@@ -1,0 +1,49 @@
+{
+    "expo": {
+        "name": "OperiX Scanner",
+        "slug": "operix-scanner",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "light",
+        "newArchEnabled": true,
+        "splash": {
+            "image": "./assets/splash-icon.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#ffffff"
+        },
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.internetkudo.operixscanner",
+            "infoPlist": {
+                "ITSAppUsesNonExemptEncryption": false
+            }
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./assets/adaptive-icon.png",
+                "backgroundColor": "#ffffff"
+            },
+            "package": "com.internetkudo.operixscanner",
+            "edgeToEdgeEnabled": true
+        },
+        "web": {
+            "favicon": "./assets/favicon.png"
+        },
+        "scheme": "operix-scanner",
+        "plugins": [
+            "expo-web-browser",
+            [
+                "expo-camera",
+                {
+                    "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for scanning."
+                }
+            ]
+        ],
+        "extra": {
+            "eas": {
+                "projectId": "YOUR_SCANNER_PROJECT_ID"
+            }
+        }
+    }
+}

@@ -1,0 +1,49 @@
+{
+    "expo": {
+        "name": "OperiX Tracker",
+        "slug": "operix-tracker",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "light",
+        "newArchEnabled": true,
+        "splash": {
+            "image": "./assets/splash-icon.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#ffffff"
+        },
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.internetkudo.operixtracker",
+            "infoPlist": {
+                "ITSAppUsesNonExemptEncryption": false
+            }
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./assets/adaptive-icon.png",
+                "backgroundColor": "#ffffff"
+            },
+            "package": "com.internetkudo.operixtracker",
+            "edgeToEdgeEnabled": true
+        },
+        "web": {
+            "favicon": "./assets/favicon.png"
+        },
+        "scheme": "operix-tracker",
+        "plugins": [
+            "expo-web-browser",
+            [
+                "expo-location",
+                {
+                    "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for time tracking."
+                }
+            ]
+        ],
+        "extra": {
+            "eas": {
+                "projectId": "YOUR_TRACKER_PROJECT_ID"
+            }
+        }
+    }
+}

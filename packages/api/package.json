@@ -1,0 +1,16 @@
+{
+    "name": "@invoice-monorepo/api",
+    "version": "1.0.0",
+    "private": true,
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.89.0"
+    },
+    "peerDependencies": {
+        "react": "*"
+    }
+}
