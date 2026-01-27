@@ -1,0 +1,6 @@
+export { corporateTemplate } from './corporate';
+
+
+
+
+
