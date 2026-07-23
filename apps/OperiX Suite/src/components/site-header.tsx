@@ -29,7 +29,7 @@ export function SiteHeader() {
       <div className="container nav-inner">
         <Link href="/" className="brand" aria-label="OperiX Suite home" onClick={() => setOpen(false)}>
           <Image src="/brand/operix-x-mark.svg" width={40} height={40} alt="" aria-hidden="true" priority />
-          <strong>OperiX</strong>
+          <Image className="brand-wordmark" src="/brand/operix-wordmark-blue.svg" width={92} height={31} alt="OperiX" />
           <span>Suite</span>
         </Link>
         <nav className="desktop-nav" aria-label="Primary navigation">

@@ -37,7 +37,7 @@ export function SiteFooter() {
         <div className="footer-brand">
           <Link href="/" className="brand brand-light" aria-label="OperiX Suite home">
             <Image src="/brand/operix-x-mark.svg" width={40} height={40} alt="" aria-hidden="true" />
-            <strong>OperiX</strong>
+            <Image className="brand-wordmark brand-wordmark-light" src="/brand/operix-wordmark-blue.svg" width={92} height={31} alt="OperiX" />
             <span>Suite</span>
           </Link>
           <p>One connected suite for clearer financial and people operations.</p>

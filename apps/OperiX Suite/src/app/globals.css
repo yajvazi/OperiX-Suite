@@ -110,6 +110,8 @@ p { color: var(--muted); }
 .nav-inner { height: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; }
 .brand { display: inline-flex; align-items: center; gap: 9px; width: max-content; color: var(--navy); font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em; }
 .brand img { width: 40px; height: 40px; padding: 5px; object-fit: contain; border-radius: 10px; background: var(--primary); }
+.brand img.brand-wordmark { width: 92px; height: 31px; padding: 0; border-radius: 0; background: transparent; }
+.brand-wordmark-light { filter: brightness(0) invert(1); }
 .brand strong { color: var(--primary); font: 700 1.1rem Oblivian, var(--font-poppins), sans-serif; letter-spacing: -.02em; }
 .brand span { padding-left: 9px; border-left: 1px solid var(--border); line-height: 1.4; }
 .desktop-nav { display: flex; justify-content: center; align-items: center; gap: clamp(15px, 2vw, 28px); }
