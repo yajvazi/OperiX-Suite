@@ -31,10 +31,10 @@ export function ProductPage({
         <div className="page-hero-glow" />
         <div className="container product-hero-grid">
           <Reveal>
-            <span className="eyebrow product-eyebrow"><Image src={variant === "hr" ? "/brand/operix-hr-office-logo.svg" : "/brand/operix-invoice-logo.svg"} width={28} height={28} alt="" aria-hidden="true" />{product}</span>
+            <span className="eyebrow product-eyebrow"><Image src={variant === "hr" ? "/brand/operix-hr-office-logo.svg" : "/brand/operix-x-icon-blue.svg"} width={28} height={28} alt="" aria-hidden="true" />{product}</span>
             <h1>{headline}</h1>
             <p>{description}</p>
-            <div className="button-row"><Link href="/book-demo" className="button">Book a demo <ArrowRight /></Link><Link href="/contact" className="button button-secondary">Contact us</Link></div>
+            <div className="button-row"><Link href={variant === "invoice" ? "https://demo.invoice.operixsuite.com/" : "/book-demo"} className="button">{variant === "invoice" ? "Try it out" : "Book a demo"} <ArrowRight /></Link><Link href="/book-demo" className="button button-secondary">Contact us</Link></div>
           </Reveal>
           <Reveal className="product-hero-media" delay={.08}><DashboardMockup variant={variant} /><PhoneMockup variant={variant} /></Reveal>
         </div>

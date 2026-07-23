@@ -18,6 +18,7 @@ export const albanianTranslations = Object.fromEntries([
   ["Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.", "Bashkoni faturimin, menaxhimin e stafit, raportimin dhe operacionet e përditshme të biznesit në një hapësirë të ndërlidhur."],
   ["Explore Products", "Eksploroni produktet"],
   ["Book Demo", "Rezervoni një demo"],
+  ["Try it out", "Provojeni"],
   ["Clear reporting", "Raportim i qartë"],
   ["Decision-ready insights", "Të dhëna gati për vendimmarrje"],
   ["One connected view", "Një pamje e ndërlidhur"],

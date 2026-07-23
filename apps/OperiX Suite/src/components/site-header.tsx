@@ -48,15 +48,12 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
+        <div className="locale-switcher" aria-label="Language selector">
+          <Link href={locale === "al" ? englishHref : albanianHref} aria-label={locale === "al" ? "Switch to English" : "Kalo në shqip"} title={locale === "al" ? "English" : "Shqip"}><Globe2 aria-hidden="true" /></Link>
+        </div>
         <Link href={`${prefix}/book-demo`} className="button button-small nav-cta">
           {locale === "al" ? al.nav.start : "Get Started"}
         </Link>
-        <div className="locale-switcher" aria-label="Language selector">
-          <Globe2 aria-hidden="true" />
-          <Link href={englishHref} aria-label="English">EN</Link>
-          <span aria-hidden="true">/</span>
-          <Link href={albanianHref} aria-label="Albanian">AL</Link>
-        </div>
         <button
           className="menu-button"
           type="button"
