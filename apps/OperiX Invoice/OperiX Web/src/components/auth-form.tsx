@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Apple, ArrowRight, Download, LockKeyhole, Mail, Play } from "lucide-react";
+import { ArrowRight, Download, LockKeyhole, Mail, Play } from "lucide-react";
 import { Brand } from "./brand";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -47,7 +47,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </form>
         {!isSupabaseConfigured && <p className="mt-4 text-xs text-center text-[#d92d20]">Supabase configuration is required to use OperiX Invoice.</p>}
         <p className="text-center mt-7 text-[13px] muted">{mode === "login" ? "New to OperiX? " : "Already have an account? "}<Link className="text-[#004ffe] font-semibold" href={mode === "login" ? "/signup" : "/login"}>{mode === "login" ? "Create an account" : "Sign in"}</Link></p>
-        <div className="mt-10 border-t border-[#e4e9f0] pt-7"><div className="flex items-center gap-3 text-[12px] muted"><Download size={17} className="text-[#004ffe]"/><span>Prefer mobile? Download OperiX Invoice for iOS or Android.</span></div><div className="mt-4 flex gap-2"><a className="store-badge" href="https://apps.apple.com/" target="_blank" rel="noreferrer"><Apple size={16}/><span><small>Download on the</small><strong>App Store</strong></span></a><a className="store-badge" href="https://play.google.com/store" target="_blank" rel="noreferrer"><Play size={15} fill="currentColor"/><span><small>GET IT ON</small><strong>Google Play</strong></span></a></div></div>
+        <div className="mt-10 border-t border-[#e4e9f0] pt-7"><div className="flex items-center gap-3 text-[12px] muted"><Download size={17} className="text-[#004ffe]"/><span>Prefer mobile? Download OperiX Invoice for iOS or Android.</span></div><div className="mt-4 flex justify-center gap-2"><a className="store-badge" href="https://apps.apple.com/" target="_blank" rel="noreferrer"><AppleLogo/><span><small>Download on the</small><strong>App Store</strong></span></a><a className="store-badge" href="https://play.google.com/store" target="_blank" rel="noreferrer"><Play size={15} fill="currentColor"/><span><small>GET IT ON</small><strong>Google Play</strong></span></a></div></div>
       </div>
       <p className="text-[11px] muted">© 2026 OperiX Invoice. Secure business software. <span>Part of </span><a className="text-[#004ffe]" href="https://operixsuite.com">OperiX Suite</a>.</p>
     </section>
@@ -59,3 +59,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 }
 
 function AuthStat({ value, label }: { value: string; label: string }) { return <div className="border-t border-white/20 pt-4"><strong className="block text-lg">{value}</strong><span className="text-white/60 text-xs">{label}</span></div>; }
+
+function AppleLogo() {
+  return <svg aria-hidden="true" viewBox="0 0 384 512" width="17" height="20" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.3-2.8-73.9 20.6-88 20.6-14.9 0-49.1-19.6-76.9-19.1-36.8.6-70.9 21.4-89.8 54.5-38 66-9.7 163.4 27.3 217 18.5 26.7 40.7 56.7 69.8 55.6 28-1.1 38.6-17.9 72.5-17.9 33.9 0 43.4 17.9 72.9 17.3 30.1-.6 49.2-27.2 67.6-53.9 21.3-31.1 30.1-61.1 30.7-62.7-.7-.3-58.9-22.6-59-87.6zM261.4 101.5c15.4-18.2 25.8-43.5 23-68.6-22.2.9-49 15.7-64.7 33.9-14.1 16.2-26.4 41.8-23.1 66.4 24.7 1.9 49.4-13.2 64.8-31.7z"/></svg>;
+}
