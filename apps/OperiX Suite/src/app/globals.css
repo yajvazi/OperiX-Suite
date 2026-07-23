@@ -112,6 +112,9 @@ p { color: var(--muted); }
 .brand img { width: 40px; height: 40px; padding: 5px; object-fit: contain; border-radius: 10px; background: var(--primary); }
 .brand img.brand-wordmark { width: 92px; height: 31px; padding: 0; border-radius: 0; background: transparent; }
 .brand-wordmark-light { filter: brightness(0) invert(1); }
+.locale-switcher { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--muted); font-size: .68rem; font-weight: 700; }
+.locale-switcher a { color: inherit; }
+.locale-switcher a:hover { color: var(--primary); }
 .brand strong { color: var(--primary); font: 700 1.1rem Oblivian, var(--font-poppins), sans-serif; letter-spacing: -.02em; }
 .brand span { padding-left: 9px; border-left: 1px solid var(--border); line-height: 1.4; }
 .desktop-nav { display: flex; justify-content: center; align-items: center; gap: clamp(15px, 2vw, 28px); }
