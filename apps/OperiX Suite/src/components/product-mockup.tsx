@@ -56,7 +56,7 @@ export function PhoneMockup({ variant = "invoice" }: { variant?: "invoice" | "hr
     <div className="phone-mockup" aria-label={`${variant} mobile app preview`}>
       <div className="phone-notch" />
       <div className="phone-screen">
-        <header><span>OperiX</span><div className="tiny-avatar"><Image src="/brand/operix-x-mark.svg" width={14} height={14} alt="" aria-hidden="true" /></div></header>
+        <header><Image className="phone-wordmark" src="/brand/operix-wordmark-blue.svg" width={52} height={18} alt="OperiX" /><div className="tiny-avatar"><Image src="/brand/operix-x-mark.svg" width={14} height={14} alt="" aria-hidden="true" /></div></header>
         <p>Today</p>
         <h3>{isHR ? "Your team" : "Overview"}</h3>
         <div className="phone-primary">
