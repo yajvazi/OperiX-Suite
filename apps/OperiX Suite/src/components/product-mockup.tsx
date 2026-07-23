@@ -8,7 +8,7 @@ export function DashboardMockup({ variant = "suite" }: { variant?: "suite" | "in
   return (
     <div className={`dashboard-mockup dashboard-${variant}`} aria-label={`${variant} dashboard preview`}>
       <aside>
-        <div className="mock-logo"><Image src="/brand/operix-x-mark.svg" width={30} height={30} alt="" aria-hidden="true" /></div>
+        <div className="mock-logo"><Image src="/brand/operix-x-icon-blue.svg" width={30} height={30} alt="" aria-hidden="true" /></div>
         <LayoutDashboard />
         {isHR ? <Users /> : <FileText />}
         <BarChart3 />
