@@ -10,7 +10,7 @@ import {
   type DemoVendor,
 } from "@/lib/demo-data";
 
-const storageKey = "operix-invoice-demo-v1";
+const storageKey = "operix-invoice-demo-v2";
 
 interface DemoContextValue {
   state: DemoState;

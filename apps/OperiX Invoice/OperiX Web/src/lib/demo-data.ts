@@ -68,11 +68,11 @@ const item = (
 });
 
 export const demoClients: DemoClient[] = [
-  { id: "client-1", name: "Alba Construction LLC", email: "finance@albaconstruction.test", phone: "+383 44 210 510", address: "Rr. Garibaldi 21", city: "Prishtina", country: "Kosovo", taxId: "810245671" },
-  { id: "client-2", name: "Dardania Market", email: "accounts@dardaniamarket.test", phone: "+383 49 330 220", address: "Bulevardi Bill Clinton 88", city: "Prishtina", country: "Kosovo", taxId: "810392104" },
-  { id: "client-3", name: "Northstar Studio", email: "hello@northstar.test", phone: "+355 69 440 1180", address: "Rruga e Kavajës 45", city: "Tirana", country: "Albania", taxId: "L92314012M" },
-  { id: "client-4", name: "Besa Logistics", email: "billing@besalogistics.test", phone: "+383 45 610 900", address: "Zona Industriale", city: "Fushë Kosovë", country: "Kosovo", taxId: "810774290" },
-  { id: "client-5", name: "Mira Dental Clinic", email: "office@miradental.test", phone: "+383 43 812 400", address: "Rr. Agim Ramadani 12", city: "Prishtina", country: "Kosovo", taxId: "810661200" },
+  { id: "client-1", name: "Meridian Works LLC", email: "finance@meridianworks.demo", phone: "+383 44 000 101", address: "Demo Avenue 21", city: "Prishtina", country: "Kosovo", taxId: "DEMO-810245671" },
+  { id: "client-2", name: "BluePeak Retail Co.", email: "accounts@bluepeak.demo", phone: "+383 49 000 202", address: "Sample Boulevard 88", city: "Prishtina", country: "Kosovo", taxId: "DEMO-810392104" },
+  { id: "client-3", name: "Orbitline Studio", email: "hello@orbitline.demo", phone: "+355 69 000 3030", address: "Example Street 45", city: "Tirana", country: "Albania", taxId: "DEMO-L92314012" },
+  { id: "client-4", name: "Cedar Route Logistics", email: "billing@cedarroute.demo", phone: "+383 45 000 404", address: "Demo Industrial Zone", city: "Fushë Kosovë", country: "Kosovo", taxId: "DEMO-810774290" },
+  { id: "client-5", name: "Harborlight Clinic", email: "office@harborlight.demo", phone: "+383 43 000 505", address: "Example Road 12", city: "Prishtina", country: "Kosovo", taxId: "DEMO-810661200" },
 ];
 
 export const demoVendors: DemoVendor[] = [

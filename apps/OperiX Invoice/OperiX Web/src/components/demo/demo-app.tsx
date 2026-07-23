@@ -26,7 +26,7 @@ import type { DemoClient, DemoInvoice, DemoProduct } from "@/lib/demo-data";
 import { useDemo } from "./demo-provider";
 
 const demoCompany: DocumentCompany = {
-  name: "Kudo Labs Demo Company",
+  name: "OperiX Group LLC",
   email: "demo@operixsuite.com",
   phone: "+383 38 700 700",
   address: "Rr. Garibaldi 12",
@@ -391,7 +391,7 @@ function InvoiceDetail({ id }: { id?: string }) {
           This is a safe demo preview. No email, payment request, or accounting record has been created.
         </div>
         <div className="invoice-document-panel">
-          <div className="invoice-document-panel-head"><span>A4 invoice preview</span><span>{client?.name}</span></div>
+          <div className="invoice-document-panel-head no-print"><span>A4 invoice preview</span><span>{client?.name}</span></div>
           <div className="invoice-document-canvas"><InvoiceDocument draft={invoice.draft} client={clientRow} company={demoCompany} /></div>
         </div>
       </div>

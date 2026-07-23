@@ -35,7 +35,7 @@ export function DemoShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc]">
+    <div className="demo-layout min-h-screen bg-[#f7f9fc]">
       {mobileOpen ? (
         <button
           className="fixed inset-0 z-30 bg-[#061a38]/50 lg:hidden"
@@ -43,7 +43,7 @@ export function DemoShell({ children }: { children: ReactNode }) {
           aria-label="Close navigation"
         />
       ) : null}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-[224px] overflow-hidden bg-[#061a38] text-white transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`demo-chrome no-print fixed inset-y-0 left-0 z-40 w-[224px] overflow-hidden bg-[#061a38] text-white transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-20 items-center justify-between border-b border-white/8 px-5">
           <Brand />
           <button className="text-white/70 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation">
@@ -77,18 +77,18 @@ export function DemoShell({ children }: { children: ReactNode }) {
         </button>
       </aside>
 
-      <div className="min-h-screen lg:ml-[224px]">
-        <div className="flex min-h-9 items-center justify-center gap-2 bg-[#edf4ff] px-4 py-2 text-center text-[11px] text-[#174ea6]">
+      <div className="demo-content min-h-screen lg:ml-[224px]">
+        <div className="demo-chrome no-print flex min-h-9 items-center justify-center gap-2 bg-[#edf4ff] px-4 py-2 text-center text-[11px] text-[#174ea6]">
           <strong>OperiX Invoice demo</strong>
           <span className="hidden sm:inline">·</span>
           <span className="hidden sm:inline">Changes stay on this device and can be reset at any time.</span>
         </div>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[#e4e9f0] bg-white px-4 lg:px-6">
+        <header className="demo-chrome no-print sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[#e4e9f0] bg-white px-4 lg:px-6">
           <button className="grid h-10 w-9 place-items-center text-[#344054] lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
             <Menu size={20} />
           </button>
           <div>
-            <strong className="block text-sm text-[#111827]">Kudo Labs Demo Company</strong>
+            <strong className="block text-sm text-[#111827]">OperiX Group LLC</strong>
             <span className="block text-[10px] text-[#667085]">EUR · VAT 18%</span>
           </div>
           <div className="ml-auto flex items-center gap-2">

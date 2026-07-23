@@ -246,6 +246,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   :root { --sidebar-width:0px; }
   html, body { width:210mm; min-height:0 !important; background:white; }
   .min-h-screen, main { min-height:0 !important; }
+  .demo-content { margin-left:0 !important; min-height:0 !important; }
+  .demo-layout main { min-height:0 !important; }
   .min-h-screen:has(.invoice-workspace) { margin-left:0 !important; transition:none !important; }
   .no-print { display: none !important; }
   @page { size: A4; margin: 0; }
