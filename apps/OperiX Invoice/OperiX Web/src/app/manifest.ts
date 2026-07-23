@@ -4,9 +4,12 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "OperiX Invoice",
     short_name: "OperiX",
+    id: "/",
     description: "Smart invoicing and business management.",
     start_url: "/dashboard",
+    scope: "/",
     display: "standalone",
+    display_override: ["window-controls-overlay", "standalone"],
     background_color: "#f7f9fc",
     theme_color: "#004FFE",
     orientation: "any",
