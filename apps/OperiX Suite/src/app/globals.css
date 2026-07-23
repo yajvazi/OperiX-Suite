@@ -208,7 +208,7 @@ p { color: var(--muted); }
 .product-copy { padding: 32px 34px 24px; }
 .product-card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
 .product-brand-icon { display: grid; place-items: center; }
-.product-brand-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; overflow: hidden; }
+.icon-box.product-brand-icon { width: 56px; height: 56px; background: var(--primary); border-radius: 12px; overflow: hidden; }
 .product-brand-icon img { width: 56px; height: 56px; padding: 7px; object-fit: contain; }
 .product-eyebrow { display: inline-flex; align-items: center; gap: 9px; }
 .product-eyebrow img { width: 28px; height: 28px; object-fit: contain; }
