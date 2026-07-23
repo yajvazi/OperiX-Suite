@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Check, type LucideIcon } from "lucide-react";
 import { Reveal } from "./motion";
 import { DashboardMockup, PhoneMockup } from "./product-mockup";
@@ -30,7 +31,7 @@ export function ProductPage({
         <div className="page-hero-glow" />
         <div className="container product-hero-grid">
           <Reveal>
-            <span className="eyebrow">{product}</span>
+            <span className="eyebrow product-eyebrow"><Image src={variant === "hr" ? "/brand/operix-hr-icon-blue.svg" : "/brand/operix-invoice-icon-blue.svg"} width={28} height={28} alt="" aria-hidden="true" />{product}</span>
             <h1>{headline}</h1>
             <p>{description}</p>
             <div className="button-row"><Link href="/book-demo" className="button">Book a demo <ArrowRight /></Link><Link href="/contact" className="button button-secondary">Contact us</Link></div>

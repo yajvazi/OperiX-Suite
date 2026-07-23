@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
@@ -65,12 +66,11 @@ export default function HomePage() {
           </Reveal>
           <div className="products-grid">
             {products.map((product, index) => {
-              const Icon = product.icon;
               return (
                 <Reveal key={product.name} delay={index * .08}>
                   <article className="product-card">
                     <div className="product-copy">
-                      <div className="product-card-title"><div className="icon-box"><Icon aria-hidden="true" /></div><h3>{product.name}</h3></div>
+                      <div className="product-card-title"><div className="icon-box product-brand-icon"><Image src={product.logo} width={34} height={34} alt="" aria-hidden="true" /></div><h3>{product.name}</h3></div>
                       <p>{product.description}</p>
                       <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                       <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>

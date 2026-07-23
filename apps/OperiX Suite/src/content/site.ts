@@ -37,6 +37,7 @@ export const trustItems = [
 export const products = [
   {
     name: "OperiX Invoice",
+    logo: "/brand/operix-invoice-icon-blue.svg",
     href: "/products/invoice",
     description:
       "Create invoices, track payments, manage expenses, and understand business performance from one focused workspace.",
@@ -46,6 +47,7 @@ export const products = [
   },
   {
     name: "OperiX HR",
+    logo: "/brand/operix-hr-icon-blue.svg",
     href: "/products/hr",
     description:
       "Bring employee records, attendance, leave, payroll, and team operations into one reliable system.",
@@ -157,4 +159,3 @@ export const resources = [
   { title: "API Documentation", description: "Integration references for technical teams.", status: "Coming soon", icon: RefreshCw },
   { title: "Downloads", description: "Access OperiX products for supported devices.", status: "Coming soon", icon: Cloud },
 ];
-
