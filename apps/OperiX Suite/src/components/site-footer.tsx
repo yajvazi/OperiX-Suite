@@ -59,6 +59,7 @@ export function SiteFooter() {
       </div>
       <div className="container footer-bottom">
         <p>© {new Date().getFullYear()} OperiX. All rights reserved.</p>
+        <p className="footer-credit">Built by <a href="https://kudolabs.dev" target="_blank" rel="noreferrer">Kudolabs.dev</a></p>
         <p>Built for businesses that value clarity.</p>
       </div>
     </footer>

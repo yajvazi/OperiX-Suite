@@ -332,4 +332,5 @@ export const albanianTranslations = Object.fromEntries([
   ["Marketing descriptions on this site explain the intended product experience and do not replace the final commercial agreement.", "Përshkrimet e marketingut në këtë faqe shpjegojnë përvojën e synuar të produktit dhe nuk zëvendësojnë marrëveshjen përfundimtare tregtare."],
   ["All rights reserved.", "Të gjitha të drejtat e rezervuara."],
   ["Built for businesses that value clarity.", "Ndërtuar për biznese që vlerësojnë qartësinë."],
+  ["Built by", "Ndërtuar nga"],
 ] satisfies [string, string][]) as Record<string, string>;
