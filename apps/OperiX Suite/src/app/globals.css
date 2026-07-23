@@ -243,7 +243,7 @@ p { color: var(--muted); }
 }
 .benefits-section .section-heading h2, .benefits-section .section-heading p { color: #fff; }
 .benefits-section .section-heading p { opacity: .68; }
-.benefits-grid { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid rgba(255,255,255,.15); border-left: 1px solid rgba(255,255,255,.15); }
+.benefits-grid { display: grid; grid-template-columns: repeat(3,1fr); overflow: hidden; border: 1px solid rgba(255,255,255,.15); border-radius: 16px; }
 .benefit-item { min-height: 165px; padding: 29px; border-right: 1px solid rgba(255,255,255,.15); border-bottom: 1px solid rgba(255,255,255,.15); }
 .benefit-item svg { width: 27px; color: #69a5ff; }
 .benefit-item h3 { margin: 18px 0 8px; color: #fff; font-size: 1rem; letter-spacing: -.01em; }
