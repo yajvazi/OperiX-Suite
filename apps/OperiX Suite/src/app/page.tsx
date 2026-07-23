@@ -118,7 +118,7 @@ export default function HomePage() {
             <Link href="/features" className="text-link">Explore all features <ArrowRight /></Link>
           </Reveal>
           <Reveal className="integration-panel" delay={.08}>
-            <div className="integration-core">X</div>
+            <div className="integration-core"><Image src="/brand/operix-x-icon-blue.svg" width={62} height={62} alt="OperiX connected suite" /></div>
             <div className="integration-node node-1"><FileText /> Invoicing</div>
             <div className="integration-node node-2"><Users /> People</div>
             <div className="integration-node node-3"><BarChart3 /> Reports</div>

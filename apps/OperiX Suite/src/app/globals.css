@@ -144,7 +144,8 @@ p { color: var(--muted); }
 .dashboard-mockup aside { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 18px 0; border-right: 1px solid #edf1f6; background: #fbfcff; }
 .dashboard-mockup aside svg { width: 18px; color: #98a2b3; }
 .dashboard-mockup aside svg:nth-child(2) { color: var(--primary); }
-.mock-logo { width: 30px; height: 30px; display: grid; place-items: center; margin-bottom: 8px; border-radius: 8px; background: var(--primary); color: #fff; font-family: Oblivian, sans-serif; }
+.mock-logo { width: 30px; height: 30px; display: grid; place-items: center; margin-bottom: 8px; border-radius: 8px; background: var(--primary); overflow: hidden; }
+.mock-logo img { width: 30px; height: 30px; object-fit: contain; }
 .mock-main { min-width: 0; padding: 22px; background: linear-gradient(180deg,#fff 0%,#fbfcff 100%); }
 .mock-main > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .mock-main > header span, .mock-main > header strong { display: block; }
@@ -206,7 +207,7 @@ p { color: var(--muted); }
 .product-copy { padding: 32px 34px 24px; }
 .product-card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
 .product-brand-icon { display: grid; place-items: center; }
-.product-brand-icon img { width: 34px; height: 34px; object-fit: contain; }
+.product-brand-icon img { width: 42px; height: 42px; object-fit: contain; }
 .product-eyebrow { display: inline-flex; align-items: center; gap: 9px; }
 .product-eyebrow img { width: 28px; height: 28px; object-fit: contain; }
 .product-card-title h3 { margin: 0; font-size: 1.35rem; }
@@ -249,7 +250,8 @@ p { color: var(--muted); }
   radial-gradient(circle at 50% 40%, rgba(0,79,254,.12), transparent 42%),
   #fbfcff;
 }
-.integration-core { width: 92px; height: 92px; display: grid; place-items: center; border-radius: 28px; background: var(--primary); box-shadow: 0 18px 50px rgba(0,79,254,.28); color: #fff; font: 700 2.1rem Oblivian,sans-serif; }
+.integration-core { width: 92px; height: 92px; display: grid; place-items: center; border-radius: 28px; background: var(--primary); box-shadow: 0 18px 50px rgba(0,79,254,.28); overflow: hidden; }
+.integration-core img { width: 62px; height: 62px; object-fit: contain; }
 .integration-node { position: absolute; min-width: 130px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; box-shadow: var(--shadow-md); color: var(--heading); font-size: .75rem; font-weight: 600; }
 .integration-node svg { width: 19px; color: var(--primary); }
 .node-1 { top: 15%; left: 10%; }.node-2 { top: 16%; right: 9%; }.node-3 { bottom: 16%; left: 12%; }.node-4 { right: 12%; bottom: 15%; }

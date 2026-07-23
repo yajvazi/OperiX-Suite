@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { BarChart3, FileText, LayoutDashboard, Settings, Users } from "lucide-react";
 
 const bars = [38, 54, 44, 70, 58, 82, 66, 88, 76, 94, 84, 100];
@@ -7,7 +8,7 @@ export function DashboardMockup({ variant = "suite" }: { variant?: "suite" | "in
   return (
     <div className={`dashboard-mockup dashboard-${variant}`} aria-label={`${variant} dashboard preview`}>
       <aside>
-        <div className="mock-logo">X</div>
+        <div className="mock-logo"><Image src="/brand/operix-x-icon-blue.svg" width={30} height={30} alt="" aria-hidden="true" /></div>
         <LayoutDashboard />
         {isHR ? <Users /> : <FileText />}
         <BarChart3 />
@@ -19,7 +20,7 @@ export function DashboardMockup({ variant = "suite" }: { variant?: "suite" | "in
             <span>{isHR ? "People overview" : variant === "invoice" ? "Financial overview" : "Business overview"}</span>
             <strong>{isHR ? "Your team, at a glance" : "Good morning"}</strong>
           </div>
-          <div className="mock-avatar">OX</div>
+          <div className="mock-avatar"><Image src="/brand/operix-x-icon-blue.svg" width={18} height={18} alt="" aria-hidden="true" /></div>
         </header>
         <div className="mock-stats">
           <div><span>{isHR ? "Employees" : "Revenue"}</span><strong>{isHR ? "Team" : "€24,850"}</strong><small>Current period</small></div>
@@ -55,7 +56,7 @@ export function PhoneMockup({ variant = "invoice" }: { variant?: "invoice" | "hr
     <div className="phone-mockup" aria-label={`${variant} mobile app preview`}>
       <div className="phone-notch" />
       <div className="phone-screen">
-        <header><span>OperiX</span><div className="tiny-avatar">OX</div></header>
+        <header><span>OperiX</span><div className="tiny-avatar"><Image src="/brand/operix-x-icon-blue.svg" width={14} height={14} alt="" aria-hidden="true" /></div></header>
         <p>Today</p>
         <h3>{isHR ? "Your team" : "Overview"}</h3>
         <div className="phone-primary">
