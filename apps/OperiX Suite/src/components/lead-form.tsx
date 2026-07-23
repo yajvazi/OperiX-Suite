@@ -36,7 +36,7 @@ export function LeadForm({ kind }: { kind: "contact" | "demo" }) {
         <div className="field"><label htmlFor="company">Company</label><input id="company" name="company" autoComplete="organization" required /></div>
         {kind === "demo" && <div className="field"><label htmlFor="employees">Employees</label><select id="employees" name="employees" required defaultValue=""><option value="" disabled>Select team size</option><option>1–10</option><option>11–50</option><option>51–200</option><option>201+</option></select></div>}
         {kind === "demo" && <div className="field"><label htmlFor="country">Country</label><input id="country" name="country" autoComplete="country-name" required /></div>}
-        <div className="field"><label htmlFor="interest">Product interest</label><select id="interest" name="interest" required defaultValue=""><option value="" disabled>Select a product</option><option>OperiX Suite</option><option>OperiX Invoice</option><option>OperiX HR</option></select></div>
+        <div className="field"><label htmlFor="interest">Product interest</label><select id="interest" name="interest" required defaultValue=""><option value="" disabled>Select a product</option><option>OperiX Suite</option><option>OperiX Invoice</option><option>OperiX HR Office</option></select></div>
         <div className="field field-full"><label htmlFor="message">Message</label><textarea id="message" name="message" required placeholder={kind === "demo" ? "What would you like to see in the demo?" : "How can we help?"} /></div>
       </div>
       <button className="button" type="submit">{kind === "demo" ? "Request Demo" : "Send Message"}</button>

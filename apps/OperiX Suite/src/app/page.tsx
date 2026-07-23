@@ -168,7 +168,7 @@ export default function HomePage() {
       <section className="section section-compact">
         <div className="container">
           <Reveal className="cta-band">
-            <div><h2>Ready to bring your operation into focus?</h2><p>Explore OperiX Invoice and OperiX HR with a guided walkthrough.</p></div>
+            <div><h2>Ready to bring your operation into focus?</h2><p>Explore OperiX Invoice and OperiX HR Office with a guided walkthrough.</p></div>
             <div className="button-row"><Link href="/book-demo" className="button">Book a Demo</Link><Link href="/contact" className="button button-secondary">Contact Us</Link></div>
           </Reveal>
         </div>

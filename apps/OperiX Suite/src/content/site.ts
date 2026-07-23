@@ -37,7 +37,7 @@ export const trustItems = [
 export const products = [
   {
     name: "OperiX Invoice",
-    logo: "/brand/operix-invoice-icon-blue.svg",
+    logo: "/brand/operix-invoice-logo.svg",
     href: "/products/invoice",
     description:
       "Create invoices, track payments, manage expenses, and understand business performance from one focused workspace.",
@@ -46,8 +46,8 @@ export const products = [
     tone: "blue",
   },
   {
-    name: "OperiX HR",
-    logo: "/brand/operix-hr-icon-blue.svg",
+    name: "OperiX HR Office",
+    logo: "/brand/operix-hr-office-logo.svg",
     href: "/products/hr",
     description:
       "Bring employee records, attendance, leave, payroll, and team operations into one reliable system.",
@@ -127,7 +127,7 @@ export const faqs = [
   {
     question: "What is OperiX Suite?",
     answer:
-      "OperiX Suite brings OperiX Invoice and OperiX HR together under one product family, helping teams manage financial and people operations with a consistent experience.",
+      "OperiX Suite brings OperiX Invoice and OperiX HR Office together under one product family, helping teams manage financial and people operations with a consistent experience.",
   },
   {
     question: "Can I start with one product?",

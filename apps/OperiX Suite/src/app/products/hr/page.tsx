@@ -3,19 +3,19 @@ import { BarChart3, BriefcaseBusiness, CalendarDays, Clock3, FileLock2, ShieldCh
 import { ProductPage } from "@/components/product-page";
 
 export const metadata: Metadata = {
-  title: "OperiX HR",
-  description: "Organize employees, attendance, leave, schedules, and payroll workflows with OperiX HR.",
+  title: "OperiX HR Office",
+  description: "Organize employees, attendance, leave, schedules, and payroll workflows with OperiX HR Office.",
   alternates: { canonical: "/products/hr" },
 };
 
 export default function HRPage() {
   return <ProductPage
-    product="OperiX HR"
+    product="OperiX HR Office"
     headline="People operations that stay organized."
     description="Manage employee records, attendance, leave, schedules, payroll, and compliance from one dependable workspace."
     variant="hr"
     overviewTitle="One reliable place for your team"
-    overviewText="OperiX HR gives growing businesses a structured view of their people operations, replacing scattered records with clear, connected workflows."
+    overviewText="OperiX HR Office gives growing businesses a structured view of their people operations, replacing scattered records with clear, connected workflows."
     overviewPoints={["Maintain a complete employee directory", "Track attendance, schedules, and leave", "Prepare payroll records and follow payout status", "Keep sensitive employee documents organized"]}
     featureTitle="Built around the employee lifecycle"
     features={[

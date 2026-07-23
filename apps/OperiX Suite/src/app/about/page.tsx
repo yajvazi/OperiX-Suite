@@ -23,7 +23,7 @@ export default function AboutPage() {
         <div className="container">
           <Reveal className="section-heading centered"><span className="eyebrow">Our story</span><h2>Built one real workflow at a time</h2><p>OperiX has evolved from focused mobile products into a broader platform for connected business operations.</p></Reveal>
           <div className="timeline">
-            <Reveal className="timeline-item"><h3>Start with the daily work</h3><p>OperiX Invoice and OperiX HR were shaped around practical workflows such as invoicing, employee records, attendance, and payroll.</p></Reveal>
+            <Reveal className="timeline-item"><h3>Start with the daily work</h3><p>OperiX Invoice and OperiX HR Office were shaped around practical workflows such as invoicing, employee records, attendance, and payroll.</p></Reveal>
             <Reveal className="timeline-item"><h3>Connect the experience</h3><p>Shared brand, authentication, data foundations, and interface patterns create a more consistent product family.</p></Reveal>
             <Reveal className="timeline-item"><h3>Grow into a suite</h3><p>The next chapter brings products together under one clear OperiX experience while keeping each workflow focused.</p></Reveal>
           </div>

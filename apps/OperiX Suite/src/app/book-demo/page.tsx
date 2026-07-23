@@ -5,7 +5,7 @@ import { PageHero } from "@/components/page-hero";
 
 export const metadata: Metadata = {
   title: "Book a Demo",
-  description: "Request a guided walkthrough of OperiX Suite, OperiX Invoice, or OperiX HR.",
+  description: "Request a guided walkthrough of OperiX Suite, OperiX Invoice, or OperiX HR Office.",
   alternates: { canonical: "/book-demo" },
 };
 
