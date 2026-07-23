@@ -49,7 +49,17 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="locale-switcher" aria-label="Language selector">
-          <Link href={locale === "al" ? englishHref : albanianHref} aria-label={locale === "al" ? "Switch to English" : "Kalo në shqip"} title={locale === "al" ? "English" : "Shqip"}><Globe2 aria-hidden="true" /></Link>
+          <Link
+            href={locale === "al" ? englishHref : albanianHref}
+            aria-label={locale === "al" ? "Switch to English" : "Kalo në shqip"}
+            title={locale === "al" ? "English" : "Shqip"}
+            onClick={(event) => {
+              event.preventDefault();
+              window.location.assign(locale === "al" ? englishHref : albanianHref);
+            }}
+          >
+            <Globe2 aria-hidden="true" />
+          </Link>
         </div>
         <Link href={`${prefix}/book-demo`} className="button button-small nav-cta">
           {locale === "al" ? al.nav.start : "Get Started"}
