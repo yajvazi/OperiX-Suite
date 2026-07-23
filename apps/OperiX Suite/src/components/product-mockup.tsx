@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { BarChart3, FileText, LayoutDashboard, Settings, Users } from "lucide-react";
+import { BarChart3, FileText, LayoutDashboard, Settings, UserRound, Users } from "lucide-react";
 
 const bars = [38, 54, 44, 70, 58, 82, 66, 88, 76, 94, 84, 100];
 
@@ -20,7 +20,7 @@ export function DashboardMockup({ variant = "suite" }: { variant?: "suite" | "in
             <span>{isHR ? "People overview" : variant === "invoice" ? "Financial overview" : "Business overview"}</span>
             <strong>{isHR ? "Your team, at a glance" : "Good morning"}</strong>
           </div>
-          <div className="mock-avatar"><Image src="/brand/operix-x-mark.svg" width={18} height={18} alt="" aria-hidden="true" /></div>
+          <div className="mock-avatar"><UserRound aria-hidden="true" /></div>
         </header>
         <div className="mock-stats">
           <div><span>{isHR ? "Employees" : "Revenue"}</span><strong>{isHR ? "Team" : "€24,850"}</strong><small>Current period</small></div>

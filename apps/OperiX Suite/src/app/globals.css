@@ -153,6 +153,7 @@ p { color: var(--muted); }
 .mock-main > header strong { margin-top: 3px; color: var(--navy); font-size: .92rem; }
 .mock-avatar, .tiny-avatar { display: grid; place-items: center; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; }
 .mock-avatar { width: 32px; height: 32px; font-size: .58rem; }
+.mock-avatar svg { width: 16px; height: 16px; stroke-width: 2; }
 .mock-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
 .mock-stats > div, .mock-chart, .mock-list { border: 1px solid #e9eef5; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(16,24,40,.025); }
 .mock-stats > div { padding: 12px; }
