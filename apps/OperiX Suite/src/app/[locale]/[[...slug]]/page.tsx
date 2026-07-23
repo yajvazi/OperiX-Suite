@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { al, isLocale, type Locale } from "@/content/locales";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
 
 const routes = ["", "products/invoice", "products/hr", "features", "pricing", "resources", "about", "contact", "book-demo", "book-demo/success"];
 
@@ -22,9 +20,9 @@ export default async function LocalizedPage({ params }: { params: Promise<{ loca
   const isHr = path === "products/hr";
   const title = path === "" ? t.home.title : isInvoice ? t.products.invoice : isHr ? t.products.hr : path === "book-demo/success" ? t.pages.success : t.pages[path.split("/")[0] as keyof typeof t.pages] ?? t.home.title;
   const description = path === "" ? t.home.description : isInvoice ? t.products.invoiceDescription : isHr ? t.products.hrDescription : t.home.description;
-  return <><SiteHeader /><main>
+  return <>
     <section className="page-hero"><div className="container page-hero-copy"><span className="eyebrow">{path === "" ? t.home.eyebrow : rawLocale === "al" ? "OPERIX" : "OPERIX"}</span><h1>{title.split("\n").map((line) => <span key={line}>{line}<br /></span>)}</h1><p>{description}</p><div className="button-row"><Link className="button" href={`${prefix}/book-demo`}>{t.actions.demo}</Link><Link className="button button-secondary" href={`${prefix}/products/invoice`}>{t.actions.explore}</Link></div></div></section>
     <section className="section"><div className="container"><div className="section-heading centered"><span className="eyebrow">{t.nav.products}</span><h2>{path === "" ? t.home.productsTitle : t.pages.features}</h2><p>{t.home.productsDescription}</p></div><div className="products-grid"><article className="product-card"><div className="product-copy"><h3>{t.products.invoice}</h3><p>{t.products.invoiceDescription}</p><Link className="text-link" href={`${prefix}/products/invoice`}>{t.actions.learn} →</Link></div></article><article className="product-card"><div className="product-copy"><h3>{t.products.hr}</h3><p>{t.products.hrDescription}</p><Link className="text-link" href={`${prefix}/products/hr`}>{t.actions.learn} →</Link></div></article></div></div></section>
     <section className="benefits-section"><div className="container"><div className="section-heading centered"><h2>{t.home.benefitsTitle}</h2><p>{description}</p></div></div></section>
-  </main><SiteFooter /></>;
+  </>;
 }
