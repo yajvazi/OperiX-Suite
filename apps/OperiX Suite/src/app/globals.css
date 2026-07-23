@@ -184,6 +184,7 @@ p { color: var(--muted); }
 .phone-screen header { display: flex; align-items: center; justify-content: space-between; color: var(--primary); font-size: .58rem; font-weight: 700; }
 .phone-wordmark { width: 52px; height: 18px; object-fit: contain; }
 .tiny-avatar { width: 21px; height: 21px; font-size: .42rem; }
+.tiny-avatar svg { width: 12px; height: 12px; stroke-width: 2; }
 .phone-screen > p { margin: 18px 0 0; font-size: .48rem; }
 .phone-screen h3 { margin: 2px 0 12px; font-size: .92rem; }
 .phone-primary { padding: 12px; border-radius: 11px; background: linear-gradient(135deg,var(--primary),var(--sky)); color: #fff; }
@@ -211,8 +212,8 @@ p { color: var(--muted); }
 .product-copy { padding: 32px 34px 24px; }
 .product-card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
 .product-brand-icon { display: grid; place-items: center; }
-.icon-box.product-brand-icon { width: 56px; height: 56px; background: var(--primary) !important; border-radius: 12px; overflow: hidden; }
-.product-brand-icon img { width: 56px; height: 56px; padding: 7px; object-fit: contain; }
+.icon-box.product-brand-icon { width: 72px; height: 72px; background: var(--primary) !important; border-radius: 14px; overflow: hidden; }
+.product-brand-icon img { width: 72px; height: 72px; padding: 7px; object-fit: contain; }
 .product-eyebrow { display: inline-flex; align-items: center; gap: 9px; }
 .product-eyebrow img { width: 28px; height: 28px; object-fit: contain; }
 .product-card-title h3 { margin: 0; font-size: 1.35rem; }
