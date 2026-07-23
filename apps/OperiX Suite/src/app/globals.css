@@ -212,8 +212,8 @@ p { color: var(--muted); }
 .product-copy { padding: 32px 34px 24px; }
 .product-card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
 .product-brand-icon { display: grid; place-items: center; }
-.icon-box.product-brand-icon { width: 72px; height: 72px; background: var(--primary) !important; border-radius: 14px; overflow: hidden; }
-.product-brand-icon img { width: 72px; height: 72px; padding: 7px; object-fit: contain; }
+.icon-box.product-brand-icon { width: 84px; height: 84px; background: var(--primary) !important; border-radius: 16px; overflow: hidden; }
+.product-brand-icon img { width: 84px; height: 84px; padding: 8px; object-fit: contain; }
 .product-eyebrow { display: inline-flex; align-items: center; gap: 9px; }
 .product-eyebrow img { width: 28px; height: 28px; object-fit: contain; }
 .product-card-title h3 { margin: 0; font-size: 1.35rem; }
