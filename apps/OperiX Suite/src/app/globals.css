@@ -314,6 +314,7 @@ p { color: var(--muted); }
 .feature-group-head h2 { margin: 0; font-size: 2.3rem; }
 .feature-group-head p { margin: 10px 0 0; max-width: 680px; }
 .feature-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+.feature-group:last-child .feature-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 900px; margin-inline: auto; }
 .feature-card { padding: 27px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; transition: transform 180ms ease, box-shadow 180ms ease; }
 .feature-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
 .feature-card h3 { margin: 22px 0 9px; }
