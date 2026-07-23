@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   title: { default: "OperiX Invoice", template: "%s · OperiX Invoice" },
   description: "Smart invoicing and business management for modern teams.",
   applicationName: "OperiX Invoice",
+  icons: {
+    icon: "/icons/icon-192.png",
+    shortcut: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
   appleWebApp: { capable: true, title: "OperiX Invoice", statusBarStyle: "default" },
 };
 
