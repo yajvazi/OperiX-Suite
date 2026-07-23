@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   return <main className="min-h-screen grid lg:grid-cols-[minmax(420px,540px)_1fr] bg-white">
     <section className="flex flex-col p-7 sm:p-12 lg:p-16 max-w-[540px] w-full mx-auto">
       <div className="my-auto py-14">
-        <div className="auth-title-brand"><Image src="/operix-invoice-login-logo.svg" width={300} height={145} alt="OperiX Invoice" priority /></div>
+        <div className="auth-title-brand"><Image src="/operix-invoice-login-logo.svg" width={220} height={106} alt="OperiX Invoice" priority /></div>
         <h1 className="text-[32px] leading-tight font-semibold tracking-[-.04em]">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
         <p className="muted mt-3 mb-9">{mode === "login" ? "Sign in to manage invoices, payments and your business." : "Start managing your business with OperiX Invoice."}</p>
         <form action={submit} className="grid gap-5">
