@@ -310,9 +310,9 @@ p { color: var(--muted); }
 .check-list svg { width: 20px; flex: none; margin-top: 3px; color: var(--primary); }
 .feature-group { padding: 72px 0; border-bottom: 1px solid var(--border); }
 .feature-group:last-child { border-bottom: 0; }
-.feature-group-head { display: grid; grid-template-columns: .8fr 1.2fr; gap: 50px; margin-bottom: 38px; }
+.feature-group-head { display: block; max-width: 760px; margin-bottom: 38px; }
 .feature-group-head h2 { margin: 0; font-size: 2.3rem; }
-.feature-group-head p { margin: 0; }
+.feature-group-head p { margin: 10px 0 0; max-width: 680px; }
 .feature-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
 .feature-card { padding: 27px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; transition: transform 180ms ease, box-shadow 180ms ease; }
 .feature-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
