@@ -1,17 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 export function LeadForm({ kind }: { kind: "contact" | "demo" }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix = pathname.startsWith("/al") ? "/al" : pathname.startsWith("/en") ? "/en" : "";
   const [submitted, setSubmitted] = useState(false);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (kind === "demo") {
-      router.push("/book-demo/success");
+      router.push(`${localePrefix}/book-demo/success`);
       return;
     }
     setSubmitted(true);

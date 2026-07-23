@@ -14,6 +14,10 @@ export function SiteHeader() {
   const pathname = usePathname();
   const locale = pathname.startsWith("/al") ? "al" : pathname.startsWith("/en") ? "en" : "";
   const prefix = locale ? `/${locale}` : "";
+  const pathWithoutLocale = pathname.replace(/^\/(en|al)(?=\/|$)/, "");
+  const localizedHome = prefix || "/";
+  const englishHref = `/en${pathWithoutLocale}`;
+  const albanianHref = `/al${pathWithoutLocale}`;
   const labels = locale === "al" ? [al.nav.overview, al.nav.products, al.nav.features, al.nav.pricing, al.nav.resources, al.nav.about, al.nav.contact] : navigation.map((item) => item.label);
 
   useEffect(() => {
@@ -33,7 +37,7 @@ export function SiteHeader() {
   return (
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
       <div className="container nav-inner">
-        <Link href="/" className="brand" aria-label="OperiX Suite home" onClick={() => setOpen(false)}>
+        <Link href={localizedHome} className="brand" aria-label="OperiX Suite home" onClick={() => setOpen(false)}>
           <Image className="brand-wordmark" src="/brand/operix-wordmark-blue.svg" width={92} height={31} alt="OperiX" />
           <span>Suite</span>
         </Link>
@@ -47,7 +51,7 @@ export function SiteHeader() {
         <Link href={`${prefix}/book-demo`} className="button button-small nav-cta">
           {locale === "al" ? al.nav.start : "Get Started"}
         </Link>
-        <div className="locale-switcher" aria-label="Language selector"><Link href="/en">EN</Link><span aria-hidden="true">/</span><Link href="/al">AL</Link></div>
+        <div className="locale-switcher" aria-label="Language selector"><Link href={englishHref}>EN</Link><span aria-hidden="true">/</span><Link href={albanianHref}>AL</Link></div>
         <button
           className="menu-button"
           type="button"
