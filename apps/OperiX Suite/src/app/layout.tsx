@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   description:
     "Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.",
   applicationName: "OperiX Suite",
+  icons: {
+    icon: "/asset4.svg",
+    shortcut: "/asset4.svg",
+    apple: "/asset4.svg",
+  },
   alternates: { canonical: "/" },
   openGraph: {
     title: "OperiX Suite — One Suite. Complete Control.",
