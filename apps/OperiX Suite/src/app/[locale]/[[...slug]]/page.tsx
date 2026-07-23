@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 
 const routes = ["", "products/invoice", "products/hr", "features", "pricing", "resources", "about", "contact", "book-demo", "book-demo/success"];
 
-function copy(locale: Locale, slug: string) {
+function copy(locale: Locale) {
   if (locale === "al") return al;
   return { nav: { overview: "Overview", products: "Products", features: "Features", pricing: "Pricing", resources: "Resources", about: "About", contact: "Contact", start: "Get Started" }, home: { eyebrow: "OPERIX SUITE", title: "One Suite.\nComplete Control.", description: "Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.", productsTitle: "Two powerful products.\nOne clear experience.", productsDescription: "Choose the workspace your business needs today.", benefitsTitle: "Everything You Need to Run Your Business", cta: "Ready to bring your operation into focus?" }, products: { invoice: "OperiX Invoice", hr: "OperiX HR Office", invoiceDescription: "Create invoices, track payments, manage expenses, and understand financial performance.", hrDescription: "Bring employees, attendance, leave, payroll, and team operations together." }, pages: { features: "Features for every team", pricing: "Clear pricing for every stage", resources: "Resources for every step", about: "Business software with clarity", contact: "Let’s talk", demo: "See OperiX around your workflows", success: "Request confirmed" }, actions: { learn: "Learn more", demo: "Book a demo", contact: "Contact us", explore: "Explore products", submit: "Submit request" }, status: "Coming soon" };
 }
@@ -16,7 +16,7 @@ export default async function LocalizedPage({ params }: { params: Promise<{ loca
   if (!isLocale(rawLocale)) notFound();
   const path = slug.join("/");
   if (!routes.includes(path)) notFound();
-  const t = copy(rawLocale, path);
+  const t = copy(rawLocale);
   const prefix = `/${rawLocale}`;
   const isInvoice = path === "products/invoice";
   const isHr = path === "products/hr";
