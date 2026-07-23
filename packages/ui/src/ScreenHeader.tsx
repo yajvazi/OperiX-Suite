@@ -22,9 +22,9 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
     const { isDark } = useTheme();
     const navigation = useNavigation();
 
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
+    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const textColor = isDark ? '#fff' : '#111827';
+    const mutedColor = isDark ? '#98A2B3' : '#667085';
 
     const handleBack = () => {
         if (onBack) {
@@ -103,4 +103,3 @@ const styles = StyleSheet.create({
         width: 40,
     },
 });
-

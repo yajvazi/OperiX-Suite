@@ -50,14 +50,14 @@ export function Button({
             case 'success':
                 return styles.success;
             case 'outline':
-                return [styles.outline, { borderColor: isDark ? '#334155' : '#e2e8f0' }];
+                return [styles.outline, { borderColor: isDark ? '#263A55' : '#E4E9F0' }];
             case 'ghost':
                 return styles.ghost;
             case 'shortcut':
                 return {
                     backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
                     borderWidth: 1,
-                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    borderColor: isDark ? '#263A55' : '#E4E9F0',
                     justifyContent: 'flex-start',
                     paddingHorizontal: 12,
                 };
@@ -84,11 +84,11 @@ export function Button({
             case 'secondary':
                 return { color: primaryColor };
             case 'outline':
-                return { color: isDark ? '#fff' : '#1e293b' };
+                return { color: isDark ? '#fff' : '#25324A' };
             case 'ghost':
                 return { color: primaryColor };
             case 'shortcut':
-                return { color: isDark ? '#fff' : '#1e293b' };
+                return { color: isDark ? '#fff' : '#25324A' };
             default:
                 return styles.primaryText;
         }
@@ -206,10 +206,10 @@ const styles = StyleSheet.create({
         }),
     },
     success: {
-        backgroundColor: '#10b981',
+        backgroundColor: '#12B76A',
         ...Platform.select({
             ios: {
-                shadowColor: '#10b981',
+                shadowColor: '#12B76A',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
@@ -238,4 +238,3 @@ const styles = StyleSheet.create({
         marginRight: 10,
     }
 });
-

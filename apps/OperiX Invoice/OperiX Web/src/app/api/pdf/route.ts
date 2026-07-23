@@ -1,0 +1,10 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import puppeteer from "puppeteer-core";
+import { invoiceHtml } from "@/lib/invoice-html";
+
+export const runtime="nodejs";
+const item=z.object({id:z.string(),product_id:z.string().optional(),description:z.string(),quantity:z.number(),unit_price:z.number(),tax_rate:z.number(),discount:z.number(),unit:z.string(),sku:z.string().optional()});
+const draft=z.object({client_id:z.string(),invoice_number:z.string(),issue_date:z.string(),due_date:z.string(),payment_method:z.enum(["cash","bank","card"]),amount_received:z.number(),notes:z.string(),status:z.enum(["draft","sent","paid","partial","overdue","cancelled"]),items:z.array(item)});
+const bodySchema=z.object({draft,client:z.record(z.string(),z.unknown()).optional(),company:z.record(z.string(),z.unknown()).optional(),config:z.record(z.string(),z.unknown()).optional(),receipt:z.boolean().default(false),template:z.enum(["corporate","thermal"]).default("corporate")});
+export async function POST(request:Request){try{const payload=bodySchema.parse(await request.json());const isThermal=payload.receipt||payload.template==="thermal";const executablePath=process.env.CHROME_EXECUTABLE_PATH||"/usr/bin/chromium";const browser=await puppeteer.launch({executablePath,args:["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-crash-reporter","--disable-breakpad"],headless:true});const page=await browser.newPage();await page.setContent(invoiceHtml(payload.draft,payload.client as never,isThermal,payload.company||{},payload.config as never),{waitUntil:"networkidle0"});const pdf=await page.pdf(isThermal?{width:"50mm",printBackground:true,preferCSSPageSize:true}:{format:"A4",printBackground:true,preferCSSPageSize:true});await browser.close();return new NextResponse(Buffer.from(pdf),{headers:{"content-type":"application/pdf","content-disposition":`attachment; filename="${payload.draft.invoice_number}.pdf"`,"cache-control":"private, no-store"}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"PDF generation failed"},{status:500});}}

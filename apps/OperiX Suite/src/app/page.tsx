@@ -1,69 +1,178 @@
-export default function ComingSoon() {
+import Link from "next/link";
+import {
+  ArrowRight,
+  BarChart3,
+  FileText,
+  Layers3,
+  PlugZap,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import { FAQList } from "@/components/faq";
+import { Float, Reveal } from "@/components/motion";
+import { DashboardMockup, PhoneMockup } from "@/components/product-mockup";
+import { PricingGrid } from "@/components/pricing";
+import { benefits, products, resources, trustItems } from "@/content/site";
+
+export default function HomePage() {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 overflow-hidden relative">
-      {/* Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="max-w-2xl w-full text-center relative z-10">
-        <div className="inline-flex items-center gap-3 mb-12">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center glow">
-            <span className="text-white font-bold text-2xl">O</span>
+    <>
+      <section className="home-hero">
+        <div className="container hero-grid">
+          <div className="hero-copy">
+            <Reveal>
+              <h1>One Suite.<br />Complete Control.</h1>
+              <p>Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.</p>
+              <div className="button-row">
+                <Link href="#products" className="button">Explore Products <ArrowRight /></Link>
+                <Link href="/book-demo" className="button button-secondary">Book Demo</Link>
+              </div>
+            </Reveal>
           </div>
-          <span className="text-3xl font-bold text-white tracking-tight">OperiX Suite</span>
-        </div>
-
-        <h1 className="text-6xl md:text-8xl font-black text-white mb-8 tracking-tighter">
-          COMING<br />
-          <span className="bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 bg-clip-text text-transparent">
-            SOON
-          </span>
-        </h1>
-
-        <div className="h-1 w-24 bg-blue-500 mx-auto mb-10 rounded-full" />
-
-        <p className="text-xl text-slate-400 mb-12 leading-relaxed">
-          The ultimate multi-app business ecosystem is being built.<br />
-          Invoicing, HR, Scanning, and Tracking — unified in one place.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <div className="w-full sm:max-w-sm flex items-center gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl focus-within:border-blue-500/50 transition-all">
-            <input
-              type="email"
-              placeholder="Enter your email for early access"
-              className="flex-1 bg-transparent px-4 py-2 text-white outline-none placeholder:text-slate-600"
-            />
-            <button className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-semibold transition-all">
-              Notify Me
-            </button>
+          <div className="hero-visual">
+            <Reveal className="hero-dashboard" delay={0.08}>
+              <DashboardMockup />
+            </Reveal>
+            <Float className="hero-phone"><PhoneMockup /></Float>
+            <Float className="floating-card floating-top" reverse>
+              <strong>Clear reporting</strong><span>Decision-ready insights</span>
+            </Float>
+            <Float className="floating-card floating-bottom">
+              <strong>One connected view</strong><span>Finance and people operations</span>
+            </Float>
           </div>
         </div>
+      </section>
 
-        <div className="mt-20 flex items-center justify-center gap-8">
-          <div className="text-center px-6 border-r border-slate-800">
-            <div className="text-2xl font-bold text-white">4</div>
-            <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Apps</div>
-          </div>
-          <div className="text-center px-6 border-r border-slate-800">
-            <div className="text-2xl font-bold text-white">1</div>
-            <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Platform</div>
-          </div>
-          <div className="text-center px-6">
-            <div className="text-2xl font-bold text-white">2026</div>
-            <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Launch</div>
+      <section className="trust-section" aria-labelledby="trust-heading">
+        <div className="container">
+          <h2 id="trust-heading" className="trust-title">Trusted foundations for growing businesses</h2>
+          <div className="trust-grid">
+            {trustItems.map((item) => {
+              const Icon = item.icon;
+              return <div className="trust-item" key={item.title}><Icon aria-hidden="true" /><div><strong>{item.title}</strong><span>{item.text}</span></div></div>;
+            })}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Footer link to the slug for you */}
-      <div className="absolute bottom-8 text-slate-700 text-sm">
-        <p>Stay tuned for OperiX Suite.</p>
-      </div>
-    </div>
+      <section className="section" id="products">
+        <div className="container">
+          <Reveal className="section-heading centered">
+            <span className="eyebrow">OperiX products</span>
+            <h2>Two powerful products.<br />One clear experience.</h2>
+            <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
+          </Reveal>
+          <div className="products-grid">
+            {products.map((product, index) => {
+              const Icon = product.icon;
+              return (
+                <Reveal key={product.name} delay={index * .08}>
+                  <article className="product-card">
+                    <div className="product-copy">
+                      <div className="product-card-title"><div className="icon-box"><Icon aria-hidden="true" /></div><h3>{product.name}</h3></div>
+                      <p>{product.description}</p>
+                      <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
+                      <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>
+                    </div>
+                    <div className="product-preview"><DashboardMockup variant={index === 0 ? "invoice" : "hr"} /></div>
+                  </article>
+                </Reveal>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="benefits-section">
+        <div className="container">
+          <Reveal className="section-heading centered">
+            <h2>Everything You Need to Run Your Business</h2>
+            <p>A connected operational foundation—clear enough for today and ready for what comes next.</p>
+          </Reveal>
+          <div className="benefits-grid">
+            {benefits.map((benefit, index) => {
+              const Icon = benefit.icon;
+              return <Reveal className="benefit-item" key={benefit.title} delay={(index % 3) * .05}><Icon aria-hidden="true" /><h3>{benefit.title}</h3><p>{benefit.text}</p></Reveal>;
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container editorial-grid">
+          <Reveal>
+            <span className="eyebrow">Built for modern teams</span>
+            <h2>Less switching.<br />More clarity.</h2>
+            <p>OperiX brings the work that keeps your business moving into focused, consistent products your team can understand.</p>
+            <div className="editorial-list">
+              {[
+                [Layers3, "Unified workspace", "A consistent system across financial and people operations."],
+                [Sparkles, "Intentional design", "Clear interfaces built around everyday work."],
+                [PlugZap, "Connected foundations", "Shared operational context wherever it adds value."],
+              ].map(([Icon, title, text]) => {
+                const Component = Icon as typeof Layers3;
+                return <div className="editorial-item" key={String(title)}><div className="icon-box"><Component /></div><div><h3>{String(title)}</h3><p>{String(text)}</p></div></div>;
+              })}
+            </div>
+            <Link href="/features" className="text-link">Explore all features <ArrowRight /></Link>
+          </Reveal>
+          <Reveal className="integration-panel" delay={.08}>
+            <div className="integration-core">X</div>
+            <div className="integration-node node-1"><FileText /> Invoicing</div>
+            <div className="integration-node node-2"><Users /> People</div>
+            <div className="integration-node node-3"><BarChart3 /> Reports</div>
+            <div className="integration-node node-4"><PlugZap /> Workflows</div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="section testimonials-section">
+        <div className="container">
+          <Reveal className="section-heading centered"><span className="eyebrow">Customer stories</span><h2>Built to support real work</h2><p>Verified customer stories will appear here as the OperiX community grows.</p></Reveal>
+          <div className="testimonial-grid">
+            {["A clearer view of financial work.", "People operations without the busywork.", "One product family our team can grow into."].map((quote, index) => (
+              <Reveal key={quote} delay={index * .06}><article className="testimonial-card"><blockquote>“{quote}”</blockquote><footer><strong>Customer story</strong>Reserved for a verified OperiX customer</footer></article></Reveal>
+            ))}
+          </div>
+          <p className="placeholder-note">Placeholder testimonials are intentionally labeled and do not represent customer endorsements.</p>
+        </div>
+      </section>
+
+      <section className="section" id="pricing">
+        <div className="container">
+          <Reveal className="section-heading centered"><span className="eyebrow">Pricing</span><h2>Start with what your business needs</h2><p>Final pricing is being prepared. Talk with us about the right product and rollout for your team.</p></Reveal>
+          <PricingGrid />
+        </div>
+      </section>
+
+      <section className="section section-compact">
+        <div className="container">
+          <Reveal className="section-heading centered"><span className="eyebrow">FAQ</span><h2>Questions, answered</h2></Reveal>
+          <FAQList limit={5} />
+        </div>
+      </section>
+
+      <section className="section section-compact">
+        <div className="container">
+          <Reveal className="section-heading centered"><span className="eyebrow">Resources</span><h2>Explore OperiX at your pace</h2><p>Product references, guides, and support material will live in one focused resource center.</p></Reveal>
+          <div className="resource-grid">
+            {resources.slice(0, 3).map((resource, index) => {
+              const Icon = resource.icon;
+              return <Reveal key={resource.title} delay={index * .06}><article className="resource-card"><div className="icon-box"><Icon /></div><div><h2>{resource.title}</h2><p>{resource.description}</p><span>{resource.status}</span></div></article></Reveal>;
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="section section-compact">
+        <div className="container">
+          <Reveal className="cta-band">
+            <div><h2>Ready to bring your operation into focus?</h2><p>Explore OperiX Invoice and OperiX HR with a guided walkthrough.</p></div>
+            <div className="button-row"><Link href="/book-demo" className="button">Book a Demo</Link><Link href="/contact" className="button button-secondary">Contact Us</Link></div>
+          </Reveal>
+        </div>
+      </section>
+    </>
   );
 }
-
-
-
-
-

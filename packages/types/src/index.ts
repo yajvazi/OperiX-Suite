@@ -367,7 +367,7 @@ export interface InvoiceData {
     config?: TemplateConfig;
 }
 
-export type TemplateType = 'corporate';
+export type TemplateType = 'corporate' | 'thermal';
 
 
 export interface Company {
@@ -420,4 +420,3 @@ export interface Compliance {
     attachment_url?: string;
     created_at: string;
 }
-

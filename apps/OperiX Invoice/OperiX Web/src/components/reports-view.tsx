@@ -1,0 +1,48 @@
+"use client";
+
+import { useState } from "react";
+import { Download, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useBusinessData } from "@/hooks/use-business-data";
+import { money } from "@/lib/format";
+import type { ExpenseRow, InvoiceRow } from "@/lib/models";
+
+type ReportPeriod = "all" | "today" | "7d" | "30d" | "90d";
+const periodOptions: Array<{ value: ReportPeriod; label: string }> = [
+  { value: "all", label: "All time" },
+  { value: "today", label: "Today" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "90d", label: "90 days" },
+];
+
+function reportMonths(invoices:InvoiceRow[],expenses:ExpenseRow[]){
+  const values=new Map<string,{month:string;revenue:number;expenses:number}>();
+  const now=new Date();
+  for(let index=11;index>=0;index--){const date=new Date(now.getFullYear(),now.getMonth()-index,1);const key=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;values.set(key,{month:new Intl.DateTimeFormat("en",{month:"short"}).format(date),revenue:0,expenses:0});}
+  invoices.filter(row=>row.type!=="offer"&&row.status!=="cancelled").forEach(row=>{const point=values.get(String(row.issue_date).slice(0,7));if(point)point.revenue+=Number(row.total_amount||0);});
+  expenses.forEach(row=>{const point=values.get(String(row.date).slice(0,7));if(!point)return;if(row.type==="income")point.revenue+=Number(row.amount||0);else point.expenses+=Number(row.amount||0);});
+  return Array.from(values.values());
+}
+
+export function ReportsView(){
+  const invoiceQuery=useBusinessData<InvoiceRow>("invoices");
+  const expenseQuery=useBusinessData<ExpenseRow>("expenses");
+  const [period, setPeriod] = useState<ReportPeriod>("all");
+  const now = new Date();
+  const start = new Date(now);
+  if (period === "today") start.setHours(0, 0, 0, 0);
+  if (period === "7d") start.setDate(start.getDate() - 6);
+  if (period === "30d") start.setDate(start.getDate() - 29);
+  if (period === "90d") start.setDate(start.getDate() - 89);
+  const inPeriod = (value: string) => period === "all" || new Date(`${value}T23:59:59`).getTime() >= start.getTime();
+  const filteredInvoices = invoiceQuery.data.filter(row => inPeriod(String(row.issue_date)));
+  const filteredExpenses = expenseQuery.data.filter(row => inPeriod(String(row.date)));
+  const monthly=reportMonths(filteredInvoices,filteredExpenses);
+  const revenue=monthly.reduce((sum,row)=>sum+row.revenue,0);
+  const expenses=monthly.reduce((sum,row)=>sum+row.expenses,0);
+  const error=invoiceQuery.error||expenseQuery.error;
+  function exportCsv(){const lines=[["Month","Revenue","Expenses","Net"],...monthly.map(row=>[row.month,row.revenue,row.expenses,row.revenue-row.expenses])];const blob=new Blob([lines.map(row=>row.join(",")).join("\n")],{type:"text/csv"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`operix-report-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
+  return <div className="mx-auto max-w-[1700px] p-4 lg:p-6"><header className="flex flex-wrap items-end gap-4"><div className="min-w-[220px] flex-1"><h1 className="page-title">Reports</h1><p className="muted mt-1.5 text-xs">Live revenue, costs and cash flow from the shared workspace.</p></div><div className="flex w-full min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center lg:w-auto lg:flex-row lg:items-center"><div className="card flex min-w-0 flex-1 flex-nowrap items-center justify-between gap-1 overflow-x-auto p-1.5 sm:justify-center lg:flex-none" aria-label="Report date filter">{periodOptions.map(option=><button key={option.value} onClick={()=>setPeriod(option.value)} className={`h-8 whitespace-nowrap rounded-md px-2 text-[10px] lg:px-3 lg:text-[11px] ${period===option.value?"bg-[#edf4ff] font-medium text-[#004ffe]":"muted hover:bg-[#f7f9fc]"}`}>{option.label}</button>)}</div><button className="btn btn-primary w-full shrink-0 justify-center whitespace-nowrap sm:w-auto" onClick={exportCsv}><Download size={16}/>Export Report</button></div></header>{error?<p className="mt-4 rounded bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p>:null}<section className="mt-6 grid gap-4 md:grid-cols-3"><ReportMetric label="Total Revenue" value={revenue} icon={TrendingUp} tone="green"/><ReportMetric label="Total Expenses" value={expenses} icon={TrendingDown} tone="red"/><ReportMetric label="Net Profit" value={revenue-expenses} icon={Wallet} tone="blue"/></section><section className="card mt-4 p-5"><h2 className="font-semibold">Revenue vs Expenses</h2><div className="mt-5 h-[380px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={monthly}><CartesianGrid vertical={false} stroke="#edf0f4"/><XAxis dataKey="month" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>money(Number(value))}/><Legend/><Area dataKey="revenue" stroke="#12b76a" fill="#12b76a22" strokeWidth={2}/><Area dataKey="expenses" stroke="#ef4444" fill="#ef444422" strokeWidth={2}/></AreaChart></ResponsiveContainer></div></section><section className="card mt-4 p-5"><h2 className="font-semibold">Monthly Cash Flow</h2><div className="mt-5 h-[280px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={monthly}><CartesianGrid vertical={false} stroke="#edf0f4"/><XAxis dataKey="month" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>money(Number(value))}/><Bar dataKey="revenue" fill="#004ffe" radius={[3,3,0,0]}/><Bar dataKey="expenses" fill="#ef4444" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div></section></div>;
+}
+function ReportMetric({label,value,icon:Icon,tone}:{label:string;value:number;icon:typeof TrendingUp;tone:string}){return <div className="card p-5 flex items-center"><span className={`w-11 h-11 rounded-md grid place-items-center ${tone==="green"?"bg-[#e9f9f0] text-[#12b76a]":tone==="red"?"bg-[#fff0ef] text-[#ef4444]":"bg-[#edf4ff] text-[#004ffe]"}`}><Icon size={21}/></span><div className="ml-4"><span className="muted text-xs">{label}</span><strong className="block text-xl mt-1">{money(value)}</strong></div></div>}

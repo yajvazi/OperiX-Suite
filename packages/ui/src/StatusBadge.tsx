@@ -7,17 +7,17 @@ interface StatusBadgeProps {
 }
 
 const statusColors: Record<string, { bg: string; text: string }> = {
-    draft: { bg: 'rgba(148, 163, 184, 0.2)', text: '#94a3b8' },
-    sent: { bg: 'rgba(59, 130, 246, 0.2)', text: '#3b82f6' },
-    paid: { bg: 'rgba(16, 185, 129, 0.2)', text: '#10b981' },
-    overdue: { bg: 'rgba(239, 68, 68, 0.2)', text: '#ef4444' },
+    draft: { bg: '#F1F3F5', text: '#4B5565' },
+    sent: { bg: '#EAF2FF', text: '#075BD8' },
+    paid: { bg: '#E9F9F0', text: '#087443' },
+    overdue: { bg: '#FFF0EF', text: '#D92D20' },
     // Contract statuses
-    signed: { bg: 'rgba(16, 185, 129, 0.2)', text: '#10b981' },
-    active: { bg: 'rgba(59, 130, 246, 0.2)', text: '#3b82f6' },
-    terminated: { bg: 'rgba(239, 68, 68, 0.2)', text: '#ef4444' },
+    signed: { bg: '#E9F9F0', text: '#087443' },
+    active: { bg: '#EAF2FF', text: '#075BD8' },
+    terminated: { bg: '#FFF0EF', text: '#D92D20' },
 };
 
-const defaultColor = { bg: 'rgba(148, 163, 184, 0.2)', text: '#94a3b8' };
+const defaultColor = { bg: '#F1F3F5', text: '#4B5565' };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
     const colors = statusColors[status] || defaultColor;

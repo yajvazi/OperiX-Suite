@@ -14,11 +14,11 @@ export function Input({ label, error, containerStyle, style, onChangeText, keybo
     const { isDark, primaryColor } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
 
-    const bgColor = isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const labelColor = isDark ? '#94a3b8' : '#64748b';
-    const borderColor = isFocused ? primaryColor : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
-    const placeholderColor = isDark ? '#475569' : '#94a3b8';
+    const bgColor = isDark ? '#102038' : '#FFFFFF';
+    const textColor = isDark ? '#fff' : '#202939';
+    const labelColor = isDark ? '#98A2B3' : '#344054';
+    const borderColor = isFocused ? '#7AA7FF' : (isDark ? '#263A55' : '#DCE3EC');
+    const placeholderColor = isDark ? '#667085' : '#98A2B3';
 
     const handleChangeText = (text: string) => {
         if (!onChangeText) return;
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     inputFocused: {
         ...Platform.select({
             ios: {
-                shadowColor: '#6366f1',
+                shadowColor: '#004FFE',
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.2,
                 shadowRadius: 8,

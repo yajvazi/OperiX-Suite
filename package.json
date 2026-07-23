@@ -4,11 +4,13 @@
   "private": true,
   "workspaces": [
     "apps/*",
+    "apps/*/*",
     "packages/*"
   ],
   "scripts": {
     "dev:invoice": "turbo run dev --filter=invoice-app",
     "dev:hr": "turbo run dev --filter=hr-app",
+    "dev:suite": "turbo run dev --filter=operix-suite-marketing",
     "build": "turbo run build",
     "lint": "turbo run lint"
   },

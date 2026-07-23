@@ -93,7 +93,7 @@ export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: Si
                     <View style={styles.header}>
                         <Text style={styles.title}>Sign Here</Text>
                         <TouchableOpacity onPress={handleClose}>
-                            <X color="#64748b" size={24} />
+                            <X color="#667085" size={24} />
                         </TouchableOpacity>
                     </View>
 
@@ -179,14 +179,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#1e293b'
+        color: '#111827'
     },
     padContainer: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#F7F9FC',
         borderRadius: 8,
         borderWidth: 2,
-        borderColor: '#e2e8f0',
+        borderColor: '#E4E9F0',
         borderStyle: 'dashed',
         overflow: 'hidden',
     },
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         textAlign: 'center',
-        color: '#94a3b8',
+        color: '#98A2B3',
         fontSize: 16,
         marginTop: -10,
     },

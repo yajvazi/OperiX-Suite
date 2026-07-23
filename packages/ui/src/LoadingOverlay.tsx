@@ -13,7 +13,7 @@ export const LoadingOverlay = ({ visible, text = 'Loading...' }: LoadingOverlayP
         <Modal transparent animationType="fade" visible={visible}>
             <View style={styles.container}>
                 <View style={styles.content}>
-                    <ActivityIndicator size="large" color="#6366f1" />
+                    <ActivityIndicator size="large" color="#004FFE" />
                     {text && <Text style={styles.text}>{text}</Text>}
                 </View>
             </View>
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     text: {
-        color: '#1e293b',
+        color: '#111827',
         fontSize: 14,
         fontWeight: '500',
     },

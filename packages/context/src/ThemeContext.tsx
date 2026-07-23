@@ -20,6 +20,19 @@ export const ThemeContext = createContext<ThemeContextType | undefined>(undefine
 const THEME_STORAGE_KEY = '@invoice_app_theme';
 const PRIMARY_COLOR_KEY = '@invoice_app_primary_color';
 const LANGUAGE_KEY = '@invoice_app_language';
+const BRAND_BLUE = '#004FFE';
+const LEGACY_PURPLE_ACCENTS = new Set([
+    '#6366f1',
+    '#818cf8',
+    '#4f46e5',
+    '#7c3aed',
+    '#8b5cf6',
+    '#9333ea',
+    '#a855f7',
+]);
+
+const normalizePrimaryColor = (color: string) =>
+    LEGACY_PURPLE_ACCENTS.has(color.toLowerCase()) ? BRAND_BLUE : color;
 
 interface ThemeProviderProps {
     children: ReactNode;
@@ -28,7 +41,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
     const systemColorScheme = useColorScheme();
     const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
-    const [primaryColor, setPrimaryColorState] = useState('#6366f1');
+    const [primaryColor, setPrimaryColorState] = useState(BRAND_BLUE);
     const [language, setLanguageState] = useState('en');
 
     useEffect(() => {
@@ -43,7 +56,9 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
             }
             const savedColor = await AsyncStorage.getItem(PRIMARY_COLOR_KEY);
             if (savedColor) {
-                setPrimaryColorState(savedColor);
+                const migratedColor = normalizePrimaryColor(savedColor);
+                setPrimaryColorState(migratedColor);
+                if (migratedColor !== savedColor) await AsyncStorage.setItem(PRIMARY_COLOR_KEY, migratedColor);
             }
             const savedLang = await AsyncStorage.getItem(LANGUAGE_KEY);
             if (savedLang) {
@@ -64,9 +79,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     };
 
     const setPrimaryColor = async (color: string) => {
-        setPrimaryColorState(color);
+        const normalizedColor = normalizePrimaryColor(color);
+        setPrimaryColorState(normalizedColor);
         try {
-            await AsyncStorage.setItem(PRIMARY_COLOR_KEY, color);
+            await AsyncStorage.setItem(PRIMARY_COLOR_KEY, normalizedColor);
         } catch (error) {
             console.log('Error saving primary color:', error);
         }
@@ -107,4 +123,3 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         </ThemeContext.Provider>
     );
 }
-

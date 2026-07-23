@@ -24,8 +24,8 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
     const [data, setData] = useState<any>({});
     const [loading, setLoading] = useState(false);
 
-    const bgColor = isDark ? '#1e293b' : '#ffffff';
-    const textColor = isDark ? '#fff' : '#1e293b';
+    const bgColor = isDark ? '#14243A' : '#ffffff';
+    const textColor = isDark ? '#fff' : '#111827';
     const overlayColor = 'rgba(0,0,0,0.5)';
 
     const handleAdd = async () => {
@@ -52,7 +52,7 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
                     <View style={styles.header}>
                         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
                         <TouchableOpacity onPress={onClose}>
-                            <X color={isDark ? '#94a3b8' : '#64748b'} size={24} />
+                            <X color={isDark ? '#98A2B3' : '#667085'} size={24} />
                         </TouchableOpacity>
                     </View>
 

@@ -12,8 +12,9 @@ export const currencies: Record<string, { symbol: string; name: string; locale: 
     INR: { symbol: '₹', name: 'Indian Rupee', locale: 'en-IN' },
 };
 
-export function formatCurrency(amount: number, currencyCode: string = 'USD'): string {
-    const currency = currencies[currencyCode] || currencies.USD;
+export function formatCurrency(amount: number, _currencyCode: string = 'EUR'): string {
+    const currencyCode = 'EUR';
+    const currency = currencies.EUR;
 
     return new Intl.NumberFormat(currency.locale, {
         style: 'currency',
@@ -515,4 +516,3 @@ export function t(key: TranslationKey, locale: string = 'en'): string {
     const lang = translations[locale as keyof typeof translations] || translations.en;
     return lang[key] || key;
 }
-

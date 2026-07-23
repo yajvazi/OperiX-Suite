@@ -1,0 +1,74 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Building2, Check, CreditCard, FileText, Globe2, Save, Users } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useWorkspace } from "@/hooks/use-workspace";
+import type { InvoiceTemplate, InvoiceTemplateConfig } from "@/lib/models";
+import { templateConfigFromRow, templateRowFromConfig, type InvoiceTemplateRow } from "@/lib/invoice-template-settings";
+
+const tabs=[
+  {id:"company",label:"Company Profile",icon:Building2},
+  {id:"general",label:"General",icon:Globe2},
+  {id:"templates",label:"Invoice Templates",icon:FileText},
+  {id:"team",label:"Team",icon:Users},
+  {id:"payments",label:"Payment Methods",icon:CreditCard},
+];
+
+type FormState=Record<string,string|number|boolean>;
+interface TeamRow {id:string;first_name?:string;last_name?:string;email?:string;role?:string;status?:string}
+
+const emptyForm:FormState={company_name:"",email:"",phone:"",address:"",city:"",country:"",website:"",tax_id:"",currency:"EUR",tax_rate:18,tax_name:"TVSH",bank_name:"",bank_account:"",bank_iban:"",bank_swift:"",invoice_language:"en",terms_conditions:"",primary_color:"#004FFE",payment_link_stripe:"",payment_link_paypal:""};
+const defaultTemplate:InvoiceTemplateConfig={style:"corporate",pageSize:"A4",showLogo:true,showSignature:true,showBuyerSignature:true,showStamp:true,showNotes:true,showDiscount:true,showTax:true,showQrCode:true,showBankDetails:true,defaultDueDays:30,defaultTaxRate:18,primaryColor:"#004FFE",footerText:"",visibleColumns:{rowNumber:true,sku:false,description:true,quantity:true,unit:true,unitPrice:true,discount:true,taxRate:false,lineTotal:true,grossPrice:false}};
+
+export function SettingsView(){
+  const workspace=useWorkspace();
+  const [tab,setTab]=useState("company");
+  const [form,setForm]=useState<FormState>(emptyForm);
+  const [template,setTemplate]=useState<InvoiceTemplateConfig>(defaultTemplate);
+  const [templateId,setTemplateId]=useState("");
+  const [templateName,setTemplateName]=useState("Default Template");
+  const [team,setTeam]=useState<TeamRow[]>([]);
+  const [saving,setSaving]=useState(false);
+  const [message,setMessage]=useState("");
+  const [success,setSuccess]=useState(false);
+
+  useEffect(()=>{const source=workspace.company||workspace.profile;if(!source)return;queueMicrotask(()=>{setForm(current=>({...current,...Object.fromEntries(Object.entries(source).filter(([,value])=>value!==null&&value!==undefined&&typeof value!=="object"))}));setTemplate({...defaultTemplate,...(workspace.profile?.template_config||{}),...(workspace.company?.template_config||{}),visibleColumns:{...defaultTemplate.visibleColumns,...workspace.profile?.template_config?.visibleColumns,...workspace.company?.template_config?.visibleColumns}});});},[workspace.company,workspace.profile]);
+  useEffect(()=>{if(!workspace.user)return;const supabase=createClient();if(!supabase)return;void supabase.from("invoice_templates").select("*").eq("user_id",workspace.user.id).eq("is_default",true).maybeSingle().then(({data,error})=>{if(error){setMessage(error.message);return;}if(data){const row=data as InvoiceTemplateRow;setTemplateId(row.id);setTemplateName(row.name||"Default Template");setTemplate(current=>({...current,...templateConfigFromRow(row),style:current.style,pageSize:current.pageSize}));}});},[workspace.user]);
+  useEffect(()=>{if(!workspace.companyId)return;const supabase=createClient();if(!supabase)return;void supabase.from("employees").select("id,first_name,last_name,email,role,status").eq("company_id",workspace.companyId).order("created_at").then(({data,error})=>{if(error)setMessage(error.message);else setTeam((data||[]) as TeamRow[]);});},[workspace.companyId]);
+
+  const set=(key:string,value:string|number|boolean)=>setForm(current=>({...current,[key]:value}));
+  async function save(){
+    if(!workspace.user){setMessage("Your session has expired.");return;}
+    const supabase=createClient();if(!supabase){setMessage("Supabase is not configured.");return;}
+    setSaving(true);setMessage("");setSuccess(false);
+    const payload={...form,template_config:template};
+    const profilePayload=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=="city"&&key!=="country"));
+    const profileResult=await supabase.from("profiles").update(profilePayload).eq("id",workspace.user.id);
+    if(profileResult.error){setMessage(profileResult.error.message);setSaving(false);return;}
+    if(workspace.companyId){const companyResult=await supabase.from("companies").update(payload).eq("id",workspace.companyId);if(companyResult.error){setMessage(companyResult.error.message);setSaving(false);return;}}
+    const templatePayload=templateRowFromConfig(template,workspace.user.id,templateName);
+    const templateResult=templateId
+      ? await supabase.from("invoice_templates").update(templatePayload).eq("id",templateId).select("id").single()
+      : await supabase.from("invoice_templates").insert(templatePayload).select("id").single();
+    if(templateResult.error){setMessage(templateResult.error.message);setSaving(false);return;}
+    if(!templateId)setTemplateId(templateResult.data.id);
+    await workspace.refresh();setSaving(false);setSuccess(true);window.setTimeout(()=>setSuccess(false),2200);
+  }
+  function chooseTemplate(style:InvoiceTemplate){setTemplate(current=>({...current,style,pageSize:style==="thermal"?"Receipt":"A4"}));}
+  function toggleTemplate(key:keyof InvoiceTemplateConfig){setTemplate(current=>({...current,[key]:!current[key]}));}
+
+  return <div className="p-4 lg:p-6 max-w-[1500px] mx-auto"><header><h1 className="page-title">Settings</h1><p className="muted text-xs mt-1.5">Shared settings for OperiX Invoice mobile and web.</p></header>{workspace.error||message?<p className="mt-4 p-3 rounded bg-[#fff3f2] text-[#d92d20] text-xs">{message||workspace.error}</p>:null}<div className="mt-6 grid lg:grid-cols-[220px_1fr] gap-4"><nav className="card p-2 self-start">{tabs.map(item=>{const Icon=item.icon;return <button key={item.id} onClick={()=>setTab(item.id)} className={`w-full flex items-center gap-3 p-3 rounded-md text-left text-xs ${tab===item.id?"bg-[#edf4ff] text-[#004ffe] font-medium":"muted hover:bg-[#f7f9fc]"}`}><Icon size={17}/>{item.label}</button>})}</nav><section className="card p-5 sm:p-7 min-h-[560px]">
+    {workspace.loading?<div className="grid gap-3">{Array.from({length:7},(_,index)=><div className="skeleton h-10 rounded" key={index}/>)}</div>:null}
+    {!workspace.loading&&tab==="company"?<><SectionTitle title="Company Profile" text="These details appear on invoices in both apps."/><div className="grid sm:grid-cols-2 gap-4 mt-6"><SettingField label="Company name" value={form.company_name} onChange={value=>set("company_name",value)}/><SettingField label="Email" type="email" value={form.email} onChange={value=>set("email",value)}/><SettingField label="Phone" value={form.phone} onChange={value=>set("phone",value)}/><SettingField label="Website" value={form.website} onChange={value=>set("website",value)}/><SettingField label="Address" value={form.address} onChange={value=>set("address",value)} wide/><SettingField label="City" value={form.city} onChange={value=>set("city",value)}/><SettingField label="Country" value={form.country} onChange={value=>set("country",value)}/><SettingField label="Tax ID" value={form.tax_id} onChange={value=>set("tax_id",value)}/><SettingField label="Bank name" value={form.bank_name} onChange={value=>set("bank_name",value)}/><SettingField label="Bank account" value={form.bank_account} onChange={value=>set("bank_account",value)}/><SettingField label="IBAN" value={form.bank_iban} onChange={value=>set("bank_iban",value)}/><SettingField label="SWIFT" value={form.bank_swift} onChange={value=>set("bank_swift",value)}/></div></>:null}
+    {!workspace.loading&&tab==="general"?<><SectionTitle title="General Preferences" text="Defaults synchronized with the mobile app."/><div className="grid sm:grid-cols-2 gap-4 mt-6"><label className="field"><span>Currency</span><select className="select" value={String(form.currency)} onChange={event=>set("currency",event.target.value)}><option>EUR</option><option>USD</option><option>GBP</option></select></label><label className="field"><span>Invoice language</span><select className="select" value={String(form.invoice_language)} onChange={event=>set("invoice_language",event.target.value)}><option value="en">English</option><option value="sq">Shqip</option><option value="de">Deutsch</option></select></label><SettingField label="Default tax rate (%)" type="number" value={form.tax_rate} onChange={value=>set("tax_rate",Number(value))}/><SettingField label="Tax name" value={form.tax_name} onChange={value=>set("tax_name",value)}/><label className="field"><span>Brand color</span><div className="flex gap-2"><input type="color" className="h-10 w-14 rounded border p-1" value={String(form.primary_color)} onChange={event=>set("primary_color",event.target.value)}/><input className="input" value={String(form.primary_color)} onChange={event=>set("primary_color",event.target.value)}/></div></label><label className="field sm:col-span-2"><span>Terms and conditions</span><textarea className="textarea min-h-28" value={String(form.terms_conditions)} onChange={event=>set("terms_conditions",event.target.value)}/></label></div></>:null}
+    {!workspace.loading&&tab==="templates"?<><SectionTitle title="Invoice Templates" text="This is the same default template record used by the mobile app."/><div className="grid sm:grid-cols-2 gap-4 mt-6"><SettingField label="Template name" value={templateName} onChange={setTemplateName}/><SettingField label="Default due days" type="number" value={template.defaultDueDays||30} onChange={value=>setTemplate(current=>({...current,defaultDueDays:Number(value)}))}/><SettingField label="Default tax rate (%)" type="number" value={template.defaultTaxRate||18} onChange={value=>setTemplate(current=>({...current,defaultTaxRate:Number(value)}))}/><label className="field"><span>Template color</span><input type="color" className="h-10 w-full rounded border p-1" value={template.primaryColor||"#004FFE"} onChange={event=>setTemplate(current=>({...current,primaryColor:event.target.value}))}/></label></div><div className="grid sm:grid-cols-2 gap-3 mt-6"><TemplateChoice name="Corporate" text="Professional A4 invoice" active={template.style!=="thermal"} onClick={()=>chooseTemplate("corporate")}/><TemplateChoice name="Thermal Receipt" text="Compact 50 mm receipt" active={template.style==="thermal"} onClick={()=>chooseTemplate("thermal")}/></div><div className="mt-6 border rounded-md divide-y">{(["showLogo","showSignature","showBuyerSignature","showStamp","showNotes","showDiscount","showTax","showQrCode","showBankDetails"] as const).map(key=><label key={key} className="p-4 flex items-center text-sm"><span>{({showLogo:"Show logo",showSignature:"Show signature",showBuyerSignature:"Show buyer signature",showStamp:"Show paid stamp",showNotes:"Show notes",showDiscount:"Show discount",showTax:"Show tax",showQrCode:"Show QR code",showBankDetails:"Show bank details"})[key]}</span><input className="ml-auto h-4 w-4" type="checkbox" checked={template[key]!==false} onChange={()=>toggleTemplate(key)}/></label>)}</div><label className="field mt-5"><span>Footer text</span><textarea className="textarea min-h-20" value={template.footerText||""} onChange={event=>setTemplate(current=>({...current,footerText:event.target.value}))}/></label></>:null}
+    {!workspace.loading&&tab==="team"?<><SectionTitle title="Team Access" text="Members attached to the active company."/><div className="mt-6 border rounded-md divide-y">{team.map(member=><div className="p-4 flex items-center" key={member.id}><span className="w-9 h-9 rounded-full bg-[#edf4ff] text-[#004ffe] grid place-items-center font-semibold">{(member.first_name||member.email||"?")[0].toUpperCase()}</span><div className="ml-3"><b className="text-xs">{[member.first_name,member.last_name].filter(Boolean).join(" ")||member.email}</b><p className="muted text-[11px]">{member.email}</p></div><span className="status status-sent ml-auto">{member.role||"member"} · {member.status||"active"}</span></div>)}{!team.length?<p className="muted text-xs p-8 text-center">No employee records are linked to this company.</p>:null}</div></>:null}
+    {!workspace.loading&&tab==="payments"?<><SectionTitle title="Payment Methods" text="Payment links and bank details shared across both apps."/><div className="grid gap-4 mt-6"><SettingField label="Stripe payment link" value={form.payment_link_stripe} onChange={value=>set("payment_link_stripe",value)}/><SettingField label="PayPal payment link" value={form.payment_link_paypal} onChange={value=>set("payment_link_paypal",value)}/><div className="p-4 rounded border bg-[#f7f9fc] text-xs"><b>Bank transfer</b><p className="muted mt-1">{form.bank_name?`${form.bank_name} · ${form.bank_iban||form.bank_account}`:"Add bank details under Company Profile."}</p></div></div></>:null}
+    <footer className="mt-10 pt-5 border-t flex justify-end"><button className="btn btn-primary" onClick={save} disabled={saving||workspace.loading}>{success?<Check size={16}/>:<Save size={16}/>} {success?"Saved":saving?"Saving…":"Save Changes"}</button></footer>
+  </section></div></div>;
+}
+
+function SectionTitle({title,text}:{title:string;text:string}){return <div><h2 className="text-lg font-semibold">{title}</h2><p className="muted text-xs mt-1">{text}</p></div>}
+function SettingField({label,value,onChange,type="text",wide}:{label:string;value:string|number|boolean;onChange:(value:string)=>void;type?:string;wide?:boolean}){return <label className={`field ${wide?"sm:col-span-2":""}`}><span>{label}</span><input className="input" type={type} value={String(value??"")} onChange={event=>onChange(event.target.value)}/></label>}
+function TemplateChoice({name,text,active,onClick}:{name:string;text:string;active:boolean;onClick:()=>void}){return <button className={`border rounded-md p-5 text-left ${active?"border-[#004ffe] bg-[#edf4ff]":"hover:border-[#8cc2ff]"}`} onClick={onClick}><b className={active?"text-[#004ffe]":""}>{name}</b><p className="muted text-xs mt-1">{text}</p></button>}

@@ -21,12 +21,12 @@ export function BarcodeScannerModal({ visible, onClose, onScanned }: BarcodeScan
     if (!permission?.granted) {
         return (
             <Modal visible={visible} animationType="slide">
-                <View style={[styles.permissionContainer, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
-                    <Text style={[styles.title, { color: isDark ? '#fff' : '#1e293b' }]}>Camera Permission</Text>
+                <View style={[styles.permissionContainer, { backgroundColor: isDark ? '#0D1B2A' : '#F7F9FC' }]}>
+                    <Text style={[styles.title, { color: isDark ? '#fff' : '#111827' }]}>Camera Permission</Text>
                     <Text style={styles.text}>We need your camera to scan barcodes.</Text>
                     <Button title="Grant Permission" onPress={requestPermission} style={styles.btn} />
                     <TouchableOpacity onPress={onClose} style={{ marginTop: 20 }}>
-                        <Text style={{ color: '#6366f1' }}>Cancel</Text>
+                        <Text style={{ color: '#004FFE' }}>Cancel</Text>
                     </TouchableOpacity>
                 </View>
             </Modal>
@@ -76,14 +76,14 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000' },
     permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
     title: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-    text: { fontSize: 16, color: '#94a3b8', textAlign: 'center', marginBottom: 32 },
+    text: { fontSize: 16, color: '#98A2B3', textAlign: 'center', marginBottom: 32 },
     btn: { width: '100%' },
     overlay: { flex: 1, justifyContent: 'space-between', paddingVertical: 60 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
     iconBtn: { padding: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12 },
     scanArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    scanFrame: { width: 280, height: 180, borderWidth: 2, borderColor: '#6366f1', borderRadius: 12, backgroundColor: 'rgba(99, 102, 241, 0.1)' },
+    scanFrame: { width: 280, height: 180, borderWidth: 2, borderColor: '#004FFE', borderRadius: 12, backgroundColor: 'rgba(0, 79, 254, 0.1)' },
     footer: { alignItems: 'center', paddingBottom: 40 },
     hint: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
 });

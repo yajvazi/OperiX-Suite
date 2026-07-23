@@ -1,38 +1,69 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Poppins } from "next/font/google";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
-const inter = Inter({
+const poppins = Poppins({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://operix.app";
+
 export const metadata: Metadata = {
-  title: "OperiX Suite - Business Management Platform",
-  description: "Invoicing, HR, Scanning, and Time Tracking in one powerful platform. Streamline your business operations with OperiX.",
-  keywords: ["invoicing", "HR management", "time tracking", "document scanning", "business software"],
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "OperiX Suite — One Suite. Complete Control.",
+    template: "%s | OperiX",
+  },
+  description:
+    "Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.",
+  applicationName: "OperiX Suite",
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "OperiX Suite - Business Management Platform",
-    description: "Invoicing, HR, Scanning, and Time Tracking in one powerful platform.",
+    title: "OperiX Suite — One Suite. Complete Control.",
+    description:
+      "A connected suite for invoicing, people operations, reporting, and business management.",
     type: "website",
+    siteName: "OperiX Suite",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OperiX Suite — One Suite. Complete Control.",
+    description: "A connected suite for clearer financial and people operations.",
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#ffffff",
+};
+
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "OperiX",
+  url: siteUrl,
+  logo: `${siteUrl}/brand/operix-icon.svg`,
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} antialiased`}>
-        {children}
+    <html lang="en" className={poppins.variable} data-scroll-behavior="smooth">
+      <body>
+        <a className="skip-link" href="#main-content">Skip to content</a>
+        <SiteHeader />
+        <main id="main-content">{children}</main>
+        <SiteFooter />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, "\\u003c") }}
+        />
       </body>
     </html>
   );
 }
-
-
-
-
-

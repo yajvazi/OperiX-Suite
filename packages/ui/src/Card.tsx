@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     cardDark: {
-        backgroundColor: '#1e293b',
+        backgroundColor: '#111827',
         borderColor: 'rgba(255,255,255,0.05)',
         ...Platform.select({
             ios: {
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(0,0,0,0.05)',
         ...Platform.select({
             ios: {
-                shadowColor: '#64748b',
+                shadowColor: '#667085',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.1,
                 shadowRadius: 12,
@@ -66,11 +66,11 @@ const styles = StyleSheet.create({
         }),
     },
     elevatedDark: {
-        backgroundColor: '#1e293b',
+        backgroundColor: '#111827',
         borderColor: 'transparent',
         ...Platform.select({
             ios: {
-                shadowColor: '#6366f1',
+                shadowColor: '#004FFE',
                 shadowOffset: { width: 0, height: 8 },
                 shadowOpacity: 0.2,
                 shadowRadius: 16,
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
         borderColor: 'transparent',
         ...Platform.select({
             ios: {
-                shadowColor: '#6366f1',
+                shadowColor: '#004FFE',
                 shadowOffset: { width: 0, height: 8 },
                 shadowOpacity: 0.15,
                 shadowRadius: 20,
@@ -97,12 +97,12 @@ const styles = StyleSheet.create({
     },
     outlinedDark: {
         backgroundColor: 'transparent',
-        borderColor: '#334155',
+        borderColor: '#263A55',
         borderWidth: 1.5,
     },
     outlinedLight: {
         backgroundColor: 'transparent',
-        borderColor: '#e2e8f0',
+        borderColor: '#E4E9F0',
         borderWidth: 1.5,
     },
 });

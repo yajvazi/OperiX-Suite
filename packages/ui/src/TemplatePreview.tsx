@@ -10,16 +10,18 @@ interface TemplatePreviewProps {
 
 const templateStyles: Record<TemplateType, { primary: string; secondary: string; accent: string }> = {
     corporate: { primary: '#000000', secondary: '#333333', accent: '#666666' },
+    thermal: { primary: '#111111', secondary: '#444444', accent: '#777777' },
 };
 
 const templateNames: Record<TemplateType, string> = {
     corporate: 'Corporate',
+    thermal: 'Thermal Receipt',
 };
 
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {
     const colors = templateStyles[template];
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const borderColor = selected ? '#6366f1' : (isDark ? '#334155' : '#e2e8f0');
+    const cardBg = isDark ? '#111827' : '#ffffff';
+    const borderColor = selected ? '#004FFE' : (isDark ? '#263A55' : '#E6EBF1');
 
     return (
         <View style={[styles.container, { backgroundColor: cardBg, borderColor }, selected && styles.selected]}>
@@ -65,7 +67,7 @@ export function TemplatePreview({ template, selected, isDark }: TemplatePreviewP
             </View>
 
             {/* Template Name */}
-            <Text style={[styles.name, { color: isDark ? '#fff' : '#1e293b' }]}>
+            <Text style={[styles.name, { color: isDark ? '#fff' : '#111827' }]}>
                 {templateNames[template]}
             </Text>
 
@@ -87,7 +89,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
     },
     selected: {
-        borderColor: '#6366f1',
+        borderColor: '#004FFE',
     },
     preview: {
         height: 160,
@@ -138,7 +140,7 @@ const styles = StyleSheet.create({
     },
     previewTableRow: {
         height: 6,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#F4F7FB',
         borderRadius: 2,
         marginBottom: 3,
     },
@@ -174,7 +176,7 @@ const styles = StyleSheet.create({
         right: 4,
         width: 20,
         height: 20,
-        backgroundColor: '#6366f1',
+        backgroundColor: '#004FFE',
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',

@@ -1,0 +1,10 @@
+**/node_modules
+**/.next
+**/.expo
+**/dist
+.git
+.env
+**/.env
+**/.env.local
+supabase/.temp
+tmp
