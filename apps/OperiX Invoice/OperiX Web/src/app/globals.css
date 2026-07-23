@@ -70,6 +70,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--blue); border-color: var(--blue); color: white; }
 .btn-primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+.store-badge { display:inline-flex; align-items:center; gap:7px; min-width:126px; padding:7px 10px; border:1px solid #d7e0ec; border-radius:7px; background:#111827; color:#fff; line-height:1; }
+.store-badge span { display:flex; flex-direction:column; gap:3px; }
+.store-badge small { font-size:8px; letter-spacing:.02em; opacity:.75; }
+.store-badge strong { font-size:13px; font-weight:600; }
+.auth-brand img { width: 190px; height: 95px; object-fit: contain; }
 .invoice-workspace { width:100%; min-width:0; max-width:1480px; margin:0 auto; padding:22px 24px 40px; overflow-x:hidden; }
 .invoice-commandbar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:16px 18px; margin-bottom:18px; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 18px rgba(16,24,40,.04); }
 .invoice-preview-back { display:inline-flex; align-items:center; gap:6px; color:var(--blue); font-size:12px; font-weight:500; }

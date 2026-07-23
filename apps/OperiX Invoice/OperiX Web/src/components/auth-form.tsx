@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Download, LockKeyhole, Mail } from "lucide-react";
+import { Apple, ArrowRight, Download, LockKeyhole, Mail, Play } from "lucide-react";
 import { Brand } from "./brand";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -35,7 +35,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return <main className="min-h-screen grid lg:grid-cols-[minmax(420px,540px)_1fr] bg-white">
     <section className="flex flex-col p-7 sm:p-12 lg:p-16 max-w-[540px] w-full mx-auto">
-      <Brand dark />
+      <div className="auth-brand flex justify-center"><Brand dark /></div>
       <div className="my-auto py-14">
         <h1 className="text-[32px] leading-tight font-semibold tracking-[-.04em]">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
         <p className="muted mt-3 mb-9">{mode === "login" ? "Sign in to manage invoices, payments and your business." : "Start managing your business with OperiX Invoice."}</p>
@@ -47,13 +47,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </form>
         {!isSupabaseConfigured && <p className="mt-4 text-xs text-center text-[#d92d20]">Supabase configuration is required to use OperiX Invoice.</p>}
         <p className="text-center mt-7 text-[13px] muted">{mode === "login" ? "New to OperiX? " : "Already have an account? "}<Link className="text-[#004ffe] font-semibold" href={mode === "login" ? "/signup" : "/login"}>{mode === "login" ? "Create an account" : "Sign in"}</Link></p>
-        <div className="mt-10 border-t border-[#e4e9f0] pt-7 flex items-center gap-3 text-[12px] muted"><Download size={17} className="text-[#004ffe]"/><span>Prefer mobile? App Store and Google Play links are available after sign-in.</span></div>
+        <div className="mt-10 border-t border-[#e4e9f0] pt-7"><div className="flex items-center gap-3 text-[12px] muted"><Download size={17} className="text-[#004ffe]"/><span>Prefer mobile? Download OperiX Invoice for iOS or Android.</span></div><div className="mt-4 flex gap-2"><a className="store-badge" href="https://apps.apple.com/" target="_blank" rel="noreferrer"><Apple size={16}/><span><small>Download on the</small><strong>App Store</strong></span></a><a className="store-badge" href="https://play.google.com/store" target="_blank" rel="noreferrer"><Play size={15} fill="currentColor"/><span><small>GET IT ON</small><strong>Google Play</strong></span></a></div></div>
       </div>
-      <p className="text-[11px] muted">© 2026 OperiX Invoice. Secure business software.</p>
+      <p className="text-[11px] muted">© 2026 OperiX Invoice. Secure business software. <span>Part of </span><a className="text-[#004ffe]" href="https://operixsuite.com">OperiX Suite</a>.</p>
     </section>
     <section className="hidden lg:flex relative overflow-hidden bg-[#061a38] text-white p-16 items-center justify-center">
       <div className="absolute inset-0 opacity-20" style={{backgroundImage:"radial-gradient(circle at 70% 20%, #3388ff 0, transparent 28%), linear-gradient(145deg, transparent 55%, #004ffe 150%)"}}/>
-      <div className="relative max-w-xl"><p className="text-[#8cc2ff] font-semibold mb-5">Smart invoicing. Stronger business.</p><h2 className="text-[48px] leading-[1.12] font-semibold tracking-[-.05em]">One clear view of every invoice, payment and decision.</h2><div className="mt-12 grid grid-cols-3 gap-3"><AuthStat value="A4 + 50 mm" label="Professional print"/><AuthStat value="Real-time" label="Business reports"/><AuthStat value="Secure" label="Company access"/></div></div>
+      <div className="relative max-w-xl"><p className="text-[#8cc2ff] font-semibold mb-5">Smart invoicing. Stronger business.</p><h2 className="text-[48px] leading-[1.12] font-semibold tracking-[-.05em]">One clear view of every invoice, payment and decision.</h2><div className="mt-12 grid grid-cols-3 gap-3"><AuthStat value="Fast setup" label="Ready in minutes"/><AuthStat value="Real-time" label="Business reports"/><AuthStat value="Secure" label="Company access"/></div></div>
     </section>
   </main>;
 }
