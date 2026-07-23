@@ -28,7 +28,7 @@ export function SiteHeader() {
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
       <div className="container nav-inner">
         <Link href="/" className="brand" aria-label="OperiX Suite home" onClick={() => setOpen(false)}>
-          <Image src="/brand/operix-icon.svg" width={32} height={32} alt="" aria-hidden="true" priority />
+          <Image src="/brand/operix-suite-icon-blue.svg" width={32} height={32} alt="" aria-hidden="true" priority />
           <strong>OperiX</strong>
           <span>Suite</span>
         </Link>

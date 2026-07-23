@@ -36,7 +36,7 @@ export function SiteFooter() {
       <div className="container footer-grid">
         <div className="footer-brand">
           <Link href="/" className="brand brand-light" aria-label="OperiX Suite home">
-            <Image src="/brand/operix-icon.svg" width={32} height={32} alt="" aria-hidden="true" />
+            <Image src="/brand/operix-suite-icon-blue.svg" width={32} height={32} alt="" aria-hidden="true" />
             <strong>OperiX</strong>
             <span>Suite</span>
           </Link>

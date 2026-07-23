@@ -48,7 +48,7 @@ const organizationSchema = {
   "@type": "Organization",
   name: "OperiX",
   url: siteUrl,
-  logo: `${siteUrl}/brand/operix-icon-blue.svg`,
+  logo: `${siteUrl}/brand/operix-suite-icon-blue.svg`,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

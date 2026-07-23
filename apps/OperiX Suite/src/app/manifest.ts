@@ -9,6 +9,6 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#004FFE",
-    icons: [{ src: "/brand/operix-icon-blue.svg", sizes: "any", type: "image/svg+xml" }],
+    icons: [{ src: "/brand/operix-suite-icon-blue.svg", sizes: "any", type: "image/svg+xml" }],
   };
 }
