@@ -25,12 +25,17 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
     const supabase = createClient();
     if (!supabase) return;
-    const result = mode === "login"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}/auth/callback` } });
-    if (result.error) { setMessage(result.error.message); setLoading(false); return; }
-    if (mode === "signup" && !result.data.session) { setMessage("Check your email to confirm your account."); setLoading(false); return; }
-    router.push(search.get("next") || "/dashboard"); router.refresh();
+    try {
+      const result = mode === "login"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}/auth/callback` } });
+      if (result.error) { setMessage(formatAuthError(result.error.message)); setLoading(false); return; }
+      if (mode === "signup" && !result.data.session) { setMessage("Check your email to confirm your account."); setLoading(false); return; }
+      router.push(search.get("next") || "/dashboard"); router.refresh();
+    } catch {
+      setMessage("Authentication is temporarily unavailable. Please try again in a moment.");
+      setLoading(false);
+    }
   }
 
   return <main className="min-h-screen grid lg:grid-cols-[minmax(420px,540px)_1fr] bg-white">
@@ -57,6 +62,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <div className="relative max-w-xl"><p className="text-[#8cc2ff] font-semibold mb-5">Smart invoicing. Stronger business.</p><h2 className="text-[48px] leading-[1.12] font-semibold tracking-[-.05em]">One clear view of every invoice, payment and decision.</h2><div className="mt-12 grid grid-cols-3 gap-3"><AuthStat value="Fast setup" label="Ready in minutes"/><AuthStat value="Real-time" label="Business reports"/><AuthStat value="Secure" label="Company access"/></div></div>
     </section>
   </main>;
+}
+
+function formatAuthError(message: string) {
+  if (!message || message === "{}" || message === "[object Object]") {
+    return "Authentication is temporarily unavailable. Please try again in a moment.";
+  }
+  return message;
 }
 
 function AuthStat({ value, label }: { value: string; label: string }) { return <div className="border-t border-white/20 pt-4"><strong className="block text-lg">{value}</strong><span className="text-white/60 text-xs">{label}</span></div>; }
