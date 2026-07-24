@@ -261,7 +261,7 @@ export function PosView() {
       stampUrl: source?.stamp_url,
     };
     localStorage.setItem("operix-print-draft", JSON.stringify({ draft, client: selectedClient, company, template: "corporate", config: source?.template_config }));
-    router.push("/pos/complete?print=1");
+    router.push(`/pos/complete/${encodeURIComponent(draft.invoice_number)}?print=1`);
   }
 
   async function saveInvoice(status: "draft" | "complete") {
@@ -373,7 +373,7 @@ export function PosView() {
       localStorage.setItem("operix-pos-complete", JSON.stringify({ draft, client: selectedClient, company, config: source?.template_config, invoiceId: invoiceResult.data.id }));
       setCart([]);
       setCashReceived(0);
-      router.push("/pos/complete");
+      router.push(`/pos/complete/${encodeURIComponent(draft.invoice_number)}`);
       return;
     }
     setCart([]);
