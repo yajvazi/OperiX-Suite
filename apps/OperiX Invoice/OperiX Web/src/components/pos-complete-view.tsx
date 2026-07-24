@@ -6,6 +6,8 @@ import { Download, FileText, Pencil, Printer } from "lucide-react";
 import { InvoiceDocument, type DocumentCompany } from "./invoice-document";
 import type { ClientRow, InvoiceDraft, InvoiceTemplateConfig } from "@/lib/models";
 import { openInvoicePdf } from "@/lib/pdf-client";
+import { createClient } from "@/lib/supabase/client";
+import { useWorkspace } from "@/hooks/use-workspace";
 
 type CompletePayload = { draft: InvoiceDraft; client?: ClientRow; company?: DocumentCompany; config?: InvoiceTemplateConfig; invoiceId?: string };
 
@@ -13,12 +15,27 @@ export function PosCompleteView({ invoiceCode }: { invoiceCode?: string }) {
   const [payload, setPayload] = useState<CompletePayload | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const workspace = useWorkspace();
 
   useEffect(() => {
     const raw = localStorage.getItem("operix-pos-complete");
     if (!raw) return;
     try { const value = JSON.parse(raw) as CompletePayload; queueMicrotask(() => setPayload(value)); } catch { queueMicrotask(() => setMessage("The invoice preview could not be loaded.")); }
   }, []);
+
+  useEffect(() => {
+    if (payload || !invoiceCode) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    void supabase.from("invoices").select("*, client:clients(*), items:invoice_items(*)").eq("invoice_number", decodeURIComponent(invoiceCode)).maybeSingle().then(({ data, error }) => {
+      if (error) { setMessage(error.message); return; }
+      if (!data) { setMessage("This invoice could not be found."); return; }
+      const source = workspace.company || workspace.profile;
+      const company: DocumentCompany = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "), taxId: source?.tax_id || "", bankName: source?.bank_name || "", iban: source?.bank_iban || "", website: source?.website || "", signatureUrl: source?.signature_url, stampUrl: source?.stamp_url };
+      const draft: InvoiceDraft = { client_id: data.client_id || "", invoice_number: data.invoice_number, issue_date: data.issue_date, due_date: data.due_date || data.issue_date, payment_method: data.payment_method || "bank", amount_received: Number(data.amount_received || 0), notes: data.notes || "", status: data.status, items: (data.items || []).map((item: Record<string, unknown>) => ({ id: String(item.id), product_id: item.product_id ? String(item.product_id) : undefined, description: String(item.description || ""), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), discount: Number(item.discount || 0), unit: String(item.unit || "pcs"), sku: item.sku ? String(item.sku) : undefined })) };
+      setPayload({ draft, client: data.client as ClientRow | undefined, company });
+    });
+  }, [invoiceCode, payload, workspace.company, workspace.profile]);
 
   useEffect(() => {
     if (!payload || !new URLSearchParams(window.location.search).has("print")) return;
