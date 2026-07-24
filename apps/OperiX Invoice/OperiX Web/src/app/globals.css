@@ -153,7 +153,7 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
 .invoice-a4-preview .signatures{display:flex;justify-content:space-between;margin-top:auto;margin-bottom:.7em;text-align:center;font-size:1em}
 .invoice-a4-preview .sig-block{width:22%}
 .invoice-a4-preview .sig-line{border-bottom:1px solid #000;height:7.2em;margin-bottom:.35em;display:flex;align-items:flex-end;justify-content:center}
-.invoice-a4-preview .seller-signature{width:15em;max-width:100%;max-height:6.8em;object-fit:contain;filter:brightness(0) saturate(100%) invert(25%) sepia(98%) saturate(2500%) hue-rotate(210deg) brightness(92%) contrast(108%)}
+.invoice-a4-preview .seller-signature{width:28em;max-width:100%;max-height:12em;object-fit:contain;filter:brightness(0) saturate(100%) invert(25%) sepia(98%) saturate(2500%) hue-rotate(210deg) brightness(92%) contrast(108%)}
 .invoice-a4-preview .page-footer{display:flex;justify-content:space-between;border-top:1px solid #000;padding-top:.7em;font-size:.86em}
 .invoice-a4-preview .footer-col{flex:1}
 .invoice-a4-preview .muted{color:#555;font-size:.8em}
