@@ -77,13 +77,13 @@ export default function HomePage() {
       <section className="section suite-connection-section" aria-labelledby="suite-connection-title">
         <div className="container suite-connection-grid">
           <Reveal className="suite-connection-copy">
-            <span className="eyebrow">One connected suite</span>
-            <h2 id="suite-connection-title">Every product works better together.</h2>
-            <p>OperiX keeps your financial, people, booking, workspace, and leadership data connected—so your team always works from the same trusted context.</p>
+            <span className="eyebrow">OperiX Control</span>
+            <h2 id="suite-connection-title">One command center for your entire suite.</h2>
+            <p>OperiX Control brings every OperiX product into one clear view, giving leaders the context, controls, and insight to run the whole operation from one place.</p>
             <div className="suite-connection-points">
-              <div><div className="icon-box"><Layers3 /></div><span><strong>Shared foundation</strong>Common teams, workspaces, and permissions.</span></div>
-              <div><div className="icon-box"><RefreshCw /></div><span><strong>Real-time context</strong>Updates flow across products as work happens.</span></div>
-              <div><div className="icon-box"><ShieldCheck /></div><span><strong>One secure account</strong>Consistent access and control everywhere.</span></div>
+              <div><div className="icon-box"><Layers3 /></div><span><strong>Unified command center</strong>See revenue, people, bookings, and workspace activity together.</span></div>
+              <div><div className="icon-box"><RefreshCw /></div><span><strong>Live operational insight</strong>Updates flow into Control as work happens across the suite.</span></div>
+              <div><div className="icon-box"><ShieldCheck /></div><span><strong>Centralized governance</strong>Manage access, settings, and shared context from one secure place.</span></div>
             </div>
           </Reveal>
           <Reveal className="suite-connection-map" delay={.08}>
