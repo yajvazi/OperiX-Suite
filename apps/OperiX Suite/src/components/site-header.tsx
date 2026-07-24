@@ -62,7 +62,7 @@ export function SiteHeader() {
           </Link>
         </div>
         <Link href={`/preview-login?next=${encodeURIComponent(`${prefix || "/en"}/preview`)}`} className="button button-small nav-cta">
-          {locale === "al" ? "Hyrje private" : "Owner Login"}
+          {locale === "al" ? "Hyrja e ekipit" : "Team Login"}
         </Link>
         <button
           className="menu-button"
@@ -83,7 +83,7 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link href={`/preview-login?next=${encodeURIComponent(`${prefix || "/en"}/preview`)}`} className="button" onClick={() => setOpen(false)}>
-            {locale === "al" ? "Hyrje private" : "Owner Login"}
+            {locale === "al" ? "Hyrja e ekipit" : "Team Login"}
           </Link>
         </nav>
       </div>
