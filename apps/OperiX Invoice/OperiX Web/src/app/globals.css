@@ -64,7 +64,8 @@ main.min-h-screen section.grid > article > div::-webkit-scrollbar { width: 0; he
   main.min-h-screen > div > header > div:first-child h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   main.min-h-screen > div > header > div:last-child { margin-left: auto; }
   main.min-h-screen section.grid > article > header > div:last-child { width: 100%; margin-left: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-  main.min-h-screen section.grid > article > header > div:last-child > div:last-child { width: 100%; justify-content: flex-end; margin-top: 10px; }
+  main.min-h-screen section.grid > article > header > div:last-child > div:last-child { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  main.min-h-screen section.grid > article > header > div:last-child > div:last-child > a { width: 100%; }
 }
 .page-title { font-size: 27px; line-height: 1.2; font-weight: 600; letter-spacing: -.03em; }
 .muted { color: var(--muted); }
