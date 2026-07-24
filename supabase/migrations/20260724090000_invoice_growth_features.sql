@@ -124,7 +124,7 @@ begin
       'amount_received', coalesce(i.amount_received, 0),
       'notes', i.notes,
       'items', coalesce((select jsonb_agg(to_jsonb(ii) - 'id' - 'invoice_id') from invoice_items ii where ii.invoice_id = i.id), '[]'::jsonb)
-    ) order by i.issue_date desc) from invoices i where i.client_id = portal.client_id and i.company_id = portal.company_id and i.type is distinct from 'offer' and i.status <> 'cancelled'), '[]'::jsonb)
+    ) order by i.issue_date desc) from invoices i where i.client_id = portal.client_id and i.company_id = portal.company_id and i.type is distinct from 'offer' and i.status::text <> 'cancelled'), '[]'::jsonb)
   ) into result;
   return result;
 end;
