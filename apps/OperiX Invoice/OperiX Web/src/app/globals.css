@@ -52,6 +52,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .sidebar-nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .sidebar-nav-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
+/* Customer portal: keep invoice actions usable on narrow screens without
+   exposing scrollbar chrome in the line-item tables. */
+main.min-h-screen > div > header > div:last-child > span { display: none; }
+main.min-h-screen section.grid > article > div { scrollbar-width: none; -ms-overflow-style: none; }
+main.min-h-screen section.grid > article > div::-webkit-scrollbar { width: 0; height: 0; display: none; }
+@media (max-width: 639px) {
+  main.min-h-screen section.grid > article > header > div:last-child { width: 100%; margin-left: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  main.min-h-screen section.grid > article > header > div:last-child > div:last-child { width: 100%; justify-content: flex-end; margin-top: 10px; }
+}
 .page-title { font-size: 27px; line-height: 1.2; font-weight: 600; letter-spacing: -.03em; }
 .muted { color: var(--muted); }
 .btn {
