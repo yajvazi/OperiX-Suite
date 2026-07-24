@@ -5,7 +5,7 @@ import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
 // The POS completion screen only reads the just-created invoice from the
 // browser's local storage. It must remain reachable after the POS redirect,
 // even if the auth cookie is refreshed between those two navigations.
-const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/pos/complete", "/demo"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/pos/complete", "/demo", "/portal"];
 
 export async function updateSession(request: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.next({ request });

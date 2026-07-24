@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell, Boxes, Building2, ChevronDown, ChevronLeft, CircleHelp, CreditCard, FileBarChart,
   FileText, HandCoins, LayoutDashboard, Menu, PackageOpen, Plus, ReceiptText, Search, Settings,
-  ShoppingBag, ShoppingCart, Store, Users, WalletCards, X, Download, LogOut, ScrollText,
+  ShoppingBag, ShoppingCart, Store, Users, WalletCards, X, Download, LogOut, ScrollText, ExternalLink,
 } from "lucide-react";
 import { Brand } from "./brand";
 import { createClient } from "@/lib/supabase/client";
@@ -24,7 +24,9 @@ const nav = [
   { href: "/expenses", label: "Expenses", icon: WalletCards },
   { href: "/income", label: "Income", icon: HandCoins },
   { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/payment-links", label: "Online Payments", icon: CreditCard },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/portal-links", label: "Customer Portal", icon: ExternalLink },
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
   { href: "/reports", label: "Reports", icon: FileBarChart },
