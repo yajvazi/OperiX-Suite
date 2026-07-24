@@ -38,7 +38,7 @@ export const trustItems = [
 export const products = [
   {
     name: "OperiX Invoice",
-    logo: "/brand/operix-xi.svg",
+    logo: "/brand/operix-xi-white.svg",
     href: "/products/invoice",
     description:
       "Create invoices, track payments, manage expenses, and understand business performance from one focused workspace.",
@@ -48,7 +48,7 @@ export const products = [
   },
   {
     name: "OperiX HR Office",
-    logo: "/brand/operix-xhr.svg",
+    logo: "/brand/operix-xhr-white.svg",
     href: "/products/hr",
     description:
       "Bring employee records, attendance, leave, payroll, and team operations into one reliable system.",
@@ -58,7 +58,7 @@ export const products = [
   },
   {
     name: "OperiX Booking",
-    logo: "/brand/operix-xb.svg",
+    logo: "/brand/operix-xb-white.svg",
     href: "/products/booking",
     description: "Simplify appointments and reservations.",
     details: "An all-in-one appointment and reservation management platform for scheduling services, managing availability, automating confirmations, sending reminders, and enabling seamless online booking.",
@@ -69,7 +69,7 @@ export const products = [
   },
   {
     name: "OperiX Desk",
-    logo: "/brand/operix-xd.svg",
+    logo: "/brand/operix-xd-white.svg",
     href: "/products/desk",
     description: "Smarter workspace reservations.",
     details: "A flexible workspace booking solution for desks, meeting rooms, offices, and shared spaces—with availability, utilization, and hybrid work in one intuitive platform.",
@@ -80,7 +80,7 @@ export const products = [
   },
   {
     name: "OperiX Control",
-    logo: "/brand/operix-xc.svg",
+    logo: "/brand/operix-xc-white.svg",
     href: "/products/control",
     description: "One control panel for the entire OperiX Suite.",
     details: "Centralize shared workspace, team, customer, billing, and activity data across every OperiX product.",
