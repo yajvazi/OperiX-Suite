@@ -3,10 +3,7 @@ import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
-  Building2,
-  CalendarDays,
   FileText,
-  Gauge,
   Layers3,
   PlugZap,
   RefreshCw,
@@ -87,13 +84,10 @@ export default function HomePage() {
             </div>
           </Reveal>
           <Reveal className="suite-connection-map" delay={.08}>
-            <div className="connection-orbit orbit-one" /><div className="connection-orbit orbit-two" />
-            <div className="connection-core"><Image src="/brand/operix-x-mark.svg" width={58} height={58} alt="OperiX Suite" /></div>
-            <div className="connection-node connection-invoice"><FileText /><span>Invoice</span></div>
-            <div className="connection-node connection-hr"><Users /><span>HR Office</span></div>
-            <div className="connection-node connection-booking"><CalendarDays /><span>Booking</span></div>
-            <div className="connection-node connection-desk"><Building2 /><span>Desk</span></div>
-            <div className="connection-node connection-control"><Gauge /><span>Control</span></div>
+            <div className="control-preview-topline"><span><i /> Live suite sync</span><small>5 products connected</small></div>
+            <div className="control-preview-dashboard"><DashboardMockup variant="control" /></div>
+            <div className="control-preview-float control-preview-float-one"><RefreshCw /> Updated just now</div>
+            <div className="control-preview-float control-preview-float-two"><ShieldCheck /> One secure account</div>
           </Reveal>
         </div>
       </section>
