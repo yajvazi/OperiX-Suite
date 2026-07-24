@@ -8,7 +8,6 @@ export function DashboardMockup({ variant = "suite" }: { variant?: "suite" | "in
   const isBooking = variant === "booking";
   const isDesk = variant === "desk";
   const isControl = variant === "control";
-  if (isDesk) return <DeskMockup />;
   return (
     <div className={`dashboard-mockup dashboard-${variant}`} aria-label={`${variant} dashboard preview`}>
       <aside>
