@@ -258,6 +258,7 @@ p { color: var(--muted); }
 .product-card:hover { transform: translateY(-5px); border-color: #c9dafb; box-shadow: var(--shadow-blue); }
 .product-carousel .product-card { width: 100%; height: 620px; min-height: 620px; }
 .product-carousel .product-preview { min-height: 0; height: 100%; }
+.product-carousel .product-preview .dashboard-mockup { height: 330px; min-height: 330px; transform: none; }
 .suite-connection-section { overflow: hidden; background: #f8fbff; }
 .suite-connection-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 76px; align-items: center; }
 .suite-connection-copy h2 { max-width: 520px; }
