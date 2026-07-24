@@ -17,20 +17,12 @@ import type { InvoiceRow } from "@/lib/models";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "POS", icon: ShoppingCart },
-  { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/quotes", label: "Quotes", icon: ReceiptText },
-  { href: "/recurring", label: "Recurring Invoices", icon: ReceiptText },
-  { href: "/reminders", label: "Payment Reminders", icon: Bell },
-  { href: "/expenses", label: "Expenses", icon: WalletCards },
-  { href: "/income", label: "Income", icon: HandCoins },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/payment-links", label: "Online Payments", icon: CreditCard },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/portal-links", label: "Customer Portal", icon: ExternalLink },
+  { href: "/invoices", label: "Invoices", icon: FileText, children: [{ href: "/quotes", label: "Quotes" }, { href: "/recurring", label: "Recurring Invoices" }] },
+  { href: "/payments", label: "Payments", icon: CreditCard, children: [{ href: "/reminders", label: "Payment Reminders" }, { href: "/payment-links", label: "Online Payments" }, { href: "/income", label: "Income" }, { href: "/expenses", label: "Expenses" }] },
+  { href: "/customers", label: "Customers", icon: Users, children: [{ href: "/portal-links", label: "Customer Portal" }] },
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
-  { href: "/reports", label: "Reports", icon: FileBarChart },
-  { href: "/tax-reports", label: "VAT & Tax Reports", icon: FileBarChart },
+  { href: "/reports", label: "Reports", icon: FileBarChart, children: [{ href: "/tax-reports", label: "VAT & Tax Reports" }] },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -66,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <aside className={`fixed z-40 inset-y-0 left-0 w-[224px] lg:w-[var(--sidebar-width)] bg-[#061a38] text-white transition-[width,transform] duration-200 overflow-hidden ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
       <div className="h-20 px-5 flex items-center justify-between border-b border-white/8"><Brand compact={collapsed}/><button className="lg:hidden text-white/70" onClick={() => setMobileOpen(false)}><X size={20}/></button></div>
       <nav className="sidebar-nav-scroll px-3 py-5 grid gap-1 overflow-y-auto overflow-x-hidden h-[calc(100vh-144px)]" aria-label="Main navigation">
-        {nav.map((item) => { const active = path === item.href || path.startsWith(item.href + "/"); const Icon = item.icon; return <Link onClick={() => setMobileOpen(false)} key={item.href} href={item.href} title={collapsed ? item.label : undefined} className={`h-[43px] px-3 rounded-[7px] flex items-center gap-3 whitespace-nowrap transition-colors ${active ? "bg-[#004ffe] text-white shadow-[0_8px_20px_rgba(0,79,254,.22)]" : "text-white/82 hover:text-white hover:bg-white/7"}`}><Icon size={19} strokeWidth={1.8}/>{!collapsed && <span className="text-[13px] font-medium">{item.label}</span>}</Link>; })}
+        {nav.map((item) => { const active = path === item.href || path.startsWith(item.href + "/"); const Icon = item.icon; return <div key={item.href} className="grid gap-1"><Link onClick={() => setMobileOpen(false)} href={item.href} title={collapsed ? item.label : undefined} className={`h-[43px] px-3 rounded-[7px] flex items-center gap-3 whitespace-nowrap transition-colors ${active ? "bg-[#004ffe] text-white shadow-[0_8px_20px_rgba(0,79,254,.22)]" : "text-white/82 hover:text-white hover:bg-white/7"}`}><Icon size={19} strokeWidth={1.8}/>{!collapsed && <><span className="text-[13px] font-medium">{item.label}</span>{item.children?.length ? <ChevronDown size={14} className="ml-auto opacity-60"/> : null}</>}</Link>{!collapsed && item.children?.map(child=><Link onClick={() => setMobileOpen(false)} key={child.href} href={child.href} className={`ml-8 h-8 rounded-md px-3 flex items-center text-[11px] whitespace-nowrap ${path === child.href || path.startsWith(child.href + "/") ? "bg-white/15 text-white" : "text-white/60 hover:bg-white/8 hover:text-white"}`}>{child.label}</Link>)}</div>; })}
       </nav>
       <button className="absolute bottom-4 left-3 right-3 h-10 px-3 flex items-center gap-3 text-white/65 hover:text-white" onClick={() => setCollapsed((value) => !value)}><ChevronLeft size={19} className={`transition-transform ${collapsed ? "rotate-180" : ""}`}/>{!collapsed && <span className="text-xs">Collapse</span>}</button>
     </aside>
