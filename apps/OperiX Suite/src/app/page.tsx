@@ -22,7 +22,8 @@ const copy = {
     deskText: "Reserve desks, meeting rooms, offices, and shared workspaces.",
     control: "OperiX Control",
     controlText: "Manage shared teams, settings, activity, and suite-wide insights from one place.",
-    footer: "OperiX Suite is being built with care for growing businesses.",
+    moreTitle: "And many more to come",
+    moreBody: "New products and capabilities are already on the way.",
   },
   al: {
     title: "Një mënyrë më e qartë për të drejtuar atë që vjen më pas.",
@@ -40,7 +41,8 @@ const copy = {
     deskText: "Rezervoni tavolina, salla takimesh, zyra dhe hapësira të përbashkëta.",
     control: "OperiX Control",
     controlText: "Menaxhoni ekipet, cilësimet, aktivitetin dhe pamjen e gjithë suite nga një vend.",
-    footer: "OperiX Suite po ndërtohet me kujdes për bizneset në rritje.",
+    moreTitle: "Dhe shumë të tjera po vijnë",
+    moreBody: "Produkte dhe mundësi të reja janë tashmë në rrugë.",
   },
 } as const;
 
@@ -93,7 +95,10 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="coming-soon-footer"><span>{t.statusText}</span><span>{t.footer}</span></div>
+        <div className="coming-soon-more" role="note">
+          <div className="coming-soon-more-icon"><Sparkles aria-hidden="true" /></div>
+          <div><strong>{t.moreTitle}</strong><span>{t.moreBody}</span></div>
+        </div>
       </div>
     </section>
   );
