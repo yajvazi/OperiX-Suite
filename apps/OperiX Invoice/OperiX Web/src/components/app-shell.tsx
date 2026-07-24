@@ -19,6 +19,8 @@ const nav = [
   { href: "/pos", label: "POS", icon: ShoppingCart },
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/quotes", label: "Quotes", icon: ReceiptText },
+  { href: "/recurring", label: "Recurring Invoices", icon: ReceiptText },
+  { href: "/reminders", label: "Payment Reminders", icon: Bell },
   { href: "/expenses", label: "Expenses", icon: WalletCards },
   { href: "/income", label: "Income", icon: HandCoins },
   { href: "/payments", label: "Payments", icon: CreditCard },
@@ -26,6 +28,7 @@ const nav = [
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/tax-reports", label: "VAT & Tax Reports", icon: FileBarChart },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
