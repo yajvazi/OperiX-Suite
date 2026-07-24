@@ -478,6 +478,7 @@ p { color: var(--muted); }
   .trust-item:nth-child(2) { border-right: 0; }
   .trust-item:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
   .products-grid, .editorial-grid, .split-section, .form-layout, .mission-grid { grid-template-columns: 1fr; }
+  .product-carousel .carousel-track > div:nth-child(2) { display: none; }
   .benefits-grid { grid-template-columns: repeat(2,1fr); }
   .editorial-grid { gap: 48px; }
   .testimonial-grid { grid-template-columns: 1fr; }
