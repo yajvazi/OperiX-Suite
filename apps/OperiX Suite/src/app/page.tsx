@@ -1,186 +1,94 @@
-import Link from "next/link";
+"use client";
+
 import Image from "next/image";
-import {
-  ArrowRight,
-  BarChart3,
-  FileText,
-  Layers3,
-  PlugZap,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  Users,
-} from "lucide-react";
-import { FAQList } from "@/components/faq";
-import { Float, Reveal } from "@/components/motion";
-import { DashboardMockup, PhoneMockup } from "@/components/product-mockup";
-import { ProductCarousel } from "@/components/product-carousel";
-import { PricingGrid } from "@/components/pricing";
-import { benefits, resources, trustItems } from "@/content/site";
+import Link from "next/link";
+import { ArrowRight, ExternalLink, LockKeyhole, Sparkles } from "lucide-react";
+import { usePathname } from "next/navigation";
+
+const copy = {
+  en: {
+    label: "OPERIX SUITE",
+    title: "A clearer way to run what comes next.",
+    body: "We’re putting the finishing touches on OperiX Suite — connected tools for finance, people, bookings, workspace, and the teams behind them.",
+    status: "Coming soon",
+    statusText: "Our connected suite is being prepared for launch.",
+    production: "Open production app",
+    demo: "Try the interactive demo",
+    contact: "Talk to our team",
+    apps: "Explore the apps while we build",
+    invoice: "OperiX Invoice",
+    invoiceText: "Create invoices, manage payments, and keep your financial work moving.",
+    hr: "OperiX HR Office",
+    hrText: "Bring employee records, attendance, and payroll into one reliable workspace.",
+    footer: "OperiX Suite is being built with care for growing businesses.",
+  },
+  al: {
+    label: "OPERIX SUITE",
+    title: "Një mënyrë më e qartë për të drejtuar atë që vjen më pas.",
+    body: "Po përfundojmë OperiX Suite — mjete të lidhura për financat, stafin, rezervimet, hapësirat dhe ekipet pas tyre.",
+    status: "Së shpejti",
+    statusText: "Suite jonë e lidhur po përgatitet për lançim.",
+    production: "Hap aplikacionin e prodhimit",
+    demo: "Provo demonstrimin interaktiv",
+    contact: "Kontaktoni ekipin",
+    apps: "Eksploroni aplikacionet ndërsa ndërtojmë",
+    invoice: "OperiX Invoice",
+    invoiceText: "Krijoni fatura, menaxhoni pagesat dhe mbani financat në lëvizje.",
+    hr: "OperiX HR Office",
+    hrText: "Mbani stafin, vijueshmërinë dhe pagat në një hapësirë të besueshme.",
+    footer: "OperiX Suite po ndërtohet me kujdes për bizneset në rritje.",
+  },
+} as const;
 
 export default function HomePage() {
+  const pathname = usePathname();
+  const t = pathname.startsWith("/al") ? copy.al : copy.en;
+  const prefix = pathname.startsWith("/al") ? "/al" : "/en";
+
   return (
-    <>
-      <section className="home-hero">
-        <div className="container hero-grid">
-          <div className="hero-copy">
-            <Reveal>
-              <h1>One Suite.<br />Complete Control.</h1>
-              <p>Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.</p>
-              <div className="button-row">
-                <Link href="#products" className="button">Explore Products <ArrowRight /></Link>
-                <Link href="/book-demo" className="button button-secondary">Book Demo</Link>
-              </div>
-            </Reveal>
+    <section className="coming-soon-page" aria-labelledby="coming-soon-title">
+      <div className="coming-soon-orb coming-soon-orb-one" />
+      <div className="coming-soon-orb coming-soon-orb-two" />
+      <div className="container coming-soon-container">
+        <div className="coming-soon-brand">
+          <Image src="/brand/operix-wordmark-blue.svg" width={132} height={44} alt="OperiX" priority />
+          <span>Suite</span>
+        </div>
+
+        <div className="coming-soon-content">
+          <div className="coming-soon-status"><span className="coming-soon-status-dot" />{t.status}</div>
+          <span className="eyebrow">{t.label}</span>
+          <h1 id="coming-soon-title">{t.title}</h1>
+          <p>{t.body}</p>
+          <div className="coming-soon-actions">
+            <a className="button" href="https://invoice.operixsuite.com/login">
+              {t.production} <ExternalLink aria-hidden="true" />
+            </a>
+            <a className="button button-secondary" href="https://demo.invoice.operixsuite.com/">
+              {t.demo} <ArrowRight aria-hidden="true" />
+            </a>
           </div>
-          <div className="hero-visual">
-            <Reveal className="hero-dashboard" delay={0.08}>
-              <DashboardMockup />
-            </Reveal>
-            <Float className="hero-phone"><PhoneMockup /></Float>
-            <Float className="floating-card floating-top" reverse>
-              <strong>Clear reporting</strong><span>Decision-ready insights</span>
-            </Float>
-            <Float className="floating-card floating-bottom">
-              <strong>One connected view</strong><span>Finance and people operations</span>
-            </Float>
-          </div>
+          <Link className="coming-soon-contact" href={`${prefix}/contact`}>{t.contact} <ArrowRight aria-hidden="true" /></Link>
         </div>
-      </section>
 
-      <section className="trust-section" aria-labelledby="trust-heading">
-        <div className="container">
-          <h2 id="trust-heading" className="trust-title">Trusted foundations for growing businesses</h2>
-          <div className="trust-grid">
-            {trustItems.map((item) => {
-              const Icon = item.icon;
-              return <div className="trust-item" key={item.title}><Icon aria-hidden="true" /><div><strong>{item.title}</strong><span>{item.text}</span></div></div>;
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="section" id="products">
-        <div className="container">
-          <Reveal className="section-heading centered">
-            <span className="eyebrow">OperiX products</span>
-            <h2>Five focused products.<br />One clear experience.</h2>
-            <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
-          </Reveal>
-          <ProductCarousel />
-        </div>
-      </section>
-
-      <section className="section suite-connection-section" aria-labelledby="suite-connection-title">
-        <div className="container suite-connection-grid">
-          <Reveal className="suite-connection-copy">
-            <span className="eyebrow">OperiX Control</span>
-            <h2 id="suite-connection-title">One command center for your entire suite.</h2>
-            <p>OperiX Control brings every OperiX product into one clear view, giving leaders the context, controls, and insight to run the whole operation from one place.</p>
-            <div className="suite-connection-points">
-              <div><div className="icon-box"><Layers3 /></div><span><strong>Unified command center</strong>See revenue, people, bookings, and workspace activity together.</span></div>
-              <div><div className="icon-box"><RefreshCw /></div><span><strong>Live operational insight</strong>Updates flow into Control as work happens across the suite.</span></div>
-              <div><div className="icon-box"><ShieldCheck /></div><span><strong>Centralized governance</strong>Manage access, settings, and shared context from one secure place.</span></div>
-            </div>
-          </Reveal>
-          <Reveal className="suite-connection-map" delay={.08}>
-            <div className="control-preview-topline"><span><i /> Live suite sync</span><small>5 products connected</small></div>
-            <div className="control-preview-dashboard"><DashboardMockup variant="control" /></div>
-            <div className="control-preview-float control-preview-float-one"><RefreshCw /> Updated just now</div>
-            <div className="control-preview-float control-preview-float-two"><ShieldCheck /> One secure account</div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="benefits-section">
-        <div className="container">
-          <Reveal className="section-heading centered">
-            <h2>Everything You Need to Run Your Business</h2>
-            <p>A connected operational foundation—clear enough for today and ready for what comes next.</p>
-          </Reveal>
-          <div className="benefits-grid">
-            {benefits.map((benefit, index) => {
-              const Icon = benefit.icon;
-              return <Reveal className="benefit-item" key={benefit.title} delay={(index % 3) * .05}><Icon aria-hidden="true" /><h3>{benefit.title}</h3><p>{benefit.text}</p></Reveal>;
-            })}
+        <div className="coming-soon-apps" aria-label={t.apps}>
+          <div className="coming-soon-apps-heading"><Sparkles aria-hidden="true" /><span>{t.apps}</span></div>
+          <div className="coming-soon-app-grid">
+            <article className="coming-soon-app-card">
+              <div className="coming-soon-app-icon"><Image src="/brand/operix-xi-white.svg" width={38} height={38} alt="" aria-hidden="true" /></div>
+              <div><h2>{t.invoice}</h2><p>{t.invoiceText}</p></div>
+              <LockKeyhole aria-hidden="true" />
+            </article>
+            <article className="coming-soon-app-card">
+              <div className="coming-soon-app-icon"><Image src="/brand/operix-xhr-white.svg" width={38} height={38} alt="" aria-hidden="true" /></div>
+              <div><h2>{t.hr}</h2><p>{t.hrText}</p></div>
+              <LockKeyhole aria-hidden="true" />
+            </article>
           </div>
         </div>
-      </section>
 
-      <section className="section">
-        <div className="container editorial-grid">
-          <Reveal>
-            <span className="eyebrow">Built for modern teams</span>
-            <h2>Less switching.<br />More clarity.</h2>
-            <p>OperiX brings the work that keeps your business moving into focused, consistent products your team can understand.</p>
-            <div className="editorial-list">
-              {[
-                [Layers3, "Unified workspace", "A consistent system across financial and people operations."],
-                [Sparkles, "Intentional design", "Clear interfaces built around everyday work."],
-                [PlugZap, "Connected foundations", "Shared operational context wherever it adds value."],
-              ].map(([Icon, title, text]) => {
-                const Component = Icon as typeof Layers3;
-                return <div className="editorial-item" key={String(title)}><div className="icon-box"><Component /></div><div><h3>{String(title)}</h3><p>{String(text)}</p></div></div>;
-              })}
-            </div>
-            <Link href="/features" className="text-link">Explore all features <ArrowRight /></Link>
-          </Reveal>
-          <Reveal className="integration-panel" delay={.08}>
-            <div className="integration-core"><Image src="/brand/operix-x-mark.svg" width={72} height={72} alt="OperiX connected suite" /></div>
-            <div className="integration-node node-1"><FileText /> Invoicing</div>
-            <div className="integration-node node-2"><Users /> People</div>
-            <div className="integration-node node-3"><BarChart3 /> Reports</div>
-            <div className="integration-node node-4"><PlugZap /> Workflows</div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="section testimonials-section">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Customer stories</span><h2>Built to support real work</h2><p>Verified customer stories will appear here as the OperiX community grows.</p></Reveal>
-          <div className="testimonial-grid">
-            {["A clearer view of financial work.", "People operations without the busywork.", "One product family our team can grow into."].map((quote, index) => (
-              <Reveal key={quote} delay={index * .06}><article className="testimonial-card"><blockquote>“{quote}”</blockquote><footer><strong>Customer story</strong>Reserved for a verified OperiX customer</footer></article></Reveal>
-            ))}
-          </div>
-          <p className="placeholder-note">Placeholder testimonials are intentionally labeled and do not represent customer endorsements.</p>
-        </div>
-      </section>
-
-      <section className="section" id="pricing">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Pricing</span><h2>Start with what your business needs</h2><p>Final pricing is being prepared. Talk with us about the right product and rollout for your team.</p></Reveal>
-          <PricingGrid />
-        </div>
-      </section>
-
-      <section className="section section-compact">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">FAQ</span><h2>Questions, answered</h2></Reveal>
-          <FAQList limit={5} />
-        </div>
-      </section>
-
-      <section className="section section-compact">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Resources</span><h2>Explore OperiX at your pace</h2><p>Product references, guides, and support material will live in one focused resource center.</p></Reveal>
-          <div className="resource-grid">
-            {resources.slice(0, 3).map((resource, index) => {
-              const Icon = resource.icon;
-              return <Reveal key={resource.title} delay={index * .06}><article className="resource-card"><div className="icon-box"><Icon /></div><div><h2>{resource.title}</h2><p>{resource.description}</p><span>{resource.status}</span></div></article></Reveal>;
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="section section-compact">
-        <div className="container">
-          <Reveal className="cta-band">
-            <div><h2>Ready to bring your operation into focus?</h2><p>Explore OperiX Invoice and OperiX HR Office with a guided walkthrough.</p></div>
-            <div className="button-row"><Link href="/book-demo" className="button">Book a Demo</Link><Link href="/contact" className="button button-secondary">Contact Us</Link></div>
-          </Reveal>
-        </div>
-      </section>
-    </>
+        <div className="coming-soon-footer"><span>{t.statusText}</span><span>{t.footer}</span></div>
+      </div>
+    </section>
   );
 }
