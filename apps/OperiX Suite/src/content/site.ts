@@ -58,7 +58,7 @@ export const products = [
   },
   {
     name: "OperiX Booking",
-    logo: "/brand/operix-booking-logo-blue.svg",
+    logo: "/brand/operix-booking-logo-white.svg",
     href: "/products/booking",
     description: "Simplify appointments and reservations.",
     details: "An all-in-one appointment and reservation management platform for scheduling services, managing availability, automating confirmations, sending reminders, and enabling seamless online booking.",
@@ -69,7 +69,7 @@ export const products = [
   },
   {
     name: "OperiX Desk",
-    logo: "/brand/operix-desk-logo-blue.svg",
+    logo: "/brand/operix-desk-logo-white.svg",
     href: "/products/desk",
     description: "Smarter workspace reservations.",
     details: "A flexible workspace booking solution for desks, meeting rooms, offices, and shared spaces—with availability, utilization, and hybrid work in one intuitive platform.",
