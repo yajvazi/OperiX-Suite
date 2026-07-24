@@ -12,8 +12,9 @@ import {
 import { FAQList } from "@/components/faq";
 import { Float, Reveal } from "@/components/motion";
 import { DashboardMockup, PhoneMockup } from "@/components/product-mockup";
+import { ProductCarousel } from "@/components/product-carousel";
 import { PricingGrid } from "@/components/pricing";
-import { benefits, products, resources, trustItems } from "@/content/site";
+import { benefits, resources, trustItems } from "@/content/site";
 
 export default function HomePage() {
   return (
@@ -64,23 +65,7 @@ export default function HomePage() {
             <h2>Five focused products.<br />One clear experience.</h2>
             <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
           </Reveal>
-          <div className="products-grid">
-            {products.map((product, index) => {
-              return (
-                <Reveal key={product.name} delay={index * .08}>
-                  <article className="product-card">
-                    <div className="product-copy">
-                      <div className="product-card-title"><div className="icon-box product-brand-icon">{product.logo ? <Image src={product.logo} width={34} height={34} alt="" aria-hidden="true" /> : (()=>{const ProductIcon=product.icon;return <ProductIcon aria-hidden="true"/>})()}</div><h3>{product.name}</h3>{product.comingSoon ? <span className="product-status">Coming soon</span> : null}</div>
-                      <p>{product.description}</p>
-                      <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
-                      {product.comingSoon ? <span className="text-link product-coming-soon">Coming soon</span> : <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>}
-                    </div>
-                    <div className="product-preview"><DashboardMockup variant={product.name.includes("Desk") ? "desk" : product.name.includes("Booking") ? "booking" : product.name.includes("Control") ? "control" : index === 0 ? "invoice" : "hr"} /></div>
-                  </article>
-                </Reveal>
-              );
-            })}
-          </div>
+          <ProductCarousel />
         </div>
       </section>
 
