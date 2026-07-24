@@ -1,2 +1,2 @@
 "use client";
-export function PortalPrintButton(){ return <button className="btn btn-primary" onClick={()=>window.print()}>Print invoice</button>; }
+export function PortalPrintButton({invoiceNumber}:{invoiceNumber?:string}){ return <button className="btn btn-primary" onClick={()=>{ const previous=document.title; const number=invoiceNumber||document.querySelector('.invoice-header-line')?.textContent?.replace(/^.*?:\s*/,'').trim()||'Invoice'; document.title=`OperiX ${number}`; window.print(); window.setTimeout(()=>{document.title=previous;},1000); }}>Print invoice</button>; }
