@@ -3,9 +3,14 @@ import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
+  Building2,
+  CalendarDays,
   FileText,
+  Gauge,
   Layers3,
   PlugZap,
+  RefreshCw,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -66,6 +71,30 @@ export default function HomePage() {
             <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
           </Reveal>
           <ProductCarousel />
+        </div>
+      </section>
+
+      <section className="section suite-connection-section" aria-labelledby="suite-connection-title">
+        <div className="container suite-connection-grid">
+          <Reveal className="suite-connection-copy">
+            <span className="eyebrow">One connected suite</span>
+            <h2 id="suite-connection-title">Every product works better together.</h2>
+            <p>OperiX keeps your financial, people, booking, workspace, and leadership data connected—so your team always works from the same trusted context.</p>
+            <div className="suite-connection-points">
+              <div><div className="icon-box"><Layers3 /></div><span><strong>Shared foundation</strong>Common teams, workspaces, and permissions.</span></div>
+              <div><div className="icon-box"><RefreshCw /></div><span><strong>Real-time context</strong>Updates flow across products as work happens.</span></div>
+              <div><div className="icon-box"><ShieldCheck /></div><span><strong>One secure account</strong>Consistent access and control everywhere.</span></div>
+            </div>
+          </Reveal>
+          <Reveal className="suite-connection-map" delay={.08}>
+            <div className="connection-orbit orbit-one" /><div className="connection-orbit orbit-two" />
+            <div className="connection-core"><Image src="/brand/operix-x-mark.svg" width={58} height={58} alt="OperiX Suite" /></div>
+            <div className="connection-node connection-invoice"><FileText /><span>Invoice</span></div>
+            <div className="connection-node connection-hr"><Users /><span>HR Office</span></div>
+            <div className="connection-node connection-booking"><CalendarDays /><span>Booking</span></div>
+            <div className="connection-node connection-desk"><Building2 /><span>Desk</span></div>
+            <div className="connection-node connection-control"><Gauge /><span>Control</span></div>
+          </Reveal>
         </div>
       </section>
 
