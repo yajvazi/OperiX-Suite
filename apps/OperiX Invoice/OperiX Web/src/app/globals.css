@@ -67,9 +67,10 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
   main.min-h-screen > div > header > div:first-child { min-width: 0; flex: 1; }
   main.min-h-screen > div > header > div:first-child h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   main.min-h-screen > div > header > div:last-child { margin-left: auto; }
-  main.min-h-screen section.grid > article > header > div:last-child { width: 100%; margin-left: 0; align-items: stretch; }
+  main.min-h-screen section.grid > article > header { position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto; min-height: 150px; padding-bottom: 70px; }
+  main.min-h-screen section.grid > article > header > div:last-child { width: auto; margin-left: 0; align-items: flex-end; }
   main.min-h-screen section.grid > article > header > div:last-child > div:first-child { justify-content: flex-end; }
-  main.min-h-screen section.grid > article > header > div:last-child > div:last-child { position: static; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  main.min-h-screen section.grid > article > header > div:last-child > div:last-child { position: absolute; left: 20px; right: 20px; bottom: 16px; width: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   main.min-h-screen section.grid > article > header > div:last-child > div:last-child > a { width: 100%; }
 }
 .page-title { font-size: 27px; line-height: 1.2; font-weight: 600; letter-spacing: -.03em; }
