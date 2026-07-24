@@ -696,7 +696,7 @@ p { color: var(--muted); }
 .preview-access-card strong { color:var(--heading); font-size:.76rem; }
 
 @media (max-width:620px) {
-  .coming-soon-page { min-height:calc(100vh - 70px); padding:34px 0 42px; background:linear-gradient(180deg,#fff 0%,#fff 68%,#f7faff 100%); }
+  .coming-soon-page { min-height:calc(100vh - 70px); padding:64px 0 42px; background:linear-gradient(180deg,#fff 0%,#fff 68%,#f7faff 100%); }
   .coming-soon-brand img { width:112px; }
   .coming-soon-content { margin:12px auto 56px; }
   .coming-soon-content h1 { font-size:clamp(2.7rem,14vw,4.1rem); }
