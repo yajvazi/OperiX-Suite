@@ -61,8 +61,8 @@ export function SiteHeader() {
             <Globe2 aria-hidden="true" />
           </Link>
         </div>
-        <Link href={`${prefix}/book-demo`} className="button button-small nav-cta">
-          {locale === "al" ? al.nav.start : "Get Started"}
+        <Link href={`/preview-login?next=${encodeURIComponent(`${prefix || "/en"}/preview`)}`} className="button button-small nav-cta">
+          {locale === "al" ? "Hyrje private" : "Owner Login"}
         </Link>
         <button
           className="menu-button"
@@ -82,8 +82,8 @@ export function SiteHeader() {
               {labels[index]}
             </Link>
           ))}
-          <Link href={`${prefix}/book-demo`} className="button" onClick={() => setOpen(false)}>
-            {locale === "al" ? al.nav.start : "Get Started"}
+          <Link href={`/preview-login?next=${encodeURIComponent(`${prefix || "/en"}/preview`)}`} className="button" onClick={() => setOpen(false)}>
+            {locale === "al" ? "Hyrje private" : "Owner Login"}
           </Link>
         </nav>
       </div>

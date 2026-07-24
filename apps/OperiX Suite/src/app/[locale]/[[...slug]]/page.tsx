@@ -10,6 +10,7 @@ import PricingPage from "@/app/pricing/page";
 import PrivacyPage from "@/app/privacy/page";
 import HRPage from "@/app/products/hr/page";
 import InvoicePage from "@/app/products/invoice/page";
+import PreviewPage from "@/app/preview/page";
 import ResourcesPage from "@/app/resources/page";
 import TermsPage from "@/app/terms/page";
 import { LocaleExperience } from "@/components/locale-experience";
@@ -26,6 +27,7 @@ const pages = {
   privacy: PrivacyPage,
   "products/hr": HRPage,
   "products/invoice": InvoicePage,
+  preview: PreviewPage,
   resources: ResourcesPage,
   terms: TermsPage,
 } as const;
@@ -41,6 +43,7 @@ const pageTitles: Record<keyof typeof pages, string> = {
   privacy: "Privacy",
   "products/hr": "OperiX HR Office",
   "products/invoice": "OperiX Invoice",
+  preview: "Private Preview",
   resources: "Resources",
   terms: "Terms",
 };

@@ -7,6 +7,9 @@ services:
         NEXT_PUBLIC_SITE_URL: https://operixsuite.com
     image: operix-suite-marketing:latest
     restart: unless-stopped
+    env_file:
+      - path: ./apps/OperiX Suite/.env.preview.local
+        required: false
     environment:
       NODE_ENV: production
       PORT: 3000

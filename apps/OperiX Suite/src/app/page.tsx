@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ExternalLink, LockKeyhole, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, LockKeyhole, LogIn, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const copy = {
@@ -14,7 +14,7 @@ const copy = {
     statusText: "Our connected suite is being prepared for launch.",
     production: "Open production app",
     demo: "Try the interactive demo",
-    contact: "Talk to our team",
+    ownerLogin: "Owner preview login",
     apps: "Explore the apps while we build",
     invoice: "OperiX Invoice",
     invoiceText: "Create invoices, manage payments, and keep your financial work moving.",
@@ -30,7 +30,7 @@ const copy = {
     statusText: "Suite jonë e lidhur po përgatitet për lançim.",
     production: "Hap aplikacionin e prodhimit",
     demo: "Provo demonstrimin interaktiv",
-    contact: "Kontaktoni ekipin",
+    ownerLogin: "Hyrja private e pronarit",
     apps: "Eksploroni aplikacionet ndërsa ndërtojmë",
     invoice: "OperiX Invoice",
     invoiceText: "Krijoni fatura, menaxhoni pagesat dhe mbani financat në lëvizje.",
@@ -50,11 +50,6 @@ export default function HomePage() {
       <div className="coming-soon-orb coming-soon-orb-one" />
       <div className="coming-soon-orb coming-soon-orb-two" />
       <div className="container coming-soon-container">
-        <div className="coming-soon-brand">
-          <Image src="/brand/operix-wordmark-blue.svg" width={132} height={44} alt="OperiX" priority />
-          <span>Suite</span>
-        </div>
-
         <div className="coming-soon-content">
           <div className="coming-soon-status"><span className="coming-soon-status-dot" />{t.status}</div>
           <span className="eyebrow">{t.label}</span>
@@ -68,7 +63,9 @@ export default function HomePage() {
               {t.demo} <ArrowRight aria-hidden="true" />
             </a>
           </div>
-          <Link className="coming-soon-contact" href={`${prefix}/contact`}>{t.contact} <ArrowRight aria-hidden="true" /></Link>
+          <Link className="button coming-soon-owner-login" href={`/preview-login?next=${encodeURIComponent(`${prefix}/preview`)}`}>
+            <LogIn aria-hidden="true" /> {t.ownerLogin}
+          </Link>
         </div>
 
         <div className="coming-soon-apps" aria-label={t.apps}>
