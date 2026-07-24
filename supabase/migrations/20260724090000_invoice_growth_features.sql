@@ -131,3 +131,28 @@ end;
 $$;
 
 grant execute on function public.get_customer_portal_data(text) to anon, authenticated;
+
+create or replace function public.resolve_invoice_qr(invoice_number_input text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invoice_row invoices%rowtype;
+  portal_token text;
+begin
+  select * into invoice_row from invoices where invoice_number = invoice_number_input limit 1;
+  if not found then return jsonb_build_object('error','Invoice not found.'); end if;
+  if auth.uid() is not null and invoice_row.user_id = auth.uid() then
+    return jsonb_build_object('destination','owner','url','/invoices/preview/' || invoice_row.invoice_number);
+  end if;
+  select token into portal_token from customer_portal_tokens where client_id = invoice_row.client_id and company_id = invoice_row.company_id and (expires_at is null or expires_at > now()) order by created_at desc limit 1;
+  if portal_token is null then
+    insert into customer_portal_tokens(user_id, company_id, client_id) values(invoice_row.user_id, invoice_row.company_id, invoice_row.client_id) returning token into portal_token;
+  end if;
+  return jsonb_build_object('destination','portal','url','/portal/' || portal_token || '/invoice/' || invoice_row.id);
+end;
+$$;
+
+grant execute on function public.resolve_invoice_qr(text) to anon, authenticated;
