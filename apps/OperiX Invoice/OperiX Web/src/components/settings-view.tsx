@@ -40,7 +40,7 @@ export function SettingsView(){
   function clearSignature(){const canvas=signatureCanvas.current;if(!canvas)return;canvas.getContext("2d")?.clearRect(0,0,canvas.width,canvas.height);set("signature_url","");}
   function uploadSignature(event:React.ChangeEvent<HTMLInputElement>){const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>set("signature_url",String(reader.result||""));reader.readAsDataURL(file);}
 
-  useEffect(()=>{const source=workspace.company||workspace.profile;if(!source)return;queueMicrotask(()=>{setForm(current=>({...current,...Object.fromEntries(Object.entries(source).filter(([,value])=>value!==null&&value!==undefined&&typeof value!=="object"))}));setTemplate({...defaultTemplate,...(workspace.profile?.template_config||{}),...(workspace.company?.template_config||{}),visibleColumns:{...defaultTemplate.visibleColumns,...workspace.profile?.template_config?.visibleColumns,...workspace.company?.template_config?.visibleColumns}});});},[workspace.company,workspace.profile]);
+  useEffect(()=>{const source=workspace.company||workspace.profile;if(!source)return;queueMicrotask(()=>{setForm(current=>({...current,...Object.fromEntries(Object.entries(source).filter(([key,value])=>!['id','created_at','updated_at'].includes(key)&&value!==null&&value!==undefined&&typeof value!=="object"))}));setTemplate({...defaultTemplate,...(workspace.profile?.template_config||{}),...(workspace.company?.template_config||{}),visibleColumns:{...defaultTemplate.visibleColumns,...workspace.profile?.template_config?.visibleColumns,...workspace.company?.template_config?.visibleColumns}});});},[workspace.company,workspace.profile]);
   useEffect(()=>{if(!workspace.user)return;const supabase=createClient();if(!supabase)return;void supabase.from("invoice_templates").select("*").eq("user_id",workspace.user.id).eq("is_default",true).maybeSingle().then(({data,error})=>{if(error){setMessage(error.message);return;}if(data){const row=data as InvoiceTemplateRow;setTemplateId(row.id);setTemplateName(row.name||"Default Template");setTemplate(current=>({...current,...templateConfigFromRow(row),style:current.style,pageSize:current.pageSize}));}});},[workspace.user]);
   useEffect(()=>{if(!workspace.companyId)return;const supabase=createClient();if(!supabase)return;void supabase.from("employees").select("id,first_name,last_name,email,role,status").eq("company_id",workspace.companyId).order("created_at").then(({data,error})=>{if(error)setMessage(error.message);else setTeam((data||[]) as TeamRow[]);});},[workspace.companyId]);
 
@@ -50,10 +50,10 @@ export function SettingsView(){
     const supabase=createClient();if(!supabase){setMessage("Supabase is not configured.");return;}
     setSaving(true);setMessage("");setSuccess(false);
     const payload={...form,template_config:template};
-    const profilePayload=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=="city"&&key!=="country"));
+    const profilePayload=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=="city"&&key!=="country"&&!['id','created_at','updated_at'].includes(key)));
     const profileResult=await supabase.from("profiles").update(profilePayload).eq("id",workspace.user.id);
     if(profileResult.error){setMessage(profileResult.error.message);setSaving(false);return;}
-    if(workspace.companyId){const companyResult=await supabase.from("companies").update(payload).eq("id",workspace.companyId);if(companyResult.error){setMessage(companyResult.error.message);setSaving(false);return;}}
+    if(workspace.companyId){const companyPayload=Object.fromEntries(Object.entries(payload).filter(([key])=>!['id','created_at','updated_at'].includes(key)));const companyResult=await supabase.from("companies").update(companyPayload).eq("id",workspace.companyId);if(companyResult.error){setMessage(companyResult.error.message);setSaving(false);return;}}
     const templatePayload=templateRowFromConfig(template,workspace.user.id,templateName);
     const templateResult=templateId
       ? await supabase.from("invoice_templates").update(templatePayload).eq("id",templateId).select("id").single()
