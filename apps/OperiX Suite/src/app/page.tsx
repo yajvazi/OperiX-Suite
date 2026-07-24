@@ -75,7 +75,7 @@ export default function HomePage() {
                       <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                       {product.comingSoon ? <span className="text-link product-coming-soon">Coming soon</span> : <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>}
                     </div>
-                    <div className="product-preview">{product.comingSoon ? <div className="product-coming-soon-panel"><span>OperiX</span><strong>{product.name.replace("OperiX ","")}</strong><small>Coming soon</small></div> : <DashboardMockup variant={index === 0 ? "invoice" : "hr"} />}</div>
+                    <div className="product-preview">{product.comingSoon ? <DashboardMockup variant={product.name.includes("Desk") ? "desk" : "booking"} /> : <DashboardMockup variant={index === 0 ? "invoice" : "hr"} />}</div>
                   </article>
                 </Reveal>
               );
