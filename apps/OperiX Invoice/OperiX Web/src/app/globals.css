@@ -283,6 +283,7 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
   .invoice-workspace-grid, .invoice-document-panel, article, main > article { display:block; width:210mm !important; max-width:none !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; background:#fff; padding:0 !important; }
   .invoice-document-canvas { padding:0; background:#fff; }
   .invoice-document-canvas .invoice-a4-preview { width:210mm; height:297mm; min-height:297mm; margin:0; padding:7mm; font-size:16px; box-shadow:none !important; border:0 !important; }
+  .invoice-a4-preview .page-footer { margin-top:0 !important; }
   .print-a4-document { width:210mm; height:297mm; max-height:297mm; min-height:0; margin:0; overflow:hidden; page-break-after:auto; break-after:auto; }
   .print-a4-document .invoice-a4-preview { width:210mm; height:297mm; min-height:297mm; padding:7mm; font-size:16px; box-shadow:none !important; border:0 !important; }
  .invoice-paper { width:210mm; height:297mm; min-height:297mm; padding:11mm; box-shadow:none; font-size:9px; overflow:hidden; page-break-after:auto; break-after:auto; }
