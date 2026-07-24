@@ -58,6 +58,11 @@ main.min-h-screen > div > header > div:last-child > span { display: none; }
 main.min-h-screen section.grid > article > div { scrollbar-width: none; -ms-overflow-style: none; }
 main.min-h-screen section.grid > article > div::-webkit-scrollbar { width: 0; height: 0; display: none; }
 @media (max-width: 639px) {
+  main.min-h-screen section.mb-5 > div.mt-6.grid > div:last-child { grid-column: span 2; }
+  main.min-h-screen > div > header { align-items: center; }
+  main.min-h-screen > div > header > div:first-child { min-width: 0; flex: 1; }
+  main.min-h-screen > div > header > div:first-child h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  main.min-h-screen > div > header > div:last-child { margin-left: auto; }
   main.min-h-screen section.grid > article > header > div:last-child { width: 100%; margin-left: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; }
   main.min-h-screen section.grid > article > header > div:last-child > div:last-child { width: 100%; justify-content: flex-end; margin-top: 10px; }
 }
