@@ -18,7 +18,7 @@ export function ProductPage({
   product: string;
   headline: string;
   description: string;
-  variant: "invoice" | "hr";
+  variant: "invoice" | "hr" | "control";
   overviewTitle: string;
   overviewText: string;
   overviewPoints: string[];

@@ -61,7 +61,7 @@ export default function HomePage() {
         <div className="container">
           <Reveal className="section-heading centered">
             <span className="eyebrow">OperiX products</span>
-            <h2>Four focused products.<br />One clear experience.</h2>
+            <h2>Five focused products.<br />One clear experience.</h2>
             <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
           </Reveal>
           <div className="products-grid">
@@ -75,7 +75,7 @@ export default function HomePage() {
                       <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
                       {product.comingSoon ? <span className="text-link product-coming-soon">Coming soon</span> : <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>}
                     </div>
-                    <div className="product-preview">{product.comingSoon ? <DashboardMockup variant={product.name.includes("Desk") ? "desk" : "booking"} /> : <DashboardMockup variant={index === 0 ? "invoice" : "hr"} />}</div>
+                    <div className="product-preview"><DashboardMockup variant={product.name.includes("Desk") ? "desk" : product.name.includes("Booking") ? "booking" : product.name.includes("Control") ? "control" : index === 0 ? "invoice" : "hr"} /></div>
                   </article>
                 </Reveal>
               );

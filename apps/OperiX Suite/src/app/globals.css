@@ -238,7 +238,7 @@ p { color: var(--muted); }
 .pin-one { top:18px; right:27%; }.pin-two { bottom:24px; left:27%; background:#12b76a; }
 .desk-product-mockup { display:flex; min-height:330px; overflow:hidden; border-radius:12px; background:#f1f5f9; color:#172b4d; font-size:9px; box-shadow:0 12px 28px rgba(16,24,40,.1); }
 .desk-mock-sidebar { display:flex; width:110px; flex-direction:column; gap:12px; padding:14px 10px; background:#102b52; color:#dbeafe; }
-.desk-mock-sidebar span { white-space:nowrap; }.desk-mock-sidebar b { margin-top:8px; font-size:7px; color:#93c5fd; }.desk-mock-brand { margin-bottom:8px; }
+.desk-mock-sidebar span { white-space:nowrap; }.desk-mock-sidebar b { margin-top:8px; font-size:7px; color:#93c5fd; }.desk-mock-brand { margin-bottom:8px; }.desk-mock-brand img { content:url('/brand/operix-x-dashboard.svg'); width:30px; height:30px; object-fit:contain; }
 .desk-mock-main { min-width:0; flex:1; }.desk-mock-top { display:flex; align-items:center; gap:10px; height:42px; padding:0 12px; background:#fff; }.desk-mock-search { flex:1; border:1px solid #d8e2ef; border-radius:6px; padding:8px; color:#8a99ad; }.desk-mock-top strong { white-space:nowrap; }.desk-mock-top i { display:grid; width:22px; height:22px; place-items:center; border-radius:50%; background:#0659cc; color:white; font-style:normal; }
 .desk-mock-filters { display:flex; gap:8px; margin:10px; padding:10px; border:1px solid #dae4f0; border-radius:8px; background:#fff; }.desk-mock-filters label { display:grid; gap:4px; color:#52708f; font-size:7px; }.desk-mock-filters b { min-width:92px; border:1px solid #c8d6e8; border-radius:5px; padding:7px; color:#243b5a; font-size:9px; font-weight:500; }
 .desk-mock-workspace { display:grid; grid-template-columns:100px minmax(0,1fr) 145px; gap:8px; padding:0 10px 10px; }.desk-mock-zones,.desk-mock-detail,.desk-mock-map { border:1px solid #dbe5f0; border-radius:8px; background:#fff; }.desk-mock-zones { display:grid; align-content:start; gap:9px; padding:11px 8px; }.desk-mock-zones hr { width:100%; border:0; border-top:1px solid #e5ebf2; }.desk-mock-zones small { color:#8090a5; font-size:7px; }.legend-green { color:#0ca678; }.legend-red { color:#ef4444; }.legend-blue { color:#2778e8; }
@@ -532,6 +532,18 @@ p { color: var(--muted); }
   .footer-bottom { display: flex; flex-direction: column; text-align: center; }
   .footer-bottom p:last-child, .footer-credit { text-align: center; }
 }
+
+/* Keep the Desk preview visually consistent with the other product cards. */
+.desk-product-mockup { border:1px solid #dbe5f0; background:#f6f9ff; box-shadow:none; }
+.desk-mock-sidebar { width:56px; align-items:center; gap:14px; padding:14px 7px; background:#eef4ff; color:#1765ee; }
+.desk-mock-sidebar span, .desk-mock-sidebar b { display:none; }
+.desk-mock-brand { display:grid; width:30px; height:30px; margin-bottom:4px; place-items:center; border-radius:8px; background:#095cff; }
+.desk-mock-brand img { filter:none; }
+.desk-mock-top { height:38px; background:#fff; color:#1e3150; }
+.desk-mock-filters { margin:8px; padding:8px; background:#fff; }
+.desk-mock-workspace { grid-template-columns:86px minmax(0,1fr) 132px; padding:0 8px 8px; }
+.desk-mock-zones,.desk-mock-detail,.desk-mock-map { border-radius:10px; }
+.desk-mock-map { background:#f1f6ff; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

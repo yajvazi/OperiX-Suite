@@ -78,6 +78,16 @@ export const products = [
     tone: "navy",
     comingSoon: true,
   },
+  {
+    name: "OperiX Control",
+    logo: "/brand/operix-x-dashboard.svg",
+    href: "/products/control",
+    description: "One control panel for the entire OperiX Suite.",
+    details: "Centralize shared workspace, team, customer, billing, and activity data across every OperiX product.",
+    features: ["Unified workspace overview", "Cross-product analytics", "Shared teams and permissions"],
+    icon: Gauge,
+    tone: "blue",
+  },
 ];
 
 export const benefits = [
