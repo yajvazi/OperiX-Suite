@@ -61,7 +61,7 @@ export default function HomePage() {
         <div className="container">
           <Reveal className="section-heading centered">
             <span className="eyebrow">OperiX products</span>
-            <h2>Two powerful products.<br />One clear experience.</h2>
+            <h2>Four focused products.<br />One clear experience.</h2>
             <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
           </Reveal>
           <div className="products-grid">
@@ -70,12 +70,12 @@ export default function HomePage() {
                 <Reveal key={product.name} delay={index * .08}>
                   <article className="product-card">
                     <div className="product-copy">
-                      <div className="product-card-title"><div className="icon-box product-brand-icon"><Image src={product.logo} width={34} height={34} alt="" aria-hidden="true" /></div><h3>{product.name}</h3></div>
+                      <div className="product-card-title"><div className="icon-box product-brand-icon">{product.logo ? <Image src={product.logo} width={34} height={34} alt="" aria-hidden="true" /> : (()=>{const ProductIcon=product.icon;return <ProductIcon aria-hidden="true"/>})()}</div><h3>{product.name}</h3>{product.comingSoon ? <span className="product-status">Coming soon</span> : null}</div>
                       <p>{product.description}</p>
                       <ul className="feature-bullets">{product.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
-                      <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>
+                      {product.comingSoon ? <span className="text-link product-coming-soon">Coming soon</span> : <Link className="text-link" href={product.href}>Learn more <ArrowRight /></Link>}
                     </div>
-                    <div className="product-preview"><DashboardMockup variant={index === 0 ? "invoice" : "hr"} /></div>
+                    <div className="product-preview">{product.comingSoon ? <div className="product-coming-soon-panel"><span>OperiX</span><strong>{product.name.replace("OperiX ","")}</strong><small>Coming soon</small></div> : <DashboardMockup variant={index === 0 ? "invoice" : "hr"} />}</div>
                   </article>
                 </Reveal>
               );
