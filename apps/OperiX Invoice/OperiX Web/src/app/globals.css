@@ -268,6 +268,13 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
 }
 
 @media (max-width: 640px) {
+  .invoice-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; overflow:hidden; }
+  .invoice-toolbar > .invoice-status-tabs { grid-column:1/-1; }
+  .invoice-status-tabs button { min-width:0; width:100%; padding-inline:4px; }
+  .invoice-toolbar > select { grid-column:1/-1; }
+  .invoice-toolbar > label { grid-column:1/-1; min-width:0; }
+  .invoice-toolbar > button { width:100%; }
+  .invoice-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .notification-popover { position:fixed !important; top:4.5rem !important; left:.5rem !important; right:.5rem !important; width:auto !important; max-height:calc(100vh - 5.25rem); overflow-y:auto; }
   .notification-popover a { padding: .7rem .65rem; }
 }
