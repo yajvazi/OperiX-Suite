@@ -266,6 +266,9 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
   .invoice-document-panel-head { align-items:flex-start; flex-direction:column; justify-content:center; gap:2px; min-height:54px; }
   .invoice-document-canvas { padding:8px; }
   .invoice-document-canvas .invoice-a4-preview { width:100%; }
+  .invoice-document-canvas { background:#fff; }
+  .invoice-document-canvas .invoice-template-preview { width:100%; min-width:0; overflow:hidden; }
+  .invoice-document-canvas .invoice-template-preview .operix-invoice { width:100%; min-height:0; margin:0; background:#fff; }
   .invoice-a4-preview { font-size:7px; }
 }
 
