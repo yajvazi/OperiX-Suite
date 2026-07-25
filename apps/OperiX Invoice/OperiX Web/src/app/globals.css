@@ -68,7 +68,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 @media (max-width: 1279px) {
   .pos-page > div > .grid > section:first-child { max-height: 46vh; overflow-y: auto; overscroll-behavior: contain; }
-  .pos-page > div > .grid > section:first-child > .pos-category-bar { position: sticky; top: 0; z-index: 10; background: #fff !important; isolation: isolate; box-shadow: 0 3px 8px rgba(16,24,40,.04); }
+  .pos-page > div > .grid > section:first-child > .pos-category-bar { position: static; z-index: auto; background: #fff !important; isolation: auto; box-shadow: none; }
 }
 .brand-x-mark { width: 48px; height: 48px; object-fit: contain; }
 .sidebar-nav-scroll > div > div.relative > button { top:0 !important; transform:none !important; height:43px !important; }
