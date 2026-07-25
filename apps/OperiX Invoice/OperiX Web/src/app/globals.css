@@ -267,6 +267,11 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
   .invoice-a4-preview { font-size:7px; }
 }
 
+@media (max-width: 640px) {
+  .notification-popover { position:fixed !important; top:4.5rem !important; left:.5rem !important; right:.5rem !important; width:auto !important; max-height:calc(100vh - 5.25rem); overflow-y:auto; }
+  .notification-popover a { padding: .7rem .65rem; }
+}
+
 @media (min-width: 1024px) { .mobile-menu-button { display: none; } }
 
 @media print {
