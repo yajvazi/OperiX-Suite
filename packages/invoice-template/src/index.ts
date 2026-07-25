@@ -35,7 +35,7 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .invoice-balance-secondary-label { display: block; margin-top: 4px; font-size: 8px; font-weight: 600; text-transform: none; color: #4b5563; }
 .invoice-type { margin-top: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .invoice-number { margin-top: 2px; font-size: 15px; font-weight: 800; }
-.invoice-balance { min-width: 170px; text-align: right; }
+.invoice-balance { display: none; }
 .invoice-balance-label { font-size: 9px; font-weight: 700; }
 .invoice-balance-value { margin-top: 3px; font-size: 18px; font-weight: 800; }
 .invoice-status { display: inline-block; margin-top: 5px; padding: 3px 9px; border: 1px solid #777; border-radius: 2px; font-size: 9px; font-weight: 700; }
