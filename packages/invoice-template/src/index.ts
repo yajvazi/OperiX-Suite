@@ -74,7 +74,21 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .company-footer > div:nth-child(2) { text-align: center; }
 .company-footer > div:last-child { text-align: right; }
 @media print { @page { size: A4; margin: 0; } html, body { width: 210mm; min-height: 297mm; } body { padding: 11mm 12mm 9mm; } .operix-invoice { width: auto; min-height: 277mm; } }
-@media screen and (max-width: 760px) { html, body { width: 100%; min-height: 0; } body { padding: 20px; } .operix-invoice { min-height: 0; } .invoice-meta { grid-template-columns: repeat(3, 1fr); } .invoice-summary { grid-template-columns: 1fr; } .invoice-totals { max-width: 285px; margin-left: auto; } }
+@media screen and (max-width: 760px) {
+  html, body { width: 100%; min-height: 0; overflow-x: hidden; }
+  body { padding: 0; }
+  .operix-invoice { width: 100%; min-height: 0; font-size: clamp(6px, 2.25vw, 10px); }
+  .invoice-header { gap: 8px; }
+  .invoice-balance { min-width: 0; }
+  .invoice-qr { width: 18vw; height: 18vw; max-width: 28mm; max-height: 28mm; }
+  .invoice-meta { grid-template-columns: repeat(3, 1fr); }
+  .invoice-items { table-layout: fixed; font-size: 6px; }
+  .invoice-items th, .invoice-items td { padding: 3px 2px; overflow-wrap: anywhere; }
+  .invoice-summary { grid-template-columns: 1fr; }
+  .invoice-totals { max-width: 100%; margin-left: 0; }
+  .signature-grid { gap: 4px; }
+  .company-footer { gap: 5px; font-size: 6px; }
+}
 `;
 
 type Config = Partial<TemplateConfig> & { visibleColumns?: Partial<TemplateConfig["visibleColumns"]> };
