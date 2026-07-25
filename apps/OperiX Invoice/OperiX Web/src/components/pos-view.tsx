@@ -73,8 +73,9 @@ function paymentMethod(value: PosPayment): PaymentMethod {
   return "card";
 }
 
-function makeInvoiceNumber() {
-  return `POS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+function makeInvoiceNumber(type: PosInvoiceType) {
+  const prefix: Record<PosInvoiceType, string> = { invoice: "INV", offer: "QUO", proforma: "PRO", order: "ORD" };
+  return `${prefix[type]}-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
 }
 
 export function PosView() {
@@ -219,7 +220,7 @@ export function PosView() {
     const globalDiscountRate = totals.subtotal - totals.itemDiscount > 0 ? totals.globalDiscount / (totals.subtotal - totals.itemDiscount) * 100 : 0;
     return {
       client_id: clientId,
-      invoice_number: makeInvoiceNumber(),
+      invoice_number: makeInvoiceNumber(invoiceType),
       issue_date: isoToday(),
       due_date: addDays(isoToday(), 0),
       payment_method: paymentMethod(payment),
