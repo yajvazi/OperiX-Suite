@@ -31,7 +31,8 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .invoice-brand { font-size: 20px; line-height: 1.05; font-weight: 800; text-transform: uppercase; letter-spacing: .2px; }
 .invoice-brand img { display: block; max-width: 150px; max-height: 34px; margin-bottom: 5px; object-fit: contain; }
 .invoice-brand-logo { width: auto; }
-.invoice-qr { display: block; width: 28mm; height: 28mm; margin: 0 0 4px auto; object-fit: contain; }
+.invoice-qr { display: block; width: 22mm; height: 22mm; margin: 0 0 2px auto; object-fit: contain; }
+.invoice-balance-secondary-label { display: block; margin-top: 4px; font-size: 8px; font-weight: 600; text-transform: none; color: #4b5563; }
 .invoice-type { margin-top: 7px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .invoice-number { margin-top: 2px; font-size: 15px; font-weight: 800; }
 .invoice-balance { min-width: 170px; text-align: right; }
@@ -80,7 +81,7 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
   .operix-invoice { width: 100%; min-height: 0; font-size: clamp(6px, 2.25vw, 10px); }
   .invoice-header { gap: 8px; }
   .invoice-balance { min-width: 0; }
-  .invoice-qr { width: 18vw; height: 18vw; max-width: 28mm; max-height: 28mm; }
+  .invoice-qr { width: 18vw; height: 18vw; max-width: 22mm; max-height: 22mm; }
   .invoice-meta { grid-template-columns: repeat(3, 1fr); }
   .invoice-items { table-layout: fixed; font-size: 6px; }
   .invoice-items th, .invoice-items td { padding: 3px 2px; overflow-wrap: anywhere; }
@@ -100,14 +101,14 @@ const labelsFor = (data: InvoiceData) => {
     department: "Njësia Org.", reference: "Referenca", yourReference: "Referenti i juaj", terms: "Kushtet", number: "Nr.", sku: "Shifra",
     description: "Përshkrimi", quantity: "Sasia", unit: "Njësia", price: "Çmimi pa TVSH", discount: "Rabati", tax: "TVSH %",
     netPrice: "Çmimi me rabat", salePrice: "Çmimi shitës", lineTotal: "Vlera shitëse", beforeDiscount: "Vlera pa rabat", extraDiscount: "Rabati shtesë",
-    beforeTax: "Vlera pa TVSH", taxTotal: "TVSH", amountDue: "Vlera për pagesë", remaining: "Vlera e mbetur", paid: "E PAGUAR",
+    beforeTax: "Vlera pa TVSH", taxTotal: "TVSH", amountDue: "Vlera për pagesë", remaining: "Vlera për pagesë<br/><span class=\"invoice-balance-secondary-label\">Vlera e mbetur</span>", paid: "E PAGUAR",
     billedBy: "Faturoi", sentBy: "Dërgoi", checkedBy: "Kontrolloi", acceptedBy: "Pranoi", fullName: "Emri i plotë", bank: "Banka",
   } : {
     invoice: "Invoice", billTo: "Billed to", shipTo: "Delivered to", issue: "Issue date", due: "Due date", department: "Department",
     reference: "Reference", yourReference: "Your reference", terms: "Terms", number: "No.", sku: "SKU", description: "Description", quantity: "Qty",
     unit: "Unit", price: "Price excl. VAT", discount: "Discount", tax: "VAT %", netPrice: "Price after discount", salePrice: "Sale price",
     lineTotal: "Line total", beforeDiscount: "Subtotal", extraDiscount: "Additional discount", beforeTax: "Net amount", taxTotal: "VAT", amountDue: "Amount due",
-    remaining: "Balance due", paid: "PAID", billedBy: "Prepared by", sentBy: "Sent by", checkedBy: "Checked by", acceptedBy: "Accepted by", fullName: "Full name", bank: "Bank",
+    remaining: "Amount due<br/><span class=\"invoice-balance-secondary-label\">Remaining balance</span>", paid: "PAID", billedBy: "Prepared by", sentBy: "Sent by", checkedBy: "Checked by", acceptedBy: "Accepted by", fullName: "Full name", bank: "Bank",
   };
   return { ...labels, ...(data.config?.labels || {}) };
 };
