@@ -374,7 +374,9 @@ export function PosView() {
       localStorage.setItem("operix-pos-complete", JSON.stringify({ draft, client: selectedClient, company, config: source?.template_config, invoiceId: invoiceResult.data.id }));
       setCart([]);
       setCashReceived(0);
-      router.push(`/pos/complete/${encodeURIComponent(draft.invoice_number)}`);
+      // Open the persisted invoice preview directly after payment. This route
+      // is backed by the saved invoice record and remains valid on refresh.
+      router.push(`/invoices/preview/${encodeURIComponent(draft.invoice_number)}`);
       return;
     }
     setCart([]);
