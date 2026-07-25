@@ -64,7 +64,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 @media (max-width: 1279px) {
   .pos-page > div > .grid > section:first-child { max-height: 46vh; overflow-y: auto; overscroll-behavior: contain; }
-  .pos-page > div > .grid > section:first-child > div:first-child { position: sticky; top: -1rem; z-index: 2; background: #fff; }
+  .pos-page > div > .grid > section:first-child > div:first-child { position: sticky; top: 0; z-index: 2; background: #fff; }
 }
 .brand-x-mark { width: 48px; height: 48px; object-fit: contain; }
 .sidebar-nav-scroll > div > div.relative > button { top:0 !important; transform:none !important; height:43px !important; }

@@ -168,9 +168,12 @@ export function PosView() {
 
   function addProduct(product: ProductRow) {
     setMessage("");
+    const entered = window.prompt(`Quantity for ${product.name}`, "1");
+    if (entered === null) return;
+    const quantity = Math.max(1, Math.floor(Number(entered) || 1));
     setCart((current) => {
       const existing = current.find((item) => item.productId === product.id);
-      if (existing) return current.map((item) => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      if (existing) return current.map((item) => item.productId === product.id ? { ...item, quantity: item.quantity + quantity } : item);
       return [...current, {
         id: crypto.randomUUID(),
         productId: product.id,
@@ -179,7 +182,7 @@ export function PosView() {
         unit: product.unit ? String(product.unit) : "pcs",
         unitPrice: Number(product.unit_price) || 0,
         taxRate: Number(product.tax_rate) || 0,
-        quantity: 1,
+        quantity,
         discountPercent: 0,
       }];
     });
