@@ -168,9 +168,7 @@ export function PosView() {
 
   function addProduct(product: ProductRow) {
     setMessage("");
-    const entered = window.prompt(`Quantity for ${product.name}`, "1");
-    if (entered === null) return;
-    const quantity = Math.max(1, Math.floor(Number(entered) || 1));
+    const quantity = 1;
     setCart((current) => {
       const existing = current.find((item) => item.productId === product.id);
       if (existing) return current.map((item) => item.productId === product.id ? { ...item, quantity: item.quantity + quantity } : item);
@@ -406,7 +404,7 @@ export function PosView() {
         <section className="card min-w-0 overflow-hidden p-3 sm:p-4">
           <div className="pos-category-bar relative z-10 mb-3 flex items-center gap-2 overflow-x-auto border-b border-[#edf0f4] bg-white pb-3">{categories.map((item) => <button key={item} className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium transition-colors ${category === item ? "bg-[#004ffe] text-white" : "text-[#475467] hover:bg-[#f2f5f9]"}`} onClick={() => setCategory(item)}>{item}</button>)}</div>
           <div className="mb-4 flex items-center justify-between gap-2"><span className="text-xs font-semibold text-[#344054]">{category === "All" ? "All products" : category}</span><span className="muted text-[11px]">{visibleProducts.length} available</span></div>
-          {productsQuery.loading ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-52 animate-pulse rounded-lg bg-[#f2f5f9]"/>)}</div> : visibleProducts.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">{visibleProducts.map((product) => <ProductCard key={product.id} product={product} currency={currency} onAdd={() => addProduct(product)}/>)}</div> : <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-[#d0d5dd] p-6 text-center"><Package size={34} className="text-[#98a2b3]"/><p className="mt-3 text-sm font-medium">No products found</p><p className="muted mt-1 text-xs">Add products or adjust the search and category filter.</p><Link href="/products" className="btn mt-4">Manage products</Link></div>}
+          {productsQuery.loading ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-52 animate-pulse rounded-lg bg-[#f2f5f9]"/>)}</div> : visibleProducts.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">{visibleProducts.map((product) => <ProductCard key={product.id} product={product} currency={currency} quantity={cart.find((item) => item.productId === product.id)?.quantity || 0} onAdd={() => addProduct(product)}/>)}</div> : <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-[#d0d5dd] p-6 text-center"><Package size={34} className="text-[#98a2b3]"/><p className="mt-3 text-sm font-medium">No products found</p><p className="muted mt-1 text-xs">Add products or adjust the search and category filter.</p><Link href="/products" className="btn mt-4">Manage products</Link></div>}
         </section>
 
         <section className="card min-w-0 overflow-hidden xl:sticky xl:top-20">
@@ -422,12 +420,12 @@ export function PosView() {
   </div>;
 }
 
-function ProductCard({ product, currency, onAdd }: { product: ProductRow; currency: string; onAdd: () => void }) {
+function ProductCard({ product, currency, quantity, onAdd }: { product: ProductRow; currency: string; quantity: number; onAdd: () => void }) {
   const stock = Number(product.stock_quantity);
   const stockTracked = Boolean(product.track_stock);
   const outOfStock = stockTracked && Number.isFinite(stock) && stock <= 0;
   const imageUrl = product.image_url?.trim();
-  return <button className="group min-w-0 overflow-hidden rounded-lg border border-[#e4e9f0] bg-white text-left transition hover:-translate-y-0.5 hover:border-[#9dbdff] hover:shadow-[0_8px_20px_rgba(16,24,40,.08)] disabled:cursor-not-allowed disabled:opacity-55" onClick={onAdd} disabled={outOfStock}>{imageUrl ? <div className="relative h-28 bg-[#f7f9fc] sm:h-32"><Image src={imageUrl} alt="" fill sizes="(max-width: 768px) 45vw, 220px" className="object-cover"/></div> : null}<div className="p-3"><strong className="block truncate text-xs text-[#101828]">{product.name}</strong><span className="mt-1 block truncate text-[10px] text-[#667085]">{String(product.sku || product.barcode || product.unit || "Product")}</span><div className="mt-2 flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#004ffe]">{money(Number(product.unit_price) || 0, currency)}</span>{outOfStock ? <span className="text-[9px] text-[#d92d20]">Out of stock</span> : <Plus size={15} className="text-[#004ffe] opacity-0 transition group-hover:opacity-100"/>}</div></div></button>;
+  return <button className="group min-w-0 overflow-hidden rounded-lg border border-[#e4e9f0] bg-white text-left transition hover:-translate-y-0.5 hover:border-[#9dbdff] hover:shadow-[0_8px_20px_rgba(16,24,40,.08)] disabled:cursor-not-allowed disabled:opacity-55" onClick={onAdd} disabled={outOfStock}>{imageUrl ? <div className="relative h-28 bg-[#f7f9fc] sm:h-32"><Image src={imageUrl} alt="" fill sizes="(max-width: 768px) 45vw, 220px" className="object-cover"/></div> : null}<div className="p-3"><strong className="block truncate text-xs text-[#101828]">{product.name}</strong><span className="mt-1 block truncate text-[10px] text-[#667085]">{String(product.sku || product.barcode || product.unit || "Product")}</span><div className="mt-2 flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#004ffe]">{money(Number(product.unit_price) || 0, currency)}</span>{outOfStock ? <span className="text-[9px] text-[#d92d20]">Out of stock</span> : <Plus size={15} className="text-[#004ffe] opacity-0 transition group-hover:opacity-100"/>}</div>{quantity > 0 ? <div className="mt-2 rounded-md border border-[#d0d5dd] bg-white px-2 py-1 text-center text-xs font-semibold text-[#004ffe]">Quantity: {quantity}</div> : null}</div></button>;
 }
 
 function CartLine({ item, currency, onQuantityChange, onDiscountChange, onRemove }: { item: CartItem; currency: string; onQuantityChange: (value: number) => void; onDiscountChange: (value: number) => void; onRemove: () => void }) {
