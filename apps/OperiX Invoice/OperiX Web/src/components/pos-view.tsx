@@ -59,7 +59,7 @@ interface CartItem {
 const paymentOptions: Array<{ value: PosPayment; label: string; icon: typeof Banknote }> = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "card", label: "Card", icon: CreditCard },
-  { value: "bank", label: "Debt without payment", icon: WalletCards },
+  { value: "bank", label: "Debt", icon: WalletCards },
   { value: "other", label: "Other", icon: CircleHelp },
 ];
 
