@@ -8,6 +8,8 @@ export const defaultCompany:DocumentCompany={name:"",email:"",phone:"",address:"
 
 export function InvoiceDocument({draft,client,company=defaultCompany,receipt=false,template="corporate",config}:{draft:InvoiceDraft;client?:ClientRow;company?:DocumentCompany;receipt?:boolean;template?:InvoiceTemplate;config?:InvoiceTemplateConfig}) {
   const isReceipt = receipt || template === "thermal";
-  const markup = invoiceMarkup(draft,client,isReceipt,company,config).replace(/^<style>[\s\S]*?<\/style>/, "");
-  return <div className={isReceipt ? "receipt-doc" : "invoice-a4-preview"} dangerouslySetInnerHTML={{__html:markup}} />;
+  const fullMarkup = invoiceMarkup(draft,client,isReceipt,company,config);
+  const styleMatch = fullMarkup.match(/^<style>([\s\S]*?)<\/style>/);
+  const markup = styleMatch ? fullMarkup.slice(styleMatch[0].length) : fullMarkup;
+  return <><style dangerouslySetInnerHTML={{__html: styleMatch?.[1] || ""}} /><div className={isReceipt ? "receipt-doc" : "invoice-template-preview"} dangerouslySetInnerHTML={{__html:markup}} /></>;
 }
