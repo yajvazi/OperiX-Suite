@@ -24,6 +24,7 @@ const nav = [
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/help", label: "Help desk", icon: CircleHelp },
 ];
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
