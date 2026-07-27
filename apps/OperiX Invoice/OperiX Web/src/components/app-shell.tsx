@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell, Boxes, Building2, ChevronDown, ChevronLeft, CircleHelp, CreditCard, FileBarChart,
-  FileText, HandCoins, LayoutDashboard, Menu, PackageOpen, Plus, ReceiptText, Search, Settings,
+  FileText, HandCoins, LayoutDashboard, Menu, PackageOpen, Plus, Search, Settings,
   ShoppingBag, ShoppingCart, Store, Users, WalletCards, X, Download, LogOut, ScrollText, ExternalLink,
 } from "lucide-react";
 import { Brand } from "./brand";
@@ -17,7 +17,7 @@ import type { InvoiceRow } from "@/lib/models";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "POS", icon: ShoppingCart },
-  { href: "/invoices", label: "Invoices", icon: FileText, children: [{ href: "/quotes", label: "Quotes", icon: ReceiptText }, { href: "/recurring", label: "Recurring Invoices", icon: ReceiptText }] },
+  { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/payments", label: "Payments", icon: CreditCard, children: [{ href: "/reminders", label: "Payment Reminders", icon: Bell }, { href: "/payment-links", label: "Online Payments", icon: CreditCard }, { href: "/income", label: "Income", icon: HandCoins }, { href: "/expenses", label: "Expenses", icon: WalletCards }] },
   { href: "/customers", label: "Customers", icon: Users, children: [{ href: "/portal-links", label: "Customer Portal", icon: ExternalLink }] },
   { href: "/reports", label: "Reports", icon: FileBarChart, children: [{ href: "/tax-reports", label: "VAT & Tax Reports", icon: FileBarChart }] },
