@@ -39,10 +39,44 @@ export function ResourcePage({ resourceKey, title, description, embedded = false
   }
   async function remove(id:string){ if(!confirm(`Delete this ${config.singular.toLowerCase()}?`))return; const supabase=createClient(); if(supabase){const result=await supabase.from(config.table).delete().eq("id",id);if(result.error){setMessage(result.error.message);return;}} setData((current)=>current.filter((row)=>row.id!==id)); }
   function exportCsv(){const csv=[config.columns.map(column=>column.label),...rows.map(row=>config.columns.map(column=>String(readValue(row,column.key)??"")))];const blob=new Blob([csv.map(line=>line.map(cell=>`"${cell.replaceAll("\"","\"\"")}"`).join(",")).join("\n")],{type:"text/csv"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`operix-${resourceKey}-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
-  async function exportPdf(){setExporting(true);setMessage("");const source=workspace.company||workspace.profile;const response=await fetch("/api/transactions/pdf",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:config.title,company:{name:source?.company_name||workspace.company?.name||"",email:source?.email||"",website:source?.website||""},rows:rows.map(row=>({number:String(row.payment_number||row.id||""),amount:Number(row.amount||0),date:String(row.payment_date||row.date||""),description:String(row.description||row.notes||""),category:String(row.category||""),method:String(row.payment_method||""),counterparty:relationName(row,"vendor")||relationName(row,"client")}))})});if(!response.ok){setMessage("The PDF could not be generated.");setExporting(false);return;}const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`operix-${resourceKey}-${new Date().toISOString().slice(0,10)}.pdf`;link.click();URL.revokeObjectURL(url);setExporting(false);}
+  async function exportPdf(){
+    setExporting(true);setMessage("");
+    try {
+      const source=workspace.company||workspace.profile;
+      const supabase=createClient();
+      let exportRows:Array<Record<string,unknown>>=rows;
+      if(config.pdfTemplate==="sales-ledger"&&supabase){
+        let query=supabase.from("invoices").select("*, client:clients(*)").order("issue_date",{ascending:true});
+        if(workspace.companyId)query=query.eq("company_id",workspace.companyId);
+        const result=await query;
+        if(result.error)throw result.error;
+        exportRows=(result.data||[]) as Array<Record<string,unknown>>;
+      }
+      if(config.pdfTemplate==="vendor-ledger"&&supabase){
+        let query=supabase.from("supplier_bills").select("*, vendor:vendors(*)").order("issue_date",{ascending:true});
+        if(workspace.companyId)query=query.eq("company_id",workspace.companyId);
+        const result=await query;
+        if(result.error)throw result.error;
+        exportRows=(result.data||[]) as Array<Record<string,unknown>>;
+      }
+      const company={
+        name:source?.company_name||workspace.company?.name||"",
+        email:source?.email||"",phone:source?.phone||"",address:source?.address||"",
+        city:workspace.company?.city||"",country:workspace.company?.country||"",
+        website:source?.website||"",taxId:source?.tax_id||"",
+        bankName:source?.bank_name||"",bankAccount:source?.bank_account||"",
+        iban:source?.bank_iban||"",swift:source?.bank_swift||"",logoUrl:source?.logo_url||"",
+      };
+      const response=await fetch("/api/transactions/pdf",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({template:config.pdfTemplate,title:config.title,company,rows:exportRows})});
+      if(!response.ok){const detail=await response.json().catch(()=>null);throw new Error(detail?.error||"The PDF could not be generated.");}
+      const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`operix-${resourceKey}-${new Date().toISOString().slice(0,10)}.pdf`;link.click();URL.revokeObjectURL(url);
+    } catch(error) {
+      setMessage(error instanceof Error?error.message:"The PDF could not be generated.");
+    } finally {setExporting(false);}
+  }
 
   function closeModal(){setModal(false);setEditing(null);setMessage("");}
-  const pdfExport=["expenses","income","payments"].includes(config.table);
+  const pdfExport=Boolean(config.pdfTemplate);
   return <div className={embedded ? "mt-8 border-t border-[#e4e9f0] pt-8" : "p-4 lg:p-6 max-w-[1700px] mx-auto"}><header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><h1 className="page-title">{config.title}</h1><p className="muted text-xs mt-1.5">{config.description}</p></div><button className="btn btn-primary w-full shrink-0 justify-center whitespace-nowrap sm:w-auto" onClick={()=>{setEditing(null);setModal(true)}}><Plus size={17}/>New {config.singular}</button></header>
     <div className="mt-5 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"><label className="relative w-full sm:max-w-[330px]"><Search size={18} className="absolute left-3 top-3 text-[#98a2b3]"/><input value={query} onChange={(e)=>setQuery(e.target.value)} className="input pl-10" placeholder={`Search ${config.title.toLowerCase()}`}/></label><button className="btn w-full shrink-0 justify-center whitespace-nowrap sm:ml-auto sm:w-auto" onClick={pdfExport?exportPdf:exportCsv} disabled={exporting}><Download size={17}/>{exporting?"Preparing…":pdfExport?"Export PDF":"Export"}</button></div>
     {message&&<p className="mt-3 p-3 rounded bg-[#fff3f2] text-[#d92d20] text-xs">{message}</p>}{error&&<p className="mt-3 p-3 rounded bg-[#fff3f2] text-[#d92d20] text-xs">{error}</p>}
