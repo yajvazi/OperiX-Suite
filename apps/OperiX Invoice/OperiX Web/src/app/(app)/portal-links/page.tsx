@@ -1,4 +1,4 @@
 import type { Metadata } from "next";
-import { PortalLinksView } from "@/components/portal-links-view";
+import { redirect } from "next/navigation";
 export const metadata: Metadata = { title:"Customer Portal" };
-export default function PortalLinksPage(){ return <PortalLinksView/>; }
+export default function PortalLinksPage(){ redirect("/customers#portal"); }
