@@ -20,7 +20,7 @@ const nav = [
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/payments", label: "Payments", icon: CreditCard, children: [{ href: "/reminders", label: "Payment Reminders", icon: Bell }, { href: "/payment-links", label: "Online Payments", icon: CreditCard }, { href: "/income", label: "Income", icon: HandCoins }, { href: "/expenses", label: "Expenses", icon: WalletCards }] },
   { href: "/customers", label: "Customers", icon: Users },
-  { href: "/reports", label: "Reports", icon: FileBarChart, children: [{ href: "/tax-reports", label: "VAT & Tax Reports", icon: FileBarChart }] },
+  { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
   { href: "/settings", label: "Settings", icon: Settings },
