@@ -26,14 +26,14 @@ const style = `
 @page { size: A4; margin: 0; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
-.operix-invoice { width: 186mm; min-height: 277mm; margin: 0 auto; padding: 0; font-size: 10px; display: flex; flex-direction: column; }
+.operix-invoice { width: 186mm; min-height: 277mm; margin: 0 auto; padding: 0; font-size: 10px; display: flex; flex-direction: column; background: #fff; }
 .invoice-header { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; padding-bottom: 7px; border-bottom: 1.5px solid #111; }
-.invoice-brand { font-size: 26px; line-height: 1.05; font-weight: 800; text-transform: uppercase; letter-spacing: .2px; }
+.invoice-brand { font-size: 30px; line-height: 1.05; font-weight: 800; text-transform: uppercase; letter-spacing: .2px; }
 .invoice-brand img { display: block; max-width: 150px; max-height: 34px; margin-bottom: 5px; object-fit: contain; }
 .invoice-brand-logo { width: auto; }
 .invoice-qr { display: block; width: 28mm; height: 28mm; margin: 0 0 2px auto; object-fit: contain; }
 .invoice-balance-secondary-label { display: block; margin-top: 4px; font-size: 8px; font-weight: 600; text-transform: none; color: #4b5563; }
-.invoice-type { margin-top: 7px; font-size: 14px; font-weight: 700; text-transform: uppercase; }
+.invoice-type { margin-top: 7px; font-size: 16px; font-weight: 700; text-transform: uppercase; }
 .invoice-number { margin-top: 2px; font-size: 15px; font-weight: 800; }
 .invoice-balance { min-width: 170px; text-align: right; }
 .invoice-balance-label, .invoice-balance-value, .invoice-status { display: none !important; }
@@ -60,7 +60,7 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .invoice-items td.center { text-align: center; }
 .invoice-summary { display: grid; grid-template-columns: 1fr 285px; gap: 20px; align-items: start; margin-top: 9px; }
 .invoice-note { font-size: 8px; line-height: 1.35; }
-.invoice-totals { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 7px; font-size: 9px; }
+.invoice-totals { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #cbd5e1; border-radius: 0; padding: 4px 7px; font-size: 9px; }
 .invoice-totals td { padding: 3px 0; }
 .invoice-totals td:last-child { text-align: right; white-space: nowrap; }
 .invoice-totals .grand td { padding-top: 6px; border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; font-size: 12px; font-weight: 800; }

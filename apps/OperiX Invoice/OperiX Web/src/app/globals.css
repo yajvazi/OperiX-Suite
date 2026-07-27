@@ -146,6 +146,8 @@ main.min-h-screen section.grid > article > header > div:last-child > div:first-c
 .invoice-document-panel-head span:last-child { color:#667085; font-weight:400; }
 .invoice-document-canvas { min-width:0; padding:24px; background:#eef3f8; }
 .invoice-document-canvas .invoice-a4-preview { width:min(100%,794px); margin:0 auto; }
+.invoice-document-canvas .invoice-template-preview,
+.invoice-document-canvas .invoice-template-preview .operix-invoice { background:#fff; }
 .invoice-a4-preview,.invoice-a4-preview *{box-sizing:border-box}
 .invoice-a4-preview{position:relative;width:100%;aspect-ratio:210/297;margin:0 auto;padding:5%;font-family:Arial,Helvetica,sans-serif;font-size:clamp(7px,1.15vw,14px);color:#000;background:#fff;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 2px 8px rgba(16,24,40,.14)}
 .help-hero{position:relative;isolation:isolate;background:linear-gradient(110deg,#061a38 0%,#0a2853 100%)}
