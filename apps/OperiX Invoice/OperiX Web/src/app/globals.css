@@ -67,9 +67,18 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .pos-page div.flex.items-center.gap-3.p-4:has(> button[aria-label^="Remove "]) strong:first-child { white-space: normal; overflow: visible; font-size: 13px; }
 }
 @media (max-width: 1279px) {
-  .pos-page > div > .grid > section:first-child { max-height: 46vh; overflow-y: auto; overscroll-behavior: contain; }
+  .pos-page > div > .grid > section { height: calc(100vh - 150px); min-height: 420px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+  .pos-page > div > .grid > section::-webkit-scrollbar { width: 0; height: 0; display: none; }
   .pos-page > div > .grid > section:first-child > .pos-category-bar { position: static; z-index: auto; background: #fff !important; isolation: auto; box-shadow: none; }
 }
+@media (min-width: 1280px) {
+  .pos-page > div > .grid { height: calc(100vh - 148px); align-items: stretch; }
+  .pos-page > div > .grid > section { min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+  .pos-page > div > .grid > section::-webkit-scrollbar { width: 0; height: 0; display: none; }
+}
+.pos-category-bar > div:first-child { display: none; }
+.pos-category-bar > div:last-child { scrollbar-width: none; -ms-overflow-style: none; }
+.pos-category-bar > div:last-child::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .brand-x-mark { width: 48px; height: 48px; object-fit: contain; }
 .sidebar-nav-scroll > div > div.relative > button { top:0 !important; transform:none !important; height:43px !important; }
 /* Customer portal: keep invoice actions usable on narrow screens without
