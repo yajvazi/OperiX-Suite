@@ -11,7 +11,7 @@ type PortalToken = { id:string; token:string; client_id:string; expires_at?:stri
 export function PortalLinksView({ embedded = false }: { embedded?: boolean }){
   const workspace=useWorkspace(); const clients=useBusinessData<ClientRow>("clients"); const [links,setLinks]=useState<PortalToken[]>([]); const [clientId,setClientId]=useState(""); const [expires,setExpires]=useState(""); const [message,setMessage]=useState("");
   const load=async()=>{const supabase=createClient();if(!supabase||!workspace.user)return;const {data,error}=await supabase.from("customer_portal_tokens").select("*, client:clients(name)").eq("user_id",workspace.user.id).order("created_at",{ascending:false});if(error)setMessage(error.message);else setLinks((data||[]) as PortalToken[]);};
-  useEffect(()=>{void load();},[workspace.user]);
+  useEffect(()=>{queueMicrotask(()=>void load());},[workspace.user]);
   async function createLink(){const supabase=createClient();if(!supabase||!workspace.user){setMessage("Your session has expired.");return;}if(!clientId){setMessage("Choose a customer first.");return;}const {data,error}=await supabase.from("customer_portal_tokens").insert({user_id:workspace.user.id,company_id:workspace.companyId,client_id:clientId,expires_at:expires||null}).select("*, client:clients(name)").single();if(error)setMessage(error.message);else{setLinks(current=>[data as PortalToken,...current]);setClientId("");setExpires("");setMessage("Portal link created.");}}
   async function remove(id:string){const supabase=createClient();if(supabase)await supabase.from("customer_portal_tokens").delete().eq("id",id);setLinks(current=>current.filter(link=>link.id!==id));}
   function url(token:string){return `${window.location.origin}/portal/${token}`;}

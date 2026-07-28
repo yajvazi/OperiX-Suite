@@ -34,7 +34,7 @@ import type {
 import type { DocumentCompany } from "./invoice-document";
 
 type DiscountMode = "amount" | "percent";
-type PosPayment = "cash" | "card" | "bank" | "mixed" | "other";
+type PosPayment = "cash" | "card" | "debt" | "other";
 type PosInvoiceType = "invoice" | "offer" | "proforma" | "order";
 
 const invoiceTypes: Array<{ value: PosInvoiceType; label: string; type: string; subtype: string }> = [
@@ -56,10 +56,40 @@ interface CartItem {
   discountPercent: number;
 }
 
+interface HeldOrderSnapshot {
+  items: CartItem[];
+  clientId: string;
+  invoiceType: PosInvoiceType;
+  discountMode: DiscountMode;
+  discountValue: number;
+  taxRate: number;
+  note: string;
+  payment: PosPayment;
+  cashReceived: number;
+}
+
+interface HeldOrder {
+  id: string;
+  version: number;
+  status?: string;
+  terminal_id?: string;
+  cart_snapshot: HeldOrderSnapshot;
+}
+
+interface PosTerminal {
+  id: string;
+  terminal_code: string;
+  display_name: string;
+  branch_id: string;
+  warehouse_id: string | null;
+  fiscal_location_id: string | null;
+  cashier_shift_required: boolean;
+}
+
 const paymentOptions: Array<{ value: PosPayment; label: string; icon: typeof Banknote }> = [
   { value: "cash", label: "Cash", icon: Banknote },
   { value: "card", label: "Card", icon: CreditCard },
-  { value: "bank", label: "Debt", icon: WalletCards },
+  { value: "debt", label: "Debt", icon: WalletCards },
   { value: "other", label: "Other", icon: CircleHelp },
 ];
 
@@ -69,8 +99,15 @@ function categoryLabel(value: string) {
 
 function paymentMethod(value: PosPayment): PaymentMethod {
   if (value === "cash") return "cash";
-  if (value === "bank") return "bank";
+  if (value === "debt") return "bank";
   return "card";
+}
+
+function parseDecimalInput(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized || normalized === ".") return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 function makeInvoiceNumber(type: PosInvoiceType) {
@@ -97,11 +134,15 @@ export function PosView() {
   const [payment, setPayment] = useState<PosPayment>("cash");
   const [cashReceived, setCashReceived] = useState(0);
   const [cashReceivedText, setCashReceivedText] = useState("");
-  const [heldCart, setHeldCart] = useState<CartItem[] | null>(null);
+  const [heldOrder, setHeldOrder] = useState<HeldOrder | null>(null);
+  const [terminals, setTerminals] = useState<PosTerminal[]>([]);
+  const [terminalId, setTerminalId] = useState("");
+  const [terminalsLoading, setTerminalsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"error" | "success">("error");
   const searchRef = useRef<HTMLInputElement>(null);
+  const completionIdempotencyKeyRef = useRef<string | null>(null);
 
   const products = productsQuery.data;
   const clients = clientsQuery.data;
@@ -118,6 +159,12 @@ export function PosView() {
     if (Number.isFinite(configuredRate) && configuredRate > 0) queueMicrotask(() => setTaxRate(configuredRate));
   }, [workspace.company?.tax_rate, workspace.profile?.tax_rate]);
 
+  // A transient network failure must reuse the same key. A meaningful checkout
+  // change intentionally starts a new transaction.
+  useEffect(() => {
+    completionIdempotencyKeyRef.current = null;
+  }, [cart, clientId, discountMode, discountValue, invoiceType, note, payment, taxRate, terminalId]);
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -130,15 +177,76 @@ export function PosView() {
   }, []);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("operix-pos-held-cart");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as CartItem[];
-      if (Array.isArray(parsed) && parsed.length) queueMicrotask(() => setHeldCart(parsed.map(item => ({ ...item, discountPercent: Number(item.discountPercent) || 0 }))));
-    } catch {
-      sessionStorage.removeItem("operix-pos-held-cart");
-    }
-  }, []);
+    const userId = workspace.user?.id;
+    if (!workspace.companyId || !userId) return;
+    let cancelled = false;
+    const loadHeldOrder = async () => {
+      const supabase = createClient();
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from("held_orders")
+        .select("id,version,status,terminal_id,cart_snapshot")
+        .eq("company_id", workspace.companyId)
+        .eq("cashier_id", userId)
+        .eq("status", "held")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        // The feature is deliberately off for existing companies. A missing
+        // migration or disabled RLS path must not break the rest of checkout.
+        if (error.code !== "42P01") setMessage(error.message);
+        return;
+      }
+      if (data) {
+        const order = data as unknown as HeldOrder;
+        setHeldOrder(order);
+        if (order.terminal_id) setTerminalId(order.terminal_id);
+      }
+    };
+    void loadHeldOrder();
+    return () => { cancelled = true; };
+  }, [workspace.companyId, workspace.user?.id]);
+
+  useEffect(() => {
+    if (!workspace.companyId) return;
+    let cancelled = false;
+    const loadTerminals = async () => {
+      setTerminalsLoading(true);
+      const supabase = createClient();
+      if (!supabase) {
+        setTerminalsLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("pos_terminals")
+        .select("id,terminal_code,display_name,branch_id,warehouse_id,fiscal_location_id,cashier_shift_required")
+        .eq("company_id", workspace.companyId)
+        .eq("active", true)
+        .order("display_name");
+      if (cancelled) return;
+      setTerminalsLoading(false);
+      if (error) {
+        if (error.code !== "42P01") {
+          setMessageTone("error");
+          setMessage(error.message);
+        }
+        return;
+      }
+      const activeTerminals = (data || []) as PosTerminal[];
+      setTerminals(activeTerminals);
+      setTerminalId((current) => (
+        activeTerminals.some((terminal) => terminal.id === current)
+          ? current
+          : activeTerminals.length === 1
+            ? activeTerminals[0].id
+            : ""
+      ));
+    };
+    void loadTerminals();
+    return () => { cancelled = true; };
+  }, [workspace.companyId]);
 
   const categories = useMemo(() => {
     const values = new Set(products.map((product) => categoryLabel(String(product.category || ""))));
@@ -216,19 +324,92 @@ export function PosView() {
     }
   }
 
-  function holdCurrentCart() {
-    if (cart.length) {
-      setHeldCart(cart);
-      sessionStorage.setItem("operix-pos-held-cart", JSON.stringify(cart));
-      setCart([]);
-      setMessageTone("success");
-      setMessage("Invoice held. Resume it when you are ready.");
-    } else if (heldCart?.length) {
-      setCart(heldCart);
-      setHeldCart(null);
-      sessionStorage.removeItem("operix-pos-held-cart");
-      setMessage("");
+  async function holdCurrentCart() {
+    const supabase = createClient();
+    if (!supabase || !workspace.companyId) {
+      setMessageTone("error");
+      setMessage("A company workspace is required to hold an order.");
+      return;
     }
+    if (!terminalId) {
+      setMessageTone("error");
+      setMessage(terminals.length
+        ? "Select a POS terminal before holding this order."
+        : "No active POS terminal is configured for this company.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    if (cart.length) {
+      const snapshot: HeldOrderSnapshot = {
+        items: cart,
+        clientId,
+        invoiceType,
+        discountMode,
+        discountValue,
+        taxRate,
+        note,
+        payment,
+        cashReceived,
+      };
+      const { data, error } = await supabase.rpc("hold_pos_order", {
+        p_company_id: workspace.companyId,
+        p_terminal_id: terminalId,
+        p_customer_id: clientId || null,
+        p_cart_snapshot: snapshot,
+        p_expires_at: null,
+      });
+      if (error) {
+        setMessageTone("error");
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+      setHeldOrder(data as unknown as HeldOrder);
+      setCart([]);
+      setCashReceived(0);
+      setCashReceivedText("");
+      setMessageTone("success");
+      setMessage("Order held securely on this terminal.");
+    } else if (heldOrder) {
+      const { data, error } = await supabase.rpc("resume_held_pos_order", {
+        p_company_id: workspace.companyId,
+        p_held_order_id: heldOrder.id,
+        p_expected_version: heldOrder.version,
+      });
+      if (error) {
+        setMessageTone("error");
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+      const resumed = data as unknown as HeldOrder;
+      if (resumed.status === "expired") {
+        setHeldOrder(null);
+        setMessageTone("error");
+        setMessage("This held order has expired.");
+        setSaving(false);
+        return;
+      }
+      const snapshot = resumed.cart_snapshot;
+      setCart(snapshot.items.map((item) => ({
+        ...item,
+        discountPercent: Number(item.discountPercent) || 0,
+      })));
+      setClientId(snapshot.clientId || "");
+      setInvoiceType(snapshot.invoiceType || "invoice");
+      setDiscountMode(snapshot.discountMode || "percent");
+      setDiscountValue(Number(snapshot.discountValue) || 0);
+      setTaxRate(Number(snapshot.taxRate) || 0);
+      setNote(snapshot.note || "");
+      setPayment(snapshot.payment || "cash");
+      setCashReceived(Number(snapshot.cashReceived) || 0);
+      setCashReceivedText(snapshot.cashReceived ? String(snapshot.cashReceived) : "");
+      setHeldOrder(null);
+      setMessageTone("success");
+      setMessage("Held order resumed.");
+    }
+    setSaving(false);
   }
 
   function createDraft(status: InvoiceDraft["status"]): InvoiceDraft {
@@ -291,22 +472,78 @@ export function PosView() {
       setMessage(`Cash received is ${money(amountDue, currency)} short of the total.`);
       return;
     }
-    setSaving(true);
-    setMessageTone("error");
-    setMessage("");
+    if (status === "complete" && !terminalId) {
+      setMessageTone("error");
+      setMessage(terminals.length
+        ? "Select a POS terminal before completing this sale."
+        : "No active POS terminal is configured for this company.");
+      return;
+    }
     const supabase = createClient();
     if (!supabase) {
       setMessage("Supabase is not configured.");
       setSaving(false);
       return;
     }
+    setSaving(true);
+    setMessageTone("error");
+    setMessage("");
+
+    // Completion is one idempotent server command. Do not recreate the old
+    // browser-side invoice → lines → payment sequence here.
+    if (status === "complete") {
+      const tenderedAmount = payment === "cash" ? cashReceived : totals.total;
+      const { data, error } = await supabase.rpc("complete_pos_sale", {
+        p_company_id: workspace.companyId,
+        p_terminal_id: terminalId,
+        p_customer_id: clientId || null,
+        p_items: cart.map((item) => ({
+          product_id: item.productId,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          discount_percent: item.discountPercent,
+        })),
+        p_payments: [{
+          method: payment === "debt" ? "customer_credit" : payment,
+          amount: totals.total,
+          tendered_amount: tenderedAmount,
+          reference: null,
+          settlement_account_id: null,
+        }],
+        p_invoice_type: invoiceType,
+        p_notes: note || null,
+        p_idempotency_key: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()),
+        p_occurred_at: new Date().toISOString(),
+      });
+      if (error) {
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+      const result = data as { invoice_number?: string } | null;
+      if (!result?.invoice_number) {
+        setMessage("The POS completion command returned no invoice number.");
+        setSaving(false);
+        return;
+      }
+      setCart([]);
+      setCashReceived(0);
+      setCashReceivedText("");
+      setDiscountValue(0);
+      setNote("");
+      completionIdempotencyKeyRef.current = null;
+      setSaving(false);
+      router.push(`/invoices/preview/${encodeURIComponent(result.invoice_number)}`);
+      return;
+    }
+
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
       setMessage("Your session has expired. Please sign in again.");
       setSaving(false);
       return;
     }
-    const draft = createDraft(status === "complete" ? (payment === "bank" ? "sent" : "paid") : "draft");
+    const draft = createDraft("draft");
     const selectedInvoiceType = invoiceTypes.find((option) => option.value === invoiceType) || invoiceTypes[0];
     const payload = {
       user_id: authData.user.id,
@@ -354,46 +591,6 @@ export function PosView() {
       setSaving(false);
       return;
     }
-    if (status === "complete" && payment !== "bank") {
-      const paymentResult = await supabase.from("payments").insert({
-        user_id: authData.user.id,
-        company_id: workspace.companyId,
-        client_id: clientId || null,
-        invoice_id: invoiceResult.data.id,
-        payment_number: `PAY-${Date.now().toString().slice(-8)}`,
-        amount: totals.total,
-        payment_date: draft.issue_date,
-        payment_method: draft.payment_method,
-        notes: note || "POS payment",
-      });
-      if (paymentResult.error) {
-        setMessage(`Invoice saved, but payment record failed: ${paymentResult.error.message}`);
-        setSaving(false);
-        return;
-      }
-    }
-    if (status === "complete") {
-      const company: DocumentCompany = {
-        name: source?.company_name || workspace.company?.name || "",
-        email: source?.email || "",
-        phone: source?.phone || "",
-        address: source?.address || "",
-        city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "),
-        taxId: source?.tax_id || "",
-        bankName: source?.bank_name || "",
-        iban: source?.bank_iban || "",
-        website: source?.website || "",
-        signatureUrl: source?.signature_url,
-        stampUrl: source?.stamp_url,
-      };
-      localStorage.setItem("operix-pos-complete", JSON.stringify({ draft, client: selectedClient, company, config: source?.template_config, invoiceId: invoiceResult.data.id }));
-      setCart([]);
-      setCashReceived(0);
-      // Open the persisted invoice preview directly after payment. This route
-      // is backed by the saved invoice record and remains valid on refresh.
-      router.push(`/invoices/preview/${encodeURIComponent(draft.invoice_number)}`);
-      return;
-    }
     setCart([]);
     setCashReceived(0);
     setCashReceivedText("");
@@ -405,12 +602,14 @@ export function PosView() {
   }
 
   const dataError = productsQuery.error || clientsQuery.error || workspace.error;
+  const terminalReady = Boolean(terminalId);
 
   return <div className="pos-page min-h-[calc(100vh-64px)] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5">
     <div className="mx-auto max-w-[1800px]">
       <header className="mb-4 flex flex-wrap items-end gap-3">
         <div className="w-full lg:w-auto"><h1 className="page-title">POS</h1><p className="muted mt-1 text-xs">Create an invoice from your product catalogue.</p></div>
-        <label className="relative order-2 min-w-0 flex-1 lg:order-none lg:ml-auto lg:w-[540px] lg:flex-none"><span className="sr-only">Search products</span><Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"/><input ref={searchRef} className="input pl-9 pr-14" placeholder="Search products, SKU or barcode…" value={search} onChange={(event) => setSearch(event.target.value)}/><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[#e4e9f0] px-1.5 py-0.5 text-[10px] muted">Ctrl K</kbd></label>
+        <label className="order-1 min-w-0 flex-1 sm:max-w-64 lg:order-none lg:ml-auto"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#667085]">Terminal</span><select className="select h-10 w-full text-xs" value={terminalId} onChange={(event) => setTerminalId(event.target.value)} disabled={terminalsLoading || !terminals.length}><option value="">{terminalsLoading ? "Loading terminals…" : terminals.length ? "Select terminal" : "No active terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.display_name || terminal.terminal_code}</option>)}</select></label>
+        <label className="relative order-2 min-w-0 flex-1 lg:order-none lg:w-[430px] lg:flex-none"><span className="sr-only">Search products</span><Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"/><input ref={searchRef} className="input pl-9 pr-14" placeholder="Search products, SKU or barcode…" value={search} onChange={(event) => setSearch(event.target.value)}/><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[#e4e9f0] px-1.5 py-0.5 text-[10px] muted">Ctrl K</kbd></label>
         <Link className="btn btn-primary order-3 shrink-0" href="/products"><Plus size={16}/>Add product</Link>
       </header>
       {dataError && <p className="mb-4 rounded border border-[#fecdca] bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{dataError}</p>}
@@ -423,12 +622,12 @@ export function PosView() {
         </section>
 
         <section className="card min-w-0 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-[#edf0f4] p-4 sm:flex-row sm:items-start"><div className="min-w-0"><h2 className="text-lg font-semibold">{invoiceTypes.find((option) => option.value === invoiceType)?.label || "Invoice"} <span className="ml-1 rounded bg-[#ecfdf3] px-2 py-1 text-[10px] font-medium text-[#087443]">New</span></h2><p className="muted mt-1 text-[11px]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "No items added"}</p></div><div className="flex w-full min-w-0 justify-end gap-2 sm:ml-auto sm:w-auto"><label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Invoice type</span><select className="select h-9 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-32" value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as PosInvoiceType)}>{invoiceTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="btn h-9 shrink-0 px-3 text-xs" onClick={holdCurrentCart} disabled={saving} title={heldCart ? "Resume held invoice" : "Hold invoice"}>{heldCart && !cart.length ? <FileText size={15}/> : <WalletCards size={15}/>}<span className="hidden sm:inline">{heldCart && !cart.length ? "Resume" : "Hold"}</span></button><button className="btn h-9 shrink-0 px-3 text-xs" onClick={clearCart} disabled={!cart.length || saving}><Trash2 size={15}/><span className="hidden sm:inline">Clear</span></button></div></div>
+          <div className="flex flex-col gap-3 border-b border-[#edf0f4] p-4 sm:flex-row sm:items-start"><div className="min-w-0"><h2 className="text-lg font-semibold">{invoiceTypes.find((option) => option.value === invoiceType)?.label || "Invoice"} <span className="ml-1 rounded bg-[#ecfdf3] px-2 py-1 text-[10px] font-medium text-[#087443]">New</span></h2><p className="muted mt-1 text-[11px]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "No items added"} · {terminalReady ? terminals.find((terminal) => terminal.id === terminalId)?.display_name || "Terminal ready" : "Terminal required"}</p></div><div className="flex w-full min-w-0 justify-end gap-2 sm:ml-auto sm:w-auto"><label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Invoice type</span><select className="select h-9 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-32" value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as PosInvoiceType)}>{invoiceTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="btn h-9 shrink-0 px-3 text-xs" onClick={() => void holdCurrentCart()} disabled={saving || !terminalReady || (!cart.length && !heldOrder)} title={heldOrder && !cart.length ? "Resume held order" : "Hold order"}>{heldOrder && !cart.length ? <FileText size={15}/> : <WalletCards size={15}/>}<span className="hidden sm:inline">{heldOrder && !cart.length ? "Resume" : "Hold"}</span></button><button className="btn h-9 shrink-0 px-3 text-xs" onClick={clearCart} disabled={!cart.length || saving}><Trash2 size={15}/><span className="hidden sm:inline">Clear</span></button></div></div>
           <div className="border-b border-[#edf0f4] p-4"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Customer</span><Link className="text-xs font-medium text-[#004ffe]" href="/customers"><Plus size={14} className="mr-1 inline"/>New customer</Link></div><div className="relative"><UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#667085]"/><input className="input pl-9 pr-9" placeholder="Search customers…" value={clientId ? (clients.find((client) => client.id === clientId)?.name || "") : customerSearch} onFocus={() => setCustomerPickerOpen(true)} onChange={(event) => { setCustomerSearch(event.target.value); setClientId(""); setCustomerPickerOpen(true); }} aria-label="Search customers"/><button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#667085]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(true); }} aria-label="Clear customer"><X size={15}/></button>{customerPickerOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#e4e9f0] bg-white p-1 shadow-lg"><button type="button" className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(false); }}>Walk-in Customer</button>{matchingClients.map((client) => <button type="button" key={client.id} className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(client.id); setCustomerSearch(""); setCustomerPickerOpen(false); }}><span className="block font-medium text-[#101828]">{client.name}</span>{client.email ? <span className="muted block text-[10px]">{client.email}</span> : null}</button>)}{!matchingClients.length ? <p className="p-2 text-xs muted">No customers found.</p> : null}</div> : null}</div></div>
           <div className="max-h-[320px] overflow-y-auto border-b border-[#edf0f4]">{cart.length ? <div className="divide-y divide-[#edf0f4]">{cart.map((item) => <CartLine key={item.id} item={item} currency={currency} onQuantityChange={(value) => updateQuantity(item.id, value)} onDiscountChange={(value) => updateProductDiscount(item.id, value)} onRemove={() => updateQuantity(item.id, 0)}/>)}</div> : <div className="grid min-h-44 place-items-center p-6 text-center"><ShoppingCart size={34} className="text-[#98a2b3]"/><p className="mt-2 text-sm font-medium">No items added</p><p className="muted mt-1 text-xs">Browse products and add them to this invoice.</p></div>}</div>
           <div className="grid gap-4 border-b border-[#edf0f4] p-4 md:grid-cols-[1fr_1fr]"><div className="space-y-3"><div><label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#667085]">Discount <select className="h-7 rounded border border-[#e4e9f0] bg-white px-2 text-[11px] font-normal" value={discountMode} onChange={(event) => {const mode=event.target.value as DiscountMode;setDiscountMode(mode);setDiscountValue(current=>mode === "percent" ? Math.min(100,current) : Math.min(totals.subtotal,current));}}><option value="percent">% Percent</option><option value="amount">€ Amount</option></select></label><input className="input" type="number" min="0" max={discountMode === "percent" ? 100 : totals.subtotal} step={discountMode === "percent" ? 1 : "0.01"} value={discountValue || ""} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {const value=Math.max(0,Number(event.target.value)||0);setDiscountValue(Math.min(discountMode === "percent" ? 100 : totals.subtotal,value));}}/></div><label className="field"><span>Note</span><textarea className="textarea min-h-16" maxLength={250} placeholder="Add note…" value={note} onChange={(event) => setNote(event.target.value)}/></label></div><div className="rounded-lg bg-[#f7f9fc] p-3"><SummaryRow label="Subtotal" value={totals.subtotal} currency={currency}/><SummaryRow label="Discount" value={-totals.discount} currency={currency}/><SummaryRow label={`Tax included (${taxRate}%)`} value={totals.tax} currency={currency}/><div className="mt-3 flex items-center border-t border-[#e4e9f0] pt-3 text-base font-semibold"><span>Total</span><strong className="ml-auto text-xl text-[#004ffe]">{money(totals.total, currency)}</strong></div></div></div>
-          <div className="border-b border-[#edf0f4] p-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentOptions.map((option) => {const Icon = option.icon; const active = payment === option.value; return <button key={option.value} type="button" aria-pressed={active} className={`btn pos-payment-option h-10 px-2 text-xs ${active ? "pos-payment-active" : ""}`} onClick={() => setPayment(option.value)}><Icon size={15}/>{option.label}</button>;})}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="field"><span>Cash received</span><div className="flex gap-2"><input className="input min-w-0" type="text" inputMode="decimal" defaultValue={cashReceived || ""} onChange={(event) => {const value=Number(event.target.value);setCashReceived(Number.isFinite(value) ? Math.max(0, value) : 0);}} disabled={payment !== "cash"}/><button type="button" className="btn shrink-0 px-3 text-xs" onClick={() => setCashReceived(Math.round(totals.total))} disabled={payment !== "cash" || !cart.length}>Paid in full</button></div></label><div className="field"><span>{amountDue > 0 ? "Amount due" : "Change"}</span><strong className={`input ${amountDue > 0 ? "bg-[#fff8eb] text-[#b54708]" : "bg-[#ecfdf3] text-[#087443]"}`}>{money(amountDue || change, currency)}</strong></div></div></div>
-          <div className="grid gap-2 p-4 sm:grid-cols-3"><button className="btn" onClick={() => saveInvoice("draft")} disabled={busy || !cart.length}><FileText size={16}/>Save as Draft</button><button className="btn" onClick={printDraft} disabled={busy || !cart.length}><Printer size={16}/>Print</button><button className="btn btn-primary sm:col-span-1" onClick={() => saveInvoice("complete")} disabled={busy || !cart.length}><Banknote size={16}/>{saving ? "Saving…" : "Pay & Complete"}</button></div>
+          <div className="border-b border-[#edf0f4] p-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentOptions.map((option) => {const Icon = option.icon; const active = payment === option.value; return <button key={option.value} type="button" aria-pressed={active} className={`btn pos-payment-option h-10 px-2 text-xs ${active ? "pos-payment-active" : ""}`} onClick={() => setPayment(option.value)}><Icon size={15}/>{option.label}</button>;})}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="field"><span>Cash received</span><div className="flex gap-2"><input className="input min-w-0" type="text" inputMode="decimal" placeholder="0.00" value={cashReceivedText} onChange={(event) => { const next = event.target.value; setCashReceivedText(next); setCashReceived(parseDecimalInput(next)); }} disabled={payment !== "cash"}/><button type="button" className="btn shrink-0 px-3 text-xs" onClick={() => { const amount = Number(totals.total.toFixed(2)); setCashReceived(amount); setCashReceivedText(String(amount)); }} disabled={payment !== "cash" || !cart.length}>Paid in full</button></div></label><div className="field"><span>{payment === "debt" ? "Customer balance" : amountDue > 0 ? "Amount due" : "Change"}</span><strong className={`input ${payment === "debt" ? "bg-[#fff8eb] text-[#b54708]" : amountDue > 0 ? "bg-[#fff8eb] text-[#b54708]" : "bg-[#ecfdf3] text-[#087443]"}`}>{payment === "debt" ? money(totals.total, currency) : money(amountDue || change, currency)}</strong></div></div></div>
+          <div className="grid gap-2 p-4 sm:grid-cols-3"><button className="btn" onClick={() => saveInvoice("draft")} disabled={busy || !cart.length}><FileText size={16}/>Save as Draft</button><button className="btn" onClick={printDraft} disabled={busy || !cart.length}><Printer size={16}/>Print</button><button className="btn btn-primary sm:col-span-1" onClick={() => saveInvoice("complete")} disabled={busy || !cart.length || !terminalReady} title={terminalReady ? undefined : "Configure and select an active POS terminal first"}><Banknote size={16}/>{saving ? "Saving…" : "Pay & Complete"}</button></div>
         </section>
       </div>
     </div>

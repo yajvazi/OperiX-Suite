@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 COPY ["apps/OperiX Invoice/OperiX Web/package.json", "apps/OperiX Invoice/OperiX Web/package.json"]
 COPY ["packages/accounting/package.json", "packages/accounting/package.json"]
 COPY ["packages/money/package.json", "packages/money/package.json"]
+COPY ["packages/payroll/package.json", "packages/payroll/package.json"]
 RUN npm ci --workspace web-suite --include-workspace-root=false
 
 FROM node:22-bookworm-slim AS builder

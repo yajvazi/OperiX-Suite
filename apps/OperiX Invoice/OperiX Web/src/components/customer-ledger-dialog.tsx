@@ -80,7 +80,7 @@ export function CustomerLedgerDialog({ customer, onClose }: { customer: Customer
   }
 
   useEffect(() => {
-    if (!workspace.loading) void load();
+    if (!workspace.loading) queueMicrotask(() => void load());
     // The customer and workspace determine the complete source set; period changes are calculated locally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.id, workspace.companyId, workspace.loading]);

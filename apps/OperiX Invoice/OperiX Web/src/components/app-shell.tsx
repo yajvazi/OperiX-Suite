@@ -21,6 +21,14 @@ const nav = [
   { href: "/payments", label: "Payments", icon: CreditCard, children: [{ href: "/reminders", label: "Payment Reminders", icon: Bell }, { href: "/payment-links", label: "Online Payments", icon: CreditCard }, { href: "/income", label: "Income", icon: HandCoins }, { href: "/expenses", label: "Expenses", icon: WalletCards }] },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/accounting", label: "Accounting", icon: BookOpenCheck },
+  { href: "/payroll", label: "Payroll", icon: WalletCards, children: [
+    { href: "/payroll/employees", label: "Employees", icon: Users },
+    { href: "/payroll/runs", label: "Payroll Runs", icon: ScrollText },
+    { href: "/payroll/payslips", label: "Payslips", icon: FileText },
+    { href: "/payroll/payment-batches", label: "Payment Batches", icon: CreditCard },
+    { href: "/payroll/configuration", label: "Configuration", icon: Settings },
+    { href: "/payroll/reports", label: "Payroll Reports", icon: FileBarChart },
+  ] },
   { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/products", label: "Products & Services", icon: Boxes },
@@ -37,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(""); const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
   const [companies,setCompanies]=useState<Array<{id:string;name:string}>>([]); const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ invoices:false, payments:false, customers:false, reports:false });
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ invoices:false, payments:false, customers:false, reports:false, payroll:false });
   const [searchedInvoices,setSearchedInvoices]=useState<InvoiceRow[]>([]);
   const invoicesQuery=useBusinessData<InvoiceRow>("invoices","id,invoice_number,client_id,total_amount,status,due_date,client:clients(name)");
   const invoices=invoicesQuery.data;
