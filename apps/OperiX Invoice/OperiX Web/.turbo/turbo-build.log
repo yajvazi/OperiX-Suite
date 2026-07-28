@@ -1,0 +1,67 @@
+
+> web-suite@0.1.0 build
+> next build
+
+▲ Next.js 16.2.11 (Turbopack)
+- Environments: .env.production
+- Experiments (use with caution):
+  · optimizePackageImports
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 14.5s
+  Running TypeScript ...
+  Finished TypeScript in 6.0s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/32) ...
+  Generating static pages using 3 workers (8/32) 
+  Generating static pages using 3 workers (16/32) 
+  Generating static pages using 3 workers (24/32) 
+✓ Generating static pages using 3 workers (32/32) in 375ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /[section]
+├ ○ /accounting
+├ ƒ /api/cron/invoice-automation
+├ ƒ /api/customers/ledger/pdf
+├ ƒ /api/health
+├ ƒ /api/payments/create-link
+├ ƒ /api/payments/portal-link
+├ ƒ /api/pdf
+├ ƒ /api/products/import/pdf
+├ ƒ /api/transactions/pdf
+├ ƒ /auth/callback
+├ ○ /dashboard
+├ ƒ /demo/[[...slug]]
+├ ○ /documents/print
+├ ○ /help
+├ ○ /inventory
+├ ○ /invoices
+├ ƒ /invoices/[id]
+├ ƒ /invoices/new
+├ ƒ /invoices/preview/[invoiceNumber]
+├ ○ /login
+├ ○ /management
+├ ○ /manifest.webmanifest
+├ ○ /offline
+├ ○ /portal-links
+├ ƒ /portal/[token]
+├ ƒ /portal/[token]/invoice/[invoiceId]
+├ ○ /pos
+├ ○ /pos/complete
+├ ƒ /pos/complete/[invoiceCode]
+├ ƒ /qr/[invoiceNumber]
+├ ○ /quotes
+├ ○ /reports
+├ ○ /settings
+├ ○ /signup
+└ ○ /transactions/preview
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -18,18 +18,17 @@ import { Button, Card } from '@invoice-monorepo/ui';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { Client, Profile } from '@invoice-monorepo/types';
+import {
+    buildCustomerLedger,
+    renderCustomerLedgerHtml,
+    type CustomerLedgerEntry,
+    type CustomerLedgerInvoice,
+    type CustomerLedgerPayment,
+} from '@invoice-monorepo/report-templates';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-interface LedgerEntry {
-    id: string;
-    date: string;
-    description: string;
-    debit: number;
-    credit: number;
-    balance: number;
-    type: 'invoice' | 'payment';
-}
+const LEDGER_RANGE = { from: '1900-01-01', to: '9999-12-31' };
 
 export function CustomerLedgerScreen({ navigation, route }: any) {
     const { user } = useAuth();
@@ -43,8 +42,15 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     const [filteredClients, setFilteredClients] = useState<Client[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClientId, setSelectedClientId] = useState<string | null>(preselectedClientId || null);
-    const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+    const [ledgerEntries, setLedgerEntries] = useState<CustomerLedgerEntry[]>([]);
     const [totals, setTotals] = useState({ debit: 0, credit: 0, balance: 0 });
+    const [ledgerSummary, setLedgerSummary] = useState({
+        openingBalance: 0,
+        totalDebit: 0,
+        totalCredit: 0,
+        closingBalance: 0,
+        totalPayments: 0,
+    });
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -103,58 +109,44 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         try {
             const { data: invoices } = await supabase
                 .from('invoices')
-                .select('*')
+                .select('id, invoice_number, issue_date, status, type, subtype, total_amount, payment_method, notes, created_at')
                 .eq('client_id', selectedClientId)
-                .eq('type', 'invoice')
                 .order('issue_date', { ascending: true });
 
             const { data: payments } = await supabase
                 .from('payments')
-                .select('*')
+                .select('id, payment_number, payment_date, amount, payment_method, bank_reference, notes, invoice_id, created_at, invoice:invoices(invoice_number)')
                 .eq('client_id', selectedClientId)
                 .order('payment_date', { ascending: true });
 
-            const entries: LedgerEntry[] = [];
-
-            invoices?.forEach(inv => {
-                entries.push({
-                    id: inv.id,
-                    date: inv.issue_date,
-                    description: `Fatura ${inv.invoice_number}`,
-                    debit: Number(inv.total_amount) || 0,
-                    credit: 0,
-                    balance: 0,
-                    type: 'invoice',
-                });
+            const normalizedPayments = (payments || []).map((payment: any) => ({
+                ...payment,
+                invoice_number: Array.isArray(payment.invoice)
+                    ? payment.invoice[0]?.invoice_number
+                    : payment.invoice?.invoice_number,
+            })) as CustomerLedgerPayment[];
+            const ledger = buildCustomerLedger({
+                invoices: (invoices || []) as CustomerLedgerInvoice[],
+                payments: normalizedPayments,
+                customerName: clients.find(client => client.id === selectedClientId)?.name || '—',
+                organizationUnit: profile?.company_name || '—',
+                userName: profile?.email || '—',
+                ...LEDGER_RANGE,
             });
 
-            payments?.forEach(pmt => {
-                entries.push({
-                    id: pmt.id,
-                    date: pmt.payment_date,
-                    description: `Pagesë ${pmt.payment_number}`,
-                    debit: 0,
-                    credit: Number(pmt.amount) || 0,
-                    balance: 0,
-                    type: 'payment',
-                });
+            setLedgerEntries(ledger.entries);
+            setLedgerSummary({
+                openingBalance: ledger.openingBalance,
+                totalDebit: ledger.totalDebit,
+                totalCredit: ledger.totalCredit,
+                closingBalance: ledger.closingBalance,
+                totalPayments: ledger.totalPayments,
             });
-
-            entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            let runningBalance = 0;
-            let totalDebit = 0;
-            let totalCredit = 0;
-
-            entries.forEach(entry => {
-                totalDebit += entry.debit;
-                totalCredit += entry.credit;
-                runningBalance = runningBalance + entry.debit - entry.credit;
-                entry.balance = runningBalance;
+            setTotals({
+                debit: ledger.totalDebit,
+                credit: ledger.totalCredit,
+                balance: ledger.closingBalance,
             });
-
-            setLedgerEntries(entries);
-            setTotals({ debit: totalDebit, credit: totalCredit, balance: runningBalance });
         } catch (error) {
             console.error('Error fetching ledger data:', error);
         } finally {
@@ -168,7 +160,34 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         if (!selectedClient || !profile) return;
         setExporting(true);
         try {
-            const html = generateLedgerHTML();
+            const html = renderCustomerLedgerHtml({
+                customer: {
+                    name: selectedClient.name,
+                    taxId: selectedClient.tax_id,
+                    email: selectedClient.email,
+                    phone: selectedClient.phone,
+                    address: [
+                        selectedClient.address,
+                        selectedClient.city,
+                        selectedClient.zip_code,
+                        selectedClient.country,
+                    ].filter(Boolean).join(', '),
+                },
+                company: {
+                    name: profile.company_name || 'Company',
+                    taxId: profile.tax_id,
+                    email: profile.email,
+                    phone: profile.phone,
+                    address: [profile.address, profile.city, profile.country].filter(Boolean).join(', '),
+                    website: profile.website,
+                    bankName: profile.bank_name,
+                    iban: profile.bank_iban || profile.bank_account,
+                    logoUrl: profile.logo_url,
+                },
+                range: LEDGER_RANGE,
+                summary: ledgerSummary,
+                entries: ledgerEntries,
+            });
             const { uri } = await Print.printToFileAsync({ html, base64: false });
             await Sharing.shareAsync(uri, {
                 mimeType: 'application/pdf',
@@ -180,117 +199,6 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         } finally {
             setExporting(false);
         }
-    };
-
-    const generateLedgerHTML = () => {
-        const formatDate = (dateStr: string) => {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('sq-AL');
-        };
-
-        const formatMoney = (amount: number) => {
-            return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) + ' €';
-        };
-
-        const rows = ledgerEntries.map(entry => `
-            <tr>
-                <td>${formatDate(entry.date)}</td>
-                <td>${entry.description}</td>
-                <td class="debit">${entry.debit > 0 ? formatMoney(entry.debit) : '-'}</td>
-                <td class="credit">${entry.credit > 0 ? formatMoney(entry.credit) : '-'}</td>
-                <td class="balance">${formatMoney(entry.balance)}</td>
-            </tr>
-        `).join('');
-
-        return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; font-size: 11px; color: #000; }
-        .header { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #000; }
-        .company-name { font-size: 18px; font-weight: bold; color: #000; }
-        .title { font-size: 20px; font-weight: bold; color: #000; text-align: right; }
-        .client-section { background: #fff; border: 1px solid #000; padding: 15px; border-radius: 0; margin-bottom: 20px; }
-        .client-name { font-size: 14px; font-weight: bold; color: #000; margin-bottom: 5px; }
-        .client-details { color: #000; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th { background: #000; color: white; padding: 10px 8px; text-align: left; font-weight: 600; border: 1px solid #000; }
-        th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: right; }
-        td { padding: 8px; border: 1px solid #000; }
-        td.debit, td.credit, td.balance { text-align: right; font-family: monospace; color: #000; }
-        td.balance { font-weight: bold; }
-        tr:nth-child(even) { background: #fff; }
-        .totals { margin-top: 10px; padding: 15px; background: #fff; border: 2px solid #000; color: #000; }
-        .totals-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .totals-row:last-child { margin-bottom: 0; font-size: 14px; font-weight: bold; border-top: 1px solid #000; padding-top: 8px; }
-        .footer { margin-top: 30px; text-align: center; color: #000; font-size: 10px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div>
-            <div class="company-name">${profile?.company_name || 'Company'}</div>
-            <div style="color: #000; margin-top: 5px;">
-                ${profile?.address || ''}<br/>
-                ${profile?.phone || ''} | ${profile?.email || ''}
-            </div>
-        </div>
-        <div>
-            <div class="title">KARTELA E BLERËSIT</div>
-            <div style="color: #000; text-align: right; margin-top: 5px;">
-                Data: ${new Date().toLocaleDateString('sq-AL')}
-            </div>
-        </div>
-    </div>
-
-    <div class="client-section">
-        <div class="client-name">${selectedClient?.name}</div>
-        <div class="client-details">
-            ${selectedClient?.email ? `Email: ${selectedClient.email}` : ''}
-            ${selectedClient?.phone ? ` | Tel: ${selectedClient.phone}` : ''}
-            ${selectedClient?.address ? `<br/>Adresa: ${selectedClient.address}` : ''}
-        </div>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 15%;">Data</th>
-                <th style="width: 35%;">Përshkrimi</th>
-                <th style="width: 16%;">Debit (Borxh)</th>
-                <th style="width: 16%;">Credit (Kredi)</th>
-                <th style="width: 18%;">Gjendja</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${rows}
-        </tbody>
-    </table>
-
-    <div class="totals">
-        <div class="totals-row">
-            <span>Total Debit:</span>
-            <span>${formatMoney(totals.debit)}</span>
-        </div>
-        <div class="totals-row">
-            <span>Total Credit:</span>
-            <span>${formatMoney(totals.credit)}</span>
-        </div>
-        <div class="totals-row">
-            <span>GJENDJA AKTUALE:</span>
-            <span>${formatMoney(totals.balance)}</span>
-        </div>
-    </div>
-
-    <div class="footer">
-        Gjeneruar automatikisht • ${profile?.company_name || 'Company'}
-    </div>
-</body>
-</html>
-        `;
     };
 
     if (!selectedClientId) {
@@ -478,8 +386,5 @@ const styles = StyleSheet.create({
 
     emptyText: { padding: 40, textAlign: 'center', fontSize: 14, fontWeight: '500' },
 });
-
-
-
 
 

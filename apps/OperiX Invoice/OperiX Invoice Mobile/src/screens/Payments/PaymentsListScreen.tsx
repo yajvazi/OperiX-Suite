@@ -1,395 +1,407 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from "react";
 import {
-    View,
-    Text,
-    FlatList,
-    TouchableOpacity,
-    RefreshControl,
-    StyleSheet,
-    Alert,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Plus, DollarSign, User, FileText, Banknote, Building, CreditCard, Share2, Printer } from 'lucide-react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { supabase } from '@invoice-monorepo/api';
-import { useAuth } from '@invoice-monorepo/hooks';
-import { useTheme } from '@invoice-monorepo/hooks';
-import { Card } from '@invoice-monorepo/ui';
-import { Payment } from '@invoice-monorepo/types';
-import { t } from '@invoice-monorepo/i18n';
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  StyleSheet,
+  Alert,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+  ArrowLeft,
+  Plus,
+  DollarSign,
+  User,
+  FileText,
+  Banknote,
+  Building,
+  CreditCard,
+  Share2,
+  Printer,
+} from "lucide-react-native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import { supabase } from "@invoice-monorepo/api";
+import { useAuth } from "@invoice-monorepo/hooks";
+import { useTheme } from "@invoice-monorepo/hooks";
+import { Card } from "@invoice-monorepo/ui";
+import { Payment } from "@invoice-monorepo/types";
+import { t } from "@invoice-monorepo/i18n";
+import {
+  renderTransactionReportHtml,
+  type TransactionReportCompany,
+} from "@invoice-monorepo/report-templates";
 
 export function PaymentsListScreen({ navigation }: any) {
-    const { user } = useAuth();
-    const { isDark, language, primaryColor } = useTheme();
-    const [payments, setPayments] = useState<Payment[]>([]);
-    const [refreshing, setRefreshing] = useState(false);
-    const [totalReceived, setTotalReceived] = useState(0);
-    const [exporting, setExporting] = useState(false);
+  const { user } = useAuth();
+  const { isDark, language, primaryColor } = useTheme();
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [totalReceived, setTotalReceived] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [company, setCompany] = useState<TransactionReportCompany>();
 
-    // Fix #5b: Generate HTML for PDF export
-    const generatePaymentsHtml = (): string => {
-        const rows = payments.map(p => `
-            <tr>
-                <td>${p.payment_number}</td>
-                <td>${p.client?.name || 'Pa klient'}</td>
-                <td>${new Date(p.payment_date).toLocaleDateString('sq-AL')}</td>
-                <td>${p.payment_method}</td>
-                <td style="text-align: right; color: #12B76A;">€${Number(p.amount).toFixed(2)}</td>
-            </tr>
-        `).join('');
+  const generatePaymentsHtml = () =>
+    renderTransactionReportHtml({
+      template: "income-payment",
+      title: "Pagesat hyrëse",
+      company,
+      rows: payments as unknown as Record<string, unknown>[],
+    });
 
-        return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    h1 { color: #111827; font-size: 24px; margin-bottom: 5px; }
-                    .date { color: #667085; margin-bottom: 20px; }
-                    .summary { background: #F4F7FB; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-                    .summary strong { color: #12B76A; font-size: 20px; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #E4E9F0; }
-                    th { background: #F7F9FC; font-weight: bold; color: #667085; font-size: 12px; }
-                    td { font-size: 13px; }
-                </style>
-            </head>
-            <body>
-                <h1>Pagesat Hyrëse</h1>
-                <p class="date">${new Date().toLocaleDateString('sq-AL', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                <div class="summary">Total i Pranuar: <strong>€${totalReceived.toFixed(2)}</strong></div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Nr. Pagese</th>
-                            <th>Klienti</th>
-                            <th>Data</th>
-                            <th>Metoda</th>
-                            <th style="text-align: right;">Shuma</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </body>
-            </html>
-        `;
-    };
+  const handlePrintPdf = async () => {
+    if (payments.length === 0) {
+      Alert.alert("Info", "Nuk ka pagesa për të eksportuar");
+      return;
+    }
+    setExporting(true);
+    try {
+      const html = generatePaymentsHtml();
+      await Print.printAsync({ html });
+    } catch (error: any) {
+      if (!error.message?.includes("cancelled")) {
+        Alert.alert("Error", "Dështoi printimi: " + error.message);
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
 
-    const handlePrintPdf = async () => {
-        if (payments.length === 0) {
-            Alert.alert('Info', 'Nuk ka pagesa për të eksportuar');
-            return;
-        }
-        setExporting(true);
-        try {
-            const html = generatePaymentsHtml();
-            await Print.printAsync({ html });
-        } catch (error: any) {
-            if (!error.message?.includes('cancelled')) {
-                Alert.alert('Error', 'Dështoi printimi: ' + error.message);
-            }
-        } finally {
-            setExporting(false);
-        }
-    };
+  const handleSharePdf = async () => {
+    if (payments.length === 0) {
+      Alert.alert("Info", "Nuk ka pagesa për të eksportuar");
+      return;
+    }
+    setExporting(true);
+    try {
+      const html = generatePaymentsHtml();
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
 
-    const handleSharePdf = async () => {
-        if (payments.length === 0) {
-            Alert.alert('Info', 'Nuk ka pagesa për të eksportuar');
-            return;
-        }
-        setExporting(true);
-        try {
-            const html = generatePaymentsHtml();
-            const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert("Error", "Sharing nuk është i disponueshëm");
+        return;
+      }
 
-            const isAvailable = await Sharing.isAvailableAsync();
-            if (!isAvailable) {
-                Alert.alert('Error', 'Sharing nuk është i disponueshëm');
-                return;
-            }
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Share Pagesat Hyrëse",
+        UTI: "com.adobe.pdf",
+      });
+    } catch (error: any) {
+      Alert.alert("Error", "Dështoi eksportimi: " + error.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
-            await Sharing.shareAsync(uri, {
-                mimeType: 'application/pdf',
-                dialogTitle: 'Share Pagesat Hyrëse',
-                UTI: 'com.adobe.pdf',
-            });
-        } catch (error: any) {
-            Alert.alert('Error', 'Dështoi eksportimi: ' + error.message);
-        } finally {
-            setExporting(false);
-        }
-    };
+  const bgColor = isDark ? "#0D1B2A" : "#F7F9FC";
+  const textColor = isDark ? "#fff" : "#111827";
+  const cardBg = isDark ? "#14243A" : "#ffffff";
+  const mutedColor = isDark ? "#98A2B3" : "#667085";
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
-    const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const mutedColor = isDark ? '#98A2B3' : '#667085';
+  useFocusEffect(
+    useCallback(() => {
+      fetchPayments();
+    }, [user]),
+  );
 
-    useFocusEffect(
-        useCallback(() => {
-            fetchPayments();
-        }, [user])
-    );
+  const fetchPayments = async () => {
+    if (!user) return;
 
-    const fetchPayments = async () => {
-        if (!user) return;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
 
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('company_id, active_company_id')
-            .eq('id', user.id)
-            .single();
+    const companyId =
+      profile?.active_company_id || profile?.company_id || user.id;
+    if (profile) {
+      setCompany({
+        name: profile.company_name,
+        email: profile.email,
+        phone: profile.phone,
+        address: profile.address,
+        city: profile.city,
+        country: profile.country,
+        website: profile.website,
+        taxId: profile.tax_id,
+        bankName: profile.bank_name,
+        bankAccount: profile.bank_account,
+        iban: profile.bank_iban,
+        swift: profile.bank_swift,
+        logoUrl: profile.logo_url,
+      });
+    }
 
-        const companyId = profile?.active_company_id || profile?.company_id || user.id;
+    const { data } = await supabase
+      .from("payments")
+      .select("*, client:clients(*), invoice:invoices(*)")
+      .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+      .order("payment_date", { ascending: false });
 
-        const { data } = await supabase
-            .from('payments')
-            .select('*, client:clients(*), invoice:invoices(*)')
-            .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-            .order('payment_date', { ascending: false });
+    if (data) {
+      setPayments(data);
+      const total = data.reduce((sum, p) => sum + Number(p.amount), 0);
+      setTotalReceived(total);
+    }
+  };
 
-        if (data) {
-            setPayments(data);
-            const total = data.reduce((sum, p) => sum + Number(p.amount), 0);
-            setTotalReceived(total);
-        }
-    };
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchPayments();
+    setRefreshing(false);
+  };
 
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        await fetchPayments();
-        setRefreshing(false);
-    };
+  const getMethodIcon = (method: string) => {
+    switch (method) {
+      case "bank":
+        return Building;
+      case "card":
+        return CreditCard;
+      default:
+        return Banknote;
+    }
+  };
 
-    const getMethodIcon = (method: string) => {
-        switch (method) {
-            case 'bank': return Building;
-            case 'card': return CreditCard;
-            default: return Banknote;
-        }
-    };
+  const getMethodColor = (method: string) => {
+    switch (method) {
+      case "bank":
+        return "#3388FF";
+      case "card":
+        return "#3388FF";
+      default:
+        return "#12B76A";
+    }
+  };
 
-    const getMethodColor = (method: string) => {
-        switch (method) {
-            case 'bank': return '#3388FF';
-            case 'card': return '#3388FF';
-            default: return '#12B76A';
-        }
-    };
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("sq-AL", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('sq-AL', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-        });
-    };
-
-    const renderPayment = ({ item }: { item: Payment }) => {
-        const MethodIcon = getMethodIcon(item.payment_method);
-        const methodColor = getMethodColor(item.payment_method);
-
-        return (
-            <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('PaymentForm', { paymentId: item.id })}
-            >
-                <Card style={styles.paymentCard}>
-                    <View style={styles.paymentRow}>
-                        <View style={[styles.methodBadge, { backgroundColor: `${methodColor}15` }]}>
-                            <MethodIcon color={methodColor} size={20} />
-                        </View>
-
-                        <View style={styles.paymentInfo}>
-                            <Text style={[styles.paymentNumber, { color: textColor }]}>
-                                {item.payment_number}
-                            </Text>
-                            <View style={styles.paymentMeta}>
-                                <User color={mutedColor} size={12} />
-                                <Text style={[styles.paymentMetaText, { color: mutedColor }]}>
-                                    {item.client?.name || 'Pa klient'}
-                                </Text>
-                            </View>
-                            {item.invoice && (
-                                <View style={styles.paymentMeta}>
-                                    <FileText color={mutedColor} size={12} />
-                                    <Text style={[styles.paymentMetaText, { color: mutedColor }]}>
-                                        {item.invoice.invoice_number}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-
-                        <View style={styles.paymentRight}>
-                            <Text style={[styles.paymentAmount, { color: '#12B76A' }]}>
-                                +€{Number(item.amount).toFixed(2)}
-                            </Text>
-                            <Text style={[styles.paymentDate, { color: mutedColor }]}>
-                                {formatDate(item.payment_date)}
-                            </Text>
-                        </View>
-                    </View>
-                </Card>
-            </TouchableOpacity>
-        );
-    };
+  const renderPayment = ({ item }: { item: Payment }) => {
+    const MethodIcon = getMethodIcon(item.payment_method);
+    const methodColor = getMethodColor(item.payment_method);
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Pagesat Hyrëse</Text>
-                <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: primaryColor }]}
-                    onPress={() => navigation.navigate('PaymentForm')}
-                >
-                    <Plus color="#fff" size={20} />
-                </TouchableOpacity>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() =>
+          navigation.navigate("PaymentForm", { paymentId: item.id })
+        }
+      >
+        <Card style={styles.paymentCard}>
+          <View style={styles.paymentRow}>
+            <View
+              style={[
+                styles.methodBadge,
+                { backgroundColor: `${methodColor}15` },
+              ]}
+            >
+              <MethodIcon color={methodColor} size={20} />
             </View>
 
-            {/* Summary Card */}
-            <Card style={styles.summaryCard}>
-                <View style={styles.summaryRow}>
-                    <View style={[styles.summaryIcon, { backgroundColor: '#12B76A15' }]}>
-                        <DollarSign color="#12B76A" size={24} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.summaryLabel, { color: mutedColor }]}>Total i Pranuar</Text>
-                        <Text style={[styles.summaryValue, { color: '#12B76A' }]}>
-                            €{totalReceived.toFixed(2)}
-                        </Text>
-                    </View>
-                    {/* Fix #5b: PDF Export Actions */}
-                    <View style={styles.exportActions}>
-                        <TouchableOpacity
-                            style={[styles.exportButton, { backgroundColor: `${primaryColor}15` }]}
-                            onPress={handlePrintPdf}
-                            disabled={exporting}
-                        >
-                            <Printer color={primaryColor} size={18} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.exportButton, { backgroundColor: '#12B76A15' }]}
-                            onPress={handleSharePdf}
-                            disabled={exporting}
-                        >
-                            <Share2 color="#12B76A" size={18} />
-                        </TouchableOpacity>
-                    </View>
+            <View style={styles.paymentInfo}>
+              <Text style={[styles.paymentNumber, { color: textColor }]}>
+                {item.payment_number}
+              </Text>
+              <View style={styles.paymentMeta}>
+                <User color={mutedColor} size={12} />
+                <Text style={[styles.paymentMetaText, { color: mutedColor }]}>
+                  {item.client?.name || "Pa klient"}
+                </Text>
+              </View>
+              {item.invoice && (
+                <View style={styles.paymentMeta}>
+                  <FileText color={mutedColor} size={12} />
+                  <Text style={[styles.paymentMetaText, { color: mutedColor }]}>
+                    {item.invoice.invoice_number}
+                  </Text>
                 </View>
-            </Card>
+              )}
+            </View>
 
-            {/* Payments List */}
-            <FlatList
-                data={payments}
-                renderItem={renderPayment}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />
-                }
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <DollarSign color={mutedColor} size={48} />
-                        <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            Nuk ka pagesa të regjistruara
-                        </Text>
-                    </View>
-                }
-            />
-        </View>
+            <View style={styles.paymentRight}>
+              <Text style={[styles.paymentAmount, { color: "#12B76A" }]}>
+                +€{Number(item.amount).toFixed(2)}
+              </Text>
+              <Text style={[styles.paymentDate, { color: mutedColor }]}>
+                {formatDate(item.payment_date)}
+              </Text>
+            </View>
+          </View>
+        </Card>
+      </TouchableOpacity>
     );
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <ArrowLeft color={textColor} size={24} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: textColor }]}>Pagesat Hyrëse</Text>
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: primaryColor }]}
+          onPress={() => navigation.navigate("PaymentForm")}
+        >
+          <Plus color="#fff" size={20} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary Card */}
+      <Card style={styles.summaryCard}>
+        <View style={styles.summaryRow}>
+          <View style={[styles.summaryIcon, { backgroundColor: "#12B76A15" }]}>
+            <DollarSign color="#12B76A" size={24} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.summaryLabel, { color: mutedColor }]}>
+              Total i Pranuar
+            </Text>
+            <Text style={[styles.summaryValue, { color: "#12B76A" }]}>
+              €{totalReceived.toFixed(2)}
+            </Text>
+          </View>
+          {/* Fix #5b: PDF Export Actions */}
+          <View style={styles.exportActions}>
+            <TouchableOpacity
+              style={[
+                styles.exportButton,
+                { backgroundColor: `${primaryColor}15` },
+              ]}
+              onPress={handlePrintPdf}
+              disabled={exporting}
+            >
+              <Printer color={primaryColor} size={18} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.exportButton, { backgroundColor: "#12B76A15" }]}
+              onPress={handleSharePdf}
+              disabled={exporting}
+            >
+              <Share2 color="#12B76A" size={18} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Card>
+
+      {/* Payments List */}
+      <FlatList
+        data={payments}
+        renderItem={renderPayment}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={primaryColor}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <DollarSign color={mutedColor} size={48} />
+            <Text style={[styles.emptyText, { color: mutedColor }]}>
+              Nuk ka pagesa të regjistruara
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 56,
-        paddingBottom: 16,
-    },
-    backButton: { marginRight: 16, padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold', flex: 1 },
-    addButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    summaryCard: {
-        marginHorizontal: 16,
-        marginBottom: 16,
-        padding: 16,
-    },
-    summaryRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-    },
-    summaryIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    summaryLabel: { fontSize: 13, marginBottom: 2 },
-    summaryValue: { fontSize: 24, fontWeight: 'bold' },
-    listContent: { padding: 16, paddingTop: 0 },
-    paymentCard: { padding: 14, marginBottom: 12 },
-    paymentRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    methodBadge: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 14,
-    },
-    paymentInfo: { flex: 1 },
-    paymentNumber: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
-    paymentMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginTop: 2,
-    },
-    paymentMetaText: { fontSize: 12 },
-    paymentRight: { alignItems: 'flex-end' },
-    paymentAmount: { fontSize: 16, fontWeight: 'bold' },
-    paymentDate: { fontSize: 12, marginTop: 2 },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 60,
-        gap: 12,
-    },
-    emptyText: { fontSize: 15 },
-    exportActions: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    exportButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 16,
+  },
+  backButton: { marginRight: 16, padding: 4 },
+  title: { fontSize: 22, fontWeight: "bold", flex: 1 },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryLabel: { fontSize: 13, marginBottom: 2 },
+  summaryValue: { fontSize: 24, fontWeight: "bold" },
+  listContent: { padding: 16, paddingTop: 0 },
+  paymentCard: { padding: 14, marginBottom: 12 },
+  paymentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  methodBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  paymentInfo: { flex: 1 },
+  paymentNumber: { fontSize: 15, fontWeight: "600", marginBottom: 4 },
+  paymentMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  paymentMetaText: { fontSize: 12 },
+  paymentRight: { alignItems: "flex-end" },
+  paymentAmount: { fontSize: 16, fontWeight: "bold" },
+  paymentDate: { fontSize: 12, marginTop: 2 },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 12,
+  },
+  emptyText: { fontSize: 15 },
+  exportActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  exportButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
-
-
-
-
-

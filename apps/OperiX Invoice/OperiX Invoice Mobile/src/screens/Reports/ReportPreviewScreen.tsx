@@ -1,162 +1,289 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Alert } from 'react-native';
-import { ArrowLeft, Download, Share2, FileText, Calendar, TrendingUp } from 'lucide-react-native';
-import * as Print from 'expo-print';
-import { useTheme } from '@invoice-monorepo/hooks';
-import { supabase } from '@invoice-monorepo/api';
-import { useAuth } from '@invoice-monorepo/hooks';
-import { Button, Card } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  Share,
+  Alert,
+} from "react-native";
+import {
+  ArrowLeft,
+  Download,
+  Share2,
+  FileText,
+  Calendar,
+  TrendingUp,
+} from "lucide-react-native";
+import * as Print from "expo-print";
+import { useTheme } from "@invoice-monorepo/hooks";
+import { supabase } from "@invoice-monorepo/api";
+import { useAuth } from "@invoice-monorepo/hooks";
+import { Button, Card } from "@invoice-monorepo/ui";
+import { t } from "@invoice-monorepo/i18n";
+import { formatCurrency } from "@invoice-monorepo/i18n";
+import { renderTransactionReportHtml } from "@invoice-monorepo/report-templates";
 
 export function ReportPreviewScreen({ navigation, route }: any) {
-    const { user } = useAuth();
-    const { isDark, language } = useTheme();
-    const type = route.params?.subtype || 'daily';
-    const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState(false);
-    const [data, setData] = useState<any>(null);
+  const { user } = useAuth();
+  const { isDark, language } = useTheme();
+  const type = route.params?.subtype || "daily";
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [data, setData] = useState<any>(null);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
-    const textColor = isDark ? '#fff' : '#111827';
-    const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+  const bgColor = isDark ? "#0D1B2A" : "#F7F9FC";
+  const textColor = isDark ? "#fff" : "#111827";
+  const mutedColor = isDark ? "#98A2B3" : "#667085";
+  const cardBg = isDark ? "#14243A" : "#ffffff";
 
-    useEffect(() => {
-        fetchReportData();
-    }, [type]);
+  useEffect(() => {
+    fetchReportData();
+  }, [type]);
 
-    const fetchReportData = async () => {
-        setLoading(true);
-        try {
-            if (type === 'daily') {
-                const today = new Date().toISOString().split('T')[0];
-                const { data: invoices } = await supabase.from('invoices').select('*').eq('issue_date', today);
-                const { data: expenses } = await supabase.from('expenses').select('*').eq('date', today);
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      if (type === "daily") {
+        const today = new Date().toISOString().split("T")[0];
+        const { data: invoices } = await supabase
+          .from("invoices")
+          .select("*")
+          .eq("issue_date", today);
+        const { data: expenses } = await supabase
+          .from("expenses")
+          .select("*")
+          .eq("date", today);
 
-                const totalSales = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-                const totalExpenses = expenses?.reduce((sum, exp) => sum + Number(exp.amount), 0) || 0;
+        const totalSales =
+          invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) ||
+          0;
+        const totalExpenses =
+          expenses?.reduce((sum, exp) => sum + Number(exp.amount), 0) || 0;
 
-                setData({
-                    title: 'Raporti Ditor',
-                    date: today,
-                    metrics: [
-                        { label: 'Total Sales', value: formatCurrency(totalSales), icon: TrendingUp, color: '#12B76A' },
-                        { label: 'Total Expenses', value: formatCurrency(totalExpenses), icon: FileText, color: '#ef4444' },
-                        { label: 'Net Profit', value: formatCurrency(totalSales - totalExpenses), icon: TrendingUp, color: '#004FFE' },
-                    ],
-                    transactions: [
-                        ...(invoices?.map(inv => ({ id: inv.id, desc: `Invoice ${inv.invoice_number}`, amount: inv.total_amount, type: 'sale' })) || []),
-                        ...(expenses?.map(exp => ({ id: exp.id, desc: exp.description, amount: exp.amount, type: 'expense' })) || []),
-                    ]
-                });
-            } else {
-                // Sales Book - fetch monthly invoice data
-                const startOfMonth = new Date();
-                startOfMonth.setDate(1);
-                startOfMonth.setHours(0, 0, 0, 0);
-                const start = startOfMonth.toISOString().split('T')[0];
+        setData({
+          title: "Raporti Ditor",
+          date: today,
+          metrics: [
+            {
+              label: "Total Sales",
+              value: formatCurrency(totalSales),
+              icon: TrendingUp,
+              color: "#12B76A",
+            },
+            {
+              label: "Total Expenses",
+              value: formatCurrency(totalExpenses),
+              icon: FileText,
+              color: "#ef4444",
+            },
+            {
+              label: "Net Profit",
+              value: formatCurrency(totalSales - totalExpenses),
+              icon: TrendingUp,
+              color: "#004FFE",
+            },
+          ],
+          transactions: [
+            ...(invoices?.map((inv) => ({
+              id: inv.id,
+              desc: `Invoice ${inv.invoice_number}`,
+              amount: inv.total_amount,
+              type: "sale",
+            })) || []),
+            ...(expenses?.map((exp) => ({
+              id: exp.id,
+              desc: exp.description,
+              amount: exp.amount,
+              type: "expense",
+            })) || []),
+          ],
+        });
+      } else {
+        // Sales Book - fetch monthly invoice data
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const start = startOfMonth.toISOString().split("T")[0];
+        const nextMonth = new Date(startOfMonth);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const endExclusive = nextMonth.toISOString().split("T")[0];
+        const end = new Date(nextMonth.getTime() - 86400000)
+          .toISOString()
+          .split("T")[0];
 
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('company_id, active_company_id')
-                    .eq('id', user?.id)
-                    .single();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user?.id)
+          .single();
 
-                const companyId = profile?.active_company_id || profile?.company_id || user?.id;
+        const companyId =
+          profile?.active_company_id || profile?.company_id || user?.id;
 
-                const { data: invoices } = await supabase
-                    .from('invoices')
-                    .select('*, client:clients(name, tax_id, nui, fiscal_number, vat_number, address)')
-                    .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
-                    .gte('issue_date', start)
-                    .eq('type', 'invoice')
-                    .order('issue_date', { ascending: false });
+        const { data: invoices } = await supabase
+          .from("invoices")
+          .select(
+            "*, client:clients(name, tax_id, nui, fiscal_number, vat_number, address), items:invoice_items(*)",
+          )
+          .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
+          .gte("issue_date", start)
+          .lt("issue_date", endExclusive)
+          .eq("type", "invoice")
+          .order("issue_date", { ascending: false });
 
-                const { data: bills } = await supabase
-                    .from('supplier_bills')
-                    .select('*, vendor:vendors(name, tax_id)')
-                    .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
-                    .gte('issue_date', start);
+        const { data: bills } = await supabase
+          .from("supplier_bills")
+          .select("*, vendor:vendors(name, tax_id)")
+          .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
+          .gte("issue_date", start);
 
-                const totalSales = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-                const paidTotal = invoices?.filter(i => i.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-                const taxTotal = invoices?.reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0) || 0;
-                const taxDeductible = bills?.reduce((sum, bill) => sum + Number(bill.tax_amount || 0), 0) || 0;
+        const totalSales =
+          invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) ||
+          0;
+        const paidTotal =
+          invoices
+            ?.filter((i) => i.status === "paid")
+            .reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
+        const taxTotal =
+          invoices?.reduce(
+            (sum, inv) => sum + Number(inv.tax_amount || 0),
+            0,
+          ) || 0;
+        const taxDeductible =
+          bills?.reduce((sum, bill) => sum + Number(bill.tax_amount || 0), 0) ||
+          0;
 
-                const monthName = startOfMonth.toLocaleDateString('sq-AL', { month: 'long', year: 'numeric' });
+        const monthName = startOfMonth.toLocaleDateString("sq-AL", {
+          month: "long",
+          year: "numeric",
+        });
 
-                setData({
-                    title: 'Libri i Shitjes',
-                    date: monthName,
-                    metrics: [
-                        { label: 'Total Sales', value: formatCurrency(totalSales), icon: TrendingUp, color: '#004FFE' },
-                        { label: 'Tax Output', value: formatCurrency(taxTotal), icon: FileText, color: '#f59e0b' },
-                        { label: 'Tax Deductible', value: formatCurrency(taxDeductible), icon: FileText, color: '#12B76A' },
-                    ],
-                    // Store full data for detailed report
-                    rawInvoices: invoices || [],
-                    rawBills: bills || [],
-                    transactions: [
-                        ...(invoices?.map(inv => ({
-                            id: inv.id,
-                            desc: `${inv.invoice_number} - ${(inv.client as any)?.name || 'Guest'}`,
-                            amount: inv.total_amount,
-                            type: 'sale',
-                            status: inv.status,
-                            date: inv.issue_date,
-                        })) || []),
-                        ...(bills?.map(bill => ({
-                            id: bill.id,
-                            desc: `${bill.bill_number} - ${(bill.vendor as any)?.name || 'Vendor'}`,
-                            amount: bill.total_amount,
-                            type: 'expense',
-                            status: bill.status,
-                            date: bill.issue_date,
-                        })) || [])
-                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-                });
-            }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
+        setData({
+          title: "Libri i Shitjes",
+          date: monthName,
+          reportFrom: start,
+          reportTo: end,
+          metrics: [
+            {
+              label: "Total Sales",
+              value: formatCurrency(totalSales),
+              icon: TrendingUp,
+              color: "#004FFE",
+            },
+            {
+              label: "Tax Output",
+              value: formatCurrency(taxTotal),
+              icon: FileText,
+              color: "#f59e0b",
+            },
+            {
+              label: "Tax Deductible",
+              value: formatCurrency(taxDeductible),
+              icon: FileText,
+              color: "#12B76A",
+            },
+          ],
+          // Store full data for detailed report
+          rawInvoices: invoices || [],
+          rawBills: bills || [],
+          company: profile
+            ? {
+                name: profile.company_name,
+                email: profile.email,
+                phone: profile.phone,
+                address: profile.address,
+                city: profile.city,
+                country: profile.country,
+                website: profile.website,
+                taxId: profile.tax_id,
+                bankName: profile.bank_name,
+                bankAccount: profile.bank_account,
+                iban: profile.bank_iban,
+                swift: profile.bank_swift,
+                logoUrl: profile.logo_url,
+              }
+            : undefined,
+          transactions: [
+            ...(invoices?.map((inv) => ({
+              id: inv.id,
+              desc: `${inv.invoice_number} - ${(inv.client as any)?.name || "Guest"}`,
+              amount: inv.total_amount,
+              type: "sale",
+              status: inv.status,
+              date: inv.issue_date,
+            })) || []),
+            ...(bills?.map((bill) => ({
+              id: bill.id,
+              desc: `${bill.bill_number} - ${(bill.vendor as any)?.name || "Vendor"}`,
+              amount: bill.total_amount,
+              type: "expense",
+              status: bill.status,
+              date: bill.issue_date,
+            })) || []),
+          ].sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+          ),
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleShare = async () => {
-        try {
-            await Share.share({
-                message: `Report: ${data?.title}\nDate: ${data?.date}\nTotal Sales: ${data?.metrics[0]?.value}`,
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Report: ${data?.title}\nDate: ${data?.date}\nTotal Sales: ${data?.metrics[0]?.value}`,
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to share report");
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!data) return;
+
+    setExporting(true);
+    try {
+      const html =
+        type === "daily"
+          ? generateDailyReportHtml(data)
+          : renderTransactionReportHtml({
+              template: "sales-ledger",
+              title: data.title,
+              company: data.company,
+              rows: data.rawInvoices || [],
+              reportPeriod: {
+                from: data.reportFrom,
+                to: data.reportTo,
+                label: data.date,
+                filingFrequency: "monthly",
+              },
             });
-        } catch (error) {
-            Alert.alert('Error', 'Failed to share report');
-        }
+      await Print.printAsync({
+        html,
+        orientation: Print.Orientation.landscape,
+      });
+    } catch (error) {
+      console.error("PDF export error:", error);
+      Alert.alert("Error", "Failed to generate PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const generateDailyReportHtml = (reportData: any) => {
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return "";
+      const date = new Date(dateStr);
+      return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
     };
 
-    const handleExportPdf = async () => {
-        if (!data) return;
-
-        setExporting(true);
-        try {
-            const html = type === 'daily' ? generateDailyReportHtml(data) : generateSalesBookHtml(data);
-            await Print.printAsync({ html, orientation: Print.Orientation.landscape });
-        } catch (error) {
-            console.error('PDF export error:', error);
-            Alert.alert('Error', 'Failed to generate PDF');
-        } finally {
-            setExporting(false);
-        }
-    };
-
-    const generateDailyReportHtml = (reportData: any) => {
-        const formatDate = (dateStr: string) => {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-        };
-
-        return `
+    return `
             <!DOCTYPE html>
             <html>
             <head>
@@ -188,12 +315,16 @@ export function ReportPreviewScreen({ navigation, route }: any) {
               </div>
             
               <div class="metrics">
-                ${reportData.metrics.map((m: any) => `
+                ${reportData.metrics
+                  .map(
+                    (m: any) => `
                   <div class="metric">
                     <div class="metric-value">${m.value}</div>
                     <div class="metric-label">${m.label}</div>
                   </div>
-                `).join('')}
+                `,
+                  )
+                  .join("")}
               </div>
             
               <div class="section-title">Transactions</div>
@@ -206,15 +337,23 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${reportData.transactions.length > 0 ? reportData.transactions.map((t: any) => `
+                  ${
+                    reportData.transactions.length > 0
+                      ? reportData.transactions
+                          .map(
+                            (t: any) => `
                     <tr>
                       <td>${t.desc}</td>
-                      <td>${t.type === 'sale' ? 'Sale' : 'Expense'}</td>
-                      <td style="text-align: right;" class="${t.type === 'sale' ? 'amount-sale' : 'amount-expense'}">
-                        ${t.type === 'sale' ? '+' : '-'}${formatCurrency(t.amount)}
+                      <td>${t.type === "sale" ? "Sale" : "Expense"}</td>
+                      <td style="text-align: right;" class="${t.type === "sale" ? "amount-sale" : "amount-expense"}">
+                        ${t.type === "sale" ? "+" : "-"}${formatCurrency(t.amount)}
                       </td>
                     </tr>
-                  `).join('') : '<tr><td colspan="3" style="text-align: center; color: #999;">No transactions for this period</td></tr>'}
+                  `,
+                          )
+                          .join("")
+                      : '<tr><td colspan="3" style="text-align: center; color: #999;">No transactions for this period</td></tr>'
+                  }
                 </tbody>
               </table>
             
@@ -224,69 +363,82 @@ export function ReportPreviewScreen({ navigation, route }: any) {
             </body>
             </html>
         `;
+  };
+
+  const generateSalesBookHtml = (reportData: any) => {
+    const invoices = reportData.rawInvoices || [];
+    const bills = reportData.rawBills || [];
+
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return "";
+      const date = new Date(dateStr);
+      return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
     };
+    const getMonth = (dateStr: string) => new Date(dateStr).getMonth() + 1;
 
-    const generateSalesBookHtml = (reportData: any) => {
-        const invoices = reportData.rawInvoices || [];
-        const bills = reportData.rawBills || [];
+    // Combine and sort
+    const allDocs = [
+      ...invoices.map((i: any) => ({ ...i, docType: "sale" })),
+      ...bills.map((b: any) => ({ ...b, docType: "purchase" })),
+    ].sort(
+      (a, b) =>
+        new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime(),
+    );
 
-        const formatDate = (dateStr: string) => {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
-        };
-        const getMonth = (dateStr: string) => new Date(dateStr).getMonth() + 1;
+    // Calculate columns totals
+    let totalNet = 0;
+    let totalVat = 0;
+    let totalVatDeductible = 0;
+    let totalGross = 0;
 
-        // Combine and sort
-        const allDocs = [
-            ...invoices.map((i: any) => ({ ...i, docType: 'sale' })),
-            ...bills.map((b: any) => ({ ...b, docType: 'purchase' }))
-        ].sort((a, b) => new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime());
+    const rows = allDocs
+      .map((doc: any, index: number) => {
+        const isSale = doc.docType === "sale";
+        const net = isSale ? doc.total_amount - doc.tax_amount : 0;
+        const vat = isSale ? doc.tax_amount : 0;
+        const vatDeductible = !isSale ? doc.tax_amount : 0;
+        const gross = doc.total_amount;
 
-        // Calculate columns totals
-        let totalNet = 0;
-        let totalVat = 0;
-        let totalVatDeductible = 0;
-        let totalGross = 0;
+        totalNet += net;
+        if (isSale) totalVat += vat;
+        else totalVatDeductible += vatDeductible;
+        totalGross += isSale ? gross : 0; // Usually Gross in Libri i Shitjes is for sales
 
-        const rows = allDocs.map((doc: any, index: number) => {
-            const isSale = doc.docType === 'sale';
-            const net = isSale ? (doc.total_amount - doc.tax_amount) : 0;
-            const vat = isSale ? doc.tax_amount : 0;
-            const vatDeductible = !isSale ? doc.tax_amount : 0;
-            const gross = doc.total_amount;
+        const subject = isSale ? doc.client || {} : doc.vendor || {};
+        const docNum = isSale ? doc.invoice_number : doc.bill_number;
+        const subjectId = isSale
+          ? subject.nui || subject.tax_id
+          : subject.tax_id;
 
-            totalNet += net;
-            if (isSale) totalVat += vat;
-            else totalVatDeductible += vatDeductible;
-            totalGross += isSale ? gross : 0; // Usually Gross in Libri i Shitjes is for sales
-
-            const subject = isSale ? (doc.client || {}) : (doc.vendor || {});
-            const docNum = isSale ? doc.invoice_number : doc.bill_number;
-            const subjectId = isSale ? (subject.nui || subject.tax_id) : (subject.tax_id);
-
-            return `
+        return `
                 <tr>
                     <td>${docNum}</td>
                     <td>${index + 1}</td>
                     <td>${formatDate(doc.issue_date)}</td>
                     <td>${getMonth(doc.issue_date)}</td>
-                    <td style="text-align: left;">${subject.name || '-'}</td>
-                    <td>${isSale ? (subject.nui || subject.tax_id || '-') : '-'}</td>
-                    <td>${isSale ? (subject.fiscal_number || '-') : (subject.tax_id || '-')}</td>
-                    <td>${isSale ? (subject.vat_number || '-') : '-'}</td>
-                    <td class="num">${isSale ? formatCurrency(net).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num">${isSale ? formatCurrency(net).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num">${isSale ? formatCurrency(vat).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num">${isSale ? formatCurrency(vat).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num">${!isSale ? formatCurrency(vatDeductible).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num bold">${isSale ? formatCurrency(gross).replace('$', '').replace('€', '') : '-'}</td>
-                    <td class="num">${isSale ? formatCurrency(doc.amount_received || 0).replace('$', '').replace('€', '') : '-'}</td>
+                    <td style="text-align: left;">${subject.name || "-"}</td>
+                    <td>${isSale ? subject.nui || subject.tax_id || "-" : "-"}</td>
+                    <td>${isSale ? subject.fiscal_number || "-" : subject.tax_id || "-"}</td>
+                    <td>${isSale ? subject.vat_number || "-" : "-"}</td>
+                    <td class="num">${isSale ? formatCurrency(net).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num">${isSale ? formatCurrency(net).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num">${isSale ? formatCurrency(vat).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num">${isSale ? formatCurrency(vat).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num">${!isSale ? formatCurrency(vatDeductible).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num bold">${isSale ? formatCurrency(gross).replace("$", "").replace("€", "") : "-"}</td>
+                    <td class="num">${
+                      isSale
+                        ? formatCurrency(doc.amount_received || 0)
+                            .replace("$", "")
+                            .replace("€", "")
+                        : "-"
+                    }</td>
                 </tr>
             `;
-        }).join('');
+      })
+      .join("");
 
-        return `
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -371,12 +523,12 @@ export function ReportPreviewScreen({ navigation, route }: any) {
       ${rows}
       <tr class="total-row">
         <td colspan="8" style="text-align: right; padding-right: 10px;">TOTAL:</td>
-        <td class="num">${formatCurrency(totalNet).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalNet).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalVat).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalVat).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalVatDeductible).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalGross).replace('$', '').replace('€', '')}</td>
+        <td class="num">${formatCurrency(totalNet).replace("$", "").replace("€", "")}</td>
+        <td class="num">${formatCurrency(totalNet).replace("$", "").replace("€", "")}</td>
+        <td class="num">${formatCurrency(totalVat).replace("$", "").replace("€", "")}</td>
+        <td class="num">${formatCurrency(totalVat).replace("$", "").replace("€", "")}</td>
+        <td class="num">${formatCurrency(totalVatDeductible).replace("$", "").replace("€", "")}</td>
+        <td class="num">${formatCurrency(totalGross).replace("$", "").replace("€", "")}</td>
         <td class="num"></td>
       </tr>
     </tbody>
@@ -384,81 +536,126 @@ export function ReportPreviewScreen({ navigation, route }: any) {
 </body>
 </html>
         `;
-    };
+  };
 
-    return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{t(type === 'daily' ? 'dailyReport' : 'salesBook', language)}</Text>
-                <TouchableOpacity onPress={handleShare}>
-                    <Share2 color={textColor} size={24} />
-                </TouchableOpacity>
+  return (
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <ArrowLeft color={textColor} size={24} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: textColor }]}>
+          {t(type === "daily" ? "dailyReport" : "salesBook", language)}
+        </Text>
+        <TouchableOpacity onPress={handleShare}>
+          <Share2 color={textColor} size={24} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {loading ? (
+          <Text style={{ color: mutedColor }}>Loading...</Text>
+        ) : (
+          <>
+            <View style={styles.metricsGrid}>
+              {data?.metrics.map((m: any, idx: number) => (
+                <Card
+                  key={idx}
+                  style={[styles.metricCard, { backgroundColor: cardBg }]}
+                >
+                  <m.icon color={m.color} size={20} />
+                  <Text style={[styles.metricValue, { color: textColor }]}>
+                    {m.value}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: mutedColor }]}>
+                    {m.label}
+                  </Text>
+                </Card>
+              ))}
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                {loading ? (
-                    <Text style={{ color: mutedColor }}>Loading...</Text>
-                ) : (
-                    <>
-                        <View style={styles.metricsGrid}>
-                            {data?.metrics.map((m: any, idx: number) => (
-                                <Card key={idx} style={[styles.metricCard, { backgroundColor: cardBg }]}>
-                                    <m.icon color={m.color} size={20} />
-                                    <Text style={[styles.metricValue, { color: textColor }]}>{m.value}</Text>
-                                    <Text style={[styles.metricLabel, { color: mutedColor }]}>{m.label}</Text>
-                                </Card>
-                            ))}
-                        </View>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>
+              Transactions
+            </Text>
+            {data?.transactions.map((t: any) => (
+              <View
+                key={t.id}
+                style={[
+                  styles.transactionRow,
+                  { borderBottomColor: isDark ? "#14243A" : "#F4F7FB" },
+                ]}
+              >
+                <View>
+                  <Text style={{ color: textColor, fontWeight: "600" }}>
+                    {t.desc}
+                  </Text>
+                  <Text style={{ color: mutedColor, fontSize: 12 }}>
+                    {t.type === "sale" ? "Sale" : "Expense"}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    color: t.type === "sale" ? "#12B76A" : "#ef4444",
+                    fontWeight: "600",
+                  }}
+                >
+                  {t.type === "sale" ? "+" : "-"}
+                  {formatCurrency(t.amount)}
+                </Text>
+              </View>
+            ))}
+            {data?.transactions.length === 0 && (
+              <Text
+                style={{
+                  color: mutedColor,
+                  textAlign: "center",
+                  marginTop: 20,
+                }}
+              >
+                No transactions for this period.
+              </Text>
+            )}
 
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Transactions</Text>
-                        {data?.transactions.map((t: any) => (
-                            <View key={t.id} style={[styles.transactionRow, { borderBottomColor: isDark ? '#14243A' : '#F4F7FB' }]}>
-                                <View>
-                                    <Text style={{ color: textColor, fontWeight: '600' }}>{t.desc}</Text>
-                                    <Text style={{ color: mutedColor, fontSize: 12 }}>{t.type === 'sale' ? 'Sale' : 'Expense'}</Text>
-                                </View>
-                                <Text style={{ color: t.type === 'sale' ? '#12B76A' : '#ef4444', fontWeight: '600' }}>
-                                    {t.type === 'sale' ? '+' : '-'}{formatCurrency(t.amount)}
-                                </Text>
-                            </View>
-                        ))}
-                        {data?.transactions.length === 0 && (
-                            <Text style={{ color: mutedColor, textAlign: 'center', marginTop: 20 }}>No transactions for this period.</Text>
-                        )}
-
-                        <Button
-                            title={exporting ? "Generating..." : "Export PDF"}
-                            icon={Download}
-                            onPress={handleExportPdf}
-                            loading={exporting}
-                            style={{ marginTop: 30 }}
-                        />
-                    </>
-                )}
-            </ScrollView>
-        </View>
-    );
+            <Button
+              title={exporting ? "Generating..." : "Export PDF"}
+              icon={Download}
+              onPress={handleExportPdf}
+              loading={exporting}
+              style={{ marginTop: 30 }}
+            />
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: {},
-    title: { fontSize: 20, fontWeight: 'bold' },
-    content: { padding: 16 },
-    metricsGrid: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-    metricCard: { flex: 1, padding: 12, alignItems: 'center', gap: 4 },
-    metricValue: { fontSize: 16, fontWeight: 'bold' },
-    metricLabel: { fontSize: 10 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
-    transactionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 16,
+  },
+  backButton: {},
+  title: { fontSize: 20, fontWeight: "bold" },
+  content: { padding: 16 },
+  metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 24 },
+  metricCard: { flex: 1, padding: 12, alignItems: "center", gap: 4 },
+  metricValue: { fontSize: 16, fontWeight: "bold" },
+  metricLabel: { fontSize: 10 },
+  sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 16 },
+  transactionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
 });
-
-
-
-
-
-

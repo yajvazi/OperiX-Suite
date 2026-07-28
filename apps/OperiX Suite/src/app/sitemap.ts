@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://operixsuite.com";
-  const routes = ["", "/products/invoice", "/products/hr", "/features", "/pricing", "/resources", "/about", "/contact", "/book-demo", "/privacy", "/terms"];
+  const routes = ["", "/products/invoice", "/products/hr", "/products/booking", "/products/desk", "/products/control", "/features", "/pricing", "/resources", "/about", "/contact", "/book-demo", "/privacy", "/terms"];
   return routes.flatMap((route) => {
     const shared = {
       lastModified: new Date(),

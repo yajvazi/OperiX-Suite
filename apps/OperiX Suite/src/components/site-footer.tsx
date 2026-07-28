@@ -7,6 +7,9 @@ const groups = [
     links: [
       ["OperiX Invoice", "/products/invoice"],
       ["OperiX HR Office", "/products/hr"],
+      ["OperiX Booking", "/products/booking"],
+      ["OperiX Desk", "/products/desk"],
+      ["OperiX Control", "/products/control"],
       ["Features", "/features"],
       ["Pricing", "/pricing"],
     ],

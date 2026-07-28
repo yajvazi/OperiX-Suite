@@ -106,7 +106,30 @@ export interface Product {
     tax_included?: boolean;
     unit?: string;
     category?: string;
-    // New fields
+    cost_price?: number;
+    purchase_currency?: string;
+    exchange_rate?: number;
+    supplier_unit_price?: number;
+    supplier_discount_percent?: number;
+    supplier_unit_price_after_discount?: number;
+    transport_cost?: number;
+    additional_cost?: number;
+    customs_base?: number;
+    customs_duty?: number;
+    excise?: number;
+    import_vat_rate?: number;
+    import_vat_amount?: number;
+    unit_cost_with_vat?: number;
+    tariff_code?: string;
+    country_of_origin?: string;
+    vat_treatment?:
+        | 'standard_18'
+        | 'reduced_8'
+        | 'exempt_no_credit'
+        | 'exempt_with_credit'
+        | 'export'
+        | 'reverse_charge'
+        | 'out_of_scope';
     stock_quantity?: number;
     track_stock?: boolean;
     low_stock_threshold?: number;

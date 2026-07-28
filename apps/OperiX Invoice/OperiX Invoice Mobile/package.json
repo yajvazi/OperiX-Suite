@@ -15,6 +15,7 @@
     "@invoice-monorepo/context": "*",
     "@invoice-monorepo/hooks": "*",
     "@invoice-monorepo/invoice-template": "*",
+    "@invoice-monorepo/report-templates": "*",
     "@invoice-monorepo/i18n": "*",
     "@invoice-monorepo/types": "*",
     "@invoice-monorepo/ui": "*",

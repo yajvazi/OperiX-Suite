@@ -18,7 +18,7 @@ export function ProductPage({
   product: string;
   headline: string;
   description: string;
-  variant: "invoice" | "hr" | "control";
+  variant: "invoice" | "hr" | "booking" | "desk" | "control";
   overviewTitle: string;
   overviewText: string;
   overviewPoints: string[];
@@ -31,7 +31,7 @@ export function ProductPage({
         <div className="page-hero-glow" />
         <div className="container product-hero-grid">
           <Reveal>
-            <span className="eyebrow product-eyebrow"><Image src={variant === "hr" ? "/brand/operix-hr-office-logo.svg" : "/brand/operix-x-icon-blue.svg"} width={28} height={28} alt="" aria-hidden="true" />{product}</span>
+            <span className="eyebrow product-eyebrow"><Image src={variant === "hr" ? "/brand/operix-hr-office-logo.svg" : variant === "booking" ? "/brand/operix-booking-logo-blue.svg" : variant === "desk" ? "/brand/operix-desk-logo-blue.svg" : "/brand/operix-x-icon-blue.svg"} width={28} height={28} alt="" aria-hidden="true" />{product}</span>
             <h1>{headline}</h1>
             <p>{description}</p>
             <div className="button-row"><Link href={variant === "invoice" ? "https://demo.invoice.operixsuite.com/" : "/book-demo"} className="button">{variant === "invoice" ? "Try it out" : "Book a demo"} <ArrowRight /></Link><Link href="/book-demo" className="button button-secondary">Contact us</Link></div>

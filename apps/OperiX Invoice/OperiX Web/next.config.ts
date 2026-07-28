@@ -3,6 +3,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "b2b.hidroterm.net",
+        pathname: "/products/catalog/**",
+      },
+    ],
+  },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
   },
@@ -29,7 +38,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
 
 
 

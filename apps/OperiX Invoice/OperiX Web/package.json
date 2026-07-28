@@ -11,7 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@invoice-monorepo/accounting": "*",
     "@invoice-monorepo/invoice-template": "*",
+    "@invoice-monorepo/report-templates": "*",
     "@invoice-monorepo/types": "*",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/ssr": "^0.12.3",

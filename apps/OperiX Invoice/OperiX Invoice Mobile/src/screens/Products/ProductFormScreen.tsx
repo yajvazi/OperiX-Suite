@@ -42,6 +42,22 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
         stock_quantity: 0,
         track_stock: false,
         low_stock_threshold: 5,
+        purchase_currency: 'EUR',
+        exchange_rate: 1,
+        supplier_unit_price: 0,
+        supplier_discount_percent: 0,
+        supplier_unit_price_after_discount: 0,
+        transport_cost: 0,
+        additional_cost: 0,
+        customs_base: 0,
+        customs_duty: 0,
+        excise: 0,
+        import_vat_rate: 18,
+        import_vat_amount: 0,
+        unit_cost_with_vat: 0,
+        tariff_code: '',
+        country_of_origin: '',
+        vat_treatment: 'standard_18',
     });
     const [loading, setLoading] = useState(false);
     const [showUnits, setShowUnits] = useState(false);
@@ -92,6 +108,22 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 stock_quantity: Number(data.stock_quantity) || 0,
                 track_stock: data.track_stock || false,
                 low_stock_threshold: Number(data.low_stock_threshold) || 5,
+                purchase_currency: data.purchase_currency || 'EUR',
+                exchange_rate: Number(data.exchange_rate) || 1,
+                supplier_unit_price: Number(data.supplier_unit_price) || 0,
+                supplier_discount_percent: Number(data.supplier_discount_percent) || 0,
+                supplier_unit_price_after_discount: Number(data.supplier_unit_price_after_discount) || 0,
+                transport_cost: Number(data.transport_cost) || 0,
+                additional_cost: Number(data.additional_cost) || 0,
+                customs_base: Number(data.customs_base) || 0,
+                customs_duty: Number(data.customs_duty) || 0,
+                excise: Number(data.excise) || 0,
+                import_vat_rate: Number(data.import_vat_rate) || 0,
+                import_vat_amount: Number(data.import_vat_amount) || 0,
+                unit_cost_with_vat: Number(data.unit_cost_with_vat) || 0,
+                tariff_code: data.tariff_code || '',
+                country_of_origin: data.country_of_origin || '',
+                vat_treatment: data.vat_treatment || 'standard_18',
             });
         }
     };
@@ -346,6 +378,177 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     </TouchableOpacity>
                 </View>
 
+                {/* Import costing */}
+                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                    <View style={styles.sectionHeader}>
+                        <Package color="#7F56D9" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Import & Landed Cost</Text>
+                    </View>
+                    <Text style={[styles.hintText, { color: mutedColor, marginBottom: 16 }]}>
+                        Shared Kosovo import calculation fields used by OperiX Invoice web and mobile.
+                    </Text>
+
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Supplier currency"
+                                value={formData.purchase_currency}
+                                onChangeText={(text) => setFormData({ ...formData, purchase_currency: text.toUpperCase() })}
+                                placeholder="EUR"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Exchange rate to EUR"
+                                value={String(formData.exchange_rate)}
+                                onChangeText={(text) => setFormData({ ...formData, exchange_rate: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Supplier unit price"
+                                value={String(formData.supplier_unit_price)}
+                                onChangeText={(text) => setFormData({ ...formData, supplier_unit_price: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Supplier discount %"
+                                value={String(formData.supplier_discount_percent)}
+                                onChangeText={(text) => setFormData({ ...formData, supplier_discount_percent: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <Input
+                        label="Unit price after discount (EUR)"
+                        value={String(formData.supplier_unit_price_after_discount)}
+                        onChangeText={(text) => setFormData({ ...formData, supplier_unit_price_after_discount: Number(text.replace(',', '.')) || 0 })}
+                        keyboardType="decimal-pad"
+                    />
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Transport"
+                                value={String(formData.transport_cost)}
+                                onChangeText={(text) => setFormData({ ...formData, transport_cost: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Other additions"
+                                value={String(formData.additional_cost)}
+                                onChangeText={(text) => setFormData({ ...formData, additional_cost: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Customs base"
+                                value={String(formData.customs_base)}
+                                onChangeText={(text) => setFormData({ ...formData, customs_base: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Customs duty"
+                                value={String(formData.customs_duty)}
+                                onChangeText={(text) => setFormData({ ...formData, customs_duty: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Excise"
+                                value={String(formData.excise)}
+                                onChangeText={(text) => setFormData({ ...formData, excise: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Import VAT %"
+                                value={String(formData.import_vat_rate)}
+                                onChangeText={(text) => setFormData({ ...formData, import_vat_rate: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Import VAT amount"
+                                value={String(formData.import_vat_amount)}
+                                onChangeText={(text) => setFormData({ ...formData, import_vat_amount: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Unit cost incl. VAT"
+                                value={String(formData.unit_cost_with_vat)}
+                                onChangeText={(text) => setFormData({ ...formData, unit_cost_with_vat: Number(text.replace(',', '.')) || 0 })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+                    <View style={styles.row}>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Tariff code"
+                                value={formData.tariff_code}
+                                onChangeText={(text) => setFormData({ ...formData, tariff_code: text })}
+                            />
+                        </View>
+                        <View style={styles.flex1}>
+                            <Input
+                                label="Country of origin"
+                                value={formData.country_of_origin}
+                                onChangeText={(text) => setFormData({ ...formData, country_of_origin: text })}
+                            />
+                        </View>
+                    </View>
+                    <Text style={[styles.fieldLabel, { color: textColor }]}>Kosovo VAT treatment</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        {[
+                            ['standard_18', 'Standard 18%'],
+                            ['reduced_8', 'Reduced 8%'],
+                            ['exempt_no_credit', 'Exempt · no credit'],
+                            ['exempt_with_credit', 'Exempt · with credit'],
+                            ['export', 'Export'],
+                            ['reverse_charge', 'Reverse charge'],
+                            ['out_of_scope', 'Out of scope'],
+                        ].map(([value, label]) => (
+                            <TouchableOpacity
+                                key={value}
+                                style={[
+                                    styles.option,
+                                    { backgroundColor: inputBg },
+                                    formData.vat_treatment === value && styles.optionActive,
+                                ]}
+                                onPress={() => setFormData({ ...formData, vat_treatment: value })}
+                            >
+                                <Text style={[
+                                    styles.optionText,
+                                    formData.vat_treatment === value && styles.optionTextActive,
+                                ]}>
+                                    {label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
                 <Button
                     title={isEditing ? 'Update Product' : 'Create Product'}
                     onPress={handleSave}
@@ -388,7 +591,6 @@ const styles = StyleSheet.create({
     saveButton: { marginTop: 8 },
     scanIconBtn: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 30 },
 });
-
 
 
 
