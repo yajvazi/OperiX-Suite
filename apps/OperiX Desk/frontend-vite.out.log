@@ -1,0 +1,39 @@
+
+> frontend@0.0.0 dev
+> vite --host 127.0.0.1
+
+Re-optimizing dependencies because lockfile has changed
+
+  [32m[1mVITE[22m v5.4.19[39m  [2mready in [0m[1m672[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m3000[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m12:46:32 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/Resources.jsx, /src/index.css[22m
+[2m12:47:00 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/FloorBuilder.jsx, /src/index.css[22m
+[2m12:48:53 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m12:51:05 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/Resources.jsx, /src/index.css[22m
+[2m12:51:05 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Layout.jsx, /src/index.css[22m
+[2m12:51:06 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m12:51:06 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/FloorBuilder.jsx, /src/index.css[22m
+[2m12:51:06 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Layout.jsx, /src/index.css[22m
+[2m12:51:06 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ResourceDetailsModal.jsx, /src/index.css[22m
+[2m2:15:02 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/context/AuthContext.jsx, /src/pages/admin/AdminDashboard.jsx, /src/pages/Reservations.jsx, /src/pages/admin/Analytics.jsx, /src/pages/admin/Users.jsx, /src/pages/Dashboard.jsx, /src/pages/FloorPlan.jsx, /src/pages/admin/FloorBuilder.jsx, /src/components/Layout.jsx, /src/pages/admin/Reservations.jsx, /src/pages/admin/Resources.jsx[22m
+[2m2:15:02 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx, /src/index.css[22m
+[2m2:15:02 PM[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/context/AuthContext.jsx[22m Could not Fast Refresh ("useAuth" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m2:15:02 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/context/AuthContext.jsx[22m
+[2m2:15:17 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/Users.jsx, /src/index.css[22m
+[2m2:16:31 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/FloorBuilder.jsx, /src/index.css[22m
+[2m2:17:41 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/context/AuthContext.jsx, /src/pages/admin/AdminDashboard.jsx, /src/pages/Reservations.jsx, /src/pages/admin/Analytics.jsx, /src/pages/admin/Users.jsx, /src/pages/Dashboard.jsx, /src/pages/FloorPlan.jsx, /src/pages/admin/FloorBuilder.jsx, /src/components/Layout.jsx, /src/pages/admin/Reservations.jsx, /src/pages/admin/Resources.jsx, /src/pages/ResetPassword.jsx[22m
+[2m2:17:41 PM[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/context/AuthContext.jsx[22m Could not Fast Refresh ("useAuth" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m2:17:41 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx, /src/index.css, /src/components/ProtectedRoute.jsx, /src/components/Layout.jsx, /src/pages/Login.jsx[22m
+[2m2:18:10 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DeskDetailPanel.jsx, /src/index.css[22m
+[2m2:18:10 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m2:18:15 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m2:19:13 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m2:19:17 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DeskDetailPanel.jsx, /src/index.css[22m
+[2m2:20:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/context/AuthContext.jsx, /src/pages/admin/AdminDashboard.jsx, /src/pages/Reservations.jsx, /src/pages/admin/Analytics.jsx, /src/pages/admin/Users.jsx, /src/pages/Dashboard.jsx, /src/pages/FloorPlan.jsx, /src/pages/admin/FloorBuilder.jsx, /src/components/Layout.jsx, /src/pages/admin/Reservations.jsx, /src/pages/admin/Resources.jsx, /src/pages/ResetPassword.jsx[22m
+[2m2:20:18 PM[22m [36m[1m[vite][22m[39m [33mhmr invalidate [39m[2m/src/context/AuthContext.jsx[22m Could not Fast Refresh ("useAuth" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m2:20:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx, /src/index.css, /src/components/ProtectedRoute.jsx, /src/components/Layout.jsx, /src/pages/Login.jsx, /src/pages/FloorPlan.jsx[22m
+[2m2:20:29 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DeskDetailPanel.jsx, /src/index.css[22m
+[2m2:21:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
+[2m2:21:35 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/FloorPlan.jsx, /src/index.css[22m
