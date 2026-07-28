@@ -13,6 +13,7 @@
   "dependencies": {
     "@invoice-monorepo/accounting": "*",
     "@invoice-monorepo/invoice-template": "*",
+    "@invoice-monorepo/payroll": "*",
     "@invoice-monorepo/report-templates": "*",
     "@invoice-monorepo/types": "*",
     "@hookform/resolvers": "^5.4.0",

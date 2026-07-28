@@ -8,6 +8,7 @@ import {
     FileText,
     Settings,
     Briefcase,
+    WalletCards,
     ShieldAlert,
     Fingerprint,
 } from 'lucide-react-native';
@@ -27,6 +28,7 @@ import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
 
 // Dashboard
 import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
+import { PayrollScreen } from '../screens/Payroll/PayrollScreen';
 
 // Invoice Screens
 import { InvoicesScreen } from '../screens/Invoices/InvoicesScreen';
@@ -239,6 +241,7 @@ function MainTabs() {
             <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={22} />, tabBarLabel: t('dashboard', language) }} />
             <Tab.Screen name="InvoicesTab" component={InvoicesStack} options={{ tabBarIcon: ({ color }) => <FileText color={color} size={22} />, tabBarLabel: t('invoices', language) }} />
             <Tab.Screen name="Management" component={ManagementStack} options={{ tabBarIcon: ({ color }) => <Briefcase color={color} size={22} />, tabBarLabel: t('management', language) }} />
+            <Tab.Screen name="Payroll" component={PayrollScreen} options={{ tabBarIcon: ({ color }) => <WalletCards color={color} size={22} />, tabBarLabel: language === 'sq' ? 'Pagat' : 'Payroll' }} />
         </Tab.Navigator>
     );
 }
@@ -382,4 +385,3 @@ const styles = StyleSheet.create({
     lockTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
     lockText: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
 });
-
