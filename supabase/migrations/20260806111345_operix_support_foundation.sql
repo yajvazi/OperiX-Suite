@@ -122,35 +122,6 @@ $$;
 revoke all on function private.support_user_has_permission(uuid, uuid, text) from public;
 grant execute on function private.support_user_has_permission(uuid, uuid, text) to authenticated, service_role;
 
-create or replace function public.support_list_agents(p_company_id uuid)
-returns table(user_id uuid, membership_role text, email text, company_name text, signature_url text, department_ids uuid[])
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select
-    membership.user_id,
-    membership.role,
-    profile.email,
-    profile.company_name,
-    profile.signature_url,
-    coalesce((select array_agg(department_membership.department_id order by department_membership.department_id)
-      from public.support_department_memberships department_membership
-      where department_membership.company_id = membership.company_id
-        and department_membership.user_id = membership.user_id
-        and department_membership.is_active), '{}'::uuid[])
-  from public.memberships membership
-  join public.profiles profile on profile.id = membership.user_id
-  where membership.company_id = p_company_id
-    and coalesce(membership.status, 'active') = 'active'
-    and private.support_user_has_permission(membership.user_id, p_company_id, 'support.ticket.reply')
-    and private.has_company_permission(p_company_id, 'support.ticket.assign');
-$$;
-
-revoke all on function public.support_list_agents(uuid) from public;
-grant execute on function public.support_list_agents(uuid) to authenticated, service_role;
-
 -- ---------------------------------------------------------------------------
 -- Reference data and generic contact model
 -- ---------------------------------------------------------------------------
@@ -272,6 +243,35 @@ create table if not exists public.support_department_memberships (
 
 create index if not exists support_department_memberships_user_idx
   on public.support_department_memberships(company_id, user_id, is_active);
+
+create or replace function public.support_list_agents(p_company_id uuid)
+returns table(user_id uuid, membership_role text, email text, company_name text, signature_url text, department_ids uuid[])
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select
+    membership.user_id,
+    membership.role,
+    profile.email,
+    profile.company_name,
+    profile.signature_url,
+    coalesce((select array_agg(department_membership.department_id order by department_membership.department_id)
+      from public.support_department_memberships department_membership
+      where department_membership.company_id = membership.company_id
+        and department_membership.user_id = membership.user_id
+        and department_membership.is_active), '{}'::uuid[])
+  from public.memberships membership
+  join public.profiles profile on profile.id = membership.user_id
+  where membership.company_id = p_company_id
+    and coalesce(membership.status, 'active') = 'active'
+    and private.support_user_has_permission(membership.user_id, p_company_id, 'support.ticket.reply')
+    and private.has_company_permission(p_company_id, 'support.ticket.assign');
+$$;
+
+revoke all on function public.support_list_agents(uuid) from public;
+grant execute on function public.support_list_agents(uuid) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Mailboxes, ticket numbering, tickets, conversations, and messages
