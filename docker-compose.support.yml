@@ -12,7 +12,7 @@ services:
       PORT: "3010"
       HOSTNAME: 0.0.0.0
     ports:
-      - "3010:3010"
+      - "127.0.0.1:3030:3010"
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3010/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
@@ -33,7 +33,7 @@ services:
       NODE_ENV: production
       WORKER_HEALTH_PORT: "3011"
     ports:
-      - "3011:3011"
+      - "127.0.0.1:3031:3011"
     command: ["node_modules/.bin/tsx", "apps/OperiX Support/src/worker/index.ts"]
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3011/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
