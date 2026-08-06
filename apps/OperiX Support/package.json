@@ -1,0 +1,47 @@
+{
+  "name": "operix-support",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p ${PORT:-3010}",
+    "build": "next build && node scripts/prepare-standalone.mjs",
+    "start": "node '.next/standalone/apps/OperiX Support/server.js'",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "worker:dev": "tsx src/worker/index.ts",
+    "worker:build": "tsc -p tsconfig.worker.json",
+    "worker": "tsx src/worker/index.ts"
+  },
+  "dependencies": {
+    "@invoice-monorepo/notifications": "*",
+    "@invoice-monorepo/support": "*",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
+    "imapflow": "^1.0.183",
+    "lucide-react": "^0.475.0",
+    "mailparser": "^3.7.4",
+    "next": "^16.2.11",
+    "nodemailer": "^7.0.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "sanitize-html": "^2.17.0",
+    "tsx": "^4.19.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^7.0.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
