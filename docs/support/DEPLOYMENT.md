@@ -17,6 +17,9 @@ Create a deployment-only `.env.support` from `apps/OperiX Support/.env.example`:
 - `SUPPORT_CREDENTIAL_KEY` — long random secret used for AES-256-GCM mailbox credentials.
 - `SUPPORT_STORAGE_BUCKET`, `SUPPORT_MAX_ATTACHMENT_BYTES`, and `SUPPORT_WORKER_POLL_INTERVAL_MS`.
 
+The two `NEXT_PUBLIC_SUPABASE_*` values are also passed as Docker build
+arguments because Next.js embeds public configuration in the browser bundle.
+
 The service-role key and credential key are worker/server secrets and must never be sent to the browser.
 
 ## Migration
@@ -28,7 +31,7 @@ Review migration history drift first. Apply `20260806111345_operix_support_found
 From the repository root:
 
 ```bash
-docker compose -f docker-compose.support.yml build --pull
+docker compose --env-file .env.support -f docker-compose.support.yml build --pull
 docker compose -f docker-compose.support.yml up -d
 curl -fsS https://helpdesk.operixsuite.com/api/health
 curl -fsS http://127.0.0.1:3031/health

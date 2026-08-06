@@ -3,6 +3,14 @@ FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY . .
 RUN npm ci --ignore-scripts
+
+# NEXT_PUBLIC_* values are inlined into the browser bundle by Next.js. They
+# are public values, but must be supplied during the production image build.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 RUN npm run build --workspace operix-support
 RUN npm run worker:build --workspace operix-support
 
