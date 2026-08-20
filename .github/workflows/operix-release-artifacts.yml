@@ -46,7 +46,7 @@ jobs:
           fetch-depth: 1
       - name: Download affected-app manifest from CI
         if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: operix-affected-apps
           path: ${{ runner.temp }}/operix-affected
