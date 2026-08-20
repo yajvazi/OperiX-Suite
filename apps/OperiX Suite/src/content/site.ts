@@ -1,194 +1,146 @@
 import {
-  BarChart3,
-  BriefcaseBusiness,
-  Building2,
+  Accessibility,
+  BookOpen,
   Cloud,
-  CreditCard,
-  CalendarDays,
-  FileChartColumn,
   FileText,
-  Gauge,
   LockKeyhole,
-  ReceiptText,
-  RefreshCw,
+  Mail,
   ShieldCheck,
-  Sparkles,
-  Users,
-  WalletCards,
-  Zap,
+  Smartphone,
+  Waypoints,
 } from "lucide-react";
+import { helpCenterUrl, productRegistry, products, solutionRegistry, type ProductKey } from "./products";
 
 export const navigation = [
-  { label: "Overview", href: "/" },
-  { label: "Products", href: "/#products" },
-  { label: "Features", href: "/features" },
+  { label: "Products", href: "#products", menu: "products" as const },
+  { label: "Solutions", href: "#solutions", menu: "solutions" as const },
   { label: "Pricing", href: "/pricing" },
-  { label: "Resources", href: "/resources" },
-  { label: "About", href: "/about" },
-  { label: "Contact", href: "/contact" },
+  { label: "Resources", href: "/resources", menu: "resources" as const },
+  { label: "Enterprise", href: "/enterprise" },
 ];
+
+export const productCardCopy: Record<ProductKey, { title: string; body: string }> = {
+  invoice: { title: "Run your finances.", body: "Create, send, and track business documents, payments, expenses, and reports." },
+  hr: { title: "Manage your people.", body: "Keep employee records, attendance, leave, payroll, and workforce workflows together." },
+  booking: { title: "Manage every reservation.", body: "Coordinate bookings, availability, services, staff, customers, and reminders." },
+  desk: { title: "Plan your workplace.", body: "Make desks, floors, shared resources, and team presence easier to manage." },
+  control: { title: "Control your organization.", body: "Manage users, roles, permissions, security, integrations, and audit activity." },
+  suite: { title: "Access everything from one place.", body: "Use one OperiX account and organization context to move between the apps you use." },
+};
 
 export const trustItems = [
-  { title: "Security", text: "Protected access and secure data.", icon: ShieldCheck },
-  { title: "Cloud", text: "Available wherever work happens.", icon: Cloud },
-  { title: "Performance", text: "Fast workflows across every device.", icon: Zap },
-  { title: "Scalability", text: "Built to grow with your operation.", icon: Gauge },
+  { title: "One account", text: "Sign in once and access the apps your organization uses.", icon: Waypoints },
+  { title: "Clear access", text: "Connect application access to organization permissions.", icon: ShieldCheck },
+  { title: "Web + mobile", text: "Use the products that support work away from the desk.", icon: Smartphone },
+  { title: "Help when needed", text: "Find product guidance in the OperiX Help Center.", icon: BookOpen, href: helpCenterUrl },
 ];
 
-export const products = [
-  {
-    name: "OperiX Invoice",
-    logo: "/brand/operix-xi-white.svg",
-    href: "/products/invoice",
-    description:
-      "Create invoices, track payments, manage expenses, and understand business performance from one focused workspace.",
-    features: ["Professional invoicing", "Payments and expenses", "Reports and ledgers"],
-    icon: ReceiptText,
-    tone: "blue",
-  },
-  {
-    name: "OperiX HR Office",
-    logo: "/brand/operix-xhr-white.svg",
-    href: "/products/hr",
-    description:
-      "Bring employee records, attendance, leave, payroll, and team operations into one reliable system.",
-    features: ["Employee management", "Attendance and leave", "Payroll workflows"],
-    icon: Users,
-    tone: "navy",
-  },
-  {
-    name: "OperiX Booking",
-    logo: "/brand/operix-xb-white.svg",
-    href: "/products/booking",
-    description: "Simplify appointments and reservations.",
-    details: "An all-in-one appointment and reservation management platform for scheduling services, managing availability, automating confirmations, sending reminders, and enabling seamless online booking.",
-    features: ["Appointments and reservations", "Automated confirmations", "Online customer booking"],
-    icon: CalendarDays,
-    tone: "blue",
-    comingSoon: true,
-  },
-  {
-    name: "OperiX Desk",
-    logo: "/brand/operix-xd-white.svg",
-    href: "/products/desk",
-    description: "Smarter workspace reservations.",
-    details: "A flexible workspace booking solution for desks, meeting rooms, offices, and shared spaces—with availability, utilization, and hybrid work in one intuitive platform.",
-    features: ["Desk and room booking", "Availability management", "Hybrid-work analytics"],
-    icon: Building2,
-    tone: "navy",
-    comingSoon: true,
-  },
-  {
-    name: "OperiX Control",
-    logo: "/brand/operix-xc-white.svg",
-    href: "/products/control",
-    description: "One control panel for the entire OperiX Suite.",
-    details: "Centralize shared workspace, team, customer, billing, and activity data across every OperiX product.",
-    features: ["Unified workspace overview", "Cross-product analytics", "Shared teams and permissions"],
-    icon: Gauge,
-    tone: "blue",
-  },
+export const platformPrinciples = [
+  { title: "Shared account", text: "Sign in once and keep identity consistent across the platform.", icon: Waypoints },
+  { title: "Organization context", text: "Work in the organization and application access your account is allowed to use.", icon: Cloud },
+  { title: "Connected permissions", text: "Control access centrally while each product keeps its own operational workflows.", icon: LockKeyhole },
+  { title: "Consistent navigation", text: "Use the App Launcher to move between Suite, products, and Control.", icon: Accessibility },
 ];
 
-export const benefits = [
-  { title: "Automation", text: "Reduce repetitive operational work.", icon: Sparkles },
-  { title: "Reports", text: "Turn activity into clear business reports.", icon: FileChartColumn },
-  { title: "Analytics", text: "Understand patterns and performance.", icon: BarChart3 },
-  { title: "Cloud", text: "Access work from office or on the move.", icon: Cloud },
-  { title: "Security", text: "Keep sensitive business data protected.", icon: LockKeyhole },
-  { title: "Scalability", text: "Support more people and processes.", icon: Building2 },
-  { title: "Real-time sync", text: "Keep teams aligned across devices.", icon: RefreshCw },
-  { title: "Employee management", text: "Organize the complete employee lifecycle.", icon: Users },
-  { title: "Financial management", text: "Connect invoices, expenses, and payments.", icon: WalletCards },
+export const securityItems = [
+  { title: "Organization-aware access", text: "Product access is scoped to the organizations and permissions available to the account.", icon: ShieldCheck },
+  { title: "Role-based permissions", text: "Give people access appropriate to their responsibilities across the platform.", icon: LockKeyhole },
+  { title: "Audit visibility", text: "Control includes audit activity so administrators can understand changes over time.", icon: FileText },
+  { title: "Encrypted transport", text: "OperiX services are served over HTTPS in the current production setup.", icon: Cloud },
 ];
 
-export const featureGroups = [
-  {
-    title: "Financial operations",
-    description: "Everything needed to move from a transaction to a clear financial picture.",
-    features: [
-      { title: "Invoices", description: "Create, deliver, and manage professional invoices.", icon: FileText },
-      { title: "Expenses", description: "Capture costs and understand where money goes.", icon: CreditCard },
-      { title: "Payments", description: "Track incoming and outgoing payments.", icon: WalletCards },
-      { title: "Reports", description: "Generate ledgers and performance summaries.", icon: FileChartColumn },
-    ],
-  },
-  {
-    title: "People operations",
-    description: "A shared source of truth for employees, time, and payroll.",
-    features: [
-      { title: "Employees", description: "Keep employee profiles and documents organized.", icon: Users },
-      { title: "Attendance", description: "Track time, schedules, and leave requests.", icon: RefreshCw },
-      { title: "Payroll", description: "Prepare payroll records and compliance workflows.", icon: BriefcaseBusiness },
-      { title: "Analytics", description: "See workforce activity in a useful context.", icon: BarChart3 },
-    ],
-  },
-];
-
-export const roadmapFeatures = [
-  { title: "Inventory", description: "Connected stock and product operations.", icon: Building2 },
-  { title: "CRM", description: "A unified view of customer relationships.", icon: Users },
-  { title: "AI assistance", description: "Helpful automation across daily workflows.", icon: Sparkles },
-];
-
-export const pricingPlans = [
-  {
-    name: "Starter",
-    monthly: "—",
-    yearly: "—",
-    description: "For small teams establishing their core operations.",
-    features: ["Core Invoice or HR workflows", "Essential reporting", "Standard support"],
-  },
-  {
-    name: "Professional",
-    monthly: "—",
-    yearly: "—",
-    description: "For growing companies bringing more workflows together.",
-    features: ["Invoice and HR capabilities", "Advanced reports", "Priority support", "Team permissions"],
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    monthly: "Custom",
-    yearly: "Custom",
-    description: "For organizations that need tailored scale and support.",
-    features: ["Custom onboarding", "Advanced permissions", "Dedicated support", "Integration planning"],
-  },
+export const integrations = [
+  { name: "Secure account and data services", note: "Platform foundation", icon: ShieldCheck },
+  { name: "Payments", note: "Available where configured in Invoice", icon: Waypoints },
+  { name: "Email and notifications", note: "Product-specific workflows", icon: Mail },
+  { name: "Document services", note: "Availability depends on deployment configuration", icon: FileText },
 ];
 
 export const faqs = [
   {
+    question: "What is OperiX?",
+    answer: "OperiX is one connected business platform made up of specialized applications for finance, people, bookings, workplaces, and platform administration.",
+  },
+  {
     question: "What is OperiX Suite?",
-    answer:
-      "OperiX Suite brings OperiX Invoice and OperiX HR Office together under one product family, helping teams manage financial and people operations with a consistent experience.",
+    answer: "Suite is the central workspace for accessing the OperiX ecosystem. It provides account access, organization context, an application launcher, and shortcuts into the products your organization uses. It is not another operational business application.",
   },
   {
-    question: "Can I start with one product?",
-    answer:
-      "Yes. You can explore Invoice or HR independently and expand as your business needs change.",
+    question: "What is OperiX Control?",
+    answer: "Control is the administration and system management layer for OperiX. It is used for organizations, users, roles, permissions, application access, security, integrations, audit logs, and system settings.",
   },
   {
-    question: "Does OperiX work on mobile and web?",
-    answer:
-      "OperiX products are designed for work across web and mobile. Availability can vary by product and deployment.",
+    question: "Can I use only one OperiX application?",
+    answer: "Yes. You can start with the product that solves the work in front of you and add other applications as your organization’s needs grow.",
   },
   {
-    question: "How is pricing handled?",
-    answer:
-      "Pricing is being finalized. Contact the OperiX team for current availability and a plan matched to your organization.",
+    question: "Do all applications use the same account?",
+    answer: "OperiX is designed around one account and organization context. Authorized users can switch between available applications through the App Launcher.",
   },
   {
-    question: "Can I request a guided demo?",
-    answer:
-      "Yes. Use the Book Demo form and select the product you want to explore.",
+    question: "Can I add applications later?",
+    answer: "Application access is managed for the organization. Your available products can grow as your rollout expands and the right access is configured.",
+  },
+  {
+    question: "Does OperiX have mobile apps?",
+    answer: "Invoice, HR, Booking, and Desk have mobile applications in the current product ecosystem. Control is web-only. Suite is the web workspace for accessing the ecosystem.",
+  },
+  {
+    question: "Can I try OperiX before signing up?",
+    answer: "A public OperiX Invoice demo is available today with fictional sample data. Additional product demos are being prepared as isolated environments so they do not touch production organizations.",
+  },
+  {
+    question: "Does the demo use real company data?",
+    answer: "No. The public demo uses fictional sample data. It is not connected to real customer organizations, production billing, or live messaging.",
+  },
+  {
+    question: "What happens to demo changes?",
+    answer: "Invoice demo changes stay in the demo browser and can be reset. They are not copied into a production workspace. A future shared demo environment will use temporary sessions with expiration and cleanup.",
+  },
+  {
+    question: "Where can I find documentation?",
+    answer: `The official Help Center is available at ${helpCenterUrl}. Developer documentation will be linked when a public API reference is ready.`,
   },
 ];
 
 export const resources = [
-  { title: "Documentation", description: "Product setup and workflow references.", status: "Coming soon", icon: FileText },
-  { title: "Blog", description: "Ideas for running a clearer operation.", status: "Coming soon", icon: Sparkles },
-  { title: "Help Center", description: "Answers for common product questions.", status: "Coming soon", icon: ShieldCheck },
-  { title: "Guides", description: "Practical playbooks for finance and people teams.", status: "Coming soon", icon: FileChartColumn },
-  { title: "API Documentation", description: "Integration references for technical teams.", status: "Coming soon", icon: RefreshCw },
-  { title: "Downloads", description: "Access OperiX products for supported devices.", status: "Coming soon", icon: Cloud },
+  { title: "Help Center", description: "Product help, setup references, and support guidance.", status: "Available", href: helpCenterUrl, icon: BookOpen, external: true },
+  { title: "Documentation", description: "Product references for the workflows OperiX supports.", status: "In the Help Center", href: helpCenterUrl, icon: FileText, external: true },
+  { title: "Demo safety", description: "How the public demo handles fictional data, temporary changes, and disabled external actions.", status: "Read the notes", href: "/resources#demo-safety", icon: ShieldCheck },
+  { title: "Developer Documentation", description: "API and integration references as public documentation becomes available.", status: "Preparing", href: "/resources#developer-documentation", icon: Waypoints },
+  { title: "What’s new", description: "Product updates and rollout notes from the OperiX team.", status: "Preparing", href: "/resources#whats-new", icon: Accessibility },
+  { title: "System status", description: "A status service will be linked when an official public endpoint is available.", status: "Not published", href: "/resources#system-status", icon: Cloud },
+  { title: "Contact support", description: "Use the Help Center for product questions and support workflows.", status: "Available", href: helpCenterUrl, icon: Mail, external: true },
 ];
+
+export const solutionCards = solutionRegistry.map((solution) => ({
+  ...solution,
+  products: solution.products.map((key) => productRegistry[key]),
+}));
+
+export const pricingPlans = [
+  {
+    name: "Start with one app",
+    description: "Choose the OperiX product that matches the work you need to organize first.",
+    price: "Contact us",
+    note: "Current pricing is available on request.",
+    features: ["One OperiX account", "Organization setup", "Product-specific workflows", "Help Center access"],
+  },
+  {
+    name: "Connected platform",
+    description: "Bring more applications into the same organization and account context.",
+    price: "Contact us",
+    note: "Plan structure and limits depend on the rollout.",
+    features: ["Multiple OperiX applications", "Shared organization context", "Central application access", "Product-specific mobile access"],
+    featured: true,
+  },
+  {
+    name: "Enterprise",
+    description: "Discuss a rollout shaped around your organization, deployment, and support needs.",
+    price: "Talk to us",
+    note: "Enterprise options are discussed with the OperiX team.",
+    features: ["Multi-company conversations", "Advanced access requirements", "Custom integration planning", "Onboarding and support planning"],
+  },
+];
+
+export const mobileProducts = products.filter((product) => product.hasMobile);

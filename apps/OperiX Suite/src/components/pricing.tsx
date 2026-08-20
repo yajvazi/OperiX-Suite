@@ -2,21 +2,11 @@
 
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { useState } from "react";
 import { pricingPlans } from "@/content/site";
 
 export function PricingGrid() {
-  const [yearly, setYearly] = useState(true);
   return (
     <>
-      <div className="billing-toggle" aria-label="Billing period">
-        <button type="button" className={!yearly ? "active" : ""} onClick={() => setYearly(false)}>
-          Monthly
-        </button>
-        <button type="button" className={yearly ? "active" : ""} onClick={() => setYearly(true)}>
-          Yearly
-        </button>
-      </div>
       <div className="pricing-grid">
         {pricingPlans.map((plan) => (
           <article className={`pricing-card ${plan.featured ? "featured" : ""}`} key={plan.name}>
@@ -24,14 +14,11 @@ export function PricingGrid() {
             <h2>{plan.name}</h2>
             <p>{plan.description}</p>
             <div className="price">
-              <strong>{yearly ? plan.yearly : plan.monthly}</strong>
-              {plan.monthly !== "—" && plan.monthly !== "Custom" && <span>/ month</span>}
+              <strong>{plan.price}</strong>
             </div>
-            <p className="pricing-note">
-              {plan.monthly === "—" ? "Pricing available on request" : "A plan shaped around your operation"}
-            </p>
-            <Link className={`button ${plan.featured ? "" : "button-secondary"}`} href="/book-demo">
-              Contact us
+            <p className="pricing-note">{plan.note}</p>
+            <Link className={`button ${plan.featured ? "" : "button-secondary"}`} href={plan.name === "Enterprise" ? "/enterprise" : "/contact"}>
+              {plan.name === "Enterprise" ? "Talk to us" : "Discuss your setup"}
             </Link>
             <ul>
               {plan.features.map((feature) => (

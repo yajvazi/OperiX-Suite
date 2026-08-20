@@ -270,7 +270,7 @@ function MessageBubble({ message }) {
         {!isUser && (
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <Bot size={14} />
-            DeskDibs AI
+            OperiX Desk AI
           </div>
         )}
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
@@ -546,7 +546,7 @@ export default function AiAssistant() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-slate-900">
-                  {activeConversation?.title ?? 'DeskDibs workspace assistant'}
+                  {activeConversation?.title ?? 'OperiX Desk workspace assistant'}
                 </p>
                 <p className="text-sm text-slate-500">
                   Try prompts like booking a desk for tomorrow or searching available meeting rooms.
@@ -582,7 +582,7 @@ export default function AiAssistant() {
                 </div>
                 <h2 className="text-lg font-semibold text-slate-900">What would you like to book?</h2>
                 <p className="mt-2 max-w-md text-sm text-slate-500">
-                  Ask in plain English. DeskDibs will extract your intent, run the reservation in the
+                  Ask in plain English. OperiX Desk will extract your intent, run the reservation in the
                   backend, and confirm with real booking details.
                 </p>
               </div>

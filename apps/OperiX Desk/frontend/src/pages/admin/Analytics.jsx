@@ -37,7 +37,7 @@ export default function Analytics() {
 
   const handleExport = async () => {
     const blob = await downloadAnalyticsCsv(days);
-    saveBlob(blob, `deskdibs-analytics-${days}d.csv`);
+    saveBlob(blob, `operix-desk-analytics-${days}d.csv`);
   };
 
   if (!data) return null;

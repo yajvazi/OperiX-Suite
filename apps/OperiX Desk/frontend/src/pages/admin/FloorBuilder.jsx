@@ -5,6 +5,7 @@ import {
   createResource,
   deleteFloorPlan,
   getFloorPlans,
+  getFloorPlanImage,
   getResources,
   updateFloorPlan,
   updateResourcePosition,
@@ -33,11 +34,6 @@ const emptyResourceForm = {
 
 const AMENITY_TYPES = ['Kitchen', 'Library', 'Break Area', 'Printer Area', 'Reception'];
 
-const withFreshImage = (plan) => ({
-  ...plan,
-  image_url: `${plan.image_url}${plan.image_url.includes('?') ? '&' : '?'}v=${Date.now()}`,
-});
-
 export default function FloorBuilder() {
   const [floor, setFloor] = useState('');
   const [resources, setResources] = useState([]);
@@ -53,6 +49,7 @@ export default function FloorBuilder() {
   const [savingResource, setSavingResource] = useState(false);
   const [message, setMessage] = useState('');
   const [missingPlanImages, setMissingPlanImages] = useState({});
+  const [planImageUrls, setPlanImageUrls] = useState({});
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -83,6 +80,24 @@ export default function FloorBuilder() {
   }, [floor]);
 
   const plan = plans.find((item) => item.floor === floor) ?? null;
+
+  useEffect(() => {
+    if (!plan) return undefined;
+    let active = true;
+    let objectUrl = null;
+    getFloorPlanImage(plan.id)
+      .then((url) => {
+        objectUrl = url;
+        if (active) setPlanImageUrls((current) => ({ ...current, [plan.id]: url }));
+      })
+      .catch(() => {
+        if (active) setMissingPlanImages((current) => ({ ...current, [plan.id]: true }));
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [plan]);
   const headerTitle = plan ? `Floor Plan Builder - ${plan.name || `Floor ${plan.floor}`}` : 'Floor Plan Builder';
   const headerSubtitle = plan
     ? `Upload, rename, replace, and manage the ${plan.building} floor plan while positioning resources`
@@ -157,12 +172,17 @@ export default function FloorBuilder() {
         planForm.building.trim() || 'HQ - Prishtina',
         planForm.name.trim() || `Floor ${planForm.floor.trim()}`,
       );
-      const refreshedPlan = withFreshImage(uploaded);
+      const refreshedPlan = uploaded;
       setPlans((prev) => {
         const rest = prev.filter((item) => item.id !== uploaded.id && item.floor !== uploaded.floor);
         return sortByNaturalFloor([...rest, refreshedPlan]);
       });
       setMissingPlanImages((current) => {
+        const next = { ...current };
+        delete next[uploaded.id];
+        return next;
+      });
+      setPlanImageUrls((current) => {
         const next = { ...current };
         delete next[uploaded.id];
         return next;
@@ -550,9 +570,17 @@ export default function FloorBuilder() {
                   onClick={handleCanvasClick}
                   className="relative max-h-[720px] w-full cursor-crosshair"
                 >
-                  {!missingPlanImages[plan.id] ? (
+                  {missingPlanImages[plan.id] ? (
+                    <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-6 text-center text-amber-900">
+                      <p className="text-sm font-semibold">Floor plan image is missing</p>
+                      <p className="max-w-md text-sm">
+                        The floor record exists, but the old image is no longer available on Vercel.
+                        Click Replace floor plan to upload it again.
+                      </p>
+                    </div>
+                  ) : planImageUrls[plan.id] ? (
                     <img
-                      src={plan.image_url}
+                      src={planImageUrls[plan.id]}
                       alt=""
                       className="block max-h-[720px] w-full object-contain"
                       onError={() => {
@@ -561,13 +589,7 @@ export default function FloorBuilder() {
                       }}
                     />
                   ) : (
-                    <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-6 text-center text-amber-900">
-                      <p className="text-sm font-semibold">Floor plan image is missing</p>
-                      <p className="max-w-md text-sm">
-                        The floor record exists, but the old image is no longer available on Vercel.
-                        Click Replace floor plan to upload it again.
-                      </p>
-                    </div>
+                    <div className="min-h-[480px] w-full animate-pulse rounded-lg bg-slate-200/70" />
                   )}
                   {resources
                     .filter((resource) => resource.floor_plan_x != null && resource.floor_plan_y != null)

@@ -11,3 +11,6 @@ export * from './BarcodeScannerModal';
 export * from './SignaturePadModal';
 export * from './LoadingOverlay';
 
+// Canonical OperiX Mobile design system. The legacy exports above remain
+// available for product code while common UI is migrated incrementally.
+export * from './mobile';

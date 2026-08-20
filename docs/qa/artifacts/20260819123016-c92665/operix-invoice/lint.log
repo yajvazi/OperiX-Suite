@@ -1,0 +1,7 @@
+command: "npm" "run" "lint" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 5998
+
+> operix-invoice@1.0.0 lint
+> eslint src test --quiet

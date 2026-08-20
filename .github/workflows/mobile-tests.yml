@@ -1,0 +1,162 @@
+name: OperiX Invoice Mobile Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'Compatibility workflow; normal PR/push CI is operix-ci.yml'
+        required: false
+        default: 'manual'
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-ci:
+    name: Lint, typecheck, unit, UI, integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:ci --workspace=operix-invoice
+
+  mobile-build:
+    name: Expo web build smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: mobile-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobile --workspace=operix-invoice
+
+  mobile-e2e:
+    name: Maestro E2E (explicit non-production dispatch only)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      E2E_CUSTOMER_ID: ${{ secrets.E2E_CUSTOMER_ID }}
+      E2E_PRODUCT_ID: ${{ secrets.E2E_PRODUCT_ID }}
+      IOS_SIMULATOR_NAME: iPhone 15 Pro Max
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check E2E configuration
+        if: ${{ env.E2E_EMAIL == '' || env.E2E_PASSWORD == '' || env.E2E_SUPABASE_URL == '' || env.E2E_CUSTOMER_ID == '' || env.E2E_PRODUCT_ID == '' }}
+        run: echo 'E2E secrets are not configured; the explicit E2E job is skipped safely.'
+      - name: Install Maestro
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        run: |
+          curl -Ls 'https://get.maestro.mobile.dev' | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Boot iPhone simulator
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        run: |
+          xcrun simctl boot "$IOS_SIMULATOR_NAME" || true
+          open -a Simulator
+      - name: Build and install Expo development client
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        working-directory: apps/OperiX Invoice/OperiX Invoice Mobile
+        run: |
+          npx expo prebuild --platform ios --no-install
+          npx expo start --dev-client --localhost > "$RUNNER_TEMP/operix-mobile-metro.log" 2>&1 &
+          npx expo run:ios --device "$IOS_SIMULATOR_NAME" --no-bundler
+      - name: Run gated E2E flows
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_CUSTOMER_ID: ${{ secrets.E2E_CUSTOMER_ID }}
+          E2E_PRODUCT_ID: ${{ secrets.E2E_PRODUCT_ID }}
+          E2E_CUSTOMER_NAME: ${{ secrets.E2E_CUSTOMER_NAME }}
+          E2E_CUSTOMER_EMAIL: ${{ secrets.E2E_CUSTOMER_EMAIL }}
+          E2E_PRODUCT_NAME: ${{ secrets.E2E_PRODUCT_NAME }}
+          MAESTRO_APP_ID: com.lrdygroup.operixinvoice
+        run: npm run test:e2e --workspace=operix-invoice
+
+  mobile-visual:
+    name: Maestro visual regression (${{ matrix.device }}, ${{ matrix.language }})
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: mobile-build
+    runs-on: macos-14
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [small-iphone, large-iphone]
+        language: [en, sq]
+        include:
+          - device: small-iphone
+            simulator: iPhone SE (3rd generation)
+          - device: large-iphone
+            simulator: iPhone 15 Pro Max
+    env:
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      E2E_CUSTOMER_ID: ${{ secrets.E2E_CUSTOMER_ID }}
+      E2E_PRODUCT_ID: ${{ secrets.E2E_PRODUCT_ID }}
+      MAESTRO_APP_ID: com.lrdygroup.operixinvoice
+      VISUAL_DEVICE: ${{ matrix.device }}
+      VISUAL_LANGUAGE: ${{ matrix.language }}
+      IOS_SIMULATOR_NAME: ${{ matrix.simulator }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check visual configuration
+        if: ${{ env.E2E_EMAIL == '' || env.E2E_PASSWORD == '' || env.E2E_SUPABASE_URL == '' || env.E2E_CUSTOMER_ID == '' || env.E2E_PRODUCT_ID == '' }}
+        run: echo 'Visual secrets are not configured; the explicit visual job is skipped safely.'
+      - name: Install Maestro
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        run: |
+          curl -Ls 'https://get.maestro.mobile.dev' | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Boot iPhone simulator
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        run: |
+          xcrun simctl boot "$IOS_SIMULATOR_NAME" || true
+          open -a Simulator
+      - name: Build and install Expo development client
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        working-directory: apps/OperiX Invoice/OperiX Invoice Mobile
+        run: |
+          npx expo prebuild --platform ios --no-install
+          npx expo start --dev-client --localhost > "$RUNNER_TEMP/operix-mobile-metro.log" 2>&1 &
+          npx expo run:ios --device "$IOS_SIMULATOR_NAME" --no-bundler
+      - name: Run visual regression suite
+        if: ${{ env.E2E_EMAIL != '' && env.E2E_PASSWORD != '' && env.E2E_SUPABASE_URL != '' && env.E2E_CUSTOMER_ID != '' && env.E2E_PRODUCT_ID != '' }}
+        working-directory: apps/OperiX Invoice/OperiX Invoice Mobile
+        run: npm run test:visual
+      - name: Upload Maestro artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-invoice-mobile-visual-${{ matrix.device }}-${{ matrix.language }}
+          path: |
+            apps/OperiX Invoice/OperiX Invoice Mobile/build/maestro-visual-results
+            ${{ runner.temp }}/operix-mobile-metro.log
+          if-no-files-found: ignore

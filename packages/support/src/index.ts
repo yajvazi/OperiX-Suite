@@ -15,7 +15,7 @@ export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 export const MESSAGE_VISIBILITIES = ["public", "internal", "system"] as const;
 export type MessageVisibility = (typeof MESSAGE_VISIBILITIES)[number];
 
-export const CONVERSATION_TYPES = ["email", "live_chat", "whatsapp", "telegram", "facebook_messenger", "api", "voice", "sms"] as const;
+export const CONVERSATION_TYPES = ["email", "live_chat", "whatsapp", "telegram", "facebook_messenger", "instagram", "api", "voice", "sms"] as const;
 export type ConversationType = (typeof CONVERSATION_TYPES)[number];
 
 export type SupportEventName =
@@ -38,6 +38,12 @@ export type SupportEventName =
   | "email_retrying"
   | "email_delivery_failed"
   | "email_bounced"
+  | "channel_message_received"
+  | "channel_message_sent"
+  | "channel_message_delivered"
+  | "channel_message_read"
+  | "channel_message_failed"
+  | "channel_connection_changed"
   | "system";
 
 export type SupportEvent = {

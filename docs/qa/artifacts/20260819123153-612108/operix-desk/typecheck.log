@@ -1,0 +1,7 @@
+command: "npm" "run" "typecheck" "--workspace=operix-desk-mobile"
+cwd: .
+exitCode: 0
+durationMs: 4015
+
+> operix-desk-mobile@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.json

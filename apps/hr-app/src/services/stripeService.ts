@@ -3,13 +3,13 @@
  * Handles Stripe Connect OAuth flow and syncs transactions via Edge Functions.
  */
 
-import { supabase } from '@invoice-monorepo/api';
+import { supabase, supabaseUrl } from '@invoice-monorepo/api';
 import * as WebBrowser from 'expo-web-browser';
 
 // Stripe Connect OAuth configuration
 // Replace these with your actual values or load from environment
 const STRIPE_CLIENT_ID = 'ca_PZGXRrlBTAqHPKTlPNeo09U3LQFbWwhh'; // Replace with your Stripe Connect client ID
-const SUPABASE_URL = 'https://hprylepdcvakwngmoshy.supabase.co'; // Replace with your Supabase URL
+const SUPABASE_URL = supabaseUrl;
 
 export interface StripeTransaction {
     id: string;
@@ -528,7 +528,6 @@ class StripeService {
 }
 
 export const stripeService = new StripeService();
-
 
 
 

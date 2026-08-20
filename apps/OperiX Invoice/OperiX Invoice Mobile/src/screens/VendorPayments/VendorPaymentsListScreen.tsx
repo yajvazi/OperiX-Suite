@@ -9,14 +9,14 @@ import {
     Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Plus, Building2, CreditCard, Calendar, MoreVertical, Trash2, Edit2 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Building2, Banknote, Calendar, MoreVertical, Trash2, Edit2 } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card } from '@invoice-monorepo/ui';
 import { VendorPayment, Vendor } from '@invoice-monorepo/types';
-import { t } from '@invoice-monorepo/i18n';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 export function VendorPaymentsListScreen({ navigation }: any) {
     const { user } = useAuth();
@@ -35,20 +35,20 @@ export function VendorPaymentsListScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchPayments();
-        }, [user])
+        }, [language, user])
     );
 
     const fetchPayments = async () => {
         if (!user) return;
         setLoading(true);
 
-        const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
-        const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
+        const { companyIds } = await getWorkspaceScope(user.id);
+        const scope = scopedResource(user.id, companyIds);
 
         const { data } = await supabase
             .from('vendor_payments')
             .select('*, vendor:vendors(*)')
-            .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+            .or(scope)
             .order('payment_date', { ascending: false });
 
         if (data) setPayments(data);
@@ -64,7 +64,7 @@ export function VendorPaymentsListScreen({ navigation }: any) {
     const handleDelete = (paymentId: string, paymentNumber: string) => {
         Alert.alert(
             t('delete', language),
-            `Are you sure you want to delete "${paymentNumber}"?`,
+            t('deleteVendorPaymentConfirmation', language).replace('{number}', paymentNumber),
             [
                 { text: t('cancel', language), style: 'cancel' },
                 {
@@ -91,11 +91,11 @@ export function VendorPaymentsListScreen({ navigation }: any) {
             <Card style={[styles.paymentCard, { backgroundColor: cardBg }]}>
                 <View style={styles.paymentHeader}>
                     <View style={[styles.iconContainer, { backgroundColor: '#0891b220' }]}>
-                        <CreditCard color="#0891b2" size={20} />
+                        <Banknote color="#0891b2" size={20} />
                     </View>
                     <View style={styles.paymentInfo}>
                         <Text style={[styles.paymentNumber, { color: textColor }]}>{item.payment_number}</Text>
-                        <Text style={[styles.vendorName, { color: mutedColor }]}>{item.vendor?.name || 'Unknown Vendor'}</Text>
+                        <Text style={[styles.vendorName, { color: mutedColor }]}>{item.vendor?.name || t('unknownVendor', language)}</Text>
                     </View>
                     <View style={styles.paymentRight}>
                         <Text style={[styles.amount, { color: '#12B76A' }]}>{formatCurrency(item.amount)}</Text>
@@ -112,12 +112,12 @@ export function VendorPaymentsListScreen({ navigation }: any) {
                     <View style={styles.detailItem}>
                         <Calendar color={mutedColor} size={14} />
                         <Text style={[styles.detailText, { color: mutedColor }]}>
-                            {new Date(item.payment_date).toLocaleDateString('sq-AL')}
+                            {formatDate(item.payment_date, language)}
                         </Text>
                     </View>
                     <View style={[styles.methodBadge, { backgroundColor: `${primaryColor}15` }]}>
                         <Text style={[styles.methodText, { color: primaryColor }]}>
-                            {t(item.payment_method as any, language)}
+                            {t(item.payment_method === 'cash' ? 'cash' : 'bank', language)}
                         </Text>
                     </View>
                 </View>
@@ -180,7 +180,7 @@ export function VendorPaymentsListScreen({ navigation }: any) {
                         <Text style={[styles.summaryValue, { color: '#12B76A' }]}>{formatCurrency(getTotalPaid())}</Text>
                     </View>
                     <View style={styles.summaryItem}>
-                        <Text style={[styles.summaryLabel, { color: mutedColor }]}>Payments</Text>
+                        <Text style={[styles.summaryLabel, { color: mutedColor }]}>{t('payments', language)}</Text>
                         <Text style={[styles.summaryValue, { color: textColor }]}>{payments.length}</Text>
                     </View>
                 </View>
@@ -196,9 +196,9 @@ export function VendorPaymentsListScreen({ navigation }: any) {
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
-                        <CreditCard color={mutedColor} size={48} />
+                            <Banknote color={mutedColor} size={48} />
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {loading ? 'Loading...' : t('noPaymentsRecorded', language)}
+                            {loading ? t('loading', language) : t('noPaymentsRecorded', language)}
                         </Text>
                     </View>
                 }
@@ -240,8 +240,4 @@ const styles = StyleSheet.create({
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 16 },
     emptyText: { fontSize: 16 },
 });
-
-
-
-
 

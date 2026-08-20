@@ -1,238 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Check, Mail, Phone, Plus, Search, UserRound, UserX } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
-import { Button, Card } from '@invoice-monorepo/ui';
-import { Search, Plus, User, Phone, Mail, MoreVertical } from 'lucide-react-native';
-import { supabase } from '@invoice-monorepo/api';
-import { t } from '@invoice-monorepo/i18n';
+import { resolveWorkspace, supabase } from '@invoice-monorepo/api';
+import { listEmployees, subscribeToHrChanges, type HrEmployee } from '@invoice-monorepo/hr';
 
+const BLUE = '#004FFE';
 export function EmployeeDirectoryScreen({ navigation }: any) {
-    const { isDark, primaryColor, language } = useTheme();
-    const [employees, setEmployees] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    // Admin & Tab State
-    const [activeTab, setActiveTab] = useState<'active' | 'requests'>('active');
-    const [isAdmin, setIsAdmin] = useState(false);
-
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-
-    useEffect(() => {
-        checkUserRole();
-    }, []);
-
-    useEffect(() => {
-        fetchEmployees();
-    }, [activeTab]);
-
-    const checkUserRole = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            // Check if user is owner of company OR has admin role
-            const { data } = await supabase
-                .from('employees')
-                .select('role')
-                .eq('user_id', user.id)
-                .single();
-
-            if (data?.role === 'admin' || data?.role === 'manager') {
-                setIsAdmin(true);
-            }
-        }
-    };
-
-    const fetchEmployees = async () => {
-        setLoading(true);
-        try {
-            let query = supabase
-                .from('employees')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (activeTab === 'requests') {
-                query = query.eq('status', 'pending');
-            } else {
-                query = query.neq('status', 'pending');
-            }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            setEmployees(data || []);
-        } catch (error) {
-            console.log('Error fetching employees:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleApprove = async (id: string) => {
-        const { error } = await supabase.from('employees').update({ status: 'active' }).eq('id', id);
-        if (!error) fetchEmployees();
-    };
-
-    const handleReject = async (id: string) => {
-        const { error } = await supabase.from('employees').delete().eq('id', id); // Or set to terminated
-        if (!error) fetchEmployees();
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'active': return '#10b981';
-            case 'onboarding': return '#3b82f6';
-            case 'on_leave': return '#f59e0b';
-            case 'terminated': return '#ef4444';
-            case 'pending': return '#818cf8';
-            default: return '#94a3b8';
-        }
-    };
-
-    const renderItem = ({ item }: any) => (
-        <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('EmployeeForm', { id: item.id })}
-            style={{ marginBottom: 12 }}
-        >
-            <Card style={[styles.card, { backgroundColor: cardBg }]}>
-                <View style={styles.cardHeader}>
-                    <View style={styles.avatarContainer}>
-                        {item.avatar_url ? (
-                            <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatarPlaceholder, { backgroundColor: primaryColor + '20' }]}>
-                                <Text style={[styles.avatarInitials, { color: primaryColor }]}>
-                                    {item.first_name[0]}{item.last_name[0]}
-                                </Text>
-                            </View>
-                        )}
-                        <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(item.status) }]} />
-                    </View>
-
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[styles.name, { color: textColor }]}>{item.first_name} {item.last_name}</Text>
-                        <Text style={[styles.role, { color: mutedColor }]}>{item.job_title || item.role}</Text>
-                    </View>
-
-                    {activeTab === 'requests' ? (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={() => handleReject(item.id)} style={[styles.actionBtn, { backgroundColor: '#ef4444' }]}>
-                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Reject</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleApprove(item.id)} style={[styles.actionBtn, { backgroundColor: '#10b981' }]}>
-                                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Approve</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <TouchableOpacity style={{ padding: 4 }}>
-                            <MoreVertical color={mutedColor} size={20} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                <View style={[styles.divider, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]} />
-
-                <View style={styles.cardFooter}>
-                    <View style={styles.contactItem}>
-                        <Mail size={14} color={mutedColor} />
-                        <Text style={[styles.contactText, { color: mutedColor }]}>{item.email || 'No email'}</Text>
-                    </View>
-                    <View style={styles.contactItem}>
-                        <Phone size={14} color={mutedColor} />
-                        <Text style={[styles.contactText, { color: mutedColor }]}>{item.phone || 'No phone'}</Text>
-                    </View>
-                </View>
-            </Card>
-        </TouchableOpacity>
-    );
-
-    return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    {/* Add Back Icon logic if needed, or rely on stack header */}
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Team Directory</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            {isAdmin && (
-                <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginBottom: 16 }}>
-                    <TouchableOpacity
-                        onPress={() => setActiveTab('active')}
-                        style={[styles.tab, activeTab === 'active' && { backgroundColor: primaryColor + '20' }]}
-                    >
-                        <Text style={{ color: activeTab === 'active' ? primaryColor : mutedColor, fontWeight: '600' }}>Active Team</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setActiveTab('requests')}
-                        style={[styles.tab, activeTab === 'requests' && { backgroundColor: primaryColor + '20' }]}
-                    >
-                        <Text style={{ color: activeTab === 'requests' ? primaryColor : mutedColor, fontWeight: '600' }}>Join Requests</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            <View style={styles.searchContainer}>
-
-                <View style={[styles.searchBar, { backgroundColor: cardBg, borderColor: isDark ? '#334155' : '#e2e8f0' }]}>
-                    <Search color={mutedColor} size={20} />
-                    <TextInput
-                        placeholder="Search employees..."
-                        placeholderTextColor={mutedColor}
-                        style={[styles.input, { color: textColor }]}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                </View>
-                <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: primaryColor }]}
-                    onPress={() => navigation.navigate('EmployeeForm')}
-                >
-                    <Plus color="#fff" size={24} />
-                </TouchableOpacity>
-            </View>
-
-            <FlatList
-                data={employees}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContent}
-            />
-        </View>
-    );
+  const { isDark } = useTheme();
+  const [employees, setEmployees] = useState<HrEmployee[]>([]);
+  const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<'active' | 'requests'>('active');
+  const [canManage, setCanManage] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const colors = { bg: isDark ? '#0f172a' : '#f7f9fc', card: isDark ? '#1e293b' : '#fff', text: isDark ? '#fff' : '#12213f', muted: isDark ? '#94a3b8' : '#6f7d96', border: isDark ? '#334155' : '#e4e9f0' };
+  const load = useCallback(async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; setRefreshing(true); try { const workspace = await resolveWorkspace(supabase, user.id); const own = await supabase.from('employees').select('role').eq('user_id', user.id).eq('company_id', workspace.companyId).maybeSingle(); setCanManage(['admin', 'manager'].includes(own.data?.role || '') || ['owner', 'admin'].includes(workspace.profile.role || '')); setEmployees(await listEmployees(supabase, workspace.companyIds)); } catch (error) { console.warn('Unable to load employee directory', error); } setRefreshing(false); }, []);
+  useFocusEffect(useCallback(() => { void load(); const sub = supabase.auth.getUser().then(async ({ data: { user } }) => { if (!user) return undefined; try { const workspace = await resolveWorkspace(supabase, user.id); return subscribeToHrChanges(supabase, workspace.companyId, () => { void load(); }); } catch { return undefined; } }); return () => { void sub.then((remove) => remove?.()); }; }, [load]));
+  const shown = useMemo(() => employees.filter((employee) => (tab === 'requests' ? employee.status === 'pending' : employee.status !== 'pending')).filter((employee) => `${employee.first_name} ${employee.last_name} ${employee.email || ''} ${employee.job_title || ''} ${employee.department || ''}`.toLowerCase().includes(query.trim().toLowerCase())), [employees, query, tab]);
+  async function updateStatus(employee: HrEmployee, status: 'active' | 'terminated') { const result = await supabase.from('employees').update({ status }).eq('id', employee.id).eq('company_id', employee.company_id); if (!result.error) await load(); }
+  return <View style={[styles.container, { backgroundColor: colors.bg }]}><View style={styles.header}><TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}><UserRound color={colors.muted} size={19} /></TouchableOpacity><View><Text style={[styles.kicker, { color: BLUE }]}>PEOPLE</Text><Text style={[styles.title, { color: colors.text }]}>Employees</Text></View>{canManage ? <TouchableOpacity onPress={() => navigation.navigate('EmployeeForm')} style={styles.add}><Plus color="#fff" size={20} /></TouchableOpacity> : <View style={{ width: 38 }} />}</View>{canManage ? <View style={[styles.tabs, { backgroundColor: colors.card }]}><TouchableOpacity onPress={() => setTab('active')} style={[styles.tab, tab === 'active' && { backgroundColor: BLUE }]}><Text style={{ color: tab === 'active' ? '#fff' : colors.muted, fontSize: 11, fontWeight: '800' }}>Directory</Text></TouchableOpacity><TouchableOpacity onPress={() => setTab('requests')} style={[styles.tab, tab === 'requests' && { backgroundColor: BLUE }]}><Text style={{ color: tab === 'requests' ? '#fff' : colors.muted, fontSize: 11, fontWeight: '800' }}>Requests</Text></TouchableOpacity></View> : null}<View style={[styles.search, { backgroundColor: colors.card, borderColor: colors.border }]}><Search color={colors.muted} size={17} /><TextInput value={query} onChangeText={setQuery} placeholder="Search employees" placeholderTextColor={colors.muted} style={{ flex: 1, color: colors.text, fontSize: 12 }} /></View><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} tintColor={BLUE} />}>{shown.length ? shown.map((employee) => <EmployeeCard key={employee.id} employee={employee} colors={colors} canManage={canManage} onPress={() => navigation.navigate('EmployeeForm', { id: employee.id })} onApprove={() => void updateStatus(employee, 'active')} onReject={() => void updateStatus(employee, 'terminated')} />) : <View style={styles.empty}><UserRound color={BLUE} size={22} /><Text style={[styles.emptyTitle, { color: colors.text }]}>No employees found</Text><Text style={[styles.emptyText, { color: colors.muted }]}>{tab === 'requests' ? 'There are no pending employee requests.' : query ? 'Try a different search.' : 'Your organization directory is empty.'}</Text></View>}</ScrollView></View>;
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-    backButton: { padding: 8 },
-    title: { fontSize: 20, fontWeight: '700' },
-    searchContainer: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 20, gap: 12 },
-    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, gap: 8 },
-    input: { flex: 1, fontSize: 15 },
-    addButton: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    listContent: { paddingHorizontal: 20, paddingBottom: 40 },
-    card: { padding: 16, borderRadius: 16 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center' },
-    avatarContainer: { position: 'relative' },
-    avatar: { width: 48, height: 48, borderRadius: 24 },
-    avatarPlaceholder: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-    avatarInitials: { fontSize: 18, fontWeight: '700' },
-    statusIndicator: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
-    name: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
-    role: { fontSize: 13 },
-    divider: { height: 1, marginVertical: 12 },
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-    contactItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    contactText: { fontSize: 12 },
-    tab: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginRight: 10 },
-    actionBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, justifyContent: 'center' }
-});
-
-
-
-
-
+function EmployeeCard({ employee, colors, canManage, onPress, onApprove, onReject }: { employee: HrEmployee; colors: { card: string; text: string; muted: string; border: string }; canManage: boolean; onPress: () => void; onApprove: () => void; onReject: () => void }) { return <TouchableOpacity onPress={onPress} activeOpacity={.8} style={[styles.card, { backgroundColor: colors.card }]}><View style={styles.cardTop}>{employee.avatar_url ? <Image source={{ uri: employee.avatar_url }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Text style={{ color: BLUE, fontWeight: '800', fontSize: 12 }}>{employee.first_name[0]}{employee.last_name[0]}</Text></View>}<View style={{ flex: 1 }}><Text style={[styles.name, { color: colors.text }]}>{employee.first_name} {employee.last_name}</Text><Text style={[styles.role, { color: colors.muted }]}>{employee.job_title || employee.department || 'Employee'}</Text></View>{employee.status === 'pending' && canManage ? <View style={styles.requestActions}><TouchableOpacity onPress={onReject} style={[styles.action, { backgroundColor: '#fff0f2' }]}><UserX size={15} color="#c43d53" /></TouchableOpacity><TouchableOpacity onPress={onApprove} style={[styles.action, { backgroundColor: '#eaf8f2' }]}><Check size={15} color="#138a62" /></TouchableOpacity></View> : <View style={[styles.statusDot, { backgroundColor: employee.status === 'active' ? '#138a62' : employee.status === 'terminated' ? '#c43d53' : '#b97709' }]} />}</View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.contactRow}><View style={styles.contact}><Mail size={13} color={colors.muted} /><Text style={[styles.contactText, { color: colors.muted }]} numberOfLines={1}>{employee.email || 'No email'}</Text></View><View style={styles.contact}><Phone size={13} color={colors.muted} /><Text style={[styles.contactText, { color: colors.muted }]}>{employee.phone || 'No phone'}</Text></View></View></TouchableOpacity>; }
+const styles = StyleSheet.create({ container: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 56, paddingBottom: 12 }, back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center' }, title: { marginTop: 3, fontSize: 19, fontWeight: '800' }, add: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: BLUE }, tabs: { flexDirection: 'row', gap: 5, marginHorizontal: 18, padding: 4, borderRadius: 11 }, tab: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, search: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, marginHorizontal: 18, marginTop: 13, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }, content: { padding: 15, paddingBottom: 35 }, card: { marginBottom: 10, padding: 14, borderRadius: 14 }, cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 }, avatar: { width: 43, height: 43, borderRadius: 12 }, avatarFallback: { width: 43, height: 43, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#eaf0ff' }, name: { fontSize: 13, fontWeight: '800' }, role: { marginTop: 3, fontSize: 10 }, statusDot: { width: 9, height: 9, borderRadius: 5 }, requestActions: { flexDirection: 'row', gap: 6 }, action: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, divider: { height: StyleSheet.hairlineWidth, marginVertical: 12 }, contactRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 }, contact: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 }, contactText: { flex: 1, fontSize: 9 }, empty: { alignItems: 'center', paddingTop: 60 }, emptyTitle: { marginTop: 12, fontSize: 14, fontWeight: '800' }, emptyText: { maxWidth: 260, marginTop: 5, textAlign: 'center', fontSize: 11 } });

@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import {
-    LayoutDashboard,
+    House,
     Users,
-    Clock,
-    Wallet,
-    Settings,
+    Clock3,
+    CalendarDays,
+    MoreHorizontal,
     ShieldAlert,
     Fingerprint,
 } from 'lucide-react-native';
@@ -16,8 +16,10 @@ import * as LocalAuthentication from 'expo-local-authentication';
 
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { Button } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
+import { Button, getOperixBottomNavigationOptions, getOperixNavigationTheme, OperixBottomNavigation } from '@invoice-monorepo/ui';
+import { brand, getPalette } from '../theme/brand';
+import { OperixLogo } from '../components/OperixLogo';
+import { MoreScreen } from '../screens/More/MoreScreen';
 
 // Auth Screens
 import { SignInScreen } from '../screens/Auth/SignInScreen';
@@ -26,7 +28,7 @@ import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
 
 // HR Dashboard
-import { HRDashboardScreen, JoinRequestsScreen } from '../screens/HR';
+import { ApprovalsScreen, HRDashboardScreen, HrOperationsScreen, JoinRequestsScreen } from '../screens/HR';
 
 // Employee Screens
 import { EmployeeDirectoryScreen } from '../screens/Employees/EmployeeDirectoryScreen';
@@ -56,31 +58,8 @@ import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const CustomDarkTheme = {
-    ...DarkTheme,
-    colors: {
-        ...DarkTheme.colors,
-        primary: '#818cf8',
-        background: '#0f172a',
-        card: '#1e293b',
-        text: '#ffffff',
-        border: '#334155',
-        notification: '#818cf8',
-    },
-};
-
-const CustomLightTheme = {
-    ...DefaultTheme,
-    colors: {
-        ...DefaultTheme.colors,
-        primary: '#6366f1',
-        background: '#f8fafc',
-        card: '#ffffff',
-        text: '#1e293b',
-        border: '#e2e8f0',
-        notification: '#6366f1',
-    },
-};
+const CustomDarkTheme = getOperixNavigationTheme(true);
+const CustomLightTheme = getOperixNavigationTheme(false);
 
 function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) {
     const { isDark } = useTheme();
@@ -100,13 +79,16 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
         authenticate();
     }, []);
 
+    const palette = getPalette(isDark);
+
     return (
-        <View style={[styles.lockContainer, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
-            <View style={styles.lockIconContainer}>
-                <ShieldAlert color="#818cf8" size={64} />
+        <View style={[styles.lockContainer, { backgroundColor: palette.background }]}>
+            <OperixLogo width={180} reversed={isDark} />
+            <View style={[styles.lockIconContainer, { backgroundColor: palette.iconSurface }]}>
+                <ShieldAlert color={brand.colors.primary} size={52} />
             </View>
-            <Text style={[styles.lockTitle, { color: isDark ? '#fff' : '#1e293b' }]}>App Locked</Text>
-            <Text style={[styles.lockText, { color: isDark ? '#94a3b8' : '#64748b' }]}>
+            <Text style={[styles.lockTitle, { color: palette.text }]}>App Locked</Text>
+            <Text style={[styles.lockText, { color: palette.muted }]}>
                 Please verify your identity to continue.
             </Text>
             <Button
@@ -121,7 +103,7 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
 
 function EmployeesStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="employees-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="EmployeeDirectory" component={EmployeeDirectoryScreen} />
             <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
             <Stack.Screen name="EmployeeVault" component={EmployeeVaultScreen} />
@@ -132,7 +114,7 @@ function EmployeesStack() {
 
 function TimeStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="time-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="AttendanceMain" component={AttendanceScreen} />
             <Stack.Screen name="LeaveRequests" component={LeaveRequestScreen} />
             <Stack.Screen name="Schedule" component={ScheduleScreen} />
@@ -143,7 +125,7 @@ function TimeStack() {
 
 function PayrollStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="payroll-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="PayrollDashboard" component={PayrollDashboardScreen} />
             <Stack.Screen name="PayrollDetail" component={PayrollDetailScreen} />
             <Stack.Screen name="Compliance" component={ComplianceScreen} />
@@ -154,7 +136,7 @@ function PayrollStack() {
 
 function SettingsStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="settings-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="SettingsMain" component={SettingsScreen} />
             <Stack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
             <Stack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
@@ -162,38 +144,37 @@ function SettingsStack() {
     );
 }
 
+function MoreStack() {
+    return <Stack.Navigator id="more-stack" screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="MoreHome" component={MoreScreen} />
+        <Stack.Screen name="Payroll" component={PayrollStack} />
+        <Stack.Screen name="Approvals" component={ApprovalsScreen} />
+        <Stack.Screen name="Recruitment" component={HrOperationsScreen} initialParams={{ mode: 'recruitment' }} />
+        <Stack.Screen name="Performance" component={HrOperationsScreen} initialParams={{ mode: 'performance' }} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Settings" component={SettingsStack} />
+    </Stack.Navigator>;
+}
+
 function MainTabs() {
-    const { isDark, language, primaryColor } = useTheme();
+    const { isDark, primaryColor } = useTheme();
 
     return (
-        <Tab.Navigator
-            screenOptions={{
-                headerShown: false,
-                tabBarStyle: {
-                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                    borderTopColor: isDark ? '#334155' : '#e2e8f0',
-                    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-                    paddingTop: 8,
-                    height: Platform.OS === 'ios' ? 88 : 70,
-                    paddingHorizontal: 8,
-                },
-                tabBarActiveTintColor: primaryColor,
-                tabBarInactiveTintColor: isDark ? '#64748b' : '#94a3b8',
-                tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-                tabBarIconStyle: { marginTop: 4 },
-            }}
+        <Tab.Navigator id="main-tabs" tabBar={OperixBottomNavigation}
+            screenOptions={{ ...getOperixBottomNavigationOptions(isDark, primaryColor) }}
         >
-            <Tab.Screen name="Dashboard" component={HRDashboardScreen} options={{ tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={22} />, tabBarLabel: t('dashboard', language) }} />
-            <Tab.Screen name="EmployeesTab" component={EmployeesStack} options={{ tabBarIcon: ({ color }) => <Users color={color} size={22} />, tabBarLabel: 'Employees' }} />
-            <Tab.Screen name="TimeTab" component={TimeStack} options={{ tabBarIcon: ({ color }) => <Clock color={color} size={22} />, tabBarLabel: 'Time' }} />
-            <Tab.Screen name="PayrollTab" component={PayrollStack} options={{ tabBarIcon: ({ color }) => <Wallet color={color} size={22} />, tabBarLabel: 'Payroll' }} />
+            <Tab.Screen name="Dashboard" component={HRDashboardScreen} options={{ tabBarIcon: ({ color }) => <House color={color} size={21} />, tabBarLabel: 'Home' }} />
+            <Tab.Screen name="EmployeesTab" component={EmployeesStack} options={{ tabBarIcon: ({ color }) => <Users color={color} size={21} />, tabBarLabel: 'People' }} />
+            <Tab.Screen name="Attendance" component={AttendanceScreen} options={{ tabBarIcon: ({ color }) => <Clock3 color={color} size={21} />, tabBarLabel: 'Time' }} />
+            <Tab.Screen name="Leave" component={LeaveRequestScreen} options={{ tabBarIcon: ({ color }) => <CalendarDays color={color} size={22} />, tabBarLabel: 'Leave' }} />
+            <Tab.Screen name="MoreTab" component={MoreStack} options={{ tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={22} />, tabBarLabel: 'More' }} />
         </Tab.Navigator>
     );
 }
 
 function RootStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Settings" component={SettingsStack} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
@@ -203,7 +184,7 @@ function RootStack() {
 
 function AuthStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator id="auth-stack" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="SignIn">
                 {(props: any) => (
                     <SignInScreen
@@ -273,8 +254,10 @@ export function AppNavigator() {
 
     if (authLoading || checkingLock) {
         return (
-            <View style={[styles.loading, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
-                <ActivityIndicator size="large" color="#818cf8" />
+            <View style={[styles.loading, { backgroundColor: getPalette(isDark).background }]}>
+                <OperixLogo width={180} reversed={isDark} />
+                <ActivityIndicator size="small" color={brand.colors.primary} style={styles.loadingIndicator} />
+                <Text style={[styles.loadingText, { color: getPalette(isDark).muted }]}>Opening your workspace</Text>
             </View>
         );
     }
@@ -304,13 +287,10 @@ export function AppNavigator() {
 
 const styles = StyleSheet.create({
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    loadingIndicator: { marginTop: 24 },
+    loadingText: { marginTop: 10, fontSize: 13, fontFamily: brand.fonts.regular },
     lockContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-    lockIconContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(129, 140, 248, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    lockTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-    lockText: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 }
+    lockIconContainer: { width: 104, height: 104, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: 34, marginBottom: 24 },
+    lockTitle: { fontSize: 24, fontFamily: brand.fonts.semibold, marginBottom: 12 },
+    lockText: { fontSize: 14, fontFamily: brand.fonts.regular, textAlign: 'center', lineHeight: 22, marginBottom: 32 }
 });
-
-
-
-
-

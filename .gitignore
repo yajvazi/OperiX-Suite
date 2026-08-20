@@ -2,11 +2,13 @@
 
 # dependencies
 node_modules/
+**/.next/
 
 # Expo
 .expo/
 dist/
 web-build/
+build/
 expo-env.d.ts
 
 # Native
@@ -31,8 +33,14 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
+!.env*.example
+artifacts/efs-certification-report/
 .env*.local
 /.env.support
+/infrastructure/chatwoot/.env
 
 # typescript
 *.tsbuildinfo

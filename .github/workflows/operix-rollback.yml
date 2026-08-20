@@ -1,0 +1,81 @@
+name: OperiX Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App id"
+        required: true
+      environment:
+        description: "staging or production"
+        required: true
+        default: production
+      target:
+        description: "Exact previous image digest/release id, or auto"
+        required: true
+        default: auto
+      confirmation:
+        description: "Type ROLLBACK to continue"
+        required: true
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      confirmation:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operix-${{ inputs.environment }}-${{ inputs.app }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Roll back ${{ inputs.app }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Validate rollback request
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == ROLLBACK ]] || { echo "Rollback requires confirmation=ROLLBACK"; exit 1; }
+          [[ "$ENVIRONMENT" == staging || "$ENVIRONMENT" == production ]] || { echo "Invalid rollback environment"; exit 1; }
+          [[ -n "$TARGET" ]] || { echo "Rollback target is required"; exit 1; }
+          [[ "$TARGET" == auto || "$TARGET" =~ ^sha-[0-9a-f]{40}$ || "$TARGET" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || { echo "Rollback target is not an allowed release reference"; exit 1; }
+      - name: Invoke restricted rollback command
+        env:
+          APP_ID: ${{ inputs.app }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+          TARGET: ${{ inputs.target }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_DEPLOY_USER: ${{ secrets.VPS_DEPLOY_USER }}
+          VPS_DEPLOY_SSH_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$VPS_HOST" && -n "$VPS_PORT" && -n "$VPS_DEPLOY_USER" && -n "$VPS_DEPLOY_SSH_KEY" && -n "$VPS_KNOWN_HOSTS" ]] || { echo "Rollback secrets are not configured"; exit 1; }
+          [[ "$VPS_DEPLOY_USER" != root ]] || { echo "Root SSH is not permitted"; exit 1; }
+          [[ "$APP_ID" =~ ^[a-z0-9][a-z0-9-]{1,63}$ ]] || { echo "Invalid app id"; exit 1; }
+          key="$RUNNER_TEMP/operix-deploy-key"
+          known_hosts="$RUNNER_TEMP/operix-known-hosts"
+          printf '%s\n' "$VPS_DEPLOY_SSH_KEY" > "$key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$known_hosts"
+          chmod 600 "$key" "$known_hosts"
+          ssh -i "$key" -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            "$VPS_DEPLOY_USER@$VPS_HOST" "/opt/operix/deploy/dispatch rollback $APP_ID $DEPLOY_ENV $TARGET"
+          echo "ROLLED_BACK" >> "$GITHUB_STEP_SUMMARY"

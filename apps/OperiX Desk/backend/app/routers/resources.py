@@ -19,6 +19,7 @@ from app.schemas.resource import (
     ResourcePositionUpdate,
     ResourceUpdate,
 )
+from app.services.workspace import scope_query, stamp_organization
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 
@@ -27,8 +28,13 @@ def _apply_floor_plan_location(
     resource: Resource,
     floor_value: str,
     db: Session,
+    current_user: User,
 ):
-    plan = db.query(FloorPlan).filter(FloorPlan.floor == floor_value).first()
+    plan = scope_query(
+        db.query(FloorPlan).filter(FloorPlan.floor == floor_value),
+        FloorPlan,
+        current_user,
+    ).first()
     if not plan:
         raise HTTPException(status_code=400, detail="Select an existing floor plan floor first")
     resource.floor = plan.floor
@@ -50,6 +56,7 @@ def _enrich_resource(
         .filter(
             Favorite.user_id == current_user.id,
             Favorite.resource_id == resource.id,
+            Favorite.organization_id == resource.organization_id,
         )
         .first()
         is not None
@@ -62,6 +69,7 @@ def _enrich_resource(
                 Reservation.resource_id == resource.id,
                 Reservation.date == booking_date,
                 Reservation.status == ReservationStatus.active,
+                Reservation.organization_id == resource.organization_id,
             )
             .first()
         )
@@ -84,7 +92,11 @@ def list_resources(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Resource).filter(Resource.is_active.is_(True))
+    query = scope_query(
+        db.query(Resource).filter(Resource.is_active.is_(True)),
+        Resource,
+        current_user,
+    )
     if floor:
         query = query.filter(Resource.floor == floor)
     if zone:
@@ -103,7 +115,7 @@ def recommend_near_team(
 ):
     if not current_user.team_name:
         resources = (
-            db.query(Resource)
+            scope_query(db.query(Resource), Resource, current_user)
             .filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk)
             .limit(6)
             .all()
@@ -116,7 +128,11 @@ def recommend_near_team(
 
     teammates = (
         db.query(User.id)
-        .filter(User.team_name == current_user.team_name, User.id != current_user.id)
+        .filter(
+            User.team_name == current_user.team_name,
+            User.id != current_user.id,
+            User.organization_id == current_user.organization_id,
+        )
         .subquery()
     )
     recent_reservations = (
@@ -125,6 +141,8 @@ def recommend_near_team(
         .filter(
             Reservation.user_id.in_(teammates),
             Reservation.status == ReservationStatus.active,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .all()
     )
@@ -132,7 +150,11 @@ def recommend_near_team(
     if recent_reservations:
         zone = Counter(z for _, z in recent_reservations).most_common(1)[0][0]
 
-    query = db.query(Resource).filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk)
+    query = scope_query(
+        db.query(Resource).filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk),
+        Resource,
+        current_user,
+    )
     if zone:
         query = query.filter(Resource.zone == zone)
     resources = query.order_by(Resource.floor, Resource.name).limit(12).all()
@@ -149,7 +171,9 @@ def add_favorite(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    resource = db.get(Resource, resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id), Resource, current_user
+    ).first()
     if not resource or not resource.is_active:
         raise HTTPException(status_code=404, detail="Resource not found")
 
@@ -162,7 +186,11 @@ def add_favorite(
         .first()
     )
     if not favorite:
-        favorite = Favorite(user_id=current_user.id, resource_id=resource_id)
+        favorite = Favorite(
+            user_id=current_user.id,
+            resource_id=resource_id,
+            organization_id=resource.organization_id or current_user.organization_id,
+        )
         db.add(favorite)
         db.commit()
 
@@ -175,7 +203,9 @@ def remove_favorite(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    resource = db.get(Resource, resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id), Resource, current_user
+    ).first()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
 
@@ -197,9 +227,11 @@ def remove_favorite(
 @router.get("/floors")
 def list_floors(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    floors = db.query(FloorPlan.floor).distinct().order_by(FloorPlan.floor).all()
+    floors = scope_query(
+        db.query(FloorPlan.floor), FloorPlan, current_user
+    ).distinct().order_by(FloorPlan.floor).all()
     return [f[0] for f in floors]
 
 
@@ -207,9 +239,13 @@ def list_floors(
 def list_zones(
     floor: str | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Resource.zone).filter(Resource.is_active.is_(True))
+    query = scope_query(
+        db.query(Resource.zone).filter(Resource.is_active.is_(True)),
+        Resource,
+        current_user,
+    )
     if floor:
         query = query.filter(Resource.floor == floor)
     zones = query.distinct().order_by(Resource.zone).all()
@@ -220,10 +256,11 @@ def list_zones(
 def create_resource(
     data: ResourceCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
     resource = Resource(**data.model_dump())
-    _apply_floor_plan_location(resource, data.floor, db)
+    stamp_organization(resource, admin_user)
+    _apply_floor_plan_location(resource, data.floor, db, admin_user)
     db.add(resource)
     db.commit()
     db.refresh(resource)
@@ -235,9 +272,11 @@ def update_resource(
     resource_id: int,
     data: ResourceUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    resource = db.get(Resource, resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id), Resource, admin_user
+    ).first()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -245,7 +284,7 @@ def update_resource(
             continue
         setattr(resource, key, value)
     if "floor" in data.model_dump(exclude_unset=True):
-        _apply_floor_plan_location(resource, resource.floor, db)
+        _apply_floor_plan_location(resource, resource.floor, db, admin_user)
     db.commit()
     db.refresh(resource)
     return ResourceOut.model_validate(resource)
@@ -256,9 +295,11 @@ def update_position(
     resource_id: int,
     data: ResourcePositionUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    resource = db.get(Resource, resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id), Resource, admin_user
+    ).first()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     resource.floor_plan_x = data.floor_plan_x
@@ -272,19 +313,41 @@ def update_position(
 def delete_resource(
     resource_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    resource = db.get(Resource, resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id), Resource, admin_user
+    ).first()
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
 
-    reservation_count = db.query(Reservation).filter(Reservation.resource_id == resource_id).count()
-    favorite_count = db.query(Favorite).filter(Favorite.resource_id == resource_id).count()
+    reservation_count = (
+        db.query(Reservation)
+        .filter(
+            Reservation.resource_id == resource_id,
+            Reservation.organization_id == resource.organization_id,
+        )
+        .count()
+    )
+    favorite_count = (
+        db.query(Favorite)
+        .filter(
+            Favorite.resource_id == resource_id,
+            Favorite.organization_id == resource.organization_id,
+        )
+        .count()
+    )
 
-    db.query(Favorite).filter(Favorite.resource_id == resource_id).delete(
+    db.query(Favorite).filter(
+        Favorite.resource_id == resource_id,
+        Favorite.organization_id == resource.organization_id,
+    ).delete(
         synchronize_session=False,
     )
-    db.query(Reservation).filter(Reservation.resource_id == resource_id).delete(
+    db.query(Reservation).filter(
+        Reservation.resource_id == resource_id,
+        Reservation.organization_id == resource.organization_id,
+    ).delete(
         synchronize_session=False,
     )
     db.delete(resource)

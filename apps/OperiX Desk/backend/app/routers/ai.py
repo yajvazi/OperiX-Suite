@@ -25,7 +25,7 @@ TEST_PROMPT = (
 
 
 @router.get("/test", response_class=PlainTextResponse)
-def test_hf():
+def test_hf(_: User = Depends(get_current_user)):
     return generate_hf_response(TEST_PROMPT)
 
 

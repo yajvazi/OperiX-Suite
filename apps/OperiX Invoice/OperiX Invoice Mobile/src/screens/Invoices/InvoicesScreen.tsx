@@ -17,28 +17,34 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, StatusBadge, FAB } from '@invoice-monorepo/ui';
 import { FileText, Users, Package, Wallet, DollarSign } from 'lucide-react-native';
 import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
-import { formatCurrency } from '@invoice-monorepo/i18n';
-import { t } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { listInvoices } from '@invoice-monorepo/api/repositories';
+import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface InvoicesScreenProps {
     navigation: any;
     route?: any;
 }
 
-const statuses: { key: InvoiceStatus | 'all'; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'draft', label: 'Draft' }, // Contracts also use 'draft'
-    { key: 'sent', label: 'Sent' },
-    { key: 'paid', label: 'Paid' },
-    { key: 'overdue', label: 'Overdue' },
+const statuses: { key: InvoiceStatus | 'all' }[] = [
+    { key: 'all' },
+    { key: 'draft' },
+    { key: 'sent' },
+    { key: 'paid' },
+    { key: 'overdue' },
 ];
 
 // Combine Invoice and Contract types for the list state
 type ListItem = Invoice | any; // using any for Contract temporarily to avoid conflict with state type
 
+function invoiceStatusLabel(status: string, language: string): string {
+    return status === 'all' ? t('all', language) : t(status as any, language);
+}
+
 export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const [invoices, setInvoices] = useState<ListItem[]>([]);
     const [filteredInvoices, setFilteredInvoices] = useState<ListItem[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -47,7 +53,6 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
-    const { primaryColor, language } = useTheme();
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -60,7 +65,11 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             setSelectedType(route.params.tab);
             navigation.setParams({ tab: undefined });
         }
-    }, [route?.params?.tab]);
+        if (route?.params?.status) {
+            setSelectedStatus(route.params.status);
+            navigation.setParams({ status: undefined });
+        }
+    }, [route?.params?.tab, route?.params?.status]);
 
     const borderColor = isDark ? '#263A55' : '#E4E9F0';
 
@@ -73,32 +82,33 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) setProfile(profileData);
+        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        setProfile(workspaceProfile);
+        const scope = scopedResource(user.id, companyIds);
+        const cacheKey = mobileCacheKey('invoices', user.id, companyIds, `recent:${selectedType}`);
 
-        const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
+        const cachedData = await readMobileCache<ListItem[]>(cacheKey);
+        if (cachedData) {
+            setInvoices(cachedData);
+            filterInvoices(cachedData, selectedStatus, searchQuery);
+        }
 
         let data = [];
 
         if (selectedType === 'invoice' || selectedType === 'offer') {
-            console.log('Fetching invoices for type:', selectedType, 'user:', user.id, 'companyId:', companyId);
-            const { data: invData, error } = await supabase
-                .from('invoices')
-                .select(`*, client:clients(name), items:invoice_items(id)`)
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-                .eq('type', selectedType)
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-            console.log('Invoices fetched:', invData?.length, 'error:', error);
-            if (error) console.error('Error fetching invoices:', error);
-            data = invData || [];
+            const invData = await listInvoices(supabase, { userId: user.id, companyIds }, {
+                select: '*, client:clients(name), items:invoice_items(id)',
+                documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE',
+                legacyType: selectedType,
+                limit: 5,
+            });
+            data = invData;
         } else if (selectedType === 'contract') {
             console.log('Fetching contracts for user:', user.id);
             const { data: contractData, error } = await supabase
                 .from('contracts')
                 .select(`*, client:clients(name)`)
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .or(scope)
                 .order('created_at', { ascending: false })
                 .limit(5);
 
@@ -111,6 +121,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         if (data) {
             setInvoices(data);
             filterInvoices(data, selectedStatus, searchQuery);
+            writeMobileCache(cacheKey, data);
         }
     };
 
@@ -152,6 +163,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         if (selectedType === 'contract') {
             return (
                 <TouchableOpacity
+                    testID={selectedType === 'contract' ? `contract-row-${item.id}` : `invoice-row-${item.id}`}
                     activeOpacity={0.7}
                     onPress={() => navigation.navigate('ContractDetail', { contractId: item.id })}
                 >
@@ -160,13 +172,13 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                             <View style={styles.invoiceInfo}>
                                 <Text style={[styles.invoiceNumber, { color: textColor }]}>{item.title}</Text>
                                 <Text style={[styles.clientName, { color: mutedColor }]}>
-                                    {item.client?.name || 'No Client'}
+                                    {item.client?.name || t('noClient', language)}
                                 </Text>
                             </View>
                             <StatusBadge status={item.status} />
                         </View>
                         <View style={styles.invoiceFooter}>
-                            <Text style={[styles.invoiceDate, { color: mutedColor }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                            <Text style={[styles.invoiceDate, { color: mutedColor }]}>{formatDate(item.created_at, language)}</Text>
                             <Text style={[styles.invoiceAmount, { fontSize: 14, color: textColor }]}>{item.type.replace('_', ' ').toUpperCase()}</Text>
                         </View>
                     </View>
@@ -176,6 +188,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
         return (
             <TouchableOpacity
+                testID={`invoice-row-${item.id}`}
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: item.id })}
             >
@@ -184,12 +197,13 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         <View style={styles.invoiceInfo}>
                             <Text style={[styles.invoiceNumber, { color: textColor }]}>{item.invoice_number}</Text>
                             <Text style={[styles.clientName, { color: mutedColor }]}>
-                                {item.client?.name || 'No client'}
+                                {item.client?.name || t('noClient', language)}
                             </Text>
                         </View>
                         <View style={styles.badgeRow}>
                             <StatusBadge status={item.status} />
                             <TouchableOpacity
+                                testID={`invoice-preview-${item.id}-button`}
                                 style={[styles.previewIcon, { backgroundColor: isDark ? 'rgba(0, 79, 254, 0.2)' : 'rgba(0, 79, 254, 0.1)' }]}
                                 onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: item.id, autoPreview: true })}
                             >
@@ -212,14 +226,14 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
+        <View testID="invoices-screen" style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Overview</Text>
-                    <Text style={[styles.title, { color: textColor }]}>Recent Activity</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('overview', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('recentActivity', language)}</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('QRScanner')}>
+                    <TouchableOpacity testID="invoice-qr-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('QRScanner')}>
                         <QrCode color={primaryColor} size={20} />
                     </TouchableOpacity>
                 </View>
@@ -229,6 +243,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             <View style={[styles.typeSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                 {(['invoice', 'offer', 'contract'] as const).map((tValue) => (
                     <TouchableOpacity
+                        testID={`invoice-type-${tValue}-button`}
                         key={tValue}
                         style={[
                             styles.typeOption,
@@ -237,7 +252,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         onPress={() => setSelectedType(tValue)}
                     >
                         <Text style={[styles.typeText, { color: selectedType === tValue ? primaryColor : mutedColor }]}>
-                            {tValue.toUpperCase()}
+                            {t(tValue === 'invoice' ? 'invoice' : tValue === 'offer' ? 'offer' : 'contracts', language)}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -245,11 +260,12 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
             {/* View All Button */}
             <View style={{ paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Aktiviteti i fundit</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t('recentActivity', language)}</Text>
             </View>
 
 
             <FlatList
+                testID="invoices-list"
                 data={filteredInvoices}
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}
@@ -258,13 +274,14 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {searchQuery ? 'No items match your search' : `No ${selectedType}s found`}
+                            {searchQuery ? t('noItemsMatchSearch', language) : `${t(selectedType === 'invoice' ? 'invoice' : selectedType === 'offer' ? 'offer' : 'contracts', language)}: ${t('notFound', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}`}
                         </Text>
                     </View>
                 }
                 ListFooterComponent={
                     invoices.length > 0 ? (
                         <TouchableOpacity
+                            testID="invoice-view-all-button"
                             style={{ padding: 16, alignItems: 'center', marginTop: 8, marginBottom: 24, backgroundColor: cardBg, borderRadius: 7 }}
                             onPress={() => navigation.navigate('AllInvoices', { type: selectedType })}
                         >
@@ -274,7 +291,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 }
             />
 
-            <FAB
+            <FAB testID="invoice-create-button"
                 onPress={() => {
                     if (selectedType === 'invoice') navigation.navigate('InvoiceForm', { type: 'invoice' });
                     else if (selectedType === 'offer') navigation.navigate('InvoiceForm', { type: 'offer' });
@@ -283,8 +300,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 actions={[
                     { label: t('newInvoice', language), icon: FileText, color: primaryColor, onPress: () => navigation.navigate('InvoiceForm', { type: 'invoice' }) },
                     { label: t('newOffer', language), icon: FileText, color: '#06B6D4', onPress: () => navigation.navigate('InvoiceForm', { type: 'offer' }) },
-                    { label: 'Shto të ardhura', icon: DollarSign, color: '#12B76A', onPress: () => navigation.navigate('PaymentsList') },
-                    { label: 'Shto shpenzim', icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('ExpenseForm') },
+                    { label: t('addIncome', language), icon: DollarSign, color: '#12B76A', onPress: () => navigation.navigate('PaymentsList') },
+                    { label: t('addExpense', language), icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('ExpenseForm') },
                     { label: t('newClient', language), icon: Users, color: '#0ea5e9', onPress: () => navigation.navigate('Management', { screen: 'ClientForm' }) },
                     { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ProductForm' }) },
                 ]}
@@ -330,8 +347,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { textAlign: 'center' },
 });
-
-
-
-
-

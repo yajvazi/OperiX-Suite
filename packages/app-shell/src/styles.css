@@ -1,0 +1,169 @@
+@import "@invoice-monorepo/operix-ui/styles.css";
+
+.operix-shared-sidebar {
+  --shared-sidebar-blue: var(--operix-primary);
+  --shared-sidebar-blue-soft: var(--operix-primary-soft);
+  --shared-sidebar-surface: var(--operix-surface);
+  --shared-sidebar-canvas: var(--operix-canvas);
+  --shared-sidebar-ink: var(--operix-ink);
+  --shared-sidebar-muted: var(--operix-muted);
+  --shared-sidebar-subtle: var(--operix-subtle);
+  --shared-sidebar-border: var(--operix-border);
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  display: flex;
+  width: 240px;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 22px 14px 14px;
+  color: var(--shared-sidebar-muted);
+  background: var(--shared-sidebar-surface);
+  border-right: 1px solid var(--shared-sidebar-border);
+  transition: transform .2s ease;
+}
+
+.operix-shared-sidebar-brand {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px 24px;
+}
+
+.operix-shared-sidebar-brand-content { min-width: 0; }
+.operix-shared-sidebar-brand-content > a { display: inline-flex; max-width: 100%; }
+.operix-shared-sidebar-close { display: none; }
+
+.operix-shared-sidebar-workspace-wrap { position: relative; margin: 0 2px 25px; }
+.operix-shared-sidebar-workspace {
+  display: flex;
+  width: 100%;
+  min-height: 45px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px;
+  color: var(--shared-sidebar-ink);
+  background: var(--shared-sidebar-canvas);
+  border: 1px solid var(--shared-sidebar-border);
+  border-radius: 11px;
+  text-align: left;
+}
+.operix-shared-sidebar-workspace:hover { border-color: #b9c7de; background: #f1f5ff; }
+.operix-shared-sidebar-workspace:disabled { cursor: wait; opacity: .72; }
+.operix-shared-sidebar-workspace-avatar,
+.operix-shared-sidebar-popover button > span:first-child,
+.operix-shared-sidebar-profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--shared-sidebar-blue);
+  background: var(--shared-sidebar-blue-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+.operix-shared-sidebar-workspace-avatar { width: 27px; height: 27px; border-radius: 9px; }
+.operix-shared-sidebar-workspace-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 1px; }
+.operix-shared-sidebar-workspace-copy small,
+.operix-shared-sidebar-section-label { color: var(--shared-sidebar-subtle); font-size: 10px; font-weight: 600; letter-spacing: .075em; text-transform: uppercase; }
+.operix-shared-sidebar-workspace-copy small { font-size: 9px; letter-spacing: .04em; }
+.operix-shared-sidebar-workspace-copy strong { overflow: hidden; color: var(--shared-sidebar-ink); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+.operix-shared-sidebar-popover {
+  position: absolute;
+  inset: calc(100% + 7px) 0 auto;
+  z-index: 60;
+  padding: 8px;
+  overflow: hidden;
+  background: var(--shared-sidebar-surface);
+  border: 1px solid var(--shared-sidebar-border);
+  border-radius: 12px;
+  box-shadow: 0 15px 45px rgba(16, 24, 40, .12);
+}
+.operix-shared-sidebar-popover button { display: flex; width: 100%; min-height: 38px; align-items: center; gap: 9px; padding: 0 9px; color: var(--shared-sidebar-muted); background: transparent; border: 0; border-radius: 8px; text-align: left; font-size: 11px; }
+.operix-shared-sidebar-popover button:hover,
+.operix-shared-sidebar-popover button.is-selected { color: var(--shared-sidebar-ink); background: #f5f8fd; }
+.operix-shared-sidebar-popover button > span:first-child { width: 23px; height: 23px; border-radius: 6px; font-size: 9px; }
+.operix-shared-sidebar-popover button strong { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.operix-shared-sidebar-popover p { padding: 8px; color: var(--shared-sidebar-muted); font-size: 10px; }
+.operix-shared-sidebar-current-dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--shared-sidebar-blue); }
+
+.operix-shared-sidebar-nav { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 3px; overflow-y: auto; scrollbar-width: none; }
+.operix-shared-sidebar-nav::-webkit-scrollbar { display: none; }
+.operix-shared-sidebar-section { display: flex; flex-direction: column; gap: 3px; }
+.operix-shared-sidebar-section.is-secondary { margin-top: 22px; }
+.operix-shared-sidebar-section-label { padding: 0 12px 8px; }
+.operix-shared-sidebar-item { display: contents; }
+.operix-shared-sidebar-link { position: relative; display: flex; min-height: 40px; align-items: center; gap: 11px; padding: 0 11px; color: var(--shared-sidebar-muted); border-radius: 10px; font-size: 12px; font-weight: 500; text-decoration: none; transition: background .18s ease, color .18s ease, transform .18s ease; }
+.operix-shared-sidebar-link:hover { color: var(--shared-sidebar-ink); background: #f5f7fb; transform: translateX(2px); }
+.operix-shared-sidebar-link.is-active { color: var(--shared-sidebar-blue); background: var(--shared-sidebar-blue-soft); font-weight: 600; }
+.operix-shared-sidebar-link.is-active svg { stroke-width: 2.3; }
+.operix-shared-sidebar-active-dot { width: 4px; height: 4px; position: absolute; right: 10px; border-radius: 50%; background: var(--shared-sidebar-blue); }
+
+.operix-shared-sidebar-bottom { display: flex; flex-direction: column; gap: 9px; }
+.operix-shared-sidebar-bottom > .operix-shared-sidebar-link { flex: 0 0 auto; }
+.operix-shared-sidebar-help { display: flex; min-height: 57px; align-items: center; gap: 9px; margin: 0 1px 12px; padding: 12px 10px; color: #61708a; background: #f5f8fd; border: 1px solid #e8eef8; border-radius: 12px; text-decoration: none; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.operix-shared-sidebar-help:hover { color: #536178; background: var(--shared-sidebar-blue-soft); border-color: #d9e6ff; transform: translateY(-1px); }
+.operix-shared-sidebar-help > svg:first-child { flex: 0 0 auto; color: var(--shared-sidebar-blue); }
+.operix-shared-sidebar-help > span { min-width: 0; display: flex; flex: 1; flex-direction: column; }
+.operix-shared-sidebar-help strong { font-size: 10px; font-weight: 600; }
+.operix-shared-sidebar-help small { color: var(--shared-sidebar-subtle); font-size: 9px; }
+.operix-shared-sidebar-help > svg:last-child { flex: 0 0 auto; color: #a3afc2; }
+.operix-shared-sidebar-profile { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 12px 7px 1px; border-top: 1px solid var(--shared-sidebar-border); }
+.operix-shared-sidebar-profile-avatar { width: 30px; height: 30px; border-radius: 50%; }
+.operix-shared-sidebar-profile-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; }
+.operix-shared-sidebar-profile-copy strong { overflow: hidden; color: var(--shared-sidebar-ink); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.operix-shared-sidebar-profile-copy small { overflow: hidden; color: var(--shared-sidebar-subtle); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.operix-shared-sidebar-icon-button { display: inline-flex; width: 31px; height: 31px; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0; color: #748197; background: transparent; border: 0; border-radius: 8px; }
+.operix-shared-sidebar-icon-button:hover { color: var(--shared-sidebar-blue); background: var(--shared-sidebar-blue-soft); }
+.operix-shared-sidebar-overlay { display: none; }
+
+.operix-app-shell { min-height: 100vh; display: flex; background: var(--operix-canvas); }
+.operix-app-shell-main { min-width: 0; width: calc(100% - var(--operix-sidebar-width)); margin-left: var(--operix-sidebar-width); }
+.operix-shared-topbar { min-height: var(--operix-topbar-height); position: sticky; top: 0; z-index: var(--operix-z-topbar); display: flex; align-items: center; gap: 20px; padding: 0 34px; color: var(--operix-ink); background: color-mix(in srgb, var(--operix-surface) 92%, transparent); border-bottom: 1px solid var(--operix-border); backdrop-filter: blur(16px); }
+.operix-shared-topbar-leading, .operix-shared-topbar-actions { display: flex; align-items: center; gap: 12px; }.operix-shared-topbar-leading { min-width: 0; }.operix-shared-topbar-actions { flex: 0 0 auto; gap: 14px; }.operix-shared-topbar-spacer { min-width: 0; flex: 1; }
+.operix-shared-topbar-mobile-menu { display: none; width: 32px; height: 32px; align-items: center; justify-content: center; padding: 0; color: var(--operix-muted); background: transparent; border: 0; border-radius: var(--operix-radius-sm); }.operix-shared-topbar-mobile-menu:hover { color: var(--operix-primary); background: var(--operix-primary-soft); }
+.operix-shared-topbar-app-switcher { position: relative; }.operix-shared-app-switcher-button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; color: var(--operix-muted); background: transparent; border: 0; border-radius: 9px; font-size: 12px; font-weight: 500; cursor: pointer; }.operix-shared-app-switcher-button:hover { color: var(--operix-ink); background: var(--operix-primary-soft); }
+.operix-shared-topbar-search { width: min(390px, 38vw); min-height: 38px; position: relative; display: flex; align-items: center; gap: 9px; margin-right: auto; padding: 0 10px; color: var(--operix-subtle); background: var(--operix-canvas); border: 1px solid var(--operix-border); border-radius: var(--operix-radius-md); }.operix-shared-topbar-search input { min-width: 0; flex: 1; color: var(--operix-ink); background: transparent; border: 0; outline: 0; font-size: 11px; }.operix-shared-topbar-search input::placeholder { color: var(--operix-subtle); }.operix-shared-topbar-search kbd { padding: 3px 5px; color: var(--operix-subtle); background: var(--operix-surface); border: 1px solid var(--operix-border); border-radius: 5px; font-size: 9px; }.operix-shared-topbar-search:focus-within { border-color: var(--operix-primary); box-shadow: 0 0 0 3px rgba(0,79,254,.1); }
+.operix-shared-topbar-popover { position: absolute; top: calc(100% + 8px); left: -8px; z-index: 60; min-width: 230px; padding: 7px; background: var(--operix-surface); border: 1px solid var(--operix-border); border-radius: 12px; box-shadow: var(--operix-shadow-lg); }.operix-shared-app-link { min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 9px; color: var(--operix-muted); border-radius: 8px; font-size: 11px; text-decoration: none; }.operix-shared-app-link:hover, .operix-shared-app-link.is-current { color: var(--operix-ink); background: var(--operix-primary-soft); }.operix-shared-app-link.is-disabled { cursor: not-allowed; opacity: .55; }.operix-shared-app-link small { margin-left: auto; color: var(--operix-subtle); font-size: 9px; }.operix-shared-app-icon { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--operix-primary); background: var(--operix-primary-soft); border-radius: 7px; }.operix-shared-app-current-dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--operix-primary); }
+.operix-shared-topbar-breadcrumbs { min-width: 0; color: var(--operix-muted); font-size: 11px; }.operix-shared-topbar-help, .operix-shared-topbar-notifications { position: relative; display: inline-flex; align-items: center; justify-content: center; color: var(--operix-muted); text-decoration: none; }.operix-shared-topbar-help { width: 28px; height: 28px; font-size: 16px; font-weight: 700; border-radius: 8px; }.operix-shared-topbar-help:hover, .operix-shared-topbar-notifications:hover { color: var(--operix-primary); }.operix-shared-topbar-notifications { padding: 0; background: transparent; border: 0; cursor: pointer; }.operix-shared-topbar-slot { position: relative; display: inline-flex; align-items: center; }.operix-shared-topbar-slot > .app-popover, .operix-shared-topbar-slot > .popover { top: calc(100% + 10px); right: 0; left: auto; }.operix-shared-notification-count { min-width: 15px; height: 15px; position: absolute; top: -7px; right: -8px; display: inline-flex; align-items: center; justify-content: center; padding: 0 3px; color: #fff; background: var(--operix-primary); border: 2px solid var(--operix-surface); border-radius: 50%; font-size: 7px; font-weight: 700; }.operix-shared-topbar-primary { white-space: nowrap; }.operix-shared-topbar-user { border: 2px solid var(--operix-surface); box-shadow: 0 0 0 1px var(--operix-border); cursor: pointer; text-decoration: none; }
+.operix-shared-mobile-navigation { display: none; }
+.operix-settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }.operix-settings-layout > aside { min-width: 0; }.operix-settings-layout > section { min-width: 0; }
+
+html[data-theme="dark"] .operix-shared-sidebar { --shared-sidebar-surface: #111827; --shared-sidebar-canvas: #111827; --shared-sidebar-ink: #f8fafc; --shared-sidebar-muted: #c4cbd6; --shared-sidebar-subtle: #98a2b3; --shared-sidebar-border: #263244; }
+html[data-theme="dark"] .operix-shared-sidebar-workspace { background: #162033; border-color: var(--shared-sidebar-border); }
+html[data-theme="dark"] .operix-shared-sidebar-workspace:hover { background: #1b2a45; border-color: #52688e; }
+html[data-theme="dark"] .operix-shared-sidebar-link:hover { color: #f8fafc; background: #1b2a45; }
+html[data-theme="dark"] .operix-shared-sidebar-link.is-active { color: #8cb1ff; background: #1b2a45; }
+html[data-theme="dark"] .operix-shared-sidebar-help { color: #c4cbd6; background: #162033; border-color: var(--shared-sidebar-border); }
+html[data-theme="dark"] .operix-shared-sidebar-help:hover { color: #f8fafc; background: #1b2a45; border-color: #344054; }
+html[data-theme="dark"] .operix-shared-sidebar-popover { background: #111827; border-color: var(--shared-sidebar-border); }
+html[data-theme="dark"] .operix-shared-sidebar-popover button { color: #c4cbd6; }
+html[data-theme="dark"] .operix-shared-sidebar-popover button:hover,
+html[data-theme="dark"] .operix-shared-sidebar-popover button.is-selected { color: #f8fafc; background: #1b2a45; }
+html[data-theme="dark"] .operix-shared-sidebar-icon-button { color: #c4cbd6; }
+html[data-theme="dark"] .operix-shared-sidebar-icon-button:hover { color: #8cb1ff; background: #1b2a45; }
+
+@media (max-width: 1250px) and (min-width: 901px) {
+  .operix-shared-sidebar { width: var(--operix-sidebar-width-compact); }
+  .operix-app-shell-main { width: calc(100% - var(--operix-sidebar-width-compact)); margin-left: var(--operix-sidebar-width-compact); }
+}
+
+@media (max-width: 900px) {
+  html, body { overflow-x: hidden; }
+  .operix-shared-sidebar { width: min(280px, 86vw); transform: translateX(-100%); box-shadow: 18px 0 40px rgba(16, 24, 40, .12); }
+  .operix-shared-sidebar.is-open { transform: translateX(0); }
+  .operix-shared-sidebar-close { display: inline-flex; width: 31px; height: 31px; align-items: center; justify-content: center; padding: 0; color: #748197; background: transparent; border: 0; border-radius: 8px; }
+  .operix-shared-sidebar-close:hover { color: var(--shared-sidebar-blue); background: var(--shared-sidebar-blue-soft); }
+  .operix-shared-sidebar-overlay { display: block; position: fixed; inset: 0; z-index: 35; width: 100%; height: 100%; padding: 0; background: rgba(6, 18, 38, .42); border: 0; }
+  .operix-app-shell-main { width: 100%; margin-left: 0; }
+  .operix-shared-topbar { padding: 0 16px; }
+  .operix-shared-topbar-mobile-menu { display: inline-flex; }
+  .operix-shared-topbar-search { width: auto; flex: 1; }
+  .operix-shared-topbar-primary { display: none; }
+  .operix-shared-mobile-navigation { position: fixed; right: 0; bottom: 0; left: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: var(--operix-mobile-nav-height); padding: 8px 8px env(safe-area-inset-bottom); background: color-mix(in srgb, var(--operix-surface) 94%, transparent); border-top: 1px solid var(--operix-border); box-shadow: 0 -8px 24px rgba(15,23,42,.06); backdrop-filter: blur(14px); }
+  .operix-shared-mobile-navigation-link { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; padding: 4px; color: var(--operix-subtle); background: transparent; border: 0; border-radius: 8px; font-size: 9px; font-weight: 600; text-decoration: none; }.operix-shared-mobile-navigation-link.is-active { color: var(--operix-primary); }.operix-shared-mobile-navigation-primary { width: 44px; height: 44px; align-self: center; justify-self: center; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--operix-primary); border-radius: 50%; box-shadow: 0 5px 14px rgba(0,79,254,.25); text-decoration: none; }
+  .operix-settings-layout { grid-template-columns: 1fr; }
+  html[data-theme="dark"] .operix-shared-sidebar-overlay { background: rgba(0, 0, 0, .58); }
+}

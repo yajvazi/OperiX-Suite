@@ -4,6 +4,7 @@ import {
     Text,
     ScrollView,
     TouchableOpacity,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
     Alert,
@@ -12,12 +13,13 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { ArrowLeft, Plus, Minus, Trash2, Building, Calendar, FileText, Search } from 'lucide-react-native';
-import { t } from '@invoice-monorepo/i18n';
+import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Input, Button } from '@invoice-monorepo/ui';
 import { Profile, Vendor, SupplierBill, SupplierBillItem } from '@invoice-monorepo/types';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 interface SupplierBillFormScreenProps {
     navigation: any;
@@ -99,15 +101,15 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
 
     const fetchInitialData = async () => {
         if (!user) return;
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            setProfile(profileData);
-            const companyId = profileData.active_company_id || profileData.company_id || user.id;
+        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        if (workspaceProfile) {
+            setProfile(workspaceProfile);
+            const scope = scopedResource(user.id, companyIds);
 
             const { data: vendorsData } = await supabase
                 .from('vendors')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .or(scope)
                 .order('name');
             if (vendorsData) setVendors(vendorsData);
         }
@@ -167,9 +169,14 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
     const calculateSubtotal = () => lineItems.reduce((sum, item) => sum + item.amount, 0);
     const calculateTotal = () => calculateSubtotal() + Number(formData.tax_amount);
 
+    const closeVendorPicker = () => {
+        Keyboard.dismiss();
+        setShowVendorPicker(false);
+    };
+
     const handleSave = async () => {
         if (!formData.vendor_id || !formData.bill_number) {
-            Alert.alert('Error', 'Please select a vendor and enter a bill number');
+            Alert.alert(t('error', language), t('vendorBillRequired', language));
             return;
         }
 
@@ -214,7 +221,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
 
             navigation.goBack();
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'supplierBillSaveFailed'));
         } finally {
             setLoading(false);
         }
@@ -234,7 +241,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>
                         {isEditing ? t('edit', language) : t('createNew', language)}
                     </Text>
@@ -247,10 +254,17 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                     onPress={handleSave}
                     loading={loading}
                     size="small"
+                    fullWidth={false}
+                    style={styles.headerSaveButton}
                 />
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
+            >
                 {/* Vendor Section */}
                 <Text style={[styles.sectionTitle, { color: textColor }]}>{t('vendor', language)}</Text>
                 <TouchableOpacity
@@ -281,7 +295,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                             <Input
-                                label="Date"
+                                label={t('date', language)}
                                 value={formData.issue_date}
                                 onChangeText={(text) => setFormData({ ...formData, issue_date: text })}
                                 placeholder="YYYY-MM-DD"
@@ -289,7 +303,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                         </View>
                         <View style={{ flex: 1, marginLeft: 16 }}>
                             <Input
-                                label="Due Date"
+                                label={t('dueDate', language)}
                                 value={formData.due_date}
                                 onChangeText={(text) => setFormData({ ...formData, due_date: text })}
                                 placeholder="YYYY-MM-DD"
@@ -300,10 +314,10 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
 
                 {/* Items Section */}
                 <View style={styles.itemsHeader}>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>Items</Text>
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>{t('items', language)}</Text>
                     <TouchableOpacity onPress={addItem} style={[styles.addButton, { backgroundColor: primaryColor }]}>
                         <Plus color="#fff" size={16} />
-                        <Text style={styles.addButtonText}>Add</Text>
+                        <Text style={styles.addButtonText}>{t('add', language)}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -312,7 +326,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                         <View style={styles.itemRow}>
                             <View style={{ flex: 1 }}>
                                 <Input
-                                    placeholder="Description"
+                                    placeholder={t('description', language)}
                                     value={item.description}
                                     onChangeText={(text) => updateItem(item.id, { description: text })}
                                 />
@@ -324,7 +338,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                         <View style={styles.row}>
                             <View style={{ flex: 1 }}>
                                 <Input
-                                    label="Qty"
+                                    label={t('qty', language)}
                                     keyboardType="numeric"
                                     value={String(item.quantity)}
                                     onChangeText={(text) => updateItem(item.id, { quantity: Number(text) || 0 })}
@@ -332,14 +346,14 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Input
-                                    label="Price"
+                                    label={t('price', language)}
                                     keyboardType="numeric"
                                     value={String(item.unit_price)}
                                     onChangeText={(text) => updateItem(item.id, { unit_price: Number(text) || 0 })}
                                 />
                             </View>
                             <View style={{ flex: 1.2, marginLeft: 12 }}>
-                                <Text style={[styles.amountLabel, { color: mutedColor }]}>Amount</Text>
+                                <Text style={[styles.amountLabel, { color: mutedColor }]}>{t('amount', language)}</Text>
                                 <Text style={[styles.amountValue, { color: textColor }]}>
                                     {item.amount.toFixed(2)}
                                 </Text>
@@ -351,11 +365,11 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                 {/* Totals */}
                 <Card style={styles.totalsCard}>
                     <View style={styles.totalRow}>
-                        <Text style={[styles.totalLabel, { color: mutedColor }]}>Subtotal</Text>
+                        <Text style={[styles.totalLabel, { color: mutedColor }]}>{t('subtotal', language)}</Text>
                         <Text style={[styles.totalValue, { color: textColor }]}>{calculateSubtotal().toFixed(2)}</Text>
                     </View>
                     <View style={styles.totalRow}>
-                        <Text style={[styles.totalLabel, { color: mutedColor }]}>Tax</Text>
+                        <Text style={[styles.totalLabel, { color: mutedColor }]}>{t('tax', language)}</Text>
                         <View style={{ width: 80 }}>
                             <TextInput
                                 style={[styles.taxInput, { color: textColor, borderBottomColor: borderColor }]}
@@ -366,13 +380,13 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                         </View>
                     </View>
                     <View style={[styles.totalRow, styles.grandTotalRow]}>
-                        <Text style={[styles.grandTotalLabel, { color: textColor }]}>Total</Text>
+                        <Text style={[styles.grandTotalLabel, { color: textColor }]}>{t('total', language)}</Text>
                         <Text style={[styles.grandTotalValue, { color: primaryColor }]}>{calculateTotal().toFixed(2)}</Text>
                     </View>
                 </Card>
 
                 <Input
-                    label="Notes"
+                    label={t('notes', language)}
                     value={formData.notes}
                     onChangeText={(text) => setFormData({ ...formData, notes: text })}
                     multiline
@@ -382,13 +396,18 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
 
             {/* Vendor Picker Modal */}
             {showVendorPicker && (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }]}>
-                    <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowVendorPicker(false)} />
+                <KeyboardAvoidingView
+                    style={styles.vendorPickerKeyboard}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={0}
+                >
+                    <View style={styles.vendorPickerOverlay}>
+                        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeVendorPicker} />
                     <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('selectVendor', language)}</Text>
-                            <TouchableOpacity onPress={() => setShowVendorPicker(false)}>
-                                <Text style={{ color: primaryColor, fontWeight: '600' }}>Close</Text>
+                            <TouchableOpacity onPress={closeVendorPicker}>
+                                <Text style={{ color: primaryColor, fontWeight: '600' }}>{t('close', language)}</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
@@ -399,14 +418,19 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                                 style={[styles.searchInput, { color: textColor }]}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
+                                keyboardAppearance={isDark ? 'dark' : 'light'}
                                 autoFocus
                             />
                         </View>
-                        <ScrollView style={{ maxHeight: 400 }}>
+                        <ScrollView
+                            style={styles.vendorList}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                        >
                             <TouchableOpacity
                                 style={[styles.vendorOption, { borderBottomColor: primaryColor + '20' }]}
                                 onPress={() => {
-                                    setShowVendorPicker(false);
+                                    closeVendorPicker();
                                     navigation.navigate('VendorForm');
                                 }}
                             >
@@ -423,7 +447,7 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                                     style={styles.vendorOption}
                                     onPress={() => {
                                         setFormData({ ...formData, vendor_id: vendor.id });
-                                        setShowVendorPicker(false);
+                                        closeVendorPicker();
                                     }}
                                 >
                                     <View style={[styles.vendorIconSmall, { backgroundColor: primaryColor + '10' }]}>
@@ -434,7 +458,8 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                             ))}
                         </ScrollView>
                     </View>
-                </View>
+                    </View>
+                </KeyboardAvoidingView>
             )}
         </KeyboardAvoidingView>
     );
@@ -444,6 +469,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
     backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    headerSaveButton: { width: 84 },
     subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
     title: { fontSize: 28, fontWeight: '800' },
     scroll: { flex: 1 },
@@ -471,17 +497,15 @@ const styles = StyleSheet.create({
     grandTotalLabel: { fontSize: 18, fontWeight: 'bold' },
     grandTotalValue: { fontSize: 18, fontWeight: 'bold' },
     taxInput: { fontSize: 14, textAlign: 'right', borderBottomWidth: 1, paddingVertical: 2 },
-    modalContent: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, minHeight: 400 },
+    vendorPickerKeyboard: { ...StyleSheet.absoluteFillObject, zIndex: 1000 },
+    vendorPickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, minHeight: 300, maxHeight: '82%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
     searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, marginBottom: 16, gap: 10 },
     searchInput: { flex: 1, fontSize: 16 },
+    vendorList: { flexShrink: 1, maxHeight: 400 },
     vendorOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     vendorIconSmall: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     vendorOptionText: { fontSize: 16 },
 });
-
-
-
-
-

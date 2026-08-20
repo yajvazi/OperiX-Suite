@@ -18,22 +18,32 @@ from app.models.resource import Resource
 from app.models.user import User
 from app.schemas.floor_plan import FloorPlanOut, FloorPlanUpdate
 from app.utils.urls import api_url
+from app.services.workspace import scope_query, stamp_organization
 
 router = APIRouter(prefix="/floor-plans", tags=["floor-plans"])
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_FLOOR_PLAN_BYTES = 12 * 1024 * 1024
 
 
 def _is_blob_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
 
 
-def _resolve_floor_plan(db: Session, plan_key: str) -> FloorPlan | None:
+def _resolve_floor_plan(db: Session, plan_key: str, current_user: User) -> FloorPlan | None:
     plan = None
     if plan_key.isdigit():
-        plan = db.get(FloorPlan, int(plan_key))
+        plan = scope_query(
+            db.query(FloorPlan).filter(FloorPlan.id == int(plan_key)),
+            FloorPlan,
+            current_user,
+        ).first()
     if not plan:
-        plan = db.query(FloorPlan).filter(FloorPlan.floor == plan_key).first()
+        plan = scope_query(
+            db.query(FloorPlan).filter(FloorPlan.floor == plan_key),
+            FloorPlan,
+            current_user,
+        ).first()
     return plan
 
 
@@ -101,12 +111,15 @@ def _store_floor_plan_bytes(filename: str, content: bytes, content_type: str) ->
 @router.get("", response_model=list[FloorPlanOut])
 def list_floor_plans(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    plans = db.query(FloorPlan).order_by(FloorPlan.floor).all()
+    plans = scope_query(
+        db.query(FloorPlan), FloorPlan, current_user
+    ).order_by(FloorPlan.floor).all()
     return [
         FloorPlanOut(
             id=p.id,
+            organization_id=p.organization_id,
             name=p.name,
             building=p.building,
             floor=p.floor,
@@ -123,7 +136,7 @@ async def upload_floor_plan(
     building: str = Form("HQ - Prishtina"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -131,9 +144,15 @@ async def upload_floor_plan(
 
     filename = f"{uuid.uuid4().hex}{ext}"
     content = await file.read()
+    if len(content) > MAX_FLOOR_PLAN_BYTES:
+        raise HTTPException(status_code=413, detail="Floor plan images must be 12 MB or smaller")
     image_path = _store_floor_plan_bytes(filename, content, file.content_type or "application/octet-stream")
 
-    existing = db.query(FloorPlan).filter(FloorPlan.floor == floor).first()
+    existing = scope_query(
+        db.query(FloorPlan).filter(FloorPlan.floor == floor),
+        FloorPlan,
+        admin_user,
+    ).first()
     if existing:
         if existing.image_path and not _is_blob_url(existing.image_path):
             existing_path = Path(existing.image_path)
@@ -154,12 +173,14 @@ async def upload_floor_plan(
             floor=floor,
             image_path=image_path,
         )
+        stamp_organization(plan, admin_user)
         db.add(plan)
         db.commit()
         db.refresh(plan)
 
     return FloorPlanOut(
         id=plan.id,
+        organization_id=plan.organization_id,
         name=plan.name,
         building=plan.building,
         floor=plan.floor,
@@ -168,8 +189,16 @@ async def upload_floor_plan(
 
 
 @router.get("/{plan_id}/image")
-def get_floor_plan_image(plan_id: int, db: Session = Depends(get_db)):
-    plan = db.get(FloorPlan, plan_id)
+def get_floor_plan_image(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    plan = scope_query(
+        db.query(FloorPlan).filter(FloorPlan.id == plan_id),
+        FloorPlan,
+        current_user,
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Image not found")
     if _is_blob_url(plan.image_path):
@@ -201,15 +230,18 @@ def update_floor_plan(
     plan_id: str,
     data: FloorPlanUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    plan = _resolve_floor_plan(db, plan_id)
+    plan = _resolve_floor_plan(db, plan_id, admin_user)
     if not plan:
         raise HTTPException(status_code=404, detail="Floor plan not found")
 
     duplicate = (
-        db.query(FloorPlan)
-        .filter(FloorPlan.floor == data.floor, FloorPlan.id != plan.id)
+        scope_query(
+            db.query(FloorPlan).filter(FloorPlan.floor == data.floor, FloorPlan.id != plan.id),
+            FloorPlan,
+            admin_user,
+        )
         .first()
     )
     if duplicate:
@@ -219,7 +251,11 @@ def update_floor_plan(
     plan.name = data.name.strip() if data.name and data.name.strip() else f"Floor {data.floor}"
     plan.building = data.building
     plan.floor = data.floor
-    linked_resources = db.query(Resource).filter(Resource.floor == previous_floor).all()
+    linked_resources = scope_query(
+        db.query(Resource).filter(Resource.floor == previous_floor),
+        Resource,
+        admin_user,
+    ).all()
     for resource in linked_resources:
         resource.floor = data.floor
         resource.building = data.building
@@ -227,6 +263,7 @@ def update_floor_plan(
     db.refresh(plan)
     return FloorPlanOut(
         id=plan.id,
+        organization_id=plan.organization_id,
         name=plan.name,
         building=plan.building,
         floor=plan.floor,
@@ -238,9 +275,9 @@ def update_floor_plan(
 def delete_floor_plan(
     plan_id: str,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    plan = _resolve_floor_plan(db, plan_id)
+    plan = _resolve_floor_plan(db, plan_id, admin_user)
     if not plan:
         raise HTTPException(status_code=404, detail="Floor plan not found")
 

@@ -1,0 +1,43 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: login.yaml
+- tapOn:
+    text: Business
+- extendedWaitUntil:
+    visible:
+      id: business-screen
+    timeout: 15000
+- tapOn:
+    id: business-add-button
+- extendedWaitUntil:
+    visible:
+      id: product-form-screen
+    timeout: 15000
+- tapOn:
+    id: product-name-input
+- inputText: ${E2E_PRODUCT_NAME}
+- tapOn:
+    id: product-price-major-input
+- inputText: "10"
+- tapOn:
+    id: product-price-minor-input
+- inputText: "50"
+- tapOn:
+    id: product-save-button
+- extendedWaitUntil:
+    visible:
+      id: business-screen
+    timeout: 30000
+- tapOn:
+    id: business-search-input
+- inputText: ${E2E_PRODUCT_NAME}
+- extendedWaitUntil:
+    visible:
+      text: ${E2E_PRODUCT_NAME}
+    timeout: 30000
+- tapOn:
+    text: ${E2E_PRODUCT_NAME}
+- extendedWaitUntil:
+    visible:
+      id: product-detail-screen
+    timeout: 15000

@@ -1,70 +1,45 @@
-import Image from "next/image";
 import Link from "next/link";
-
-const groups = [
-  {
-    title: "Products",
-    links: [
-      ["OperiX Invoice", "/products/invoice"],
-      ["OperiX HR Office", "/products/hr"],
-      ["OperiX Booking", "/products/booking"],
-      ["OperiX Desk", "/products/desk"],
-      ["OperiX Control", "/products/control"],
-      ["Features", "/features"],
-      ["Pricing", "/pricing"],
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      ["About", "/about"],
-      ["Contact", "/contact"],
-      ["Book a demo", "/book-demo"],
-    ],
-  },
-  {
-    title: "Resources",
-    links: [
-      ["Documentation", "/resources"],
-      ["Help Center", "/resources"],
-      ["Guides", "/resources"],
-      ["API", "/resources"],
-    ],
-  },
-];
+import { ArrowUpRight, ExternalLink } from "lucide-react";
+import type { ReactNode } from "react";
+import { getStartedUrl, helpCenterUrl, productOrder, productRegistry, solutionRegistry } from "@/content/products";
+import { PlatformLogo } from "./platform-logo";
 
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <div className="container footer-grid">
-        <div className="footer-brand">
-          <Link href="/" className="brand brand-light" aria-label="OperiX Suite home">
-            <Image className="brand-wordmark brand-wordmark-light" src="/brand/operix-wordmark-blue.svg" width={92} height={31} alt="OperiX" />
-            <span>Suite</span>
-          </Link>
-          <p>One connected suite for clearer financial and people operations.</p>
+      <div className="container footer-top">
+        <div className="footer-brand-column">
+          <PlatformLogo className="brand-lockup-footer" />
+          <p>One account. One organization. Multiple connected applications for the work your business does every day.</p>
+          <a className="footer-help-link" href={helpCenterUrl} target="_blank" rel="noreferrer" data-analytics="help_center_clicked">Visit the Help Center <ExternalLink size={14} /></a>
         </div>
-        {groups.map((group) => (
-          <nav key={group.title} aria-label={`${group.title} links`}>
-            <h2>{group.title}</h2>
-            {group.links.map(([label, href]) => (
-              <Link key={label} href={href}>
-                {label}
-              </Link>
-            ))}
-          </nav>
-        ))}
-        <nav aria-label="Legal links">
-          <h2>Legal</h2>
+        <FooterGroup title="Products">
+          {productOrder.map((key) => <Link href={productRegistry[key].marketingPath} key={key}>{productRegistry[key].name}</Link>)}
+        </FooterGroup>
+        <FooterGroup title="Solutions">
+          {solutionRegistry.slice(0, 4).map((solution) => <Link href={solution.path} key={solution.key}>{solution.name}</Link>)}
+          <Link href="/enterprise">Enterprise</Link>
+        </FooterGroup>
+        <FooterGroup title="Resources">
+          <a href={helpCenterUrl} target="_blank" rel="noreferrer" data-analytics="help_center_clicked">Help Center <ExternalLink size={12} /></a>
+          <Link href="/resources">Documentation</Link>
+          <Link href="/resources#developer-documentation">Developer Documentation</Link>
+          <Link href="/resources#whats-new">What’s new</Link>
+          <Link href="/resources#system-status">System status</Link>
+        </FooterGroup>
+        <FooterGroup title="Company">
+          <Link href="/about">About</Link>
+          <Link href="/contact">Contact</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-        </nav>
+          <a href={getStartedUrl} data-analytics="get_started_clicked">Get started <ArrowUpRight size={12} /></a>
+        </FooterGroup>
       </div>
-      <div className="container footer-bottom">
-        <p>© {new Date().getFullYear()} OperiX. All rights reserved.</p>
-        <p className="footer-credit">Built by <a href="https://kudolabs.dev" target="_blank" rel="noreferrer">Kudolabs.dev</a></p>
-        <p>Built for businesses that value clarity.</p>
-      </div>
+      <div className="container footer-bottom"><p>© {new Date().getFullYear()} OperiX. All rights reserved.</p><span>Built for clear, connected work.</span><span>OperiX platform</span></div>
     </footer>
   );
+}
+
+function FooterGroup({ title, children }: { title: string; children: ReactNode }) {
+  return <nav className="footer-group" aria-label={`${title} links`}><h2>{title}</h2>{children}</nav>;
 }

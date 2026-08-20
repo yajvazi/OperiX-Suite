@@ -1,0 +1,306 @@
+command: "npm" "run" "test:ci" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 28880
+
+> operix-invoice@1.0.0 test:ci
+> npm run lint && npm run typecheck && npm run localization:check && npm run test:legacy && npm run test:core && npm run test:unit && npm run test:ui && npm run test:integration
+
+
+> operix-invoice@1.0.0 lint
+> eslint src test --quiet
+
+
+> operix-invoice@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.json
+
+
+> operix-invoice@1.0.0 localization:check
+> node ../../../scripts/check-mobile-localization.mjs
+
+Mobile localization catalog: 1473 English keys / 1473 Albanian keys
+Missing Albanian keys: 0
+Extra Albanian keys: 0
+Missing keys used by mobile source: 0
+Same English/Albanian values requiring review: 9
+  draft, email, website, nr, id, standard, marketingCategory, grantCategory, partner
+
+> operix-invoice@1.0.0 test:legacy
+> node --test src/navigation/navigation.test.mjs src/services/contracts/contractBuilder.test.mjs
+
+TAP version 13
+# Subtest: mobile primary navigation exposes exactly five task destinations
+ok 1 - mobile primary navigation exposes exactly five task destinations
+  ---
+  duration_ms: 2.657099
+  type: 'test'
+  ...
+# Subtest: removed legacy tab aliases are not used as navigation destinations
+ok 2 - removed legacy tab aliases are not used as navigation destinations
+  ---
+  duration_ms: 15.898453
+  type: 'test'
+  ...
+# Subtest: critical root routes are registered and authentication gates protected navigation
+ok 3 - critical root routes are registered and authentication gates protected navigation
+  ---
+  duration_ms: 0.638684
+  type: 'test'
+  ...
+# Subtest: all declared root routes are represented by a registered screen or compatibility navigator
+ok 4 - all declared root routes are represented by a registered screen or compatibility navigator
+  ---
+  duration_ms: 0.366985
+  type: 'test'
+  ...
+# (node:1978881) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///root/OperiX/apps/OperiX%20Invoice/OperiX%20Invoice%20Mobile/src/services/contracts/contractBuilder.ts is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile/package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: extracts and resolves variables while retaining missing tokens
+ok 5 - extracts and resolves variables while retaining missing tokens
+  ---
+  duration_ms: 3.086658
+  type: 'test'
+  ...
+# Subtest: evaluates the supported simple conditions
+ok 6 - evaluates the supported simple conditions
+  ---
+  duration_ms: 0.341996
+  type: 'test'
+  ...
+# Subtest: validates template basics and formats contract numbers
+ok 7 - validates template basics and formats contract numbers
+  ---
+  duration_ms: 0.293143
+  type: 'test'
+  ...
+# Subtest: keeps malformed legacy document data from crashing rendering
+ok 8 - keeps malformed legacy document data from crashing rendering
+  ---
+  duration_ms: 0.240594
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 122.786429
+
+> operix-invoice@1.0.0 test:core
+> node --import tsx --test ../../../packages/money/src/index.test.ts ../../../packages/api/src/domain.test.ts ../../../packages/api/src/workspace.test.ts
+
+TAP version 13
+# Subtest: builds one canonical tax-exclusive invoice persistence shape
+ok 1 - builds one canonical tax-exclusive invoice persistence shape
+  ---
+  duration_ms: 2.576788
+  type: 'test'
+  ...
+# Subtest: maps platform-neutral save statuses to the shared commercial status
+ok 2 - maps platform-neutral save statuses to the shared commercial status
+  ---
+  duration_ms: 0.562049
+  type: 'test'
+  ...
+# Subtest: rejects invalid financial input before a Supabase write
+ok 3 - rejects invalid financial input before a Supabase write
+  ---
+  duration_ms: 0.540976
+  type: 'test'
+  ...
+# Subtest: workspace scope includes descendants without leaking unrelated companies
+ok 4 - workspace scope includes descendants without leaking unrelated companies
+  ---
+  duration_ms: 1.142644
+  type: 'test'
+  ...
+# Subtest: tenant filters retain legacy creator rows and company-owned rows
+ok 5 - tenant filters retain legacy creator rows and company-owned rows
+  ---
+  duration_ms: 0.372233
+  type: 'test'
+  ...
+# Subtest: parses decimal strings without binary floating-point
+ok 6 - parses decimal strings without binary floating-point
+  ---
+  duration_ms: 1.288774
+  type: 'test'
+  ...
+# Subtest: supports deterministic half-up and half-even rounding
+ok 7 - supports deterministic half-up and half-even rounding
+  ---
+  duration_ms: 0.222806
+  type: 'test'
+  ...
+# Subtest: adds and multiplies exact decimal amounts
+ok 8 - adds and multiplies exact decimal amounts
+  ---
+  duration_ms: 0.315676
+  type: 'test'
+  ...
+# Subtest: serializes money as a decimal string and currency
+ok 9 - serializes money as a decimal string and currency
+  ---
+  duration_ms: 0.976332
+  type: 'test'
+  ...
+# Subtest: rejects unsafe or incompatible inputs
+ok 10 - rejects unsafe or incompatible inputs
+  ---
+  duration_ms: 0.49
+  type: 'test'
+  ...
+# Subtest: calculates the shared invoice example with transport
+ok 11 - calculates the shared invoice example with transport
+  ---
+  duration_ms: 1.114041
+  type: 'test'
+  ...
+# Subtest: supports VAT, discounts, inclusive prices, and payment state
+ok 12 - supports VAT, discounts, inclusive prices, and payment state
+  ---
+  duration_ms: 0.484041
+  type: 'test'
+  ...
+# Subtest: exposes the effective POS discount after document allocation
+ok 13 - exposes the effective POS discount after document allocation
+  ---
+  duration_ms: 0.375597
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 242.709645
+
+> operix-invoice@1.0.0 test:unit
+> jest --config jest.config.cjs --runInBand test/unit
+
+
+> operix-invoice@1.0.0 test:ui
+> jest --config jest.config.cjs --runInBand test/component test/ui
+
+
+> operix-invoice@1.0.0 test:integration
+> jest --config jest.config.cjs --runInBand test/integration
+
+
+PASS test/unit/localization.test.ts
+PASS test/unit/workspace.test.ts
+PASS test/unit/services.test.ts
+PASS test/unit/repositories.test.ts
+PASS test/unit/money.test.ts
+PASS test/unit/domain.test.ts
+PASS test/unit/commercial-documents.test.ts
+
+Test Suites: 7 passed, 7 total
+Tests:       47 passed, 47 total
+Snapshots:   0 total
+Time:        1.297 s
+Ran all test suites matching /test\/unit/i.
+PASS test/ui/ui-surfaces.test.tsx
+  ● Console
+
+    console.error
+      Reports hub load error: Error: offline
+          at Object.<anonymous> (/root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile/test/ui/ui-surfaces.test.tsx:178:27)
+          at Generator.next (<anonymous>)
+          at asyncGeneratorStep (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+          at _next (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+          at /root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:7
+          at new Promise (<anonymous>)
+          at Object.<anonymous> (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:14:12)
+          at Promise.then.completed (/root/OperiX/node_modules/jest-circus/build/utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/root/OperiX/node_modules/jest-circus/build/utils.js:231:10)
+          at _callCircusTest (/root/OperiX/node_modules/jest-circus/build/run.js:316:40)
+          at _runTest (/root/OperiX/node_modules/jest-circus/build/run.js:252:3)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:126:9)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:121:9)
+          at run (/root/OperiX/node_modules/jest-circus/build/run.js:71:3)
+          at runAndTransformResultsToJestFormat (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+          at jestAdapter (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+          at runTestInternal (/root/OperiX/node_modules/jest-runner/build/runTest.js:367:16)
+          at runTest (/root/OperiX/node_modules/jest-runner/build/runTest.js:444:34)
+
+      94 |                 if (active) setSummary(totals);
+      95 |             } catch (loadError) {
+    > 96 |                 console.error('Reports hub load error:', loadError);
+         |                         ^
+      97 |                 if (active) setError(t('financialReportsLoadError', language));
+      98 |             } finally {
+      99 |                 if (active) setLoading(false);
+
+      at error (src/screens/Reports/ReportsHubScreen.tsx:96:25)
+      at asyncGeneratorStep (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+PASS test/component/invoice-form.test.tsx
+PASS test/component/customer-product-payment.test.tsx
+PASS test/component/critical-screens.test.tsx
+  ● Console
+
+    console.error
+      Home data error: Error: offline
+          at Object.<anonymous> (/root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile/test/component/critical-screens.test.tsx:104:44)
+          at Generator.next (<anonymous>)
+          at asyncGeneratorStep (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+          at _next (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+          at /root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:7
+          at new Promise (<anonymous>)
+          at Object.<anonymous> (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:14:12)
+          at Promise.then.completed (/root/OperiX/node_modules/jest-circus/build/utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/root/OperiX/node_modules/jest-circus/build/utils.js:231:10)
+          at _callCircusTest (/root/OperiX/node_modules/jest-circus/build/run.js:316:40)
+          at _runTest (/root/OperiX/node_modules/jest-circus/build/run.js:252:3)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:126:9)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:121:9)
+          at run (/root/OperiX/node_modules/jest-circus/build/run.js:71:3)
+          at runAndTransformResultsToJestFormat (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+          at jestAdapter (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+          at runTestInternal (/root/OperiX/node_modules/jest-runner/build/runTest.js:367:16)
+          at runTest (/root/OperiX/node_modules/jest-runner/build/runTest.js:444:34)
+
+      213 |             writeMobileCache(cacheKey, nextData);
+      214 |         } catch (fetchError: any) {
+    > 215 |             console.error('Home data error:', fetchError);
+          |                     ^
+      216 |             setError(t('unableToLoad', language));
+      217 |         } finally {
+      218 |             setLoading(false);
+
+      at error (src/screens/Home/HomeScreen.tsx:215:21)
+      at asyncGeneratorStep (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+PASS test/component/list-screens.test.tsx
+PASS test/component/auth.test.tsx
+PASS test/component/invoice-detail.test.tsx
+
+Test Suites: 7 passed, 7 total
+Tests:       35 passed, 35 total
+Snapshots:   0 total
+Time:        4.804 s, estimated 6 s
+Ran all test suites matching /test\/component|test\/ui/i.
+PASS test/integration/api-boundaries.test.ts
+  mobile API integration boundaries
+    ✓ executes a tenant-scoped invoice read against a PostgREST-shaped client (3 ms)
+    ✓ uses the atomic invoice command pipeline and never falls back to direct invoice inserts (3 ms)
+    ✓ keeps payment settlement tenant-bound and propagates a payment RPC failure (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        0.617 s, estimated 1 s
+Ran all test suites matching /test\/integration/i.

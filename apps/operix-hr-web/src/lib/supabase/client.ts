@@ -1,0 +1,24 @@
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
+
+let browserClient: SupabaseClient | null = null;
+
+function redirectToCleanLogin() {
+  if (typeof window === "undefined" || ["/login", "/auth"].some((route) => window.location.pathname.startsWith(route))) return;
+  const url = new URL("/login", window.location.origin);
+  url.searchParams.set("auth", "reset");
+  url.searchParams.set("next", `${window.location.pathname}${window.location.search}`);
+  window.location.replace(url.toString());
+}
+
+export function createClient() {
+  if (!isSupabaseConfigured) return null;
+  if (!browserClient) {
+    browserClient = createBrowserClient(supabaseUrl, supabaseKey);
+    browserClient.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") redirectToCleanLogin();
+    });
+  }
+  return browserClient;
+}

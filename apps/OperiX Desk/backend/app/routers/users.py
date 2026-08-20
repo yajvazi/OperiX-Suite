@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import csv
 import io
 
-from app.auth import get_current_user, require_admin
+from app.auth import get_current_user, require_admin, user_has_permission
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.search import SearchResults, SearchResourceResult, SearchUserResult
@@ -14,8 +14,64 @@ from app.schemas.auth import UserOut, UserUpdate
 from app.models.resource import Resource
 from app.models.reservation import Reservation
 from app.models.favorite import Favorite
+from app.services.workspace import scope_query
+from datetime import date
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.get("/today")
+def who_is_in_today(
+    floor: str | None = None,
+    team: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return colleagues with an active desk reservation for today.
+
+    This is intentionally reservation-backed: the Desk UI never fabricates
+    attendance from a profile or seed list.
+    """
+
+    query = (
+        scope_query(db.query(Reservation), Reservation, current_user)
+        .join(User, Reservation.user_id == User.id)
+        .join(Resource, Reservation.resource_id == Resource.id)
+        .filter(
+            Reservation.date == date.today(),
+            Reservation.status == "active",
+            Resource.type == "desk",
+            User.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
+        )
+        .order_by(User.full_name)
+    )
+    if floor:
+        query = query.filter(Resource.floor == floor)
+    if team:
+        query = query.filter(User.team_name == team)
+
+    people = []
+    seen: set[int] = set()
+    for reservation in query.all():
+        if reservation.user_id in seen:
+            continue
+        seen.add(reservation.user_id)
+        person = reservation.user
+        resource = reservation.resource
+        people.append(
+            {
+                "id": person.id,
+                "full_name": person.full_name,
+                "team_name": person.team_name,
+                "job_title": person.job_title,
+                "floor": resource.floor,
+                "desk": resource.name,
+                "zone": resource.zone,
+                "resource_id": resource.id,
+            }
+        )
+    return people
 
 
 def _sync_team_members(
@@ -36,7 +92,11 @@ def _sync_team_members(
             leader.team_name = cleaned_name
 
     selected_ids = set(teammate_ids)
-    teammates = db.query(User).filter(User.id.in_(selected_ids)).all() if selected_ids else []
+    teammates = (
+        scope_query(db.query(User).filter(User.id.in_(selected_ids)), User, leader).all()
+        if selected_ids
+        else []
+    )
 
     if len(teammates) != len(selected_ids):
         raise HTTPException(status_code=404, detail="One or more team members were not found")
@@ -60,7 +120,7 @@ def _sync_team_members(
             )
 
     current_teammates = (
-        db.query(User).filter(User.team_leader_id == leader.id).all()
+        scope_query(db.query(User).filter(User.team_leader_id == leader.id), User, leader).all()
     )
     for member in current_teammates:
         if member.id not in selected_ids:
@@ -93,11 +153,11 @@ def _sync_team_members(
 def search_workspace(
     q: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     term = f"%{q.strip()}%"
     resources = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(
             Resource.is_active.is_(True),
             (
@@ -112,7 +172,7 @@ def search_workspace(
         .all()
     )
     users = (
-        db.query(User)
+        scope_query(db.query(User), User, current_user)
         .filter(
             User.full_name.ilike(term)
             | User.email.ilike(term)
@@ -151,9 +211,9 @@ def search_workspace(
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    return db.query(User).order_by(User.full_name).all()
+    return scope_query(db.query(User), User, admin_user).order_by(User.full_name).all()
 
 
 @router.get("/team-members", response_model=list[UserOut])
@@ -161,11 +221,12 @@ def list_team_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.team_leader:
+    if not user_has_permission(current_user, "team.read"):
         raise HTTPException(status_code=403, detail="Team leader access required")
     teammates = (
-        db.query(User)
-        .filter(User.team_leader_id == current_user.id)
+        scope_query(
+            db.query(User).filter(User.team_leader_id == current_user.id), User, current_user
+        )
         .order_by(User.full_name)
         .all()
     )
@@ -177,11 +238,11 @@ def list_available_for_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in (UserRole.team_leader, UserRole.admin):
+    if not user_has_permission(current_user, "team.manage"):
         raise HTTPException(status_code=403, detail="Team management access required")
 
-    query = db.query(User).filter(User.role == UserRole.employee)
-    if current_user.role == UserRole.team_leader:
+    query = scope_query(db.query(User).filter(User.role == UserRole.employee), User, current_user)
+    if current_user.role == UserRole.team_leader and not user_has_permission(current_user, "workspace.manage"):
         query = query.filter(
             (User.team_leader_id.is_(None)) | (User.team_leader_id == current_user.id)
         )
@@ -195,7 +256,7 @@ def update_my_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.team_leader:
+    if not user_has_permission(current_user, "team.manage"):
         raise HTTPException(status_code=403, detail="Team leader access required")
     return _sync_team_members(
         db,
@@ -214,7 +275,9 @@ def assign_team_members(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin),
 ):
-    leader = db.get(User, leader_id)
+    leader = scope_query(
+        db.query(User).filter(User.id == leader_id), User, admin_user
+    ).first()
     if not leader:
         raise HTTPException(status_code=404, detail="User not found")
     return _sync_team_members(
@@ -230,9 +293,9 @@ def assign_team_members(
 @router.get("/export")
 def export_users_csv(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
-    users = db.query(User).order_by(User.full_name).all()
+    users = scope_query(db.query(User), User, admin_user).order_by(User.full_name).all()
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow([
@@ -269,7 +332,7 @@ def export_users_csv(
     return StreamingResponse(
         iter([buffer.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=deskdibs-users.csv"},
+        headers={"Content-Disposition": "attachment; filename=operix-desk-users.csv"},
     )
 
 
@@ -280,7 +343,9 @@ def update_user(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin),
 ):
-    user = db.get(User, user_id)
+    user = scope_query(
+        db.query(User).filter(User.id == user_id), User, admin_user
+    ).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -303,7 +368,9 @@ def update_user(
     if data.availability is not None:
         user.availability = data.availability
     if data.team_leader_id is not None:
-        leader = db.get(User, data.team_leader_id)
+        leader = scope_query(
+            db.query(User).filter(User.id == data.team_leader_id), User, admin_user
+        ).first()
         if not leader or leader.role != UserRole.team_leader:
             raise HTTPException(status_code=400, detail="Invalid team leader")
         user.team_leader_id = data.team_leader_id
@@ -331,18 +398,28 @@ def delete_user(
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
 
-    user = db.get(User, user_id)
+    user = scope_query(
+        db.query(User).filter(User.id == user_id), User, current_user
+    ).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     email = user.email
-    db.query(User).filter(User.team_leader_id == user.id).update(
+    scope_query(
+        db.query(User).filter(User.team_leader_id == user.id), User, current_user
+    ).update(
         {User.team_leader_id: None}, synchronize_session=False
     )
-    db.query(Reservation).filter(Reservation.user_id == user.id).delete(
+    db.query(Reservation).filter(
+        Reservation.user_id == user.id,
+        Reservation.organization_id == user.organization_id,
+    ).delete(
         synchronize_session=False
     )
-    db.query(Favorite).filter(Favorite.user_id == user.id).delete(
+    db.query(Favorite).filter(
+        Favorite.user_id == user.id,
+        Favorite.organization_id == user.organization_id,
+    ).delete(
         synchronize_session=False
     )
     db.delete(user)

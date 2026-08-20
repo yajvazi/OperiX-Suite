@@ -1,30 +1,21 @@
 import type { Metadata } from "next";
-import { Armchair, BarChart3, CalendarDays, MapPinned, Users, Zap } from "lucide-react";
 import { ProductPage } from "@/components/product-page";
 
 export const metadata: Metadata = {
-  title: "OperiX Desk",
-  description: "Desk and room reservations for flexible workspaces.",
+  title: "OperiX Desk — Desk & Workplace Booking",
+  description: "Reserve desks and workplace resources, manage floors and floor plans, and understand workspace use with OperiX Desk.",
   alternates: { canonical: "/products/desk" },
+  openGraph: { title: "OperiX Desk — Desk & Workplace Booking", description: "Give employees a simple way to reserve desks, find teammates, and plan office days." },
 };
 
 export default function DeskPage() {
-  return <ProductPage
-    product="OperiX Desk"
-    headline="A better way to use your workspace."
-    description="Reserve desks, rooms, and shared spaces with a clear view of availability and utilization."
-    variant="desk"
-    overviewTitle="Turn workspace demand into a clear plan"
-    overviewText="OperiX Desk connects people, places, and reservations so every team can find the right space at the right time."
-    overviewPoints={["Manage desks, rooms, and shared resources", "See availability on a visual floor plan", "Support hybrid work and recurring reservations", "Understand utilization across locations"]}
-    featureTitle="Workspace clarity, every day"
-    features={[
-      { title: "Desk reservations", description: "Make it easy to find and reserve the right desk.", icon: Armchair },
-      { title: "Room booking", description: "Keep meeting spaces visible and easy to coordinate.", icon: CalendarDays },
-      { title: "Floor plans", description: "Give teams a visual map of resources and availability.", icon: MapPinned },
-      { title: "Team schedules", description: "See where people plan to work across the week.", icon: Users },
-      { title: "Utilization reports", description: "Understand how space is being used over time.", icon: BarChart3 },
-      { title: "Flexible workflows", description: "Automate recurring reservations and everyday workspace tasks.", icon: Zap },
-    ]}
-  />;
+  return <ProductPage content={{
+    product: "desk",
+    headline: "A smarter workplace starts here.",
+    description: "Give employees a simple way to reserve desks, find teammates, and plan office days.",
+    overview: "Connect the people, places, and reservations that make a flexible workplace work.",
+    workflow: ["Reserve desks, rooms, offices, and shared workplace resources", "Explore interactive floor plans and floor management", "See team presence and who is in the office today", "Review reservations and workplace utilization"],
+    useCases: ["Desk reservations", "Interactive floor plans", "Hybrid workplace planning", "Team presence and office days", "Workspace utilization"],
+    mobileCopy: "Use Desk on the web or in the Desk mobile application where enabled. Employees can reserve space and see workplace context without creating a separate account.",
+  }} />;
 }

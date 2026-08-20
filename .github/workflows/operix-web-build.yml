@@ -1,0 +1,68 @@
+name: OperiX Web Build
+
+on:
+  workflow_call:
+    inputs:
+      apps_json:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # Build-time public values are intentionally non-routable placeholders. CI
+  # must never receive production Supabase credentials.
+  NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: operix-ci-placeholder
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: operix-ci-placeholder
+
+jobs:
+  web:
+    name: ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.apps_json) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Lint
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' lint
+      - name: Typecheck
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' typecheck
+      - name: Tests
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' test
+      - name: Production build
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' build --required
+      - name: Validate Docker production image
+        if: matrix.app.dockerfile != ''
+        env:
+          DOCKERFILE: ${{ matrix.app.dockerfile }}
+          APP_ID: ${{ matrix.app.id }}
+        run: |
+          set -euo pipefail
+          docker build --file "$DOCKERFILE" --tag "operix-ci:${APP_ID}-${GITHUB_SHA}" .
+          mkdir -p "$RUNNER_TEMP/operix-web-${APP_ID}"
+          docker image inspect "operix-ci:${APP_ID}-${GITHUB_SHA}" > "$RUNNER_TEMP/operix-web-${APP_ID}/image.json"
+      - name: Upload web build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-web-${{ matrix.app.id }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/operix-web-${{ matrix.app.id }}/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/coverage/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/test-results/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/playwright-report/**
+          if-no-files-found: ignore
+          retention-days: 14

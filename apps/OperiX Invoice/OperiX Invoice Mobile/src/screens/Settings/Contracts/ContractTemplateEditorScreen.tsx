@@ -1,304 +1,187 @@
-import React, { useState, useEffect } from 'react';
-import {
-    View,
-    Text,
-    ScrollView,
-    TouchableOpacity,
-    Alert,
-    StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
-    Modal,
-} from 'react-native';
-import { ArrowLeft, Save, Plus, Trash2, GripVertical } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, ChevronRight, GripVertical, Plus, Save, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
-import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
-import { Button, Input, Card } from '@invoice-monorepo/ui';
-import { ContractTemplate, ContractTemplateField } from '@invoice-monorepo/types';
+import { supabase } from '@invoice-monorepo/api';
+import { Button, Card, Input } from '@invoice-monorepo/ui';
+import { t } from '@invoice-monorepo/i18n';
+import type { ContractBlock, ContractParty, ContractSigner, ContractTemplate, ContractTemplateField } from '@invoice-monorepo/types';
+import { getLocalizedErrorMessage } from '@invoice-monorepo/i18n';
+import { extractVariables, renderBlocks, validateTemplate, VARIABLE_GROUPS } from '../../../services/contracts/contractBuilder';
 
-interface ContractTemplateEditorScreenProps {
-    navigation: any;
-    route: any;
-}
+const STEPS = ['details', 'parties', 'fields', 'contract', 'signatures', 'settings', 'preview'] as const;
+const CATEGORIES = ['service_agreement', 'employment', 'sales_agreement', 'rental_agreement', 'nda', 'partnership', 'freelance', 'supplier', 'purchase', 'maintenance', 'custom'];
+const FIELD_TYPES = ['text', 'textarea', 'number', 'currency', 'percentage', 'date', 'date_range', 'email', 'phone', 'address', 'yes_no', 'checkbox', 'dropdown', 'single_choice', 'multiple_choice', 'person', 'company', 'customer', 'employee', 'supplier', 'product', 'service', 'quantity', 'file'] as const;
+const BLOCK_TYPES = ['title', 'heading', 'paragraph', 'numbered_clause', 'bullet_list', 'numbered_list', 'table', 'divider', 'page_break', 'variable', 'signature', 'conditional_section'] as const;
+const CATEGORY_KEYS: Record<string, string> = {
+    service_agreement: 'serviceAgreementCategory', employment: 'employmentCategory', sales_agreement: 'salesAgreementCategory',
+    rental_agreement: 'rentalAgreementCategory', nda: 'ndaCategory', partnership: 'partnershipCategory', freelance: 'freelanceCategory',
+    supplier: 'supplierCategory', purchase: 'purchaseCategory', maintenance: 'maintenanceCategory', custom: 'customContractCategory',
+};
+const FIELD_TYPE_KEYS: Record<string, string> = {
+    text: 'fieldTypeShortText', textarea: 'fieldTypeLongText', number: 'number', currency: 'currency', percentage: 'percentage', date: 'date', date_range: 'fieldTypeDateRange',
+    email: 'email', phone: 'phone', address: 'address', yes_no: 'fieldTypeYesNo', checkbox: 'checkbox', dropdown: 'dropdown', single_choice: 'fieldTypeSingleChoice', multiple_choice: 'fieldTypeMultipleChoice',
+    person: 'person', company: 'company', customer: 'customer', employee: 'employee', supplier: 'supplier', product: 'product', service: 'service', quantity: 'quantity', file: 'fieldTypeFile',
+};
+const BLOCK_TYPE_KEYS: Record<string, string> = {
+    title: 'blockTypeTitle', heading: 'blockTypeHeading', paragraph: 'blockTypeParagraph', numbered_clause: 'blockTypeNumberedClause', bullet_list: 'blockTypeBulletList', numbered_list: 'blockTypeNumberedList',
+    table: 'blockTypeTable', divider: 'blockTypeDivider', page_break: 'blockTypePageBreak', variable: 'blockTypeVariable', signature: 'blockTypeSignature', conditional_section: 'blockTypeConditionalSection',
+};
 
-const FIELD_TYPES = [
-    { value: 'text', label: 'Short Text' },
-    { value: 'textarea', label: 'Long Text' },
-    { value: 'number', label: 'Number' },
-    { value: 'date', label: 'Date' },
-];
+type Draft = Omit<ContractTemplate, 'id' | 'user_id' | 'created_at' | 'updated_at'> & { id?: string; user_id?: string; created_at?: string; updated_at?: string };
+const id = () => Math.random().toString(36).slice(2, 10);
+const blankBlock = (type: ContractBlock['type'], order: number): ContractBlock => ({ id: id(), type, text: type === 'title' ? 'SERVICE AGREEMENT' : '', order });
+const legacyBlocks = (template: any): ContractBlock[] => Array.isArray(template.blocks) && template.blocks.length ? template.blocks : template.html_body ? [{ id: id(), type: 'paragraph', text: String(template.html_body), order: 0 }] : [{ id: id(), type: 'title', text: template.name || 'CONTRACT', order: 0 }, { id: id(), type: 'paragraph', text: 'Between {{company.name}} and {{customer.name}}.', order: 1 }];
 
-export function ContractTemplateEditorScreen({ navigation, route }: ContractTemplateEditorScreenProps) {
+export function ContractTemplateEditorScreen({ navigation, route }: any) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
+    const palette = isDark ? { bg: '#0D1B2A', card: '#14243A', text: '#fff', muted: '#98A2B3', border: '#263A55' } : { bg: '#F7F9FC', card: '#fff', text: '#111827', muted: '#667085', border: '#E4E9F0' };
     const templateId = route.params?.templateId;
-    const isEditing = !!templateId;
-
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [fields, setFields] = useState<ContractTemplateField[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    // Field Modal State
-    const [modalVisible, setModalVisible] = useState(false);
-    const [currentField, setCurrentField] = useState<Partial<ContractTemplateField>>({});
-    const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
-
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
-    const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
+    const [step, setStep] = useState(0);
+    const [loading, setLoading] = useState(Boolean(templateId));
+    const [dirty, setDirty] = useState(!templateId);
+    const [fieldModal, setFieldModal] = useState(false);
+    const [blockModal, setBlockModal] = useState(false);
+    const [fieldDraft, setFieldDraft] = useState<Partial<ContractTemplateField>>({ type: 'text', required: true });
+    const [blockDraft, setBlockDraft] = useState<ContractBlock>(blankBlock('paragraph', 0));
+    const [clauses, setClauses] = useState<Array<{ id: string; name: string; category: string; content: string }>>([]);
+    const initialDraft: Draft = { name: '', description: '', category: 'service_agreement', language: language === 'sq' ? 'sq' : 'en', tags: [], numbering: { mode: 'automatic', prefix: 'CTR', year: true, padding: 4 }, fields: [], parties: [{ id: 'company', role: 'company', source: 'company' }], blocks: [blankBlock('title', 0), blankBlock('paragraph', 1)], settings: { fixedTerm: true, automaticRenewal: false }, signers: [{ id: 'company-signer', role: 'Company representative', partyId: 'company', required: true, order: 1 }], appearance: {} };
+    const [draftState, setDraftValue] = useState<Draft>(initialDraft);
+    const setDraft = (patch: Partial<Draft>) => { setDraftValue((current) => ({ ...current, ...patch })); setDirty(true); };
+    const current = draftState;
+    const blocks = current.blocks || [];
+    const fields = current.fields || [];
+    const parties = current.parties || [];
+    const signers = current.signers || [];
+    const variables = useMemo(() => Object.fromEntries(Object.values(VARIABLE_GROUPS).flat().map((key) => [key, `{{${key}}}`])), []);
+    const preview = renderBlocks(blocks, variables);
 
     useEffect(() => {
-        if (isEditing) fetchTemplate();
-    }, [templateId]);
+        if (!templateId) return;
+        let active = true;
+        supabase.from('contract_templates').select('*').eq('id', templateId).single().then(({ data, error }) => {
+            if (!active) return;
+            if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
+            if (data) setDraftValue({ ...data, fields: data.fields || [], blocks: legacyBlocks(data), parties: data.parties?.length ? data.parties : [{ id: 'company', role: 'company', source: 'company' }], signers: data.signers || [{ id: 'company-signer', role: 'Company representative', partyId: 'company', required: true, order: 1 }] });
+            setLoading(false);
+        });
+        return () => { active = false; };
+    }, [templateId, language]);
 
-    const fetchTemplate = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('contract_templates')
-            .select('*')
-            .eq('id', templateId)
-            .single();
+    useEffect(() => {
+        supabase.from('contract_clauses').select('id,name,category,content').eq('language', language === 'sq' ? 'sq' : 'en').order('category').then(({ data }) => setClauses((data || []) as Array<{ id: string; name: string; category: string; content: string }>));
+    }, [language]);
 
-        if (data) {
-            setName(data.name);
-            setDescription(data.description || '');
-            setFields(data.fields || []);
-        }
-        setLoading(false);
-    };
+    useEffect(() => navigation.addListener('beforeRemove', (event: any) => {
+        if (!dirty || loading) return;
+        event.preventDefault();
+        Alert.alert(t('discardChanges', language), '', [{ text: t('keepEditing', language), style: 'cancel' }, { text: t('discard', language), style: 'destructive', onPress: () => navigation.dispatch(event.data.action) }]);
+    }), [dirty, loading, navigation, language]);
 
-    const handleSave = async () => {
-        if (!name) {
-            Alert.alert('Error', 'Template name is required');
-            return;
-        }
-
+    const save = async (leave = true) => {
+        const errors = validateTemplate({ name: current.name || '', fields, blocks });
+        if (errors.length) return Alert.alert(t('error', language), errors[0] || t('contractTemplateValidation', language));
         setLoading(true);
         try {
-            const payload = {
-                user_id: user?.id,
-                name,
-                description,
-                fields,
-            };
-
-            let error;
-            if (isEditing) {
-                ({ error } = await supabase.from('contract_templates').update(payload).eq('id', templateId));
-            } else {
-                ({ error } = await supabase.from('contract_templates').insert(payload));
-            }
-
-            if (error) throw error;
-            Alert.alert('Success', 'Template saved successfully');
-            navigation.goBack();
-        } catch (error: any) {
-            Alert.alert('Error', error.message);
-        } finally {
-            setLoading(false);
-        }
+            const { data: profile } = await supabase.from('profiles').select('active_company_id,company_id').eq('id', user?.id).single();
+            const payload = { user_id: user?.id, company_id: profile?.active_company_id || profile?.company_id || null, name: current.name, description: current.description || '', category: current.category, language: current.language, tags: current.tags || [], numbering: current.numbering || {}, parties, fields, blocks, settings: current.settings || {}, financial_terms: current.financial_terms || {}, signers, appearance: current.appearance || {}, updated_by: user?.id };
+            const result = templateId ? await supabase.from('contract_templates').update(payload).eq('id', templateId).select('id').single() : await supabase.from('contract_templates').insert(payload).select('id').single();
+            if (result.error) throw result.error;
+            setDirty(false);
+            if (leave) { Alert.alert(t('success', language), t('templateSaved', language)); navigation.goBack(); }
+        } catch (error: any) { Alert.alert(t('error', language), getLocalizedErrorMessage(error, language)); }
+        finally { setLoading(false); }
     };
 
-    const handleAddField = () => {
-        if (!currentField.label || !currentField.type) {
-            Alert.alert('Error', 'Label and Type are required');
-            return;
-        }
+    const addField = () => {
+        if (!fieldDraft.label || !fieldDraft.key) return Alert.alert(t('error', language), t('fieldLabelKeyRequired', language));
+        setDraft({ fields: [...fields, { id: fieldDraft.id || id(), label: fieldDraft.label, key: fieldDraft.key, variable: fieldDraft.variable || `custom.${fieldDraft.key}`, type: fieldDraft.type as any || 'text', required: fieldDraft.required !== false, placeholder: fieldDraft.placeholder, helpText: fieldDraft.helpText, order: fields.length }] });
+        setFieldDraft({ type: 'text', required: true }); setFieldModal(false);
+    };
+    const addBlock = () => { setDraft({ blocks: [...blocks, { ...blockDraft, id: blockDraft.id || id(), order: blocks.length }] }); setBlockDraft(blankBlock('paragraph', blocks.length + 1)); setBlockModal(false); };
+    const updateBlock = (blockId: string, patch: Partial<ContractBlock>) => setDraft({ blocks: blocks.map((block) => block.id === blockId ? { ...block, ...patch } : block) });
+    const moveBlock = (index: number, direction: -1 | 1) => { const target = index + direction; if (target < 0 || target >= blocks.length) return; const next = [...blocks]; [next[index], next[target]] = [next[target], next[index]]; setDraft({ blocks: next.map((block, order) => ({ ...block, order })) }); };
+    const addParty = () => setDraft({ parties: [...parties, { id: id(), role: 'customer', source: 'manual', name: '', email: '' }] });
+    const updateParty = (partyId: string, patch: Partial<ContractParty>) => setDraft({ parties: parties.map((party) => party.id === partyId ? { ...party, ...patch } : party) });
+    const addSigner = () => setDraft({ signers: [...signers, { id: id(), role: 'Customer', required: true, order: signers.length + 1 }] });
+    const updateSigner = (signerId: string, patch: Partial<ContractSigner>) => setDraft({ signers: signers.map((signer) => signer.id === signerId ? { ...signer, ...patch } : signer) });
 
-        const newField: ContractTemplateField = {
-            id: currentField.id || Math.random().toString(36).substr(2, 9),
-            label: currentField.label,
-            type: currentField.type as any,
-            placeholder: currentField.placeholder,
-            required: currentField.required ?? true,
-        };
+    const stepLabels = STEPS.map((key) => t(key === 'details' ? 'details' : key === 'parties' ? 'parties' : key === 'fields' ? 'fields' : key === 'contract' ? 'contract' : key === 'signatures' ? 'signatures' : key === 'settings' ? 'settings' : 'preview', language));
+    const progressWidth = (String(Math.round(((step + 1) / STEPS.length) * 100)) + '%') as any;
+    const categoryLabel = (category: string) => t((CATEGORY_KEYS[category] || 'customContractCategory') as any, language);
+    const fieldTypeLabel = (type: string) => t((FIELD_TYPE_KEYS[type] || type) as any, language);
+    const blockTypeLabel = (type: string) => t((BLOCK_TYPE_KEYS[type] || type) as any, language);
+    const formatText = (key: string, replacements: Record<string, string>) => Object.entries(replacements).reduce((value, [token, replacement]) => value.replace(`{${token}}`, replacement), t(key as any, language));
+    const fieldCard = (field: ContractTemplateField, index: number) => <Card key={field.id} style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}><View style={styles.row}><GripVertical color={palette.muted} size={18}/><View style={styles.flex}><Text style={[styles.cardTitle, { color: palette.text }]}>{field.label}</Text><Text style={[styles.meta, { color: palette.muted }]}>{fieldTypeLabel(field.type)} · {field.required ? t('required', language) : t('optional', language)} · {field.variable}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('delete', language)} onPress={() => setDraft({ fields: fields.filter((_, itemIndex) => itemIndex !== index) })} hitSlop={8}><Trash2 color="#ef4444" size={18}/></TouchableOpacity></View><View style={styles.moveRow}><TouchableOpacity accessibilityRole="button" onPress={() => { if (index) { const next = [...fields]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; setDraft({ fields: next }); } }}><Text style={{ color: primaryColor }}>{t('moveUp', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { if (index < fields.length - 1) { const next = [...fields]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; setDraft({ fields: next }); } }}><Text style={{ color: primaryColor }}>{t('moveDown', language)}</Text></TouchableOpacity></View></Card>;
+    const settingsStep = <View style={styles.stack}><View style={styles.sectionIntro}><Text style={[styles.sectionHeading, { color: palette.text }]}>{t('settings', language)}</Text><Text style={[styles.sectionDescription, { color: palette.muted }]}>{t('contractDatesDescription', language)}</Text></View><Card style={[styles.panel, { backgroundColor: palette.card, borderColor: palette.border }]}><Text style={[styles.cardTitle, { color: palette.text }]}>{t('contractDates', language)}</Text>{inputTag(t('startDateVariable', language), String(current.settings?.startDateVariable || 'contract.start_date'), (value) => setDraft({ settings: { ...current.settings, startDateVariable: value } }), palette, t)}{inputTag(t('endDateVariable', language), String(current.settings?.endDateVariable || 'contract.end_date'), (value) => setDraft({ settings: { ...current.settings, endDateVariable: value } }), palette, t)}{inputTag(t('renewalPeriod', language), String(current.settings?.renewalPeriod || ''), (value) => setDraft({ settings: { ...current.settings, renewalPeriod: value } }), palette, t)}{inputTag(t('cancellationNotice', language), String(current.settings?.cancellationNotice || ''), (value) => setDraft({ settings: { ...current.settings, cancellationNotice: value } }), palette, t)}<View style={[styles.switchRow, { borderTopColor: palette.border }]}><View style={styles.flex}><Text style={[styles.switchLabel, { color: palette.text }]}>{t('automaticRenewal', language)}</Text><Text style={[styles.meta, { color: palette.muted }]}>{t('renewalPeriod', language)}</Text></View><Switch value={Boolean(current.settings?.automaticRenewal)} onValueChange={(value) => setDraft({ settings: { ...current.settings, automaticRenewal: value } })} trackColor={{ true: primaryColor }}/></View></Card><View style={styles.sectionIntro}><Text style={[styles.sectionHeading, { color: palette.text }]}>{t('financialTerms', language)}</Text><Text style={[styles.sectionDescription, { color: palette.muted }]}>{t('financialTermsDescription', language)}</Text></View><Card style={[styles.panel, { backgroundColor: palette.card, borderColor: palette.border }]}>{inputTag(t('contractValue', language), String(current.financial_terms?.value || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, value } }), palette, t)}{inputTag(t('currency', language), String(current.financial_terms?.currency || 'EUR'), (value) => setDraft({ financial_terms: { ...current.financial_terms, currency: value.toUpperCase() } }), palette, t)}{inputTag(t('pricingMethod', language), String(current.financial_terms?.pricingMethod || 'fixed'), (value) => setDraft({ financial_terms: { ...current.financial_terms, pricingMethod: value } }), palette, t)}{inputTag(t('vatPercentage', language), String(current.financial_terms?.vatPercentage || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, vatPercentage: value } }), palette, t)}{inputTag(t('deposit', language), String(current.financial_terms?.deposit || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, deposit: value } }), palette, t)}{inputTag(t('discount', language), String(current.financial_terms?.discount || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, discount: value } }), palette, t)}{inputTag(t('paymentDueDays', language), String(current.financial_terms?.paymentDueDays || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, paymentDueDays: value } }), palette, t)}{inputTag(t('installments', language), String(current.financial_terms?.installments || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, installments: value } }), palette, t)}</Card></View>;
 
-        if (editingFieldIndex !== null) {
-            const updated = [...fields];
-            updated[editingFieldIndex] = newField;
-            setFields(updated);
-        } else {
-            setFields([...fields, newField]);
-        }
-
-        setModalVisible(false);
-        resetModal();
+    const renderStep = () => {
+        if (step === 5) return settingsStep;
+        if (step === 0) return <Card style={[styles.panel, { backgroundColor: palette.card, borderColor: palette.border }]}>{<Input label={t('templateName', language)} value={current.name} onChangeText={(value) => setDraft({ name: value })} placeholder={t('templateNamePlaceholder', language)}/>}<Input label={t('description', language)} value={current.description || ''} onChangeText={(value) => setDraft({ description: value })} multiline placeholder={t('optionalDescription', language)}/><Text style={[styles.label, { color: palette.text }]}>{t('category', language)}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{CATEGORIES.map((category) => <TouchableOpacity key={category} onPress={() => setDraft({ category })} style={[styles.chip, { borderColor: palette.border, backgroundColor: current.category === category ? primaryColor : palette.bg }]}><Text style={{ color: current.category === category ? '#fff' : palette.text }}>{categoryLabel(category)}</Text></TouchableOpacity>)}</ScrollView><Text style={[styles.label, { color: palette.text }]}>{t('contractLanguage', language)}</Text><View style={styles.row}><TouchableOpacity onPress={() => setDraft({ language: 'en' })} style={[styles.chip, { borderColor: palette.border, backgroundColor: current.language === 'en' ? primaryColor : palette.bg }]}><Text style={{ color: current.language === 'en' ? '#fff' : palette.text }}>English</Text></TouchableOpacity><TouchableOpacity onPress={() => setDraft({ language: 'sq' })} style={[styles.chip, { borderColor: palette.border, backgroundColor: current.language === 'sq' ? primaryColor : palette.bg }]}><Text style={{ color: current.language === 'sq' ? '#fff' : palette.text }}>Shqip</Text></TouchableOpacity></View>{inputTag(t('tags', language), current.tags?.join(', ') || '', (value) => setDraft({ tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) }), palette, t)}<Text style={[styles.label, { color: palette.text }]}>{t('numbering', language)}</Text>{inputTag(t('prefix', language), String(current.numbering?.prefix || 'CTR'), (value) => setDraft({ numbering: { ...current.numbering, prefix: value } }), palette, t)}{inputTag(`${t('manualNumber', language)} (${t('optional', language)})`, String(current.numbering?.manual || ''), (value) => setDraft({ numbering: { ...current.numbering, manual: value, mode: value ? 'manual' : 'automatic' } }), palette, t)}</Card>;
+        if (step === 1) return <View>{parties.map((party) => <Card key={party.id} style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}><Text style={[styles.cardTitle, { color: palette.text }]}>{party.source === 'company' ? t('ourCompany', language) : party.role === 'customer' ? t('customer', language) : party.role === 'employee' ? t('employee', language) : party.role === 'supplier' ? t('supplier', language) : party.role === 'contractor' ? t('contractor', language) : party.role === 'partner' ? t('partner', language) : party.role === 'witness' ? t('witness', language) : t('partyRole', language)}</Text>{party.source !== 'company' ? inputTag(t('partyRole', language), party.role, (value) => updateParty(party.id, { role: value }), palette, t) : <Text style={[styles.meta, { color: palette.muted }]}>{t('companyProfileWillPopulate', language)}</Text>}{party.source !== 'company' ? <>{inputTag(t('partyName', language), party.name || '', (value) => updateParty(party.id, { name: value }), palette, t)}{inputTag(t('partyEmail', language), party.email || '', (value) => updateParty(party.id, { email: value }), palette, t)}</> : null}</Card>)}<TouchableOpacity style={[styles.outline, { borderColor: primaryColor }]} onPress={addParty}><Plus color={primaryColor} size={18}/><Text style={{ color: primaryColor }}>{t('additionalParty', language)}</Text></TouchableOpacity></View>;
+        if (step === 2) return <View><Text style={[styles.help, { color: palette.muted }]}>{t('fieldsQuestions', language)}</Text>{fields.map(fieldCard)}<TouchableOpacity style={[styles.primary, { backgroundColor: primaryColor }]} onPress={() => { setFieldDraft({ type: 'text', required: true }); setFieldModal(true); }}><Plus color="#fff" size={18}/><Text style={styles.primaryText}>{t('addField', language)}</Text></TouchableOpacity></View>;
+        if (step === 3) return <View><Text style={[styles.help, { color: palette.muted }]}>{t('insertVariable', language)}: {extractVariables(blocks.map((block) => block.text || '').join('\n')).join(', ') || '—'}</Text>{blocks.map((block, index) => <Card key={block.id} style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}><View style={styles.row}><Text style={[styles.meta, { color: palette.muted }]}>{blockTypeLabel(block.type)}</Text><View style={styles.row}><TouchableOpacity onPress={() => moveBlock(index, -1)}><Text style={{ color: primaryColor }}>{t('moveUp', language)}</Text></TouchableOpacity><TouchableOpacity onPress={() => moveBlock(index, 1)}><Text style={{ color: primaryColor }}>{t('moveDown', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('delete', language)} onPress={() => setDraft({ blocks: blocks.filter((item) => item.id !== block.id) })}><Trash2 color="#ef4444" size={17}/></TouchableOpacity></View></View>{block.type !== 'divider' && block.type !== 'page_break' ? <Input label={t('contentVariable', language)} value={block.type === 'variable' ? block.variable || '' : block.text || ''} onChangeText={(value) => updateBlock(block.id, block.type === 'variable' ? { variable: value } : { text: value })} multiline placeholder={t('useVariableHint', language)}/> : null}</Card>)}<TouchableOpacity style={[styles.primary, { backgroundColor: primaryColor }]} onPress={() => setBlockModal(true)}><Plus color="#fff" size={18}/><Text style={styles.primaryText}>{t('addBlock', language)}</Text></TouchableOpacity><Text style={[styles.label, { color: palette.text, marginTop: 20 }]}>{t('clauseLibrary', language)}</Text>{clauses.map((clause) => <TouchableOpacity key={clause.id} style={[styles.outline, { borderColor: palette.border, marginBottom: 8 }]} onPress={() => setDraft({ blocks: [...blocks, { id: id(), type: 'paragraph', text: clause.content, order: blocks.length }] })}><Text style={{ color: palette.text, flex: 1 }}>{clause.name}</Text><Plus color={primaryColor} size={17}/></TouchableOpacity>)}</View>;
+        if (step === 4) return <View>{signers.map((signer) => <Card key={signer.id} style={[styles.card, { backgroundColor: palette.card, borderColor: palette.border }]}><Input label={t('signerRole', language)} value={signer.role} onChangeText={(value) => updateSigner(signer.id, { role: value })}/><Input label={t('nameVariable', language)} value={signer.nameVariable || ''} onChangeText={(value) => updateSigner(signer.id, { nameVariable: value })} placeholder="customer.name"/><Input label={t('emailVariable', language)} value={signer.emailVariable || ''} onChangeText={(value) => updateSigner(signer.id, { emailVariable: value })} placeholder="customer.email"/><View style={styles.row}><Text style={[styles.label, { color: palette.text }]}>{t('required', language)}</Text><Switch value={signer.required} onValueChange={(value) => updateSigner(signer.id, { required: value })} trackColor={{ true: primaryColor }}/></View></Card>)}<TouchableOpacity style={[styles.outline, { borderColor: primaryColor }]} onPress={addSigner}><Plus color={primaryColor} size={18}/><Text style={{ color: primaryColor }}>{t('addSigner', language)}</Text></TouchableOpacity></View>;
+        if (step === 5) return <Card style={[styles.panel, { backgroundColor: palette.card, borderColor: palette.border }]}>{inputTag(t('startDateVariable', language), String(current.settings?.startDateVariable || 'contract.start_date'), (value) => setDraft({ settings: { ...current.settings, startDateVariable: value } }), palette, t)}{inputTag(t('endDateVariable', language), String(current.settings?.endDateVariable || 'contract.end_date'), (value) => setDraft({ settings: { ...current.settings, endDateVariable: value } }), palette, t)}{inputTag(t('renewalPeriod', language), String(current.settings?.renewalPeriod || ''), (value) => setDraft({ settings: { ...current.settings, renewalPeriod: value } }), palette, t)}{inputTag(t('cancellationNotice', language), String(current.settings?.cancellationNotice || ''), (value) => setDraft({ settings: { ...current.settings, cancellationNotice: value } }), palette, t)}<View style={styles.row}><Text style={[styles.label, { color: palette.text }]}>{t('automaticRenewal', language)}</Text><Switch value={Boolean(current.settings?.automaticRenewal)} onValueChange={(value) => setDraft({ settings: { ...current.settings, automaticRenewal: value } })} trackColor={{ true: primaryColor }}/></View><Text style={[styles.label, { color: palette.text, marginTop: 18 }]}>{t('financialTerms', language)}</Text>{inputTag(t('contractValue', language), String(current.financial_terms?.value || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, value } }), palette, t)}{inputTag(t('currency', language), String(current.financial_terms?.currency || 'EUR'), (value) => setDraft({ financial_terms: { ...current.financial_terms, currency: value.toUpperCase() } }), palette, t)}{inputTag(t('pricingMethod', language), String(current.financial_terms?.pricingMethod || 'fixed'), (value) => setDraft({ financial_terms: { ...current.financial_terms, pricingMethod: value } }), palette, t)}{inputTag(t('vatPercentage', language), String(current.financial_terms?.vatPercentage || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, vatPercentage: value } }), palette, t)}{inputTag(t('deposit', language), String(current.financial_terms?.deposit || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, deposit: value } }), palette, t)}{inputTag(t('discount', language), String(current.financial_terms?.discount || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, discount: value } }), palette, t)}{inputTag(t('paymentDueDays', language), String(current.financial_terms?.paymentDueDays || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, paymentDueDays: value } }), palette, t)}{inputTag(t('installments', language), String(current.financial_terms?.installments || ''), (value) => setDraft({ financial_terms: { ...current.financial_terms, installments: value } }), palette, t)}</Card>;
+        return <Card style={[styles.preview, { backgroundColor: '#fff', borderColor: palette.border }]}><Text style={styles.previewTitle}>{current.name || t('contractPreview', language)}</Text><Text style={styles.previewMeta}>{categoryLabel(current.category || 'custom')} · {current.language === 'sq' ? 'Shqip' : 'English'}</Text><View style={styles.previewBody}><Text style={styles.previewHtml}>{preview.html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}</Text></View>{preview.missing.length ? <Text style={styles.warning}>{t('unresolvedVariables', language)}: {preview.missing.join(', ')}</Text> : null}<View style={styles.previewStats}><Text style={styles.previewMeta}>{formatText('partiesCount', { count: String(parties.length) })}</Text><Text style={styles.previewMeta}>{formatText('fieldsCount', { count: String(fields.length) })}</Text><Text style={styles.previewMeta}>{formatText('signersCount', { count: String(signers.length) })}</Text></View></Card>;
     };
 
-    const resetModal = () => {
-        setCurrentField({});
-        setEditingFieldIndex(null);
-    };
-
-    const deleteField = (index: number) => {
-        const updated = [...fields];
-        updated.splice(index, 1);
-        setFields(updated);
-    };
-
-    const openFieldModal = (field?: ContractTemplateField, index?: number) => {
-        if (field && index !== undefined) {
-            setCurrentField(field);
-            setEditingFieldIndex(index);
-        } else {
-            resetModal();
-            setCurrentField({ type: 'text', required: true });
-        }
-        setModalVisible(true);
-    };
-
+    if (loading && templateId) return <View style={[styles.center, { backgroundColor: palette.bg }]}><Text style={{ color: palette.muted }}>{t('loading', language)}</Text></View>;
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{isEditing ? 'Edit Template' : 'New Template'}</Text>
-                <TouchableOpacity onPress={handleSave} disabled={loading}>
-                    <Save color={primaryColor} size={24} />
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.content}>
-                <Card style={[styles.section, { backgroundColor: cardBg }]}>
-                    <Input label="Template Name" value={name} onChangeText={setName} placeholder="e.g. Website Development Contract" />
-                    <Input label="Description" value={description} onChangeText={setDescription} placeholder="Optional description..." multiline />
-                </Card>
-
-                <View style={styles.fieldsHeader}>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>Fields / Questions</Text>
-                    <TouchableOpacity onPress={() => openFieldModal()}>
-                        <View style={[styles.addButton, { backgroundColor: primaryColor }]}>
-                            <Plus color="white" size={16} />
-                            <Text style={styles.addButtonText}>Add Field</Text>
-                        </View>
+        <SafeAreaView edges={['top', 'bottom']} style={[styles.safeArea, { backgroundColor: palette.bg }]}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { backgroundColor: palette.bg }]}>
+                <View style={[styles.header, { borderBottomColor: palette.border }]}>
+                    <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
+                        <ArrowLeft color={palette.text} size={22}/>
+                    </TouchableOpacity>
+                    <Text numberOfLines={1} style={[styles.headerTitle, { color: palette.text }]}>{t('contractBuilder', language)}</Text>
+                    <TouchableOpacity style={styles.headerButton} onPress={() => void save()} disabled={loading}>
+                        <Save color={primaryColor} size={22}/>
                     </TouchableOpacity>
                 </View>
-
-                {fields.map((field, index) => (
-                    <TouchableOpacity
-                        key={field.id}
-                        onPress={() => openFieldModal(field, index)}
-                        activeOpacity={0.7}
-                    >
-                        <Card style={[styles.fieldCard, { backgroundColor: cardBg }]}>
-                            <View style={styles.dragHandle}>
-                                <GripVertical color={mutedColor} size={20} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.fieldLabel, { color: textColor }]}>{field.label}</Text>
-                                <Text style={[styles.fieldType, { color: mutedColor }]}>{field.type} {field.required ? '*' : ''}</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => deleteField(index)} style={{ padding: 8 }}>
-                                <Trash2 color="#ef4444" size={18} />
-                            </TouchableOpacity>
-                        </Card>
-                    </TouchableOpacity>
-                ))}
-
-                {fields.length === 0 && (
-                    <Text style={{ textAlign: 'center', color: mutedColor, marginTop: 24 }}>
-                        No fields added yet. Add questions for the contract.
-                    </Text>
-                )}
-            </ScrollView>
-
-            <Modal
-                visible={modalVisible}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
-                        <Text style={[styles.modalTitle, { color: textColor }]}>
-                            {editingFieldIndex !== null ? 'Edit Field' : 'Add Field'}
-                        </Text>
-
-                        <Input
-                            label="Question Label"
-                            value={currentField.label}
-                            onChangeText={t => setCurrentField({ ...currentField, label: t })}
-                            placeholder="e.g. Project Duration"
-                        />
-
-                        <Input
-                            label="Placeholder"
-                            value={currentField.placeholder}
-                            onChangeText={t => setCurrentField({ ...currentField, placeholder: t })}
-                            placeholder="e.g. 2 months"
-                        />
-
-                        <Text style={[styles.label, { color: textColor }]}>Type</Text>
-                        <View style={styles.typeRow}>
-                            {FIELD_TYPES.map(t => (
-                                <TouchableOpacity
-                                    key={t.value}
-                                    style={[
-                                        styles.typeOption,
-                                        { borderColor: currentField.type === t.value ? primaryColor : mutedColor },
-                                        currentField.type === t.value && { backgroundColor: primaryColor + '20' }
-                                    ]}
-                                    onPress={() => setCurrentField({ ...currentField, type: t.value as any })}
-                                >
-                                    <Text style={{ color: currentField.type === t.value ? primaryColor : mutedColor, fontSize: 12 }}>
-                                        {t.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <View style={styles.modalActions}>
-                            <Button
-                                title="Cancel"
-                                onPress={() => setModalVisible(false)}
-                                variant="outline"
-                                style={{ flex: 1 }}
-                            />
-                            <View style={{ width: 12 }} />
-                            <Button
-                                title="Save Field"
-                                onPress={handleAddField}
-                                style={{ flex: 1 }}
-                            />
-                        </View>
+                <View style={[styles.progressCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+                    <View style={styles.progressRow}>
+                        <Text style={[styles.progressLabel, { color: palette.text }]}>{stepLabels[step]}</Text>
+                        <Text style={[styles.progressValue, { color: palette.muted }]}>{formatText('stepOf', { current: String(step + 1), total: String(STEPS.length) })}</Text>
+                    </View>
+                    <View style={[styles.progressTrack, { backgroundColor: palette.border }]}>
+                        <View style={[styles.progressFill, { backgroundColor: primaryColor, width: progressWidth }]} />
                     </View>
                 </View>
-            </Modal>
-        </KeyboardAvoidingView>
+                <ScrollView style={styles.stepScroll} horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} alwaysBounceVertical={false} bounces={false} directionalLockEnabled contentContainerStyle={styles.stepBar}>
+                    {STEPS.map((key, index) => <TouchableOpacity key={key} onPress={() => setStep(index)} style={[styles.step, { borderColor: index === step ? primaryColor : palette.border, backgroundColor: index === step ? `${primaryColor}18` : palette.card }]}>
+                        <Text numberOfLines={1} style={{ color: index === step ? primaryColor : palette.muted, fontSize: 11 }}>{stepLabels[index]}</Text>
+                    </TouchableOpacity>)}
+                </ScrollView>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
+                    {renderStep()}
+                </ScrollView>
+                <View style={{ backgroundColor: palette.bg, borderTopColor: palette.border, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
+                    <View style={[styles.footer, { marginTop: 0, paddingTop: 0 }]}>
+                        <TouchableOpacity disabled={step === 0} onPress={() => setStep((value) => value - 1)} style={[styles.outline, { borderColor: palette.border, opacity: step === 0 ? 0.4 : 1 }]}>
+                            <Text style={{ color: palette.text }}>{t('back', language)}</Text>
+                        </TouchableOpacity>
+                        {step < STEPS.length - 1 ? <TouchableOpacity onPress={() => setStep((value) => value + 1)} style={[styles.primary, { backgroundColor: primaryColor }]}>
+                            <Text style={styles.primaryText}>{t('continueText', language)}</Text>
+                            <ChevronRight color="#fff" size={18}/>
+                        </TouchableOpacity> : <TouchableOpacity onPress={() => void save()} style={[styles.primary, { backgroundColor: primaryColor }]}>
+                            <Save color="#fff" size={18}/>
+                            <Text style={styles.primaryText}>{t('saveTemplate', language)}</Text>
+                        </TouchableOpacity>}
+                    </View>
+                </View>
+        <Modal visible={fieldModal} transparent animationType="slide" onRequestClose={() => setFieldModal(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.card }]}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><Text style={[styles.modalTitle, { color: palette.text }]}>{t('addField', language)}</Text><Input label={t('fieldLabel', language)} value={fieldDraft.label || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, label: value })}/><Input label={t('internalKey', language)} value={fieldDraft.key || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, key: value.replace(/\s+/g, '_').toLowerCase() })}/><Input label={t('variable', language)} value={fieldDraft.variable || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, variable: value })} placeholder="custom.project_name"/><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{FIELD_TYPES.map((type) => <TouchableOpacity key={type} onPress={() => setFieldDraft({ ...fieldDraft, type })} style={[styles.chip, { borderColor: primaryColor, backgroundColor: fieldDraft.type === type ? primaryColor : palette.bg }]}><Text numberOfLines={1} style={{ color: fieldDraft.type === type ? '#fff' : palette.text }}>{fieldTypeLabel(type)}</Text></TouchableOpacity>)}</ScrollView><View style={styles.row}><Text style={{ color: palette.text }}>{t('required', language)}</Text><Switch value={fieldDraft.required !== false} onValueChange={(value) => setFieldDraft({ ...fieldDraft, required: value })} trackColor={{ true: primaryColor }}/></View><Button title={t('saveField', language)} onPress={addField}/></ScrollView></View></View></Modal>
+        <Modal visible={blockModal} transparent animationType="slide" onRequestClose={() => setBlockModal(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.card }]}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><Text style={[styles.modalTitle, { color: palette.text }]}>{t('addBlock', language)}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{BLOCK_TYPES.map((type) => <TouchableOpacity key={type} onPress={() => setBlockDraft(blankBlock(type, blocks.length))} style={[styles.chip, { borderColor: primaryColor, backgroundColor: blockDraft.type === type ? primaryColor : palette.bg }]}><Text numberOfLines={1} style={{ color: blockDraft.type === type ? '#fff' : palette.text }}>{blockTypeLabel(type)}</Text></TouchableOpacity>)}</ScrollView>{blockDraft.type !== 'divider' && blockDraft.type !== 'page_break' ? <Input label={t('content', language)} value={blockDraft.type === 'variable' ? blockDraft.variable || '' : blockDraft.text || ''} onChangeText={(value) => setBlockDraft(blockDraft.type === 'variable' ? { ...blockDraft, variable: value } : { ...blockDraft, text: value })} multiline placeholder={t('writeClauseHint', language)}/> : null}<Button title={t('addBlock', language)} onPress={addBlock}/></ScrollView></View></View></Modal>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
+function inputTag(label: string, value: string, onChangeText: (value: string) => void, palette: any, _translate: any) { return <Input label={label} value={value} onChangeText={onChangeText}/>; }
+
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: {},
-    title: { fontSize: 20, fontWeight: 'bold' },
-    content: { padding: 16 },
-    section: { marginBottom: 24, padding: 16 },
-    fieldsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold' },
-    addButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 4 },
-    addButtonText: { color: 'white', fontWeight: '600', fontSize: 12 },
-    fieldCard: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 8, gap: 12 },
-    dragHandle: {},
-    fieldLabel: { fontSize: 16, fontWeight: '600' },
-    fieldType: { fontSize: 12 },
-
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 },
-    modalContent: { borderRadius: 16, padding: 24 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-    label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
-    typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-    typeOption: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
-    modalActions: { flexDirection: 'row' },
+    safeArea: { flex: 1 }, container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { minHeight: 68, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', borderBottomWidth: 1 }, headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, headerTitle: { flex: 1, minWidth: 0, marginLeft: 6, marginRight: 8, fontSize: 18, fontWeight: '700', textAlign: 'left' }, progressCard: { marginHorizontal: 20, marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1 }, progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, progressLabel: { fontSize: 13, fontWeight: '700' }, progressValue: { fontSize: 11, fontWeight: '600' }, progressTrack: { height: 4, borderRadius: 99, overflow: 'hidden', marginTop: 10 }, progressFill: { height: 4, borderRadius: 99 }, stepScroll: { flexGrow: 0, height: 64 }, stepBar: { alignItems: 'center', gap: 8, minHeight: 64, paddingHorizontal: 20 }, step: { height: 44, minWidth: 72, flexGrow: 0, flexShrink: 0, alignSelf: 'center', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 13, justifyContent: 'center' }, content: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 100 }, panel: { padding: 16, borderWidth: 1, borderRadius: 18 }, card: { padding: 14, borderWidth: 1, borderRadius: 16, marginBottom: 10 }, flex: { flex: 1 }, row: { flexDirection: 'row', alignItems: 'center', gap: 10 }, label: { fontSize: 12, fontWeight: '600', marginBottom: 8 }, meta: { fontSize: 11, lineHeight: 16, marginTop: 4 }, cardTitle: { fontSize: 15, fontWeight: '700' }, help: { fontSize: 12, lineHeight: 19, marginBottom: 14 }, chips: { gap: 8, paddingBottom: 10 }, chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 }, primary: { minHeight: 48, minWidth: 146, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }, primaryText: { color: '#fff', fontWeight: '700' }, outline: { minHeight: 48, minWidth: 108, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, moveRow: { flexDirection: 'row', gap: 18, marginTop: 10 }, footer: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, paddingTop: 2 }, stack: { gap: 12 }, sectionIntro: { marginTop: 4, marginBottom: 2 }, sectionHeading: { fontSize: 17, fontWeight: '700' }, sectionDescription: { fontSize: 12, lineHeight: 18, marginTop: 4 }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6, paddingTop: 14, borderTopWidth: 1 }, switchLabel: { fontSize: 14, fontWeight: '600' }, preview: { padding: 24, borderWidth: 1, minHeight: 500 }, previewTitle: { color: '#111827', fontSize: 24, fontWeight: '800' }, previewMeta: { color: '#667085', fontSize: 11, marginTop: 6 }, previewBody: { marginTop: 26, borderTopWidth: 1, borderTopColor: '#e4e9f0', paddingTop: 18 }, previewHtml: { color: '#111827', fontSize: 14, lineHeight: 24 }, previewStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }, warning: { color: '#b54708', backgroundColor: '#fffaeb', padding: 10, marginTop: 18, fontSize: 12 }, modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, modal: { maxHeight: '86%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }, modalScroll: { paddingBottom: 12 }, modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 }, form: { marginTop: 10 }, fieldLabel: { fontSize: 12, fontWeight: '600' }, listRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e4e9f0' },
 });
-
-
-
-
-

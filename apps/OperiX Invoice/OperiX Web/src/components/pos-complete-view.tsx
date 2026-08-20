@@ -8,6 +8,7 @@ import type { ClientRow, InvoiceDraft, InvoiceTemplateConfig } from "@/lib/model
 import { openInvoicePdf } from "@/lib/pdf-client";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { getInvoiceByNumber } from "@invoice-monorepo/api/repositories";
 
 type CompletePayload = { draft: InvoiceDraft; client?: ClientRow; company?: DocumentCompany; config?: InvoiceTemplateConfig; invoiceId?: string };
 
@@ -24,18 +25,19 @@ export function PosCompleteView({ invoiceCode }: { invoiceCode?: string }) {
   }, []);
 
   useEffect(() => {
-    if (payload || !invoiceCode) return;
+    if (payload || !invoiceCode || !workspace.user) return;
     const supabase = createClient();
     if (!supabase) return;
-    void supabase.from("invoices").select("*, client:clients(*), items:invoice_items(*)").eq("invoice_number", decodeURIComponent(invoiceCode)).maybeSingle().then(({ data, error }) => {
-      if (error) { setMessage(error.message); return; }
-      if (!data) { setMessage("This invoice could not be found."); return; }
+    void getInvoiceByNumber(supabase, decodeURIComponent(invoiceCode), { userId: workspace.user.id, companyIds: workspace.companyIds }).then((data) => {
+      if (!data) { setMessage("This invoice could not be found in the current workspace."); return; }
+      const row = data as Record<string, unknown>;
+      const client = row.client as ClientRow | undefined;
       const source = workspace.company || workspace.profile;
-      const company: DocumentCompany = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "), taxId: source?.tax_id || "", bankName: source?.bank_name || "", iban: source?.bank_iban || "", website: source?.website || "", signatureUrl: source?.signature_url, stampUrl: source?.stamp_url };
-      const draft: InvoiceDraft = { client_id: data.client_id || "", invoice_number: data.invoice_number, issue_date: data.issue_date, due_date: data.due_date || data.issue_date, payment_method: data.payment_method || "bank", amount_received: Number(data.amount_received || 0), notes: data.notes || "", status: data.status, items: (data.items || []).map((item: Record<string, unknown>) => ({ id: String(item.id), product_id: item.product_id ? String(item.product_id) : undefined, description: String(item.description || ""), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), discount: Number(item.discount || 0), unit: String(item.unit || "pcs"), sku: item.sku ? String(item.sku) : undefined })) };
-      setPayload({ draft, client: data.client as ClientRow | undefined, company });
-    });
-  }, [invoiceCode, payload, workspace.company, workspace.profile]);
+      const company: DocumentCompany = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "), taxId: source?.tax_id || workspace.company?.fiscal_number || workspace.company?.vat_number || "", businessId: workspace.company?.unique_business_number, vatNumber: workspace.company?.vat_number, bankName: source?.bank_name || "", iban: source?.bank_iban || "", website: source?.website || "", signatureUrl: source?.signature_url, stampUrl: source?.stamp_url };
+      const draft: InvoiceDraft = { client_id: row.client_id ? String(row.client_id) : "", invoice_number: String(row.invoice_number || ""), issue_date: String(row.issue_date || ""), due_date: String(row.due_date || row.issue_date || ""), payment_method: String(row.payment_method || "bank") as InvoiceDraft["payment_method"], amount_received: Number(row.amount_received || 0), notes: String(row.notes || ""), status: String(row.status || "draft") as InvoiceDraft["status"], buyer_signature_url: row.buyer_signature_url ? String(row.buyer_signature_url) : null, customer_signature_requested: Boolean(row.customer_signature_requested), customer_signature_status: String(row.customer_signature_status || "not_requested") as InvoiceDraft["customer_signature_status"], customer_signature_name: row.customer_signature_name ? String(row.customer_signature_name) : null, customer_signed_at: row.customer_signed_at ? String(row.customer_signed_at) : null, items: (Array.isArray(row.items) ? row.items : []).map((item: Record<string, unknown>) => ({ id: String(item.id), product_id: item.product_id ? String(item.product_id) : undefined, description: String(item.description || ""), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), tax_included: Boolean(item.tax_included), discount: Number(item.discount || 0), unit: String(item.unit || "pcs"), sku: item.sku ? String(item.sku) : undefined })) };
+      setPayload({ draft, client, company });
+    }).catch((loadError) => setMessage(loadError instanceof Error ? loadError.message : "The invoice could not be loaded."));
+  }, [invoiceCode, payload, workspace.company, workspace.companyIds, workspace.profile, workspace.user]);
 
   useEffect(() => {
     if (!payload || !new URLSearchParams(window.location.search).has("print")) return;

@@ -7,10 +7,30 @@ import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
 // even if the auth cookie is refreshed between those two navigations.
 const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/pos/complete", "/demo", "/portal", "/qr"];
 
+function isInvalidRefreshToken(error: unknown) {
+  const authError = error as { code?: string; status?: number; message?: string } | null;
+  const code = authError?.code?.toLowerCase() ?? "";
+  const message = authError?.message?.toLowerCase() ?? "";
+  return code === "refresh_token_not_found"
+    || code === "refresh_token_already_used"
+    || code === "invalid_refresh_token"
+    || code === "refresh_token_expired"
+    || (authError?.status === 400 && (message.includes("refresh token") || code === "invalid_grant"));
+}
+
+function clearAuthCookies(response: NextResponse, request: NextRequest) {
+  request.cookies.getAll().forEach(({ name }) => {
+    if (!name.startsWith("sb-")) return;
+    response.cookies.set(name, "", { expires: new Date(0), maxAge: 0, path: "/" });
+  });
+  return response;
+}
+
 export async function updateSession(request: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+  const serverSupabaseUrl = process.env.SUPABASE_INTERNAL_URL?.trim() || supabaseUrl;
+  const supabase = createServerClient(serverSupabaseUrl, supabaseKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (cookiesToSet) => {
@@ -20,8 +40,16 @@ export async function updateSession(request: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await supabase.auth.getUser();
   const isPublic = PUBLIC_ROUTES.some((route) => request.nextUrl.pathname.startsWith(route));
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (isInvalidRefreshToken(authError)) {
+    if (isPublic) return clearAuthCookies(NextResponse.next({ request }), request);
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("next", request.nextUrl.pathname);
+    url.searchParams.set("auth", "reset");
+    return clearAuthCookies(NextResponse.redirect(url), request);
+  }
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

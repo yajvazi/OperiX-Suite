@@ -11,8 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@invoice-monorepo/app-shell": "*",
+    "@invoice-monorepo/operix-ui": "*",
     "@invoice-monorepo/accounting": "*",
+    "@invoice-monorepo/api": "*",
+    "@invoice-monorepo/commercial-documents": "*",
     "@invoice-monorepo/invoice-template": "*",
+    "@invoice-monorepo/money": "*",
     "@invoice-monorepo/payroll": "*",
     "@invoice-monorepo/report-templates": "*",
     "@invoice-monorepo/types": "*",

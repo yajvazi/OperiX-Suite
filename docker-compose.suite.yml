@@ -5,11 +5,10 @@ services:
       dockerfile: apps/OperiX Suite/Dockerfile
       args:
         NEXT_PUBLIC_SITE_URL: https://operixsuite.com
-    image: operix-suite-marketing:latest
+        NEXT_PUBLIC_OPERIX_CRM_URL: ${NEXT_PUBLIC_OPERIX_CRM_URL:-https://crm.operixsuite.com}
+        NEXT_PUBLIC_OPERIX_CRM_ENABLED: ${NEXT_PUBLIC_OPERIX_CRM_ENABLED:-true}
+    image: operix-suite-marketing:build-20260813-logo
     restart: unless-stopped
-    env_file:
-      - path: ./apps/OperiX Suite/.env.preview.local
-        required: false
     environment:
       NODE_ENV: production
       PORT: 3000

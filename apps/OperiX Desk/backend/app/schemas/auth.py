@@ -132,6 +132,10 @@ class UserOut(BaseModel):
     availability: float | None = None
     profile_image_path: str | None = None
     team_leader_id: int | None = None
+    organization_id: str | None = None
+    organization_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
+    desk_role: str | None = None
 
     model_config = {"from_attributes": True}
 

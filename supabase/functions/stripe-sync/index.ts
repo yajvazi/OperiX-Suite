@@ -1,225 +1,110 @@
-// Stripe Sync Edge Function
-// Securely fetches Stripe data using stored access tokens
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { loadStripeStore, syncStripeStore, type StripeStore } from '../_shared/stripeSync.ts'
 
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function response(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+async function userCanAccessCompany(admin: ReturnType<typeof createClient>, userId: string, companyId: string) {
+  const [{ data: profile }, { data: memberships }, { data: companies }] = await Promise.all([
+    admin.from('profiles').select('company_id,active_company_id').eq('id', userId).maybeSingle(),
+    admin.from('memberships').select('company_id,status').eq('user_id', userId),
+    admin.from('companies').select('id,parent_company_id,owner_id'),
+  ])
+  const rows = companies || []
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const grants = new Set<string>([
+    ...(memberships || []).filter((row) => (row.status || 'active') === 'active').map((row) => row.company_id),
+    ...rows.filter((row) => row.owner_id === userId).map((row) => row.id),
+    ...[profile?.company_id, profile?.active_company_id].filter(Boolean) as string[],
+  ])
+  let current = companyId
+  const visited = new Set<string>()
+  while (current && !visited.has(current)) {
+    if (grants.has(current)) return true
+    visited.add(current)
+    current = byId.get(current)?.parent_company_id || ''
+  }
+  return false
 }
 
 serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405)
+
+  let storeId: string | null = null
+  try {
+    const authorization = req.headers.get('Authorization')
+    if (!authorization) return response({ error: 'Authentication required' }, 401)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!supabaseUrl || !serviceRoleKey) return response({ error: 'Stripe sync is not configured on the server' }, 503)
+
+    const admin = createClient(supabaseUrl, serviceRoleKey)
+    const token = authorization.replace(/^Bearer\s+/i, '')
+    const { data: authData, error: authError } = await admin.auth.getUser(token)
+    if (authError || !authData.user) return response({ error: 'Invalid session' }, 401)
+    const payload = await req.json().catch(() => ({})) as { store_id?: string; force?: boolean }
+    storeId = payload.store_id || null
+
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('company_id,active_company_id')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+    const companyId = profile?.active_company_id || profile?.company_id
+
+    let store: StripeStore
+    if (storeId) {
+      const { data, error } = await admin.from('stripe_stores').select('id,company_id').eq('id', storeId).maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data || !(await userCanAccessCompany(admin, authData.user.id, data.company_id))) {
+        return response({ error: 'You do not have access to this Stripe store' }, 403)
+      }
+    } else if (companyId) {
+      const { data, error } = await admin
+        .from('stripe_stores')
+        .select('id,company_id')
+        .eq('company_id', companyId)
+        .eq('status', 'connected')
+        .order('created_at')
+      if (error) throw new Error(error.message)
+      const accessible = (data || []).filter((row) => row.company_id === companyId)
+      if (accessible.length === 0) return response({ error: 'Stripe is not connected for this company' }, 400)
+      if (accessible.length > 1) {
+        return response({ error: 'Select a Stripe store before syncing multiple stores', stores: accessible }, 409)
+      }
+      storeId = accessible[0].id
+    } else {
+      return response({ error: 'A company or Stripe store is required' }, 400)
     }
 
-    try {
-        // Get user from JWT
-        const authHeader = req.headers.get('Authorization')
-        if (!authHeader) {
-            return new Response(
-                JSON.stringify({ error: 'Missing authorization header' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-        }
-
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-        // Verify JWT and get user
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-        if (authError || !user) {
-            return new Response(
-                JSON.stringify({ error: 'Invalid token' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-        }
-
-        // Get user's Stripe credentials
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('stripe_access_token, stripe_account_id, active_company_id, company_id')
-            .eq('id', user.id)
-            .single()
-
-        if (profileError || !profile?.stripe_access_token) {
-            return new Response(
-                JSON.stringify({ error: 'Stripe not connected' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-        }
-
-        const accessToken = profile.stripe_access_token
-        const stripeAccountId = profile.stripe_account_id
-        const companyId = profile.active_company_id || profile.company_id
-
-        // Fetch balance transactions with pagination
-        const allTransactions: any[] = []
-        let hasMore = true
-        let startingAfter: string | undefined
-
-        while (hasMore) {
-            const params = new URLSearchParams({ limit: '100' })
-            if (startingAfter) params.append('starting_after', startingAfter)
-
-            const txResponse = await fetch(
-                `https://api.stripe.com/v1/balance_transactions?${params}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Stripe-Account': stripeAccountId,
-                    },
-                }
-            )
-
-            const txData = await txResponse.json()
-
-            if (txData.error) {
-                throw new Error(txData.error.message)
-            }
-
-            allTransactions.push(...txData.data)
-            hasMore = txData.has_more
-
-            if (txData.data.length > 0) {
-                startingAfter = txData.data[txData.data.length - 1].id
-            } else {
-                hasMore = false
-            }
-        }
-
-        // Fetch payouts with pagination
-        const allPayouts: any[] = []
-        hasMore = true
-        startingAfter = undefined
-
-        while (hasMore) {
-            const params = new URLSearchParams({ limit: '100' })
-            if (startingAfter) params.append('starting_after', startingAfter)
-
-            const payoutResponse = await fetch(
-                `https://api.stripe.com/v1/payouts?${params}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Stripe-Account': stripeAccountId,
-                    },
-                }
-            )
-
-            const payoutData = await payoutResponse.json()
-
-            if (payoutData.error) {
-                throw new Error(payoutData.error.message)
-            }
-
-            allPayouts.push(...payoutData.data)
-            hasMore = payoutData.has_more
-
-            if (payoutData.data.length > 0) {
-                startingAfter = payoutData.data[payoutData.data.length - 1].id
-            } else {
-                hasMore = false
-            }
-        }
-
-        // Sync transactions to database
-        let transactionsCount = 0
-        let totalSales = 0
-        let totalFees = 0
-
-        for (const tx of allTransactions) {
-            const { data: existing } = await supabase
-                .from('stripe_transactions')
-                .select('id')
-                .eq('stripe_id', tx.id)
-                .single()
-
-            if (!existing) {
-                const txRecord = {
-                    user_id: user.id,
-                    company_id: companyId,
-                    stripe_id: tx.id,
-                    type: tx.type,
-                    amount: tx.amount / 100,
-                    currency: tx.currency,
-                    description: tx.description,
-                    status: tx.status,
-                    fee: tx.fee ? tx.fee / 100 : 0,
-                    net: tx.net ? tx.net / 100 : 0,
-                    created_at: new Date(tx.created * 1000).toISOString(),
-                }
-
-                await supabase.from('stripe_transactions').insert(txRecord)
-                transactionsCount++
-
-                if (tx.type === 'charge' || tx.type === 'payment') {
-                    totalSales += txRecord.amount
-                }
-                if (tx.fee) {
-                    totalFees += txRecord.fee
-                }
-            }
-        }
-
-        // Sync payouts to database
-        let payoutsCount = 0
-        let totalPayouts = 0
-
-        for (const payout of allPayouts) {
-            const { data: existing } = await supabase
-                .from('stripe_payouts')
-                .select('id')
-                .eq('stripe_id', payout.id)
-                .single()
-
-            if (!existing) {
-                const payoutRecord = {
-                    user_id: user.id,
-                    company_id: companyId,
-                    stripe_id: payout.id,
-                    amount: payout.amount / 100,
-                    currency: payout.currency,
-                    arrival_date: new Date(payout.arrival_date * 1000).toISOString().split('T')[0],
-                    status: payout.status,
-                    method: payout.method,
-                    description: payout.description,
-                    created_at: new Date(payout.created * 1000).toISOString(),
-                }
-
-                await supabase.from('stripe_payouts').insert(payoutRecord)
-                payoutsCount++
-                totalPayouts += payoutRecord.amount
-            }
-        }
-
-        // Update last synced
-        await supabase
-            .from('profiles')
-            .update({ stripe_last_synced: new Date().toISOString() })
-            .eq('id', user.id)
-
-        return new Response(
-            JSON.stringify({
-                success: true,
-                transactionsCount,
-                payoutsCount,
-                totalSales,
-                totalPayouts,
-                totalFees,
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-
-    } catch (error) {
-        console.error('Stripe sync error:', error)
-        return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+    const loaded = await loadStripeStore(admin, storeId)
+    if (!(await userCanAccessCompany(admin, authData.user.id, loaded.store.company_id))) {
+      return response({ error: 'You do not have access to this Stripe store' }, 403)
     }
+    const result = await syncStripeStore(admin, loaded.store, loaded.accessToken, { force: Boolean(payload.force) })
+    return response({ success: true, ...result })
+  } catch (error) {
+    console.error('Stripe sync error:', error)
+    if (storeId) {
+      try {
+        const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+        await admin.from('stripe_stores').update({ status: 'error', last_error: error instanceof Error ? error.message.slice(0, 500) : 'Sync failed' }).eq('id', storeId)
+      } catch (_) {
+        // Preserve the original sync error.
+      }
+    }
+    return response({ error: error instanceof Error ? error.message : 'Sync failed' }, 500)
+  }
 })

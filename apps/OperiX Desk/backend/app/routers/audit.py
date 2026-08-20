@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.schemas.audit import AuditLogOut
+from app.services.workspace import scope_query
 
 router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 
@@ -13,10 +14,10 @@ router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 @router.get("", response_model=list[AuditLogOut])
 def list_audit_logs(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin_user: User = Depends(require_admin),
 ):
     logs = (
-        db.query(AuditLog)
+        scope_query(db.query(AuditLog), AuditLog, admin_user)
         .options(joinedload(AuditLog.actor))
         .order_by(AuditLog.id.desc())
         .limit(100)

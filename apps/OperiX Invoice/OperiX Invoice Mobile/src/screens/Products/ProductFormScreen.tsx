@@ -1,20 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
+    Image,
     ScrollView,
     TouchableOpacity,
     Alert,
     StyleSheet,
+    Switch,
     KeyboardAvoidingView,
     Platform,
-    Switch,
 } from 'react-native';
-import { ArrowLeft, Package, DollarSign, Percent, Tag, Box, Scan } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { SvgXml } from 'react-native-svg';
+import { ArrowLeft, Package, DollarSign, Percent, Tag, Box, Scan, ChevronDown, ChevronUp, Trash2, Image as ImageIcon } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
+import { getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
+import { SERVICE_ICON_OPTIONS, serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
+import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
+import { deleteProduct, getProduct, saveProduct } from '@invoice-monorepo/api/repositories';
+import * as Crypto from 'expo-crypto';
 
 interface ProductFormScreenProps {
     navigation: any;
@@ -23,16 +32,58 @@ interface ProductFormScreenProps {
 
 const units = ['pcs', 'hrs', 'kg', 'lbs', 'mt', 'ft', 'l', 'gal', 'unit'];
 const defaultCategories = ['Service', 'Product', 'Subscription', 'Consulting'];
+const PRODUCT_IMAGES_BUCKET = 'product-images';
+const PRODUCT_IMAGE_MAX_BYTES = 4.5 * 1024 * 1024;
+const PRODUCT_IMAGE_MAX_DIMENSION = 1600;
+
+function isRemoteImageUrl(value: string) {
+    return /^(https?:|data:)/i.test(value);
+}
+
+async function prepareProductImage(uri: string) {
+    const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: PRODUCT_IMAGE_MAX_DIMENSION } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
+    );
+
+    const response = await fetch(result.uri);
+    if (!response.ok) throw new Error('Unable to read the prepared product image.');
+    let fileBuffer = await response.arrayBuffer();
+
+    // A noisy photo can still exceed the Storage bucket limit after the first pass.
+    if (fileBuffer.byteLength > PRODUCT_IMAGE_MAX_BYTES) {
+        const fallback = await ImageManipulator.manipulateAsync(
+            result.uri,
+            [],
+            { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG },
+        );
+        const fallbackResponse = await fetch(fallback.uri);
+        if (!fallbackResponse.ok) throw new Error('Unable to read the compressed product image.');
+        fileBuffer = await fallbackResponse.arrayBuffer();
+    }
+
+    if (fileBuffer.byteLength > PRODUCT_IMAGE_MAX_BYTES) {
+        throw new Error('Product image is too large. Please choose a smaller photo.');
+    }
+
+    return { fileBuffer, contentType: 'image/jpeg' };
+}
+
+function isMissingProductDeleteRpc(error: unknown) {
+    return Boolean(error && typeof error === 'object' && 'code' in error && String((error as { code?: unknown }).code) === 'PGRST202');
+}
 
 export function ProductFormScreen({ navigation, route }: ProductFormScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const productId = route.params?.productId;
     const isEditing = !!productId;
 
     const [formData, setFormData] = useState({
         name: '',
         description: '',
+        image_url: '',
         sku: '',
         unit_price: 0,
         tax_rate: 0,
@@ -62,18 +113,42 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const [loading, setLoading] = useState(false);
     const [showUnits, setShowUnits] = useState(false);
     const [showCategories, setShowCategories] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [majorPrice, setMajorPrice] = useState('0');
     const [minorPrice, setMinorPrice] = useState('00');
+    const [taxRateInput, setTaxRateInput] = useState('');
+    const [importVatRateInput, setImportVatRateInput] = useState('18');
+    // Keep the form interactive while the workspace permission check is loading.
+    // handleSave performs the authoritative permission check before writing.
+    const [canManageProducts, setCanManageProducts] = useState(true);
+    const saveInFlight = useRef(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
     const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
+    const categoryLabels: Record<string, string> = {
+        Service: t('serviceCategory', language),
+        Product: t('productCategory', language),
+        Subscription: t('subscriptionCategory', language),
+        Consulting: t('consultingCategory', language),
+    };
 
     useEffect(() => {
+        void loadProductAccess();
         if (isEditing) fetchProduct();
-    }, [productId]);
+    }, [productId, user?.id]);
+
+    const loadProductAccess = async () => {
+        if (!user) return;
+        try {
+            const workspaceScope = await getWorkspaceScope(user.id);
+            setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+        } catch {
+            setCanManageProducts(false);
+        }
+    };
 
     useEffect(() => {
         if (route.params?.scannedSKU) {
@@ -88,42 +163,52 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     }, [route.params?.scannedSKU]);
 
     const fetchProduct = async () => {
-        const { data } = await supabase.from('products').select('*').eq('id', productId).single();
+        if (!user) return;
+        const workspaceScope = await getWorkspaceScope(user.id);
+        setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+        const companyIds = getActiveProductCompanyIds(workspaceScope);
+        const data = await getProduct(supabase, productId, { userId: user.id, companyIds });
         if (data) {
-            const price = Number(data.unit_price) || 0;
+            const product = data as unknown as Record<string, unknown>;
+            const price = Number(product.unit_price) || 0;
             const parts = price.toFixed(2).split('.');
 
             setMajorPrice(parts[0]);
             setMinorPrice(parts[1] === '00' ? '' : parts[1]);
 
+            const taxRate = Number(product.tax_rate) || 0;
+            const importVatRate = Number(product.import_vat_rate) || 0;
+            setTaxRateInput(product.tax_rate === null || product.tax_rate === undefined ? '' : String(product.tax_rate));
+            setImportVatRateInput(product.import_vat_rate === null || product.import_vat_rate === undefined ? '' : String(product.import_vat_rate));
             setFormData({
-                name: data.name || '',
-                description: data.description || '',
-                sku: data.sku || '',
+                name: String(product.name || ''),
+                description: String(product.description || ''),
+                image_url: String(product.image_url || ''),
+                sku: String(product.sku || ''),
                 unit_price: price,
-                tax_rate: Number(data.tax_rate) || 0,
-                tax_included: data.tax_included || false,
-                unit: data.unit || 'pcs',
-                category: data.category || '',
-                stock_quantity: Number(data.stock_quantity) || 0,
-                track_stock: data.track_stock || false,
-                low_stock_threshold: Number(data.low_stock_threshold) || 5,
-                purchase_currency: data.purchase_currency || 'EUR',
-                exchange_rate: Number(data.exchange_rate) || 1,
-                supplier_unit_price: Number(data.supplier_unit_price) || 0,
-                supplier_discount_percent: Number(data.supplier_discount_percent) || 0,
-                supplier_unit_price_after_discount: Number(data.supplier_unit_price_after_discount) || 0,
-                transport_cost: Number(data.transport_cost) || 0,
-                additional_cost: Number(data.additional_cost) || 0,
-                customs_base: Number(data.customs_base) || 0,
-                customs_duty: Number(data.customs_duty) || 0,
-                excise: Number(data.excise) || 0,
-                import_vat_rate: Number(data.import_vat_rate) || 0,
-                import_vat_amount: Number(data.import_vat_amount) || 0,
-                unit_cost_with_vat: Number(data.unit_cost_with_vat) || 0,
-                tariff_code: data.tariff_code || '',
-                country_of_origin: data.country_of_origin || '',
-                vat_treatment: data.vat_treatment || 'standard_18',
+                tax_rate: taxRate,
+                tax_included: Boolean(product.tax_included),
+                unit: String(product.unit || 'pcs'),
+                category: String(product.category || ''),
+                stock_quantity: Number(product.stock_quantity) || 0,
+                track_stock: Boolean(product.track_stock),
+                low_stock_threshold: Number(product.low_stock_threshold) || 5,
+                purchase_currency: String(product.purchase_currency || 'EUR'),
+                exchange_rate: Number(product.exchange_rate) || 1,
+                supplier_unit_price: Number(product.supplier_unit_price) || 0,
+                supplier_discount_percent: Number(product.supplier_discount_percent) || 0,
+                supplier_unit_price_after_discount: Number(product.supplier_unit_price_after_discount) || 0,
+                transport_cost: Number(product.transport_cost) || 0,
+                additional_cost: Number(product.additional_cost) || 0,
+                customs_base: Number(product.customs_base) || 0,
+                customs_duty: Number(product.customs_duty) || 0,
+                excise: Number(product.excise) || 0,
+                import_vat_rate: importVatRate,
+                import_vat_amount: Number(product.import_vat_amount) || 0,
+                unit_cost_with_vat: Number(product.unit_cost_with_vat) || 0,
+                tariff_code: String(product.tariff_code || ''),
+                country_of_origin: String(product.country_of_origin || ''),
+                vat_treatment: String(product.vat_treatment || 'standard_18'),
             });
         }
     };
@@ -141,6 +226,19 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
         setFormData(prev => ({ ...prev, unit_price: total }));
     };
 
+    const pickProductImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+        });
+
+        const asset = result.canceled ? null : result.assets[0];
+        if (!asset?.uri) return;
+        setFormData((current) => ({ ...current, image_url: asset.uri }));
+    };
+
     const handleScan = () => {
         navigation.navigate('QRScanner', {
             mode: 'generic',
@@ -150,67 +248,177 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     };
 
     const handleSave = async () => {
+        if (saveInFlight.current) return;
         if (!formData.name) {
-            Alert.alert('Error', 'Name is required');
+            Alert.alert(t('error', language), t('nameRequiredProduct', language));
             return;
         }
 
+        saveInFlight.current = true;
         setLoading(true);
-        console.log('Saving product...', { isEditing, user_id: user?.id, ...formData });
 
         try {
-            if (isEditing) {
-                const { error } = await supabase.from('products').update(formData).eq('id', productId);
-                if (error) throw error;
-            } else {
-                const { data, error } = await supabase.from('products').insert({ ...formData, user_id: user?.id }).select();
-                console.log('Insert result:', { data, error });
-                if (error) throw error;
+            if (!user) throw new Error(t('signInToCreateProduct', language));
+            const workspaceScope = await getWorkspaceScope(user.id);
+            if (!['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode)) {
+                throw new Error('Only Super admin, Admin, or Manager can manage products.');
             }
+            setCanManageProducts(true);
+            const { company } = workspaceScope;
+            let imageUrl = formData.image_url;
+            if (imageUrl && !isRemoteImageUrl(imageUrl) && !serviceIconNameFromValue(imageUrl)) {
+                const { fileBuffer, contentType } = await prepareProductImage(imageUrl);
+                const fileExtension = 'jpeg';
+                const storagePath = company
+                    ? `company/${company.id}/${user.id}/${Crypto.randomUUID()}.${fileExtension}`
+                    : `user/${user.id}/${Crypto.randomUUID()}.${fileExtension}`;
+                const { error: uploadError } = await supabase.storage
+                    .from(PRODUCT_IMAGES_BUCKET)
+                    .upload(storagePath, fileBuffer, {
+                        contentType,
+                        cacheControl: '31536000',
+                        upsert: false,
+                    });
+                if (uploadError) throw uploadError;
+                imageUrl = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+            }
+            await saveProduct(supabase, { ...formData, image_url: imageUrl, user_id: user.id, company_id: company?.id ?? null }, isEditing ? productId : null);
             setLoading(false);
             navigation.goBack();
         } catch (error) {
-            console.error('Error saving product:', error);
             setLoading(false);
-            Alert.alert('Error', 'Failed to save product: ' + (error as any).message);
+            console.error('Error saving product:', error);
+            Alert.alert(t('error', language), `${t('productSavedError', language)}: ${getLocalizedErrorMessage(error, language, 'productSavedError')}`);
+        } finally {
+            saveInFlight.current = false;
         }
+    };
+
+    const handleDelete = () => {
+        if (!isEditing || loading) return;
+        Alert.alert(t('deleteProduct', language), t('deleteProductConfirmation', language), [
+            { text: t('cancel', language), style: 'cancel' },
+            {
+                text: t('delete', language),
+                style: 'destructive',
+                onPress: async () => {
+                    if (!user) return;
+                    setLoading(true);
+                    try {
+                        const { companyId } = await getWorkspaceScope(user.id);
+                        await deleteProduct(supabase, productId, companyId, user.id);
+                        setLoading(false);
+                        Alert.alert(
+                            t('success', language),
+                            t('productDeletedSuccessfully', language),
+                            [{ text: t('done', language), onPress: () => navigation.navigate('ProductsList') }],
+                        );
+                    } catch (error) {
+                        setLoading(false);
+                        const missingRpc = isMissingProductDeleteRpc(error);
+                        if (!missingRpc) console.error('Error deleting product:', error);
+                        Alert.alert(t('error', language), missingRpc ? t('productDeleteDatabaseUpdateRequired', language) : getLocalizedErrorMessage(error, language, 'productDeletedError'));
+                    }
+                },
+            },
+        ]);
     };
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            testID="product-form-screen"
             style={[styles.container, { backgroundColor: bgColor }]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
         >
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity testID="product-form-back-button" accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>{isEditing ? 'Update Item' : 'New Item'}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>Product Details</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{isEditing ? t('updateItem', language) : t('newItem', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('productDetailsTitle', language)}</Text>
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
                 {/* Basic Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Package color="#004FFE" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Product Information</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('productInformation', language)}</Text>
                     </View>
-                    <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Product or service name" />
-                    <Input label="Description" value={formData.description} onChangeText={(text) => setFormData({ ...formData, description: text })} placeholder="Detailed description" multiline numberOfLines={3} />
+                    <Input testID="product-name-input" label={`${t('name', language)} *`} value={formData.name} onChangeText={(text) => setFormData((current) => ({ ...current, name: text }))} placeholder={t('productOrServiceName', language)} />
+                    <Input label={t('description', language)} value={formData.description} onChangeText={(text) => setFormData((current) => ({ ...current, description: text }))} placeholder={t('detailedDescription', language)} multiline numberOfLines={3} />
+
+                    <View style={[styles.imageField, { borderColor: isDark ? '#263A55' : '#E4E9F0', backgroundColor: inputBg }]}>
+                        {formData.image_url ? (
+                            serviceIconNameFromValue(formData.image_url) ? (
+                                <View style={[styles.imagePreview, styles.serviceIconPreview, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}>
+                                    <SvgXml xml={serviceIconSvg(serviceIconNameFromValue(formData.image_url)!, primaryColor)} width="54" height="54" />
+                                </View>
+                            ) : <Image accessibilityLabel={t('productPhoto', language)} source={{ uri: formData.image_url }} style={styles.imagePreview} resizeMode="cover" />
+                        ) : (
+                            <View style={[styles.imagePlaceholder, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}>
+                                <ImageIcon color="#004FFE" size={25} />
+                            </View>
+                        )}
+                        <View style={styles.imageCopy}>
+                            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('productPhoto', language)}</Text>
+                            <Text style={[styles.imageHint, { color: mutedColor }]}>{t('pickFromGallery', language)}</Text>
+                            <View style={styles.imageActions}>
+                                <TouchableOpacity testID="product-image-picker-button" accessibilityRole="button" onPress={() => { void pickProductImage(); }} style={[styles.imageAction, { backgroundColor: '#004FFE' }]}>
+                                    <Text style={styles.imageActionText}>{formData.image_url ? t('changePhoto', language) : t('pickFromGallery', language)}</Text>
+                                </TouchableOpacity>
+                                {formData.image_url ? <TouchableOpacity testID="product-image-remove-button" accessibilityRole="button" onPress={() => setFormData((current) => ({ ...current, image_url: '' }))} style={styles.imageRemoveAction}>
+                                    <Text style={styles.imageRemoveText}>{t('delete', language)}</Text>
+                                </TouchableOpacity> : null}
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.serviceIconSection}>
+                        <Text style={[styles.fieldLabel, { color: textColor }]}>{t('serviceIcon', language)}</Text>
+                        <Text style={[styles.imageHint, { color: mutedColor }]}>{t('serviceIconDescription', language)}</Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.serviceIconCarousel}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {SERVICE_ICON_OPTIONS.map((option) => {
+                                const selected = serviceIconNameFromValue(formData.image_url) === option.name;
+                                return (
+                                    <TouchableOpacity
+                                        key={option.name}
+                                        testID={`product-service-icon-${option.name}-button`}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t(option.labelKey as TranslationKey, language)}
+                                        accessibilityState={{ selected }}
+                                        onPress={() => setFormData((current) => ({ ...current, image_url: `icon:${option.name}` }))}
+                                        style={[styles.serviceIconOption, { backgroundColor: selected ? `${primaryColor}18` : inputBg, borderColor: selected ? primaryColor : (isDark ? '#263A55' : '#E4E9F0') }]}
+                                    >
+                                        <SvgXml xml={serviceIconSvg(option.name, selected ? primaryColor : mutedColor)} width="25" height="25" />
+                                        <Text style={[styles.serviceIconLabel, { color: selected ? primaryColor : mutedColor }]} numberOfLines={1}>{t(option.labelKey as TranslationKey, language)}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
 
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                             <Input
-                                label="SKU / Code"
+                                testID="product-sku-input"
+                                label={t('skuCode', language)}
                                 value={formData.sku}
-                                onChangeText={(text) => setFormData({ ...formData, sku: text })}
-                                placeholder="Product code (optional)"
+                                        onChangeText={(text) => setFormData((current) => ({ ...current, sku: text }))}
+                                placeholder={t('skuCodeOptional', language)}
                             />
                         </View>
                         <TouchableOpacity
+                            testID="product-scan-button"
+                            accessibilityRole="button"
                             style={[styles.scanIconBtn, { backgroundColor: inputBg }]}
                             onPress={handleScan}
                         >
@@ -223,14 +431,15 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <DollarSign color="#f59e0b" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Pricing & Quantity</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('pricingQuantity', language)}</Text>
                     </View>
 
                     <View style={styles.row}>
                         <View style={{ flex: 2 }}>
-                            <Text style={[styles.fieldLabel, { color: textColor }]}>Price (Net)</Text>
+                            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('priceNet', language)}</Text>
                             <View style={styles.priceGrid}>
                                 <Input
+                                    testID="product-price-major-input"
                                     value={majorPrice}
                                     onChangeText={(text) => {
                                         const clean = text.replace(/\D/g, '');
@@ -245,6 +454,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                     <Text style={{ color: textColor, fontWeight: '600', fontSize: 20 }}>.</Text>
                                 </View>
                                 <Input
+                                    testID="product-price-minor-input"
                                     value={minorPrice}
                                     onChangeText={(text) => {
                                         const clean = text.replace(/\D/g, '').slice(0, 2);
@@ -261,17 +471,20 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
                         {/* Display Gross Price */}
                         <View style={{ flex: 2 }}>
-                            <Text style={[styles.fieldLabel, { color: textColor }]}>Final Price (Inc. tax)</Text>
+                            <Text style={[styles.fieldLabel, { color: textColor }]}>{t('finalPriceIncludingTax', language)}</Text>
                             <View style={[styles.priceGrid, { backgroundColor: inputBg, borderRadius: 7, paddingHorizontal: 12, height: 50 }]}>
                                 <Text style={{ fontSize: 16, fontWeight: '600', color: '#12B76A' }}>
-                                    {((formData.unit_price || 0) * (1 + (formData.tax_rate || 0) / 100)).toFixed(2)}
+                                    {(formData.tax_included
+                                        ? (formData.unit_price || 0)
+                                        : (formData.unit_price || 0) * (1 + (formData.tax_rate || 0) / 100)
+                                    ).toFixed(2)}
                                 </Text>
                             </View>
                         </View>
                     </View>
 
                     <View style={{ marginTop: 16 }}>
-                        <Text style={[styles.fieldLabel, { color: textColor }]}>Unit</Text>
+                        <Text style={[styles.fieldLabel, { color: textColor }]}>{t('unit', language)}</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                             {units.map((unit) => (
                                 <TouchableOpacity
@@ -296,10 +509,11 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Box color="#12B76A" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Inventory Control</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('inventoryControl', language)}</Text>
                         <Switch
+                            testID="product-track-stock-switch"
                             value={formData.track_stock}
-                            onValueChange={(val) => setFormData({ ...formData, track_stock: val })}
+                            onValueChange={(val) => setFormData((current) => ({ ...current, track_stock: val }))}
                             trackColor={{ false: '#263A55', true: '#004FFE' }}
                         />
                     </View>
@@ -308,14 +522,14 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                         <>
                             <View style={styles.row}>
                                 <View style={styles.flex1}>
-                                    <Input label="Current Stock" value={String(formData.stock_quantity)} onChangeText={(text) => setFormData({ ...formData, stock_quantity: Number(text) || 0 })} placeholder="0" keyboardType="number-pad" />
+                                    <Input testID="product-stock-input" label={t('currentStock', language)} value={String(formData.stock_quantity)} onChangeText={(text) => setFormData((current) => ({ ...current, stock_quantity: Number(text) || 0 }))} placeholder="0" keyboardType="number-pad" />
                                 </View>
                                 <View style={styles.flex1}>
-                                    <Input label="Low Stock Alert" value={String(formData.low_stock_threshold)} onChangeText={(text) => setFormData({ ...formData, low_stock_threshold: Number(text) || 0 })} placeholder="5" keyboardType="number-pad" />
+                                    <Input label={t('lowStockAlert', language)} value={String(formData.low_stock_threshold)} onChangeText={(text) => setFormData((current) => ({ ...current, low_stock_threshold: Number(text) || 0 }))} placeholder="5" keyboardType="number-pad" />
                                 </View>
                             </View>
                             <Text style={[styles.hintText, { color: mutedColor }]}>
-                                The app will notify you when stock falls below this threshold.
+                                {t('stockThresholdDescription', language)}
                             </Text>
                         </>
                     )}
@@ -325,23 +539,23 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Tag color="#12B76A" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Classification</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('classification', language)}</Text>
                     </View>
 
                     {!showCategories && (
                         <View style={{ marginBottom: 16 }}>
                             <Input
-                                label="Custom Category"
+                                label={t('customCategory', language)}
                                 value={formData.category}
-                                onChangeText={(text) => setFormData({ ...formData, category: text })}
-                                placeholder="Type or select below"
+                                onChangeText={(text) => setFormData((current) => ({ ...current, category: text }))}
+                                placeholder={t('typeOrSelectBelow', language)}
                             />
                         </View>
                     )}
 
                     <TouchableOpacity style={[styles.picker, { backgroundColor: inputBg }]} onPress={() => setShowCategories(!showCategories)}>
                         <Text style={formData.category ? { color: textColor } : { color: mutedColor }}>
-                            {formData.category || 'Select from list'}
+                            {formData.category || t('selectFromList', language)}
                         </Text>
                     </TouchableOpacity>
                     {showCategories && (
@@ -352,7 +566,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                     style={[styles.option, { backgroundColor: inputBg }, formData.category === cat && styles.optionActive]}
                                     onPress={() => { setFormData({ ...formData, category: cat }); setShowCategories(false); }}
                                 >
-                                    <Text style={[styles.optionText, formData.category === cat && styles.optionTextActive]}>{cat}</Text>
+                                    <Text style={[styles.optionText, formData.category === cat && styles.optionTextActive]}>{categoryLabels[cat] || cat}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -363,45 +577,61 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Percent color="#06B6D4" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Tax Rules</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('taxRules', language)}</Text>
                     </View>
-                    <Input label="Tax Rate (%)" value={String(formData.tax_rate || '')} onChangeText={(text) => setFormData({ ...formData, tax_rate: Number(text) || 0 })} placeholder="0" keyboardType="decimal-pad" />
+                    <Input
+                        testID="product-tax-rate-input"
+                        label={`${t('taxRate', language)} (%)`}
+                        value={taxRateInput}
+                        onChangeText={(text) => {
+                            const normalized = text.replace(',', '.');
+                            if (!/^\d*(?:\.\d*)?$/.test(normalized)) return;
+                            setTaxRateInput(normalized);
+                            setFormData((current) => ({ ...current, tax_rate: Number(normalized) || 0 }));
+                        }}
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                    />
 
                     <TouchableOpacity
                         style={styles.checkboxRow}
-                        onPress={() => setFormData({ ...formData, tax_included: !formData.tax_included })}
+                        onPress={() => setFormData((current) => ({ ...current, tax_included: !current.tax_included }))}
                     >
                         <View style={[styles.checkbox, formData.tax_included && styles.checkboxChecked]}>
                             {formData.tax_included && <Text style={styles.checkmark}>✓</Text>}
                         </View>
-                        <Text style={[styles.checkboxLabel, { color: textColor }]}>Price includes tax</Text>
+                        <Text style={[styles.checkboxLabel, { color: textColor }]}>{t('priceIncludesTax', language)}</Text>
                     </TouchableOpacity>
                 </View>
 
                 {/* Import costing */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: showAdvanced }} onPress={() => setShowAdvanced((current) => !current)} style={styles.advancedToggle}>
+                    <Text style={[styles.advancedText, { color: '#004FFE' }]}>{showAdvanced ? t('hideLandedCostOptions', language) : t('landedCostOptions', language)}</Text>
+                    {showAdvanced ? <ChevronUp color="#004FFE" size={17} /> : <ChevronDown color="#004FFE" size={17} />}
+                </TouchableOpacity>
+                {showAdvanced ? <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Package color="#7F56D9" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Import & Landed Cost</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('importLandedCost', language)}</Text>
                     </View>
                     <Text style={[styles.hintText, { color: mutedColor, marginBottom: 16 }]}>
-                        Shared Kosovo import calculation fields used by OperiX Invoice web and mobile.
+                        {t('kosovoImportFieldsDescription', language)}
                     </Text>
 
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Supplier currency"
+                                label={t('supplierCurrency', language)}
                                 value={formData.purchase_currency}
-                                onChangeText={(text) => setFormData({ ...formData, purchase_currency: text.toUpperCase() })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, purchase_currency: text.toUpperCase() }))}
                                 placeholder="EUR"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Exchange rate to EUR"
+                                label={t('exchangeRateToEur', language)}
                                 value={String(formData.exchange_rate)}
-                                onChangeText={(text) => setFormData({ ...formData, exchange_rate: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, exchange_rate: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -409,41 +639,41 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Supplier unit price"
+                                label={t('supplierUnitPrice', language)}
                                 value={String(formData.supplier_unit_price)}
-                                onChangeText={(text) => setFormData({ ...formData, supplier_unit_price: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, supplier_unit_price: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Supplier discount %"
+                                label={t('supplierDiscountPercent', language)}
                                 value={String(formData.supplier_discount_percent)}
-                                onChangeText={(text) => setFormData({ ...formData, supplier_discount_percent: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, supplier_discount_percent: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                     </View>
                     <Input
-                        label="Unit price after discount (EUR)"
+                        label={t('unitPriceAfterDiscount', language)}
                         value={String(formData.supplier_unit_price_after_discount)}
-                        onChangeText={(text) => setFormData({ ...formData, supplier_unit_price_after_discount: Number(text.replace(',', '.')) || 0 })}
+                        onChangeText={(text) => setFormData((current) => ({ ...current, supplier_unit_price_after_discount: Number(text.replace(',', '.')) || 0 }))}
                         keyboardType="decimal-pad"
                     />
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Transport"
+                                label={t('transport', language)}
                                 value={String(formData.transport_cost)}
-                                onChangeText={(text) => setFormData({ ...formData, transport_cost: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, transport_cost: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Other additions"
+                                label={t('otherAdditions', language)}
                                 value={String(formData.additional_cost)}
-                                onChangeText={(text) => setFormData({ ...formData, additional_cost: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, additional_cost: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -451,17 +681,17 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Customs base"
+                                label={t('customsBase', language)}
                                 value={String(formData.customs_base)}
-                                onChangeText={(text) => setFormData({ ...formData, customs_base: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, customs_base: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Customs duty"
+                                label={t('customsDuty', language)}
                                 value={String(formData.customs_duty)}
-                                onChangeText={(text) => setFormData({ ...formData, customs_duty: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, customs_duty: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -469,17 +699,22 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Excise"
+                                label={t('excise', language)}
                                 value={String(formData.excise)}
-                                onChangeText={(text) => setFormData({ ...formData, excise: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, excise: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Import VAT %"
-                                value={String(formData.import_vat_rate)}
-                                onChangeText={(text) => setFormData({ ...formData, import_vat_rate: Number(text.replace(',', '.')) || 0 })}
+                                label={t('importVatPercent', language)}
+                                value={importVatRateInput}
+                                onChangeText={(text) => {
+                                    const normalized = text.replace(',', '.');
+                                    if (!/^\d*(?:\.\d*)?$/.test(normalized)) return;
+                                    setImportVatRateInput(normalized);
+                                    setFormData((current) => ({ ...current, import_vat_rate: Number(normalized) || 0 }));
+                                }}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -487,17 +722,17 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Import VAT amount"
+                                label={t('importVatAmount', language)}
                                 value={String(formData.import_vat_amount)}
-                                onChangeText={(text) => setFormData({ ...formData, import_vat_amount: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, import_vat_amount: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Unit cost incl. VAT"
+                                label={t('unitCostIncludingVat', language)}
                                 value={String(formData.unit_cost_with_vat)}
-                                onChangeText={(text) => setFormData({ ...formData, unit_cost_with_vat: Number(text.replace(',', '.')) || 0 })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, unit_cost_with_vat: Number(text.replace(',', '.')) || 0 }))}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -505,29 +740,29 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <View style={styles.row}>
                         <View style={styles.flex1}>
                             <Input
-                                label="Tariff code"
+                                label={t('tariffCode', language)}
                                 value={formData.tariff_code}
-                                onChangeText={(text) => setFormData({ ...formData, tariff_code: text })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, tariff_code: text }))}
                             />
                         </View>
                         <View style={styles.flex1}>
                             <Input
-                                label="Country of origin"
+                                label={t('countryOfOrigin', language)}
                                 value={formData.country_of_origin}
-                                onChangeText={(text) => setFormData({ ...formData, country_of_origin: text })}
+                                onChangeText={(text) => setFormData((current) => ({ ...current, country_of_origin: text }))}
                             />
                         </View>
                     </View>
-                    <Text style={[styles.fieldLabel, { color: textColor }]}>Kosovo VAT treatment</Text>
+                    <Text style={[styles.fieldLabel, { color: textColor }]}>{t('kosovoVatTreatment', language)}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                         {[
-                            ['standard_18', 'Standard 18%'],
-                            ['reduced_8', 'Reduced 8%'],
-                            ['exempt_no_credit', 'Exempt · no credit'],
-                            ['exempt_with_credit', 'Exempt · with credit'],
-                            ['export', 'Export'],
-                            ['reverse_charge', 'Reverse charge'],
-                            ['out_of_scope', 'Out of scope'],
+                            ['standard_18', t('standard18', language)],
+                            ['reduced_8', t('reduced8', language)],
+                            ['exempt_no_credit', t('exemptNoCredit', language)],
+                            ['exempt_with_credit', t('exemptWithCredit', language)],
+                            ['export', t('exportVat', language)],
+                            ['reverse_charge', t('reverseCharge', language)],
+                            ['out_of_scope', t('outOfScope', language)],
                         ].map(([value, label]) => (
                             <TouchableOpacity
                                 key={value}
@@ -547,14 +782,29 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
-                </View>
+                </View> : null}
 
-                <Button
-                    title={isEditing ? 'Update Product' : 'Create Product'}
-                    onPress={handleSave}
-                    loading={loading}
-                    style={styles.saveButton}
-                />
+                    <Button
+                        testID="product-save-button"
+                        title={isEditing ? t('update', language) : t('create', language)}
+                        onPress={handleSave}
+                        loading={loading}
+                        disabled={!canManageProducts}
+                        style={styles.saveButton}
+                    />
+                    {isEditing && canManageProducts ? (
+                        <TouchableOpacity
+                            testID="product-delete-button"
+                            accessibilityRole="button"
+                            accessibilityLabel={t('deleteProduct', language)}
+                            onPress={handleDelete}
+                            disabled={loading}
+                            style={[styles.deleteButton, loading && styles.deleteButtonDisabled]}
+                        >
+                            <Trash2 color="#D92D20" size={18} />
+                            <Text style={styles.deleteButtonText}>{t('deleteProduct', language)}</Text>
+                        </TouchableOpacity>
+                    ) : null}
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -589,9 +839,25 @@ const styles = StyleSheet.create({
     checkmark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
     checkboxLabel: { fontSize: 15 },
     saveButton: { marginTop: 8 },
+    deleteButton: { minHeight: 50, marginTop: 12, borderWidth: 1, borderColor: '#D92D20', borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    deleteButtonDisabled: { opacity: 0.5 },
+    deleteButtonText: { color: '#D92D20', fontSize: 14, fontWeight: '700' },
     scanIconBtn: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 30 },
+    imageField: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 10, marginBottom: 16 },
+    imagePreview: { width: 76, height: 76, borderRadius: 11 },
+    serviceIconPreview: { alignItems: 'center', justifyContent: 'center' },
+    imagePlaceholder: { width: 76, height: 76, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    imageCopy: { flex: 1, minWidth: 0 },
+    imageHint: { fontSize: 11, marginTop: -4, marginBottom: 8 },
+    imageActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    imageAction: { borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8 },
+    imageActionText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+    imageRemoveAction: { paddingHorizontal: 4, paddingVertical: 8 },
+    imageRemoveText: { color: '#D92D20', fontSize: 11, fontWeight: '700' },
+    serviceIconSection: { marginTop: 2, marginBottom: 14 },
+    serviceIconCarousel: { flexDirection: 'row', gap: 8, paddingVertical: 2, paddingRight: 8 },
+    serviceIconOption: { width: 78, minHeight: 68, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, gap: 4 },
+    serviceIconLabel: { fontSize: 9, fontWeight: '600', textAlign: 'center' },
+    advancedToggle: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+    advancedText: { fontSize: 13, fontWeight: '700' },
 });
-
-
-
-

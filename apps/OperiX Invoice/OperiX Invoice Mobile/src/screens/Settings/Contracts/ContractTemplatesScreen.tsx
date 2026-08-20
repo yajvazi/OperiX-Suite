@@ -15,14 +15,19 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ArrowLeft, Plus, FileText, ChevronRight, Trash2 } from 'lucide-react-native';
 import { FAB, Card } from '@invoice-monorepo/ui';
 import { ContractTemplate } from '@invoice-monorepo/types';
+import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 
 interface ContractTemplatesScreenProps {
     navigation: any;
 }
 
+function fieldCountLabel(count: number, language: string): string {
+    return `${count} ${count === 1 ? t('field', language) : t('fields', language)}`;
+}
+
 export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenProps) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const [templates, setTemplates] = useState<ContractTemplate[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -34,7 +39,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
     useFocusEffect(
         useCallback(() => {
             fetchTemplates();
-        }, [user])
+        }, [language, user])
     );
 
     const fetchTemplates = async () => {
@@ -46,7 +51,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
 
-        if (error) Alert.alert('Error', error.message);
+        if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
         else setTemplates(data || []);
 
         setLoading(false);
@@ -54,16 +59,16 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
 
     const handleDelete = (id: string) => {
         Alert.alert(
-            'Delete Template',
-            'Are you sure you want to delete this template?',
+            t('deleteTemplate', language),
+            t('deleteTemplateConfirmation', language),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel', language), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
                         const { error } = await supabase.from('contract_templates').delete().eq('id', id);
-                        if (error) Alert.alert('Error', error.message);
+                        if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                         else fetchTemplates();
                     }
                 }
@@ -87,7 +92,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                             <Text style={[styles.cardDesc, { color: mutedColor }]}>{item.description}</Text>
                         )}
                         <Text style={[styles.fieldCount, { color: mutedColor }]}>
-                            {item.fields?.length || 0} fields
+                            {fieldCountLabel(item.fields?.length || 0, language)}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -108,7 +113,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Contract Templates</Text>
+                <Text style={[styles.title, { color: textColor }]}>{t('contractTemplates', language)}</Text>
                 <View style={{ width: 24 }} />
             </View>
 
@@ -125,7 +130,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <Text style={[styles.emptyText, { color: mutedColor }]}>
-                                No templates found. Create one to get started.
+                                {t('noTemplatesCreateOne', language)}
                             </Text>
                         </View>
                     }
@@ -159,8 +164,5 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { fontSize: 16 },
 });
-
-
-
 
 

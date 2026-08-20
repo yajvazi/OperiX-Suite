@@ -19,6 +19,7 @@ import { Card, FAB } from '@invoice-monorepo/ui';
 import { Vendor } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 interface VendorsScreenProps {
     navigation: any;
@@ -43,7 +44,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     const inputBg = isDark ? '#14243A' : '#ffffff';
     const borderColor = isDark ? '#263A55' : '#E4E9F0';
 
-    const cities = ['Të gjitha', ...Array.from(new Set(vendors.map(v => v.address?.split(',').pop()?.trim()).filter((c): c is string => !!c)))];
+    const cities = ['__all__', ...Array.from(new Set(vendors.map(v => v.address?.split(',').pop()?.trim()).filter((c): c is string => !!c)))];
 
     const stats = {
         totalVendors: vendors.length,
@@ -55,27 +56,19 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     useFocusEffect(
         useCallback(() => {
             fetchVendors();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchVendors = async () => {
         if (!user) return;
         try {
-            console.log('Step 1: Fetching profile...');
-            const { data: profileData, error: profileError } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
-
-            if (profileError) {
-                console.error('Profile fetch error:', profileError);
-                return;
-            }
-
-            const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
-            console.log('Step 2: Fetching vendors with companyId:', companyId);
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const scope = scopedResource(user.id, companyIds);
 
             const { data, error } = await supabase
                 .from('vendors')
                 .select('*')
-                .eq('user_id', user.id)
+                .or(scope)
                 .order('name');
 
             if (error) {
@@ -92,7 +85,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 const { data: expenses, error: expenseError } = await supabase
                     .from('expenses')
                     .select('vendor_id, amount')
-                    .eq('user_id', user.id);
+                    .or(scope);
 
                 if (expenseError) {
                     console.error('Expenses fetch error:', expenseError);
@@ -126,7 +119,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
             );
         }
 
-        if (city && city !== 'Të gjitha') {
+        if (city && city !== '__all__') {
             filtered = filtered.filter(v => v.address?.includes(city));
         }
 
@@ -150,7 +143,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     };
 
     const handleDelete = (id: string, name: string) => {
-        Alert.alert(t('delete', language), `${t('areYouSure', language) || 'Are you sure?'} "${name}"`, [
+        Alert.alert(t('delete', language), `${t('areYouSure', language)} "${name}"`, [
             { text: t('cancel', language), style: 'cancel' },
             {
                 text: t('delete', language),
@@ -223,7 +216,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                     <View style={styles.vendorFooter}>
                         <View style={styles.expenseRow}>
                             <Text style={[styles.expenseValue, { color: '#ef4444' }]}>{formatCurrency(expenses)}</Text>
-                            <Text style={[styles.expenseLabel, { color: mutedColor }]}>shpenzime</Text>
+                            <Text style={[styles.expenseLabel, { color: mutedColor }]}>{t('expenses', language)}</Text>
                         </View>
                         <View style={styles.actionRow}>
                             <TouchableOpacity
@@ -258,6 +251,8 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
             >
                 {/* Stats */}
                 <View style={styles.statsContainer}>
@@ -290,17 +285,17 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                         {cities.map((city, idx) => (
                             <TouchableOpacity
                                 key={idx}
-                                onPress={() => setSelectedFilter(city === 'Të gjitha' ? null : city)}
+                                onPress={() => setSelectedFilter(city === '__all__' ? null : city)}
                                 style={[
                                     styles.filterChip,
                                     { backgroundColor: cardBg },
-                                    ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: primaryColor }
+                                    ((selectedFilter === null && city === '__all__') || selectedFilter === city) && { backgroundColor: primaryColor }
                                 ]}
                             >
                                 <Text style={[
                                     styles.filterText,
-                                    { color: ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) ? '#fff' : mutedColor }
-                                ]}>{city}</Text>
+                                    { color: ((selectedFilter === null && city === '__all__') || selectedFilter === city) ? '#fff' : mutedColor }
+                                ]}>{city === '__all__' ? t('all', language) : city}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -388,7 +383,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 15, fontWeight: '500' },
 });
-
-
-
-

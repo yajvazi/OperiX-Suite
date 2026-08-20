@@ -1,0 +1,18 @@
+command: "npm" "run" "typecheck" "--workspace=operix-invoice"
+cwd: .
+exitCode: 2
+durationMs: 14571
+
+> operix-invoice@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.json
+
+test/ui/ui-surfaces.test.tsx(203,93): error TS2322: Type '{ params: {}; }' is not assignable to type 'RouteProp<RootStackParamList, "HelpSupport">'.
+  Type '{ params: {}; }' is missing the following properties from type 'Readonly<{ key: string; name: "HelpSupport"; path?: string; }>': key, name
+
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile
+npm error workspace operix-invoice@1.0.0
+npm error location /root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile
+npm error command failed
+npm error command sh -c tsc --noEmit -p tsconfig.json

@@ -1,0 +1,57 @@
+command: "npm" "run" "test:component" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 4966
+
+> operix-invoice@1.0.0 test:component
+> jest --config jest.config.cjs --runInBand test/component
+
+
+PASS test/component/invoice-form.test.tsx
+PASS test/component/customer-product-payment.test.tsx
+PASS test/component/critical-screens.test.tsx
+  ● Console
+
+    console.error
+      Home data error: Error: offline
+          at Object.<anonymous> (/root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile/test/component/critical-screens.test.tsx:98:44)
+          at Generator.next (<anonymous>)
+          at asyncGeneratorStep (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+          at _next (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+          at /root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:7
+          at new Promise (<anonymous>)
+          at Object.<anonymous> (/root/OperiX/node_modules/@babel/runtime/helpers/asyncToGenerator.js:14:12)
+          at Promise.then.completed (/root/OperiX/node_modules/jest-circus/build/utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (/root/OperiX/node_modules/jest-circus/build/utils.js:231:10)
+          at _callCircusTest (/root/OperiX/node_modules/jest-circus/build/run.js:316:40)
+          at _runTest (/root/OperiX/node_modules/jest-circus/build/run.js:252:3)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:126:9)
+          at _runTestsForDescribeBlock (/root/OperiX/node_modules/jest-circus/build/run.js:121:9)
+          at run (/root/OperiX/node_modules/jest-circus/build/run.js:71:3)
+          at runAndTransformResultsToJestFormat (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+          at jestAdapter (/root/OperiX/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+          at runTestInternal (/root/OperiX/node_modules/jest-runner/build/runTest.js:367:16)
+          at runTest (/root/OperiX/node_modules/jest-runner/build/runTest.js:444:34)
+
+      213 |             writeMobileCache(cacheKey, nextData);
+      214 |         } catch (fetchError: any) {
+    > 215 |             console.error('Home data error:', fetchError);
+          |                     ^
+      216 |             setError(t('unableToLoad', language));
+      217 |         } finally {
+      218 |             setLoading(false);
+
+      at error (src/screens/Home/HomeScreen.tsx:215:21)
+      at asyncGeneratorStep (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+      at _next (../../../node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+
+PASS test/component/list-screens.test.tsx
+PASS test/component/auth.test.tsx
+PASS test/component/invoice-detail.test.tsx
+
+Test Suites: 6 passed, 6 total
+Tests:       27 passed, 27 total
+Snapshots:   0 total
+Time:        4.32 s
+Ran all test suites matching /test\/component/i.

@@ -4,11 +4,13 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
+from app.auth import user_has_permission
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.resource import Resource, ResourceType
 from app.models.user import User, UserRole
 from app.schemas.ai import ColleagueLocationSummary
 from app.services.ai_dates import extract_date_phrase, parse_flexible_date
+from app.services.workspace import scope_query
 
 SCHEDULE_DATE_MARKER = "upcoming"
 
@@ -102,12 +104,14 @@ def _normalize_book_for_candidate(raw: str) -> str | None:
     return None
 
 
-def _find_users_by_name(db: Session, name: str, limit: int = 5) -> list[User]:
+def _find_users_by_name(
+    db: Session, name: str, current_user: User, limit: int = 5
+) -> list[User]:
     term = name.strip()
     if not term:
         return []
     return (
-        db.query(User)
+        scope_query(db.query(User), User, current_user)
         .filter(User.full_name.ilike(f"%{term}%"))
         .order_by(User.full_name)
         .limit(limit)
@@ -123,15 +127,18 @@ def _team_colleagues(db: Session, user: User) -> list[User]:
         .filter(
             User.team_name == user.team_name,
             User.id != user.id,
+            User.organization_id == user.organization_id,
         )
         .order_by(User.full_name)
         .all()
     )
 
 
-def _desk_reservation(db: Session, user_id: int, booking_date) -> Reservation | None:
+def _desk_reservation(
+    db: Session, user_id: int, booking_date, current_user: User
+) -> Reservation | None:
     return (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .options(joinedload(Reservation.resource))
         .join(Resource, Reservation.resource_id == Resource.id)
         .filter(
@@ -139,6 +146,8 @@ def _desk_reservation(db: Session, user_id: int, booking_date) -> Reservation | 
             Reservation.date == booking_date,
             Reservation.status == ReservationStatus.active,
             Resource.type == ResourceType.desk,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .first()
     )
@@ -169,7 +178,7 @@ def lookup_colleague_locations(
         return [], "Which date should I check?"
 
     if coworker:
-        people = _find_users_by_name(db, coworker)
+        people = _find_users_by_name(db, coworker, current_user)
         if len(people) > 1:
             names = ", ".join(person.full_name for person in people)
             return [], f"I found multiple matches: {names}. Please use their full name."
@@ -184,7 +193,7 @@ def lookup_colleague_locations(
 
     results: list[ColleagueLocationSummary] = []
     for person in people:
-        reservation = _desk_reservation(db, person.id, booking_date)
+        reservation = _desk_reservation(db, person.id, booking_date, current_user)
         results.append(_summarize_colleague(person, booking_date, reservation))
 
     return results, None
@@ -193,6 +202,7 @@ def lookup_colleague_locations(
 def lookup_colleague_schedule(
     db: Session,
     coworker: str | None,
+    current_user: User,
     *,
     today: date | None = None,
     days_ahead: int | None = None,
@@ -204,7 +214,7 @@ def lookup_colleague_schedule(
     if not coworker:
         return [], "Which colleague should I look up?", None
 
-    people = _find_users_by_name(db, coworker)
+    people = _find_users_by_name(db, coworker, current_user)
     if len(people) > 1:
         names = ", ".join(person.full_name for person in people)
         return [], f"I found multiple matches: {names}. Please use their full name.", None
@@ -213,7 +223,7 @@ def lookup_colleague_schedule(
 
     person = people[0]
     reservations = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .options(joinedload(Reservation.resource))
         .join(Resource, Reservation.resource_id == Resource.id)
         .filter(
@@ -222,6 +232,8 @@ def lookup_colleague_schedule(
             Reservation.date <= max_date,
             Reservation.status == ReservationStatus.active,
             Resource.type == ResourceType.desk,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .order_by(Reservation.date.asc())
         .all()
@@ -271,7 +283,7 @@ def resolve_book_for_user(
     if not book_for_name:
         return actor, None
 
-    people = _find_users_by_name(db, book_for_name)
+    people = _find_users_by_name(db, book_for_name, actor)
     if len(people) > 1:
         names = ", ".join(person.full_name for person in people)
         return None, f"I found multiple matches: {names}. Please use their full name."
@@ -279,7 +291,7 @@ def resolve_book_for_user(
         return None, f"I couldn't find anyone named {book_for_name.strip()}."
 
     target = people[0]
-    if actor.role != UserRole.team_leader:
+    if not user_has_permission(actor, "team.manage"):
         return None, "Only team leaders can book desks for teammates."
     if target.team_leader_id != actor.id:
         return None, f"{target.full_name} is not on your team."

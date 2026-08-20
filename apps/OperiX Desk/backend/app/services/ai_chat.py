@@ -14,13 +14,14 @@ from app.services.ai_dates import message_mentions_time
 from app.services.ai_intent_fallback import infer_booking_intent_from_message, reconcile_intent_with_message
 from app.services.ai_confirmation import generate_booking_confirmation
 from app.services.booking import get_booking_limits
+from app.services.workspace import scope_query
 from app.services.huggingface import generate_hf_chat
 
 INVALID_AI_RESPONSE = "The AI response was invalid."
 
-SYSTEM_PROMPT = """You are the AI engine for DeskDibs.
+SYSTEM_PROMPT = """You are the AI engine for OperiX Desk.
 
-DeskDibs is an office workspace reservation platform.
+OperiX Desk is an office workspace reservation platform.
 
 Users can only:
 - reserve desks
@@ -66,7 +67,7 @@ intent, people, date, time, duration, equipment, preferred_location, coworker, b
 
 If required information is missing, do not guess. Set follow_up_question instead.
 
-DeskDibs automatically assigns an available desk or meeting room. Never ask for a desk number, desk name, or room name.
+OperiX Desk automatically assigns an available desk or meeting room. Never ask for a desk number, desk name, or room name.
 
 Informal requests like "reserve tomorrow somewhere quiet" mean book_desk with date and preferred_location.
 
@@ -269,12 +270,13 @@ def _build_user_context(db: Session, user: User) -> str:
     limits = get_booking_limits(db, user)
 
     upcoming = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, user)
         .options(joinedload(Reservation.resource))
         .filter(
             Reservation.user_id == user.id,
             Reservation.status == ReservationStatus.active,
             Reservation.date >= today,
+            Reservation.organization_id == user.organization_id,
         )
         .order_by(Reservation.date.asc())
         .limit(5)

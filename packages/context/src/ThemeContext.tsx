@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { normalizeLocale, setAppLocale } from '@invoice-monorepo/i18n';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -42,7 +43,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const systemColorScheme = useColorScheme();
     const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
     const [primaryColor, setPrimaryColorState] = useState(BRAND_BLUE);
-    const [language, setLanguageState] = useState('en');
+    const [language, setLanguageState] = useState<'en' | 'sq'>('en');
 
     useEffect(() => {
         loadPreferences();
@@ -62,7 +63,9 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
             }
             const savedLang = await AsyncStorage.getItem(LANGUAGE_KEY);
             if (savedLang) {
-                setLanguageState(savedLang);
+                const normalizedLanguage = normalizeLocale(savedLang);
+                setLanguageState(normalizedLanguage);
+                setAppLocale(normalizedLanguage);
             }
         } catch (error) {
             console.log('Error loading preferences:', error);
@@ -89,9 +92,11 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     };
 
     const setLanguage = async (lang: string) => {
-        setLanguageState(lang);
+        const normalizedLanguage = normalizeLocale(lang);
+        setLanguageState(normalizedLanguage);
+        setAppLocale(normalizedLanguage);
         try {
-            await AsyncStorage.setItem(LANGUAGE_KEY, lang);
+            await AsyncStorage.setItem(LANGUAGE_KEY, normalizedLanguage);
         } catch (error) {
             console.log('Error saving language:', error);
         }

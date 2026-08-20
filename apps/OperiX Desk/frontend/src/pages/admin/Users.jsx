@@ -263,7 +263,7 @@ export default function Users() {
               type="button"
               onClick={async () => {
                 const blob = await downloadUsersCsv();
-                saveBlob(blob, 'deskdibs-users.csv');
+                saveBlob(blob, 'operix-desk-users.csv');
               }}
               className="btn-secondary"
             >

@@ -7,9 +7,10 @@ import { ShieldCheck, ArrowRight, UserPlus, Mail, Lock, User } from 'lucide-reac
 import { useAuth } from '@invoice-monorepo/hooks';
 import { OperixLogo } from '../../components/OperixLogo';
 import { getPalette } from '../../theme/brand';
+import { t } from '@invoice-monorepo/i18n';
 
 export function JoinTeamScreen({ navigation }: any) {
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const { signUp } = useAuth();
 
     const [token, setToken] = useState('');
@@ -31,11 +32,11 @@ export function JoinTeamScreen({ navigation }: any) {
             if (data && data.length > 0) {
                 setVerifiedCompany(data[0]);
             } else {
-                Alert.alert('Invalid Token', 'Could not find a company with this invite token.');
+                Alert.alert(t('invalidToken', language), t('invalidTokenDescription', language));
                 setVerifiedCompany(null);
             }
         } catch (err: any) {
-            Alert.alert('Error', err.message);
+            Alert.alert(t('error', language), t('somethingWentWrong', language));
         } finally {
             setLoading(false);
         }
@@ -44,7 +45,7 @@ export function JoinTeamScreen({ navigation }: any) {
     const handleJoin = async () => {
         if (!verifiedCompany) return;
         if (!firstName || !lastName || !email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert(t('error', language), t('fillAllFields', language));
             return;
         }
 
@@ -65,10 +66,10 @@ export function JoinTeamScreen({ navigation }: any) {
             if (signUpError) throw signUpError;
 
             Alert.alert(
-                'Request Sent',
-                `Your request to join ${verifiedCompany.name} has been sent. Please wait for an admin to approve your account.`,
+                t('requestSent', language),
+                t('joinRequestSent', language).replace('{company}', verifiedCompany.name),
                 [{
-                    text: 'OK', onPress: () => {
+                    text: t('done', language), onPress: () => {
                         // Start navigation to Dashboard (blocked by AppNavigator until approved)
                         // Or ideally reset stack.
                         // AuthContext update will trigger AppNavigator switch.
@@ -78,7 +79,7 @@ export function JoinTeamScreen({ navigation }: any) {
 
         } catch (error: any) {
             console.error(error);
-            Alert.alert('Error', error.message || 'Something went wrong');
+            Alert.alert(t('error', language), t('somethingWentWrong', language));
         } finally {
             setLoading(false);
         }
@@ -93,9 +94,9 @@ export function JoinTeamScreen({ navigation }: any) {
     const borderColor = palette.border;
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <LoadingOverlay visible={loading} text={verifiedCompany ? "Joining..." : "Verifying Token..."} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0} style={[styles.container, { backgroundColor: bgColor }]}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+                <LoadingOverlay visible={loading} text={verifiedCompany ? t('joining', language) : t('verifyingToken', language)} />
 
                 <View style={styles.iconContainer}>
                     <OperixLogo width={176} reversed={isDark} />
@@ -103,26 +104,27 @@ export function JoinTeamScreen({ navigation }: any) {
 
                 {!verifiedCompany ? (
                     <>
-                        <Text style={[styles.title, { color: textColor }]}>Join Your Team</Text>
+                        <Text style={[styles.title, { color: textColor }]}>{t('joinYourTeam', language)}</Text>
                         <Text style={[styles.subtitle, { color: mutedColor }]}>
-                            Enter the invite token to verify your company.
+                            {t('inviteTokenDescription', language)}
                         </Text>
 
                         <View style={[styles.form, { backgroundColor: cardBg, borderColor }]}>
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>INVITE TOKEN</Text>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('inviteTokenLabel', language).toUpperCase()}</Text>
                                 <TextInput
                                     style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg, textAlign: 'center', letterSpacing: 4, fontSize: 20 }]}
-                                    placeholder="e.g. 8A2F9C"
+                                    placeholder={t('pasteInviteCode', language)}
                                     placeholderTextColor={mutedColor}
                                     value={token}
                                     onChangeText={setToken}
                                     autoCapitalize="characters"
-                                    maxLength={10}
+                                    autoCorrect={false}
+                                    maxLength={64}
                                 />
                             </View>
                             <Button
-                                title="Verify Token"
+                                title={t('verifyToken', language)}
                                 onPress={checkToken}
                                 icon={ArrowRight}
                                 style={{ marginTop: 16 }}
@@ -131,19 +133,19 @@ export function JoinTeamScreen({ navigation }: any) {
                     </>
                 ) : (
                     <>
-                        <Text style={[styles.title, { color: textColor }]}>Sign Up & Join</Text>
+                        <Text style={[styles.title, { color: textColor }]}>{t('signUpAndJoin', language)}</Text>
                         <Text style={[styles.subtitle, { color: primaryColor, fontWeight: '700' }]}>
                             {verifiedCompany.name}
                         </Text>
                         <Text style={[styles.subtitle, { color: mutedColor, fontSize: 14, marginBottom: 24 }]}>
-                            Create your account to complete the request.
+                            {t('createAccount', language)}
                         </Text>
 
                         <View style={[styles.form, { backgroundColor: cardBg, borderColor }]}>
                             {/* Form Fields */}
                             <View style={styles.row}>
                                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>First Name</Text>
+                                    <Text style={[styles.label, { color: mutedColor }]}>{t('firstName', language)}</Text>
                                     <TextInput
                                         style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
                                         value={firstName}
@@ -153,7 +155,7 @@ export function JoinTeamScreen({ navigation }: any) {
                                     />
                                 </View>
                                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>Last Name</Text>
+                                    <Text style={[styles.label, { color: mutedColor }]}>{t('lastName', language)}</Text>
                                     <TextInput
                                         style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
                                         value={lastName}
@@ -165,7 +167,7 @@ export function JoinTeamScreen({ navigation }: any) {
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>Email</Text>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('email', language)}</Text>
                                 <TextInput
                                     style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
                                     value={email}
@@ -178,7 +180,7 @@ export function JoinTeamScreen({ navigation }: any) {
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>Password</Text>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('password', language)}</Text>
                                 <TextInput
                                     style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
                                     value={password}
@@ -190,21 +192,21 @@ export function JoinTeamScreen({ navigation }: any) {
                             </View>
 
                             <Button
-                                title="Create Account"
+                                title={t('createAccount', language)}
                                 onPress={handleJoin}
                                 icon={UserPlus}
                                 style={{ marginTop: 16 }}
                             />
 
                             <TouchableOpacity onPress={() => setVerifiedCompany(null)} style={{ marginTop: 16 }}>
-                                <Text style={{ color: mutedColor, textAlign: 'center', fontSize: 12 }}>Change Token</Text>
+                                <Text style={{ color: mutedColor, textAlign: 'center', fontSize: 12 }}>{t('changeToken', language)}</Text>
                             </TouchableOpacity>
                         </View>
                     </>
                 )}
 
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 24 }}>
-                    <Text style={{ color: mutedColor, textAlign: 'center' }}>Cancel</Text>
+                    <Text style={{ color: mutedColor, textAlign: 'center' }}>{t('cancel', language)}</Text>
                 </TouchableOpacity>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -223,8 +225,4 @@ const styles = StyleSheet.create({
     inputGroup: { marginBottom: 16 },
     row: { flexDirection: 'row', gap: 12 },
 });
-
-
-
-
 

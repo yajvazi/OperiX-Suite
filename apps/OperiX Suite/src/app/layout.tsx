@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
+import { AnalyticsBoundary } from "@/components/analytics";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
@@ -11,17 +12,17 @@ const poppins = Poppins({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://operix.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://operixsuite.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "OperiX Suite — One Suite. Complete Control.",
+    default: "OperiX — One connected platform for your business.",
     template: "%s | OperiX",
   },
   description:
-    "Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.",
-  applicationName: "OperiX Suite",
+    "Finance, people, bookings, workplaces, and platform administration in one connected OperiX account and organization.",
+  applicationName: "OperiX",
   icons: {
     icon: "/asset4.svg",
     shortcut: "/asset4.svg",
@@ -29,16 +30,16 @@ export const metadata: Metadata = {
   },
   alternates: { canonical: "/" },
   openGraph: {
-    title: "OperiX Suite — One Suite. Complete Control.",
+    title: "OperiX — One connected platform for your business.",
     description:
-      "A connected suite for invoicing, people operations, reporting, and business management.",
+      "One account. One organization. Multiple connected OperiX applications.",
     type: "website",
     siteName: "OperiX Suite",
   },
   twitter: {
     card: "summary_large_image",
-    title: "OperiX Suite — One Suite. Complete Control.",
-    description: "A connected suite for clearer financial and people operations.",
+    title: "OperiX — One connected platform for your business.",
+    description: "Finance, people, bookings, workplaces, and administration in one OperiX platform.",
   },
 };
 
@@ -54,6 +55,7 @@ const organizationSchema = {
   name: "OperiX",
   url: siteUrl,
   logo: `${siteUrl}/brand/operix-suite-icon-blue.svg`,
+  description: "One connected business platform for finance, people, bookings, workplaces, and administration.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -64,6 +66,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SiteHeader />
         <main id="main-content">{children}</main>
         <SiteFooter />
+        <AnalyticsBoundary />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, "\\u003c") }}

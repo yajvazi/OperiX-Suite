@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "OperiX Booking",
+    "slug": "operix-booking",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "operixbooking",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.operixsuite.booking" },
+    "android": { "package": "com.operixsuite.booking" },
+    "web": { "bundler": "metro" }
+  }
+}

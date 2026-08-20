@@ -1,32 +1,21 @@
 import type { Metadata } from "next";
-import { BarChart3, Building2, CalendarDays, CreditCard, Settings, Users, WalletCards, Zap } from "lucide-react";
 import { ProductPage } from "@/components/product-page";
 
 export const metadata: Metadata = {
-  title: "OperiX Control",
-  description: "A centralized control panel for the entire OperiX Suite.",
+  title: "OperiX Control — Administration & Platform Security",
+  description: "Manage OperiX organizations, users, roles, permissions, application access, security, integrations, and audit logs from one web console.",
   alternates: { canonical: "/products/control" },
+  openGraph: { title: "OperiX Control — Administration & Platform Security", description: "The web-only administration and system management layer for the OperiX platform." },
 };
 
 export default function ControlPage() {
-  return <ProductPage
-    product="OperiX Control"
-    headline="One control panel for your whole operation."
-    description="Bring shared workspace, team, customer, billing, and activity data together across every OperiX product."
-    variant="control"
-    overviewTitle="See the suite as one connected business"
-    overviewText="OperiX Control gives leaders a fast, unified view of the activity flowing through Invoice, HR Office, Booking, and Desk."
-    overviewPoints={["Monitor revenue, invoices, appointments, and occupancy", "Manage shared teams, workspaces, and permissions", "Review cross-product activity and alerts", "Keep operational decisions in one clear workspace"]}
-    featureTitle="Clarity across every product"
-    features={[
-      { title: "Unified overview", description: "See the metrics that matter across your OperiX workspace.", icon: BarChart3 },
-      { title: "Workspace management", description: "Organize offices, teams, and shared settings in one place.", icon: Building2 },
-      { title: "Team permissions", description: "Give every team member the right access across products.", icon: Users },
-      { title: "Financial signals", description: "Connect revenue, invoices, payments, and billing activity.", icon: CreditCard },
-      { title: "Appointments", description: "Track upcoming booking activity and attention points.", icon: CalendarDays },
-      { title: "Automation", description: "Keep recurring operational work moving with fewer handoffs.", icon: Zap },
-      { title: "Shared settings", description: "Maintain consistent configuration across the suite.", icon: Settings },
-      { title: "Activity history", description: "Understand what changed and when across your workspace.", icon: WalletCards },
-    ]}
-  />;
+  return <ProductPage content={{
+    product: "control",
+    headline: "Manage your entire OperiX environment.",
+    description: "Control organizations, users, permissions, security, and app access from one place.",
+    overview: "A central administration layer for the account, organization, and applications around your business.",
+    workflow: ["Manage organizations, users, roles, and permissions", "Set application access and review security settings", "Monitor integrations, audit activity, and system configuration", "Use the App Launcher to switch between Suite, Invoice, HR, Booking, Desk, and Control"],
+    useCases: ["Organization administration", "Role and permission management", "Application access reviews", "Security and audit visibility"],
+    mobileCopy: "OperiX Control is web-only. It is designed for administrators working from the browser and does not have a native iOS or Android application.",
+  }} />;
 }

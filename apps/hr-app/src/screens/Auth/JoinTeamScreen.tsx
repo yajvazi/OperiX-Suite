@@ -1,39 +1,50 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { useTheme } from '@invoice-monorepo/hooks';
-import { Button, Card, LoadingOverlay } from '@invoice-monorepo/ui';
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { ArrowRight, ShieldCheck, UserPlus } from 'lucide-react-native';
+import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { ShieldCheck, ArrowRight, UserPlus, Mail, Lock, User } from 'lucide-react-native';
-import { useAuth } from '@invoice-monorepo/hooks';
+import { OperixLogo } from '../../components/OperixLogo';
+import { brand, getPalette } from '../../theme/brand';
 
 export function JoinTeamScreen({ navigation }: any) {
     const { isDark, primaryColor } = useTheme();
     const { signUp } = useAuth();
-
+    const palette = getPalette(isDark);
     const [token, setToken] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-
-    const [verifiedCompany, setVerifiedCompany] = useState<{ id: string, name: string } | null>(null);
+    const [verifiedCompany, setVerifiedCompany] = useState<{ id: string; name: string } | null>(null);
 
     const checkToken = async () => {
-        if (!token.trim()) return;
+        if (!token.trim()) {
+            Alert.alert('Invite token required', 'Enter the token shared by your administrator.');
+            return;
+        }
         setLoading(true);
         try {
             const { data, error } = await supabase.rpc('verify_invite_token', { token_input: token.trim() });
             if (error) throw error;
-
-            if (data && data.length > 0) {
-                setVerifiedCompany(data[0]);
-            } else {
-                Alert.alert('Invalid Token', 'Could not find a company with this invite token.');
+            if (data && data.length > 0) setVerifiedCompany(data[0]);
+            else {
                 setVerifiedCompany(null);
+                Alert.alert('Invalid token', 'Could not find a company with this invite token.');
             }
-        } catch (err: any) {
-            Alert.alert('Error', err.message);
+        } catch (error: any) {
+            Alert.alert('Unable to verify token', error.message || 'Please try again.');
         } finally {
             setLoading(false);
         }
@@ -41,187 +52,91 @@ export function JoinTeamScreen({ navigation }: any) {
 
     const handleJoin = async () => {
         if (!verifiedCompany) return;
-        if (!firstName || !lastName || !email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+        if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
+            Alert.alert('Complete your details', 'Please fill in all fields.');
             return;
         }
-
         setLoading(true);
         try {
-            // 1. Sign Up the user with Invite Token in metadata
-            // The database trigger 'process_new_user_invite' will handle the joining process automatically.
-            const { error: signUpError } = await signUp(email, password, {
+            const { error } = await signUp(email.trim().toLowerCase(), password, {
                 data: {
-                    first_name: firstName,
-                    last_name: lastName,
-                    invite_token: token.trim(), // Trigger looks for this
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
+                    invite_token: token.trim(),
                     phone: '',
-                    tax_id: ''
-                }
+                    tax_id: '',
+                },
             });
-
-            if (signUpError) throw signUpError;
-
-            Alert.alert(
-                'Request Sent',
-                `Your request to join ${verifiedCompany.name} has been sent. Please wait for an admin to approve your account.`,
-                [{
-                    text: 'OK', onPress: () => {
-                        // Start navigation to Dashboard (blocked by AppNavigator until approved)
-                        // Or ideally reset stack.
-                        // AuthContext update will trigger AppNavigator switch.
-                    }
-                }]
-            );
-
+            if (error) throw error;
+            Alert.alert('Request sent', `Your request to join ${verifiedCompany.name} has been sent.`, [{ text: 'OK' }]);
         } catch (error: any) {
-            console.error(error);
-            Alert.alert('Error', error.message || 'Something went wrong');
+            Alert.alert('Unable to join team', error.message || 'Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-    const inputBg = isDark ? '#0f172a' : '#f1f5f9';
-    const borderColor = isDark ? '#334155' : '#e2e8f0';
-
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <LoadingOverlay visible={loading} text={verifiedCompany ? "Joining..." : "Verifying Token..."} />
-
-                <View style={styles.iconContainer}>
-                    <ShieldCheck size={64} color={primaryColor} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: palette.background }]}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <View style={styles.header}>
+                    <OperixLogo width={190} reversed={isDark} />
+                    <View style={[styles.iconContainer, { backgroundColor: palette.iconSurface }]}><ShieldCheck color={brand.colors.primary} size={27} /></View>
+                    <Text style={[styles.title, { color: palette.text }]}>{verifiedCompany ? 'Sign up & join' : 'Join your team'}</Text>
+                    <Text style={[styles.subtitle, { color: palette.muted }]}>{verifiedCompany ? verifiedCompany.name : 'Enter the invite token shared by your administrator.'}</Text>
                 </View>
 
-                {!verifiedCompany ? (
-                    <>
-                        <Text style={[styles.title, { color: textColor }]}>Join Your Team</Text>
-                        <Text style={[styles.subtitle, { color: mutedColor }]}>
-                            Enter the invite token to verify your company.
-                        </Text>
+                <View style={[styles.form, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                    {!verifiedCompany ? (
+                        <>
+                            <Field label="Invite token" value={token} onChangeText={setToken} placeholder="e.g. 8A2F9C" palette={palette} autoCapitalize="characters" maxLength={10} style={styles.tokenInput} />
+                            <PrimaryButton label="Verify token" icon={ArrowRight} loading={loading} onPress={() => void checkToken()} color={primaryColor} />
+                        </>
+                    ) : (
+                        <>
+                            <Text style={[styles.helper, { color: palette.muted }]}>Create your account to send an approval request.</Text>
+                            <Field label="First name" value={firstName} onChangeText={setFirstName} placeholder="John" palette={palette} />
+                            <Field label="Last name" value={lastName} onChangeText={setLastName} placeholder="Doe" palette={palette} />
+                            <Field label="Email" value={email} onChangeText={setEmail} placeholder="john@example.com" palette={palette} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                            <Field label="Password" value={password} onChangeText={setPassword} placeholder="Create a password" palette={palette} secureTextEntry />
+                            <PrimaryButton label="Create account" icon={UserPlus} loading={loading} onPress={() => void handleJoin()} color={primaryColor} />
+                            <TouchableOpacity onPress={() => setVerifiedCompany(null)} style={styles.secondaryAction}><Text style={[styles.link, { color: primaryColor }]}>Use a different token</Text></TouchableOpacity>
+                        </>
+                    )}
+                </View>
 
-                        <View style={[styles.form, { backgroundColor: cardBg }]}>
-                            <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>INVITE TOKEN</Text>
-                                <TextInput
-                                    style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg, textAlign: 'center', letterSpacing: 4, fontSize: 20 }]}
-                                    placeholder="e.g. 8A2F9C"
-                                    placeholderTextColor={mutedColor}
-                                    value={token}
-                                    onChangeText={setToken}
-                                    autoCapitalize="characters"
-                                    maxLength={10}
-                                />
-                            </View>
-                            <Button
-                                title="Verify Token"
-                                onPress={checkToken}
-                                icon={ArrowRight}
-                                style={{ marginTop: 16 }}
-                            />
-                        </View>
-                    </>
-                ) : (
-                    <>
-                        <Text style={[styles.title, { color: textColor }]}>Sign Up & Join</Text>
-                        <Text style={[styles.subtitle, { color: primaryColor, fontWeight: '700' }]}>
-                            {verifiedCompany.name}
-                        </Text>
-                        <Text style={[styles.subtitle, { color: mutedColor, fontSize: 14, marginBottom: 24 }]}>
-                            Create your account to complete the request.
-                        </Text>
-
-                        <View style={[styles.form, { backgroundColor: cardBg }]}>
-                            {/* Form Fields */}
-                            <View style={styles.row}>
-                                <View style={[styles.inputGroup, { flex: 1 }]}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>First Name</Text>
-                                    <TextInput
-                                        style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
-                                        value={firstName}
-                                        onChangeText={setFirstName}
-                                        placeholder="John"
-                                        placeholderTextColor={mutedColor}
-                                    />
-                                </View>
-                                <View style={[styles.inputGroup, { flex: 1 }]}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>Last Name</Text>
-                                    <TextInput
-                                        style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
-                                        value={lastName}
-                                        onChangeText={setLastName}
-                                        placeholder="Doe"
-                                        placeholderTextColor={mutedColor}
-                                    />
-                                </View>
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>Email</Text>
-                                <TextInput
-                                    style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    autoCapitalize="none"
-                                    keyboardType="email-address"
-                                    placeholder="john@example.com"
-                                    placeholderTextColor={mutedColor}
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: mutedColor }]}>Password</Text>
-                                <TextInput
-                                    style={[styles.input, { color: textColor, borderColor, backgroundColor: inputBg }]}
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                    placeholder="••••••"
-                                    placeholderTextColor={mutedColor}
-                                />
-                            </View>
-
-                            <Button
-                                title="Create Account"
-                                onPress={handleJoin}
-                                icon={UserPlus}
-                                style={{ marginTop: 16 }}
-                            />
-
-                            <TouchableOpacity onPress={() => setVerifiedCompany(null)} style={{ marginTop: 16 }}>
-                                <Text style={{ color: mutedColor, textAlign: 'center', fontSize: 12 }}>Change Token</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </>
-                )}
-
-                <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 24 }}>
-                    <Text style={{ color: mutedColor, textAlign: 'center' }}>Cancel</Text>
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cancel}><Text style={[styles.cancelText, { color: palette.muted }]}>Cancel</Text></TouchableOpacity>
             </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
+function Field({ label, palette, ...props }: { label: string; palette: ReturnType<typeof getPalette> } & React.ComponentProps<typeof TextInput>) {
+    return <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{label}</Text><TextInput {...props} placeholderTextColor={palette.muted} style={[styles.input, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }, props.style]} /></View>;
+}
+
+function PrimaryButton({ label, icon: Icon, loading, onPress, color }: { label: string; icon: React.ComponentType<{ color?: string; size?: number }>; loading: boolean; onPress: () => void; color: string }) {
+    return <TouchableOpacity style={[styles.button, { backgroundColor: color }, loading && styles.buttonDisabled]} onPress={onPress} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <><Icon color="#fff" size={18} /><Text style={styles.buttonText}>{label}</Text></>}</TouchableOpacity>;
+}
+
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { padding: 24, justifyContent: 'center', minHeight: '100%' },
-    iconContainer: { alignItems: 'center', marginBottom: 24 },
-    title: { fontSize: 28, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
-    subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 32, lineHeight: 24 },
-    form: { padding: 24, borderRadius: 16 },
-    label: { fontSize: 12, fontWeight: '700', marginBottom: 8, letterSpacing: 0.5 },
-    input: { fontSize: 16, height: 50, borderWidth: 1, borderRadius: 10, paddingHorizontal: 16 },
-    inputGroup: { marginBottom: 16 },
-    row: { flexDirection: 'row', gap: 12 },
+    scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+    header: { alignItems: 'center', marginBottom: 30 },
+    iconContainer: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: 28, marginBottom: 18 },
+    title: { fontSize: 25, lineHeight: 32, fontFamily: brand.fonts.semibold },
+    subtitle: { maxWidth: 300, textAlign: 'center', fontSize: 13, lineHeight: 20, fontFamily: brand.fonts.regular, marginTop: 6 },
+    form: { borderRadius: brand.radius.panel, borderWidth: 1, padding: 22, ...brand.shadow.card },
+    helper: { fontSize: 13, lineHeight: 20, fontFamily: brand.fonts.regular, marginBottom: 18 },
+    inputGroup: { marginBottom: 14 },
+    label: { marginBottom: 7, fontSize: 12, fontFamily: brand.fonts.medium },
+    input: { minHeight: 52, borderWidth: 1, borderRadius: brand.radius.control, paddingHorizontal: 15, fontSize: 15, fontFamily: brand.fonts.regular },
+    tokenInput: { textAlign: 'center', letterSpacing: 4, fontSize: 20 },
+    button: { minHeight: 54, borderRadius: brand.radius.control, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', marginTop: 6, ...brand.shadow.floating },
+    buttonDisabled: { opacity: 0.7 },
+    buttonText: { color: '#fff', fontSize: 15, fontFamily: brand.fonts.semibold },
+    secondaryAction: { alignItems: 'center', marginTop: 18 },
+    link: { fontSize: 13, fontFamily: brand.fonts.semibold },
+    cancel: { alignItems: 'center', marginTop: 22 },
+    cancelText: { fontSize: 13, fontFamily: brand.fonts.medium },
 });
-
-
-
-
-

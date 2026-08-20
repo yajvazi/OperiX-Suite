@@ -14,6 +14,7 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { OperixLogo } from '../../components/OperixLogo';
 import { brand, getPalette } from '../../theme/brand';
+import { t } from '@invoice-monorepo/i18n';
 
 interface SignUpScreenProps {
     onNavigateToSignIn: () => void;
@@ -22,7 +23,7 @@ interface SignUpScreenProps {
 
 export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenProps) {
     const { signUp, verifyEmailOtp } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const [email, setEmail] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -47,17 +48,17 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
 
     const handleSignUp = async () => {
         if (!email || !password || !confirmPassword || !firstName || !lastName || !phone) {
-            setError('Please fill in all required fields marked with *');
+            setError(t('requiredFields', language));
             return;
         }
 
         if (password !== confirmPassword) {
-            setError('Passwords do not match');
+            setError(t('passwordMismatch', language));
             return;
         }
 
         if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+            setError(t('passwordMin', language));
             return;
         }
 
@@ -76,12 +77,12 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                 }
             });
             if (signUpError) {
-                setError(signUpError.message);
+                setError(t('signUpFailed', language));
             } else {
                 setSuccess(true);
             }
         } catch (e) {
-            setError('An unexpected error occurred');
+            setError(t('unexpectedError', language));
         } finally {
             setLoading(false);
         }
@@ -91,19 +92,19 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
 
     const handleVerify = async () => {
         if (!verificationCode) {
-            setError('Please enter the code');
+            setError(t('enterVerificationCode', language));
             return;
         }
         setLoading(true);
         try {
             const { error } = await verifyEmailOtp(email, verificationCode);
             if (error) {
-                setError(error.message);
+                setError(t('verificationFailed', language));
             } else {
                 onNavigateToSignIn();
             }
         } catch (e) {
-            setError('Verification failed');
+            setError(t('verificationFailed', language));
         } finally {
             setLoading(false);
         }
@@ -113,9 +114,9 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
         return (
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
                 <View style={styles.successBox}>
-                    <Text style={styles.successTitle}>Verify Email</Text>
+                    <Text style={styles.successTitle}>{t('verifyEmail', language)}</Text>
                     <Text style={[styles.successText, { color: mutedColor }]}>
-                        Please enter the verification code sent to {email}
+                        {t('verificationCodeSentTo', language).replace('{email}', email)}
                     </Text>
 
                     {error ? (
@@ -125,6 +126,7 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     ) : null}
 
                     <TextInput
+                        testID="auth-otp-input"
                         style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor, width: '100%', textAlign: 'center', fontSize: 24, letterSpacing: 4 }]}
                         placeholder="000000"
                         placeholderTextColor={mutedColor}
@@ -134,12 +136,12 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                         maxLength={6}
                     />
 
-                    <TouchableOpacity style={[styles.button, { backgroundColor: primaryColor, marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify Code</Text>}
+                    <TouchableOpacity testID="auth-verify-button" accessibilityRole="button" style={[styles.button, { backgroundColor: primaryColor, marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{t('verifyCode', language)}</Text>}
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={{ marginTop: 16 }} onPress={onNavigateToSignIn}>
-                        <Text style={[styles.link, { color: primaryColor }]}>Skip to Sign In</Text>
+                    <TouchableOpacity testID="auth-skip-to-sign-in" accessibilityRole="button" style={{ marginTop: 16 }} onPress={onNavigateToSignIn}>
+                        <Text style={[styles.link, { color: primaryColor }]}>{t('skipToSignIn', language)}</Text>
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -154,11 +156,12 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
             >
                 <View style={styles.header}>
                     <OperixLogo width={180} reversed={isDark} />
-                    <Text style={[styles.title, { color: primaryColor }]}>Create Account</Text>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Start managing your invoices</Text>
+                    <Text style={[styles.title, { color: primaryColor }]}>{t('createAccount', language)}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('startManagingInvoices', language)}</Text>
                 </View>
 
                 <View style={[styles.form, { backgroundColor: cardBg, borderColor }]}>
@@ -169,10 +172,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     ) : null}
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Name *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('firstName', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-first-name"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="First Name"
+                            placeholder={t('firstName', language)}
                             placeholderTextColor={mutedColor}
                             value={firstName}
                             onChangeText={setFirstName}
@@ -180,10 +184,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Last Name *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('lastName', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-last-name"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Last Name"
+                            placeholder={t('lastName', language)}
                             placeholderTextColor={mutedColor}
                             value={lastName}
                             onChangeText={setLastName}
@@ -191,10 +196,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Email *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('email', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-email"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Enter your email"
+                            placeholder={t('enterEmail', language)}
                             placeholderTextColor={mutedColor}
                             value={email}
                             onChangeText={setEmail}
@@ -204,10 +210,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Password *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('password', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-password"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Create a password"
+                            placeholder={t('createPassword', language)}
                             placeholderTextColor={mutedColor}
                             value={password}
                             onChangeText={setPassword}
@@ -216,10 +223,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Confirm Password *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('confirmPassword', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-confirm-password"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Confirm your password"
+                            placeholder={t('confirmYourPassword', language)}
                             placeholderTextColor={mutedColor}
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
@@ -228,8 +236,9 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Phone Number *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('phoneNumber', language)} *</Text>
                         <TextInput
+                            testID="auth-sign-up-phone"
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="+1 234 567 8900"
                             placeholderTextColor={mutedColor}
@@ -240,10 +249,10 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Company Name</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('companyName', language)}</Text>
                         <TextInput
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Your Company Details"
+                            placeholder={t('yourCompanyDetails', language)}
                             placeholderTextColor={mutedColor}
                             value={companyName}
                             onChangeText={setCompanyName}
@@ -251,10 +260,10 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Company Registered Number</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>{t('companyRegisteredNumber', language)}</Text>
                         <TextInput
                             style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Tax ID / Registration"
+                            placeholder={t('taxIdRegistration', language)}
                             placeholderTextColor={mutedColor}
                             value={companyRegNumber}
                             onChangeText={setCompanyRegNumber}
@@ -262,6 +271,8 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <TouchableOpacity
+                        testID="auth-sign-up-button"
+                        accessibilityRole="button"
                         style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]}
                         onPress={handleSignUp}
                         disabled={loading}
@@ -269,21 +280,21 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.buttonText}>Create Account</Text>
+                            <Text style={styles.buttonText}>{t('createAccount', language)}</Text>
                         )}
                     </TouchableOpacity>
 
                     <View style={styles.footer}>
-                        <Text style={[styles.footerText, { color: mutedColor }]}>Already have an account?</Text>
-                        <TouchableOpacity onPress={onNavigateToSignIn}>
-                            <Text style={[styles.link, { color: primaryColor }]}>Sign In</Text>
+                        <Text style={[styles.footerText, { color: mutedColor }]}>{t('alreadyHaveAccount', language)}</Text>
+                        <TouchableOpacity testID="auth-sign-up-sign-in-link" accessibilityRole="button" onPress={onNavigateToSignIn}>
+                            <Text style={[styles.link, { color: primaryColor }]}>{t('signIn', language)}</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={[styles.footer, { marginTop: 12 }]}>
-                        <Text style={[styles.footerText, { color: mutedColor }]}>Joining a company?</Text>
-                        <TouchableOpacity onPress={() => (navigation as any).navigate('JoinTeam')}>
-                            <Text style={[styles.link, { color: primaryColor }]}>Enter Invite Code</Text>
+                        <Text style={[styles.footerText, { color: mutedColor }]}>{t('joinCompany', language)}</Text>
+                        <TouchableOpacity testID="auth-join-team-link" accessibilityRole="button" onPress={() => (navigation as any).navigate('JoinTeam')}>
+                            <Text style={[styles.link, { color: primaryColor }]}>{t('enterInviteCode', language)}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -385,8 +396,5 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 });
-
-
-
 
 

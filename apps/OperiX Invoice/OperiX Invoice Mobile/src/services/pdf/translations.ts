@@ -1,13 +1,18 @@
 export const pdfTranslations: Record<string, any> = {
     en: {
+        number: 'No.',
         invoice: 'Invoice',
         billTo: 'Bill To',
+        customer: 'Customer',
+        taxId: 'Tax ID',
+        summary: 'Invoice summary',
         details: 'Invoice Details',
         date: 'Issue Date',
         due: 'Due Date',
         description: 'Description',
         qty: 'Qty',
         price: 'Price',
+        value: 'Amount',
         total: 'Total',
         subtotal: 'Subtotal',
         tax: 'Tax',
@@ -21,6 +26,13 @@ export const pdfTranslations: Record<string, any> = {
         signature: 'Authorized Signature',
         payNow: 'Pay Online',
         terms: 'Terms & Conditions',
+        received: 'Received',
+        change: 'Change',
+        thankYou: 'Thank you!',
+        business: 'Business',
+        cash: 'CASH',
+        bankTransfer: 'BANK TRANSFER',
+        card: 'CARD',
     },
     de: {
         invoice: 'Rechnung',
@@ -46,17 +58,22 @@ export const pdfTranslations: Record<string, any> = {
         terms: 'Allgemeine Geschäftsbedingungen',
     },
     sq: {
+        number: 'Nr.',
         invoice: 'Faturë',
         billTo: 'Faturuar për',
+        customer: 'Klienti',
+        taxId: 'Numri fiskal',
+        summary: 'Përmbledhja e faturës',
         details: 'Detajet e faturës',
         date: 'Data e lëshimit',
         due: 'Data e skadencës',
         description: 'Përshkrimi',
         qty: 'Sasia',
         price: 'Çmimi',
+        value: 'Vlera',
         total: 'Totali',
         subtotal: 'Nëntotali',
-        tax: 'Taksa',
+        tax: 'TVSH',
         discount: 'Zbritja',
         totalDue: 'Totali për pagesë',
         payment: 'Informacioni i pagesës',
@@ -67,6 +84,13 @@ export const pdfTranslations: Record<string, any> = {
         signature: 'Nënshkrimi i autorizuar',
         payNow: 'Paguaj online',
         terms: 'Kushtet dhe rregullat',
+        received: 'Pranuar',
+        change: 'Kusuri',
+        thankYou: 'Ju faleminderit!',
+        business: 'Biznesi',
+        cash: 'PARA TË GATSHME',
+        bankTransfer: 'BANKË',
+        card: 'KARTELË',
     },
     fr: {
         invoice: 'Facture',
@@ -138,7 +162,6 @@ export const pdfTranslations: Record<string, any> = {
         terms: 'Termini e condizioni',
     }
 };
-
 
 
 

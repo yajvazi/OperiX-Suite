@@ -34,6 +34,7 @@ class ReservationUpdate(BaseModel):
 
 class ReservationOut(BaseModel):
     id: int
+    organization_id: str | None = None
     user_id: int
     resource_id: int
     date: date

@@ -1,0 +1,65 @@
+:root {
+  --operix-primary: #004ffe;
+  --operix-primary-hover: #0044d9;
+  --operix-primary-soft: #edf4ff;
+  --operix-canvas: #f7f9fc;
+  --operix-surface: #ffffff;
+  --operix-surface-raised: #ffffff;
+  --operix-ink: #122033;
+  --operix-muted: #67738a;
+  --operix-subtle: #98a2b3;
+  --operix-border: #e4e9f0;
+  --operix-border-strong: #d5dce8;
+  --operix-success: #12b76a;
+  --operix-success-soft: #ecfdf3;
+  --operix-warning: #f59e0b;
+  --operix-warning-soft: #fff8e8;
+  --operix-danger: #ef4444;
+  --operix-danger-soft: #fff1f1;
+  --operix-purple: #8b5cf6;
+  --operix-sidebar-width: 240px;
+  --operix-sidebar-width-compact: 215px;
+  --operix-topbar-height: 72px;
+  --operix-mobile-nav-height: 68px;
+  --operix-radius-sm: 8px;
+  --operix-radius-md: 10px;
+  --operix-radius-lg: 12px;
+  --operix-radius-xl: 16px;
+  --operix-shadow-sm: 0 4px 18px rgba(16, 24, 40, .04);
+  --operix-shadow-md: 0 8px 28px rgba(16, 24, 40, .06);
+  --operix-shadow-lg: 0 15px 45px rgba(16, 24, 40, .12);
+  --operix-space-1: 4px;
+  --operix-space-2: 8px;
+  --operix-space-3: 12px;
+  --operix-space-4: 16px;
+  --operix-space-5: 20px;
+  --operix-space-6: 24px;
+  --operix-space-8: 32px;
+  --operix-space-10: 40px;
+  --operix-font-ui: Poppins, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --operix-font-body: Inter, Poppins, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --operix-transition-fast: 150ms ease;
+  --operix-transition: 180ms ease;
+  --operix-z-sidebar: 40;
+  --operix-z-topbar: 20;
+  --operix-z-overlay: 50;
+  --operix-z-modal: 70;
+}
+
+html[data-theme="dark"] {
+  --operix-canvas: #0b1220;
+  --operix-surface: #111827;
+  --operix-surface-raised: #162033;
+  --operix-ink: #f8fafc;
+  --operix-muted: #c4cbd6;
+  --operix-subtle: #98a2b3;
+  --operix-border: #263244;
+  --operix-border-strong: #344054;
+  --operix-primary-soft: #1b2a45;
+  --operix-success-soft: #123b2c;
+  --operix-warning-soft: #3b2c12;
+  --operix-danger-soft: #3b1d24;
+  --operix-shadow-sm: 0 4px 18px rgba(0, 0, 0, .14);
+  --operix-shadow-md: 0 8px 28px rgba(0, 0, 0, .2);
+  --operix-shadow-lg: 0 15px 45px rgba(0, 0, 0, .3);
+}

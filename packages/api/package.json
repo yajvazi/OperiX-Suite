@@ -5,11 +5,22 @@
     "main": "./src/index.ts",
     "types": "./src/index.ts",
     "exports": {
-        ".": "./src/index.ts"
+        ".": "./src/index.ts",
+        "./domain": "./src/domain.ts",
+        "./repositories": "./src/repositories.ts",
+        "./workspace": "./src/workspace.ts"
     },
     "dependencies": {
-        "@supabase/supabase-js": "^2.89.0"
-    },
+        "@invoice-monorepo/commercial-documents": "*",
+        "@invoice-monorepo/money": "*",
+        "@invoice-monorepo/types": "*",
+        "@react-native-async-storage/async-storage": "^2.2.0",
+    "@supabase/supabase-js": "^2.89.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/domain.test.ts src/workspace.test.ts"
+  },
     "peerDependencies": {
         "react": "*"
     }

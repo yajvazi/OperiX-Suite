@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSpreadsheet, RefreshCw, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { listCustomerInvoices, listCustomerPayments } from "@invoice-monorepo/api/repositories";
 import { buildCustomerLedger, type CustomerLedgerInvoice, type CustomerLedgerPayment } from "@/lib/customer-ledger";
 import { useWorkspace } from "@/hooks/use-workspace";
 
 type Customer = Record<string, unknown> & { id: string };
-type PaymentQueryRow = CustomerLedgerPayment & { invoice?: { invoice_number?: string | null } | null };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -35,43 +35,12 @@ export function CustomerLedgerDialog({ customer, onClose }: { customer: Customer
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("Supabase is not configured.");
-      let invoiceQuery = supabase
-        .from("invoices")
-        .select("id,invoice_number,issue_date,status,type,subtype,total_amount,payment_method,notes,created_at")
-        .eq("client_id", customer.id)
-        .order("issue_date", { ascending: true });
-      if (workspace.companyId) invoiceQuery = invoiceQuery.eq("company_id", workspace.companyId);
-      const invoiceResult = await invoiceQuery;
-      if (invoiceResult.error) throw invoiceResult.error;
-      const nextInvoices = (invoiceResult.data || []) as CustomerLedgerInvoice[];
-      const invoiceIds = nextInvoices.map((invoice) => invoice.id);
-
-      let directQuery = supabase
-        .from("payments")
-        .select("id,payment_number,payment_date,amount,payment_method,bank_reference,notes,invoice_id,created_at,invoice:invoices(invoice_number)")
-        .eq("client_id", customer.id);
-      if (workspace.companyId) directQuery = directQuery.eq("company_id", workspace.companyId);
-      const directResult = await directQuery;
-      if (directResult.error) throw directResult.error;
-
-      let linkedRows: PaymentQueryRow[] = [];
-      if (invoiceIds.length) {
-        let linkedQuery = supabase
-          .from("payments")
-          .select("id,payment_number,payment_date,amount,payment_method,bank_reference,notes,invoice_id,created_at,invoice:invoices(invoice_number)")
-          .in("invoice_id", invoiceIds);
-        if (workspace.companyId) linkedQuery = linkedQuery.eq("company_id", workspace.companyId);
-        const linkedResult = await linkedQuery;
-        if (linkedResult.error) throw linkedResult.error;
-        linkedRows = (linkedResult.data || []) as unknown as PaymentQueryRow[];
-      }
-      const merged = new Map<string, PaymentQueryRow>();
-      ([...(directResult.data || []), ...linkedRows] as unknown as PaymentQueryRow[]).forEach((payment) => merged.set(payment.id, payment));
+      if (!workspace.user) throw new Error("Your session has expired.");
+      const scope = { userId: workspace.user.id, companyIds: workspace.companyIds };
+      const nextInvoices = await listCustomerInvoices(supabase, scope, customer.id) as unknown as CustomerLedgerInvoice[];
+      const customerPayments = await listCustomerPayments(supabase, scope, customer.id) as unknown as CustomerLedgerPayment[];
       setInvoices(nextInvoices);
-      setPayments([...merged.values()].map((payment) => ({
-        ...payment,
-        invoice_number: payment.invoice?.invoice_number || null,
-      })));
+      setPayments(customerPayments);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Kartela e blerësit nuk mund të ngarkohej.");
     } finally {
@@ -83,7 +52,7 @@ export function CustomerLedgerDialog({ customer, onClose }: { customer: Customer
     if (!workspace.loading) queueMicrotask(() => void load());
     // The customer and workspace determine the complete source set; period changes are calculated locally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer.id, workspace.companyId, workspace.loading]);
+  }, [customer.id, workspace.companyIds, workspace.loading]);
 
   const ledger = useMemo(() => buildCustomerLedger({
     invoices,

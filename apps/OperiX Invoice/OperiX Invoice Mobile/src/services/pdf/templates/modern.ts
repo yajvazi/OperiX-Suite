@@ -1,4 +1,4 @@
-import { InvoiceData } from '@invoice-monorepo/types';
+import { InvoiceData, TemplateConfig } from '@invoice-monorepo/types';
 import { pdfTranslations } from '../translations';
 
 export function modernTemplate(data: InvoiceData): string {
@@ -6,13 +6,20 @@ export function modernTemplate(data: InvoiceData): string {
   const isGrayscale = data.company.isGrayscale;
   const lang = data.details.language || 'en';
   const t = pdfTranslations[lang] || pdfTranslations.en;
-  const config = data.config || {
-    showLogo: true,
-    showSignature: true,
-    showStamp: true,
-    visibleColumns: { sku: false, unit: true, tax: false, quantity: true, price: true },
-    labels: {},
-    pageSize: 'A4'
+  const config: TemplateConfig = {
+    ...data.config,
+    showLogo: data.config?.showLogo ?? true,
+    showSignature: data.config?.showSignature ?? true,
+    showBuyerSignature: data.config?.showBuyerSignature ?? true,
+    showStamp: data.config?.showStamp ?? true,
+    showQrCode: data.config?.showQrCode ?? true,
+    showNotes: data.config?.showNotes ?? true,
+    showDiscount: data.config?.showDiscount ?? true,
+    showTax: data.config?.showTax ?? true,
+    showBankDetails: data.config?.showBankDetails ?? true,
+    visibleColumns: { rowNumber: true, sku: false, description: true, quantity: true, unit: true, discount: true, unitPrice: true, taxRate: true, lineTotal: true, grossPrice: true, ...(data.config?.visibleColumns || {}) },
+    labels: data.config?.labels || {},
+    pageSize: data.config?.pageSize || 'A4',
   };
 
   const pageSize = config.pageSize || 'A4';
@@ -37,16 +44,17 @@ export function modernTemplate(data: InvoiceData): string {
       <tr>
         <td style="padding: 10px 12px; border-bottom: 1px solid #E6EBF1;">${item.description}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #E6EBF1; text-align: center;">${item.quantity} ${config.visibleColumns.unit ? (item.unit || '') : ''}</td>
-        ${config.visibleColumns.price ? `<td style="padding: 10px 12px; border-bottom: 1px solid #E6EBF1; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
+        ${config.visibleColumns.unitPrice ? `<td style="padding: 10px 12px; border-bottom: 1px solid #E6EBF1; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
         <td style="padding: 10px 12px; border-bottom: 1px solid #E6EBF1; text-align: right; font-weight: 600;">${formatCurrency(item.total)}</td>
       </tr>
     `
     )
     .join('');
 
-  const qrData = encodeURIComponent(`INVOICE:${data.details.number}`);
+  const qrData = data.details.qrReference ? encodeURIComponent(`https://invoice.operixsuite.com/qr/${data.details.qrReference}`) : '';
   const qrColor = isGrayscale ? '000000' : primaryColor.replace('#', '');
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${qrData}&color=${qrColor}`;
+  const qrCodeUrl = qrData ? `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${qrData}&color=${qrColor}` : '';
+  const qrCodeMarkup = qrCodeUrl ? `<img src="${qrCodeUrl}" alt="QR Code">` : '';
 
   return `
 <!DOCTYPE html>
@@ -87,7 +95,7 @@ export function modernTemplate(data: InvoiceData): string {
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     th { background: ${isGrayscale ? '#1e293b' : primaryColor}; color: white; padding: 10px 12px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
     th:nth-child(2) { text-align: center; }
-    ${config.visibleColumns.price ? 'th:nth-child(3), th:nth-child(4) { text-align: right; }' : 'th:nth-child(3) { text-align: right; }'}
+    ${config.visibleColumns.unitPrice ? 'th:nth-child(3), th:nth-child(4) { text-align: right; }' : 'th:nth-child(3) { text-align: right; }'}
     td { font-size: ${isA5 ? '9px' : '10px'}; }
     tbody tr:nth-child(even) { background: #F7F9FC; }
     .summary-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
@@ -123,8 +131,7 @@ export function modernTemplate(data: InvoiceData): string {
   <div class="gradient-header">
     <div class="header-content">
       <div class="company-section">
-        ${(config.showLogo && data.company.logoUrl) ? `<img src="${data.company.logoUrl}" alt="Logo" style="max-height: ${isA5 ? '35px' : '45px'}; margin-bottom: 8px; filter: brightness(0) invert(1);">` : ''}
-        <h1>${data.company.name}</h1>
+        ${(config.showLogo && data.company.logoUrl) ? `<img src="${data.company.logoUrl}" alt="Logo" style="max-height: ${isA5 ? '35px' : '45px'}; max-width: 180px; object-fit: contain; margin-bottom: 8px;">` : `<h1>${data.company.name}</h1>`}
         <p>${data.company.address}</p>
         ${data.company.phone ? `<p>📞 ${data.company.phone}</p>` : ''}
         ${data.company.email ? `<p>✉️ ${data.company.email}</p>` : ''}
@@ -133,7 +140,7 @@ export function modernTemplate(data: InvoiceData): string {
         <h2>${getLabel('invoice', t.invoice)}</h2>
         <div class="invoice-number">${data.details.number}</div>
         <div class="qr-code">
-          <img src="${qrCodeUrl}" alt="QR Code">
+          ${qrCodeMarkup}
         </div>
       </div>
     </div>
@@ -160,7 +167,7 @@ export function modernTemplate(data: InvoiceData): string {
         <tr>
           <th>${getLabel('item', t.description)}</th>
           <th style="text-align: center;">${getLabel('quantity', t.qty)}</th>
-          ${config.visibleColumns.price ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
+          ${config.visibleColumns.unitPrice ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
           <th style="text-align: right;">${getLabel('total', t.total)}</th>
         </tr>
       </thead>
@@ -249,7 +256,3 @@ export function modernTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
-
-
-

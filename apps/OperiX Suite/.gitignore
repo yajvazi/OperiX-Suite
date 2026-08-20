@@ -10,6 +10,7 @@
 
 # local environment
 .env*
+!.env.example
 
 # logs and local tooling
 *.log

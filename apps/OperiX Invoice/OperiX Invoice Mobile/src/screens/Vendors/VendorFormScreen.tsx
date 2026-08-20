@@ -15,7 +15,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
+import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 
 interface VendorFormScreenProps {
     navigation: any;
@@ -111,7 +111,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
             navigation.goBack();
         } catch (error: any) {
             console.error('Error saving vendor:', error);
-            Alert.alert(t('error', language), error.message || t('saveError', language));
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'saveError'));
         } finally {
             setLoading(false);
         }
@@ -119,7 +119,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: bgColor }]}
         >
             <View style={styles.header}>
@@ -132,16 +132,16 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
                 {/* Contact Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Building2 color="#0891b2" size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('contactInfo', language)}</Text>
                     </View>
-                    <Input label={`${t('name', language) || 'Name'} *`} value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Vendor/Supplier name" />
-                    <Input label={t('email', language)} value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
-                    <Input label={t('phone', language)} value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
+                    <Input label={`${t('name', language)} *`} value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder={t('vendorSupplierNamePlaceholder', language)} />
+                    <Input label={t('email', language)} value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder={t('emailAddress', language)} keyboardType="email-address" />
+                    <Input label={t('phone', language)} value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder={t('phoneNumber', language)} keyboardType="phone-pad" />
                 </View>
 
                 {/* Address Details */}
@@ -150,16 +150,16 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                         <MapPin color="#12B76A" size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('addressDetails', language)}</Text>
                     </View>
-                    <Input label={t('streetAddress', language)} value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
+                    <Input label={t('streetAddress', language)} value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder={t('fullAddress', language)} multiline />
                     <View style={styles.row}>
                         <View style={styles.halfField}>
-                            <Input label={t('city', language)} value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder="City" />
+                            <Input label={t('city', language)} value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder={t('city', language)} />
                         </View>
                         <View style={styles.halfField}>
-                            <Input label={t('zipCode', language)} value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder="Zip" keyboardType="number-pad" />
+                            <Input label={t('zipCode', language)} value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder={t('zipCode', language)} keyboardType="number-pad" />
                         </View>
                     </View>
-                    <Input label={t('country', language)} value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder="Country" />
+                    <Input label={t('country', language)} value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder={t('country', language)} />
                 </View>
 
                 {/* Business Info */}
@@ -176,7 +176,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                             </TouchableOpacity>
                         </View>
                     </View>
-                    <Input label={t('taxIdVat', language)} value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
+                    <Input label={t('taxIdVat', language)} value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder={t('taxIdentificationNumber', language)} />
                 </View>
 
                 {/* Notes */}
@@ -189,7 +189,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                         label={t('notes', language)}
                         value={formData.notes}
                         onChangeText={(text) => setFormData({ ...formData, notes: text })}
-                        placeholder="Additional notes about this vendor..."
+                        placeholder={t('additionalVendorNotes', language)}
                         multiline
                         numberOfLines={3}
                     />
@@ -221,8 +221,4 @@ const styles = StyleSheet.create({
     halfField: { flex: 1 },
     saveButton: { marginTop: 8 },
 });
-
-
-
-
 

@@ -6,16 +6,19 @@ import {
     TouchableOpacity,
     RefreshControl,
     StyleSheet,
+    Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Plus, ArrowUpCircle, ArrowDownCircle, MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, Plus, ArrowUpCircle, ArrowDownCircle, MoreVertical, Edit2 } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, FAB } from '@invoice-monorepo/ui';
 import { Profile } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { deleteExpense } from '@invoice-monorepo/api/repositories';
 
 interface ExpensesListScreenProps {
     navigation: any;
@@ -28,6 +31,7 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
     const [profile, setProfile] = useState<Profile | null>(null);
     const [expenses, setExpenses] = useState<any[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
     const type = route?.params?.type || 'expense'; // 'expense', 'income', 'dashboard'
 
@@ -39,32 +43,32 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [user, type])
+        }, [user, type, language])
     );
 
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            setProfile(profileData);
-            const companyId = profileData.company_id || user.id;
+        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        if (workspaceProfile) {
+            setProfile(workspaceProfile);
+            const scope = scopedResource(user.id, companyIds);
 
             if (type === 'income') {
                 // Fetch paid invoices as income
                 const { data } = await supabase
                     .from('invoices')
                     .select('*, client:clients(name)')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('status', 'paid')
                     .order('issue_date', { ascending: false });
 
                 setExpenses(data?.map(inv => ({
                     id: inv.id,
-                    description: `${inv.invoice_number} - ${inv.client?.name || 'Client'}`,
+                    description: `${inv.invoice_number} - ${inv.client?.name || t('client', language)}`,
                     amount: inv.total_amount,
                     date: inv.issue_date,
-                    category: 'Invoice Payment',
+                    category: 'incomePayment',
                     type: 'income',
                 })) || []);
             } else {
@@ -72,10 +76,10 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
                 const { data } = await supabase
                     .from('expenses')
                     .select('*')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .order('date', { ascending: false });
 
-                setExpenses(data?.map(exp => ({
+                setExpenses(data?.filter(exp => exp.type !== 'income').map(exp => ({
                     ...exp,
                     type: 'expense',
                 })) || []);
@@ -87,6 +91,33 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
         setRefreshing(true);
         await fetchData();
         setRefreshing(false);
+    };
+
+    const handleDelete = (expense: any) => {
+        Alert.alert(
+            t('delete', language),
+            t('deleteExpenseConfirmation', language),
+            [
+                { text: t('cancel', language), style: 'cancel' },
+                {
+                    text: t('delete', language),
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            if (!user) throw new Error('Your session has expired.');
+                            const { companyId } = await getWorkspaceScope(user.id);
+                            await deleteExpense(supabase, expense.id, companyId, user.id);
+                            await fetchData();
+                        } catch (error) {
+                            Alert.alert(
+                                t('error', language),
+                                error instanceof Error ? error.message : t('failedToDeleteExpense', language),
+                            );
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     const getTitle = () => {
@@ -103,7 +134,10 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
         const color = isIncome ? '#12B76A' : '#ef4444';
 
         return (
-            <TouchableOpacity activeOpacity={0.8}>
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => !isIncome && navigation.navigate('ExpenseForm', { expenseId: item.id })}
+            >
                 <Card style={styles.itemCard}>
                     <View style={styles.itemContent}>
                         <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
@@ -111,21 +145,49 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
                         </View>
                         <View style={styles.itemInfo}>
                             <Text style={[styles.itemTitle, { color: textColor }]} numberOfLines={1}>
-                                {item.description || item.category || 'Expense'}
+                                {item.description || (item.category === 'incomePayment' ? t('incomePayment', language) : item.category || t('expense', language))}
                             </Text>
                             <Text style={[styles.itemDate, { color: mutedColor }]}>
-                                {item.date ? new Date(item.date).toLocaleDateString() : 'No date'}
+                                {item.date ? formatDate(item.date, language) : t('noDate', language)}
                             </Text>
+                            {!isIncome && (item.vendor_name || item.invoice_number) ? (
+                                <Text style={[styles.itemDate, { color: mutedColor }]} numberOfLines={1}>
+                                    {[item.vendor_name, item.invoice_number].filter(Boolean).join(' • ')}
+                                </Text>
+                            ) : null}
                         </View>
                         <View style={styles.itemRight}>
                             <Text style={[styles.itemAmount, { color }]}>
                                 {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
                             </Text>
                             {item.category && (
-                                <Text style={[styles.itemCategory, { color: mutedColor }]}>{item.category}</Text>
+                                <Text style={[styles.itemCategory, { color: mutedColor }]}>{item.category === 'incomePayment' ? t('incomePayment', language) : item.category}</Text>
+                            )}
+                            {!isIncome && (
+                                <TouchableOpacity
+                                    testID={`expense-menu-${item.id}`}
+                                    style={styles.menuButton}
+                                    onPress={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
+                                >
+                                    <MoreVertical color={mutedColor} size={18} />
+                                </TouchableOpacity>
                             )}
                         </View>
                     </View>
+                    {!isIncome && activeMenu === item.id && (
+                        <View style={[styles.dropdownMenu, { backgroundColor: cardBg, borderColor: isDark ? '#263A55' : '#E4E9F0' }]}>
+                            <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => {
+                                    setActiveMenu(null);
+                                    navigation.navigate('ExpenseForm', { expenseId: item.id });
+                                }}
+                            >
+                                <Edit2 color="#12B76A" size={18} />
+                                <Text style={[styles.menuText, { color: textColor }]}>{t('edit', language)}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </Card>
             </TouchableOpacity>
         );
@@ -155,7 +217,7 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
                         {formatCurrency(expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0))}
                     </Text>
                     <Text style={[styles.statCount, { color: mutedColor }]}>
-                        {expenses.length} {type === 'income' ? 'payments' : 'expenses'}
+                        {expenses.length} {type === 'income' ? t('incomePayments', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US') : t('expenses', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}
                     </Text>
                 </Card>
             </View>
@@ -170,7 +232,7 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {type === 'income' ? 'No income payments yet' : 'No expenses yet'}
+                            {type === 'income' ? t('noIncomePaymentsYet', language) : t('noExpensesYet', language)}
                         </Text>
                     </View>
                 }
@@ -238,6 +300,10 @@ const styles = StyleSheet.create({
     },
     itemDate: { fontSize: 12 },
     itemRight: { alignItems: 'flex-end' },
+    menuButton: { padding: 4, marginTop: 2 },
+    dropdownMenu: { marginTop: 12, borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+    menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+    menuText: { fontSize: 14, fontWeight: '600' },
     itemAmount: {
         fontSize: 16,
         fontWeight: 'bold',
@@ -248,8 +314,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { textAlign: 'center' },
 });
-
-
-
-
-

@@ -38,6 +38,7 @@ class ResourceUpdate(BaseModel):
 
 class ResourceOut(ResourceBase):
     id: int
+    organization_id: str | None = None
     is_active: bool
     is_available: bool | None = None
     reserved_by: str | None = None

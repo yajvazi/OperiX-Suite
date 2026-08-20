@@ -8,9 +8,11 @@ interface SignaturePadModalProps {
     onClose: () => void;
     onSave: (signature: string) => void;
     primaryColor: string;
+    title?: string;
+    description?: string;
 }
 
-export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: SignaturePadModalProps) {
+export function SignaturePadModal({ visible, onClose, onSave, primaryColor, title = 'Sign Here', description }: SignaturePadModalProps) {
     const [paths, setPaths] = useState<string[]>([]);
     const [currentPath, setCurrentPath] = useState<string>('');
     const [layout, setLayout] = useState({ width: 300, height: 200 });
@@ -91,7 +93,10 @@ export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: Si
             <View style={styles.container}>
                 <View style={styles.content}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Sign Here</Text>
+                        <View style={{ flex: 1, paddingRight: 12 }}>
+                            <Text style={styles.title}>{title}</Text>
+                            {description ? <Text style={styles.description}>{description}</Text> : null}
+                        </View>
                         <TouchableOpacity onPress={handleClose}>
                             <X color="#667085" size={24} />
                         </TouchableOpacity>
@@ -181,6 +186,12 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#111827'
     },
+    description: {
+        marginTop: 4,
+        fontSize: 12,
+        lineHeight: 17,
+        color: '#667085'
+    },
     padContainer: {
         flex: 1,
         backgroundColor: '#F7F9FC',
@@ -220,4 +231,3 @@ const styles = StyleSheet.create({
         borderRadius: 8
     }
 });
-

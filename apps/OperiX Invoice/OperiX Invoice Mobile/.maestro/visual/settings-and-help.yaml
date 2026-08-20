@@ -1,0 +1,45 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: nav-more-tab
+- tapOn:
+    id: more-reports-button
+- extendedWaitUntil:
+    visible:
+      id: reports-hub-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/reports.png"
+    thresholdPercentage: 98
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: nav-more-tab
+- tapOn:
+    id: more-settings-button
+- extendedWaitUntil:
+    visible:
+      id: settings-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/settings.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: settings-logout-button
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/logout-confirmation.png"
+    thresholdPercentage: 98
+- tapOn:
+    text: ${VISUAL_SIGN_OUT}
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: nav-more-tab
+- tapOn:
+    id: more-help-button
+- extendedWaitUntil:
+    visible:
+      id: help-support-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/help.png"
+    thresholdPercentage: 98

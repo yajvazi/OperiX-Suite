@@ -21,6 +21,7 @@ from app.utils.user_profile import (
     user_skills,
     user_specialization,
 )
+from app.services.workspace import scope_query
 
 EXPERIENCE_RANK = {"senior": 3, "mid": 2, "junior": 1}
 
@@ -157,7 +158,9 @@ def _matches_required_skills(
     return False
 
 
-def _fetch_reservation_availability(db: Session, user_ids: list[int]) -> dict[int, float]:
+def _fetch_reservation_availability(
+    db: Session, user_ids: list[int], current_user: User
+) -> dict[int, float]:
     if not user_ids:
         return {}
 
@@ -165,12 +168,13 @@ def _fetch_reservation_availability(db: Session, user_ids: list[int]) -> dict[in
     window_end = today + timedelta(days=14)
 
     rows = (
-        db.query(Reservation.user_id, func.count(Reservation.id))
+        scope_query(db.query(Reservation.user_id, func.count(Reservation.id)), Reservation, current_user)
         .filter(
             Reservation.user_id.in_(user_ids),
             Reservation.status == ReservationStatus.active,
             Reservation.date >= today,
             Reservation.date <= window_end,
+            Reservation.organization_id == current_user.organization_id,
         )
         .group_by(Reservation.user_id)
         .all()
@@ -184,15 +188,17 @@ def _fetch_reservation_availability(db: Session, user_ids: list[int]) -> dict[in
     return scores
 
 
-def _load_candidates(db: Session) -> list[EmployeeCandidate]:
+def _load_candidates(db: Session, current_user: User) -> list[EmployeeCandidate]:
     users = (
-        db.query(User)
+        scope_query(db.query(User), User, current_user)
         .filter(User.role.in_([UserRole.employee, UserRole.team_leader, UserRole.manager]))
         .order_by(User.full_name)
         .all()
     )
 
-    reservation_availability = _fetch_reservation_availability(db, [user.id for user in users])
+    reservation_availability = _fetch_reservation_availability(
+        db, [user.id for user in users], current_user
+    )
 
     candidates: list[EmployeeCandidate] = []
     for user in users:
@@ -511,6 +517,7 @@ def build_project_team(
     prompt: str,
     required_skills: list[str] | None = None,
     team_size: int | None = None,
+    current_user: User,
 ) -> TeamBuilderResponse:
     cleaned_prompt = prompt.strip()
     if not cleaned_prompt:
@@ -523,7 +530,7 @@ def build_project_team(
         if isinstance(skill, str) and skill.strip()
     ]
 
-    all_candidates = _load_candidates(db)
+    all_candidates = _load_candidates(db, current_user)
     if not all_candidates:
         raise HTTPException(status_code=404, detail="No employees found to build a team")
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -10,20 +10,34 @@ import {
     Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { ArrowLeft, User, Percent, FileText, MapPin, Globe } from 'lucide-react-native';
+import { ArrowLeft, User, Percent, FileText, MapPin, Globe, ChevronDown, ChevronUp, Trash2 } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
+import { getWorkspaceScope } from '../../services/workspace';
+import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { deleteCustomer, getCustomer, saveCustomer } from '@invoice-monorepo/api/repositories';
 
 interface ClientFormScreenProps {
     navigation: any;
     route: any;
 }
 
+const wholePercentageValue = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(100, Math.max(0, Math.trunc(parsed)));
+};
+
+const wholePercentageText = (text: string) => {
+    const integerPart = text.split(/[.,]/, 1)[0].replace(/\D/g, '');
+    return integerPart ? String(wholePercentageValue(integerPart)) : '';
+};
+
 export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const clientId = route.params?.clientId;
     const isEditing = !!clientId;
 
@@ -43,6 +57,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
         notes: '',
     });
     const [loading, setLoading] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const saveInFlight = useRef(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -54,169 +71,222 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
     }, [clientId]);
 
     const fetchClient = async () => {
-        const { data } = await supabase.from('clients').select('*').eq('id', clientId).single();
-        if (data) setFormData({
-            name: data.name || '',
-            email: data.email || '',
-            phone: data.phone || '',
-            address: data.address || '',
-            city: data.city || '',
-            zip_code: data.zip_code || '',
-            country: data.country || '',
-            tax_id: data.tax_id || '',
-            nui: data.nui || '',
-            fiscal_number: data.fiscal_number || '',
-            vat_number: data.vat_number || '',
-            discount_percent: data.discount_percent || 0,
-            notes: data.notes || '',
+        if (!user) return;
+        const { companyIds } = await getWorkspaceScope(user.id);
+        const data = await getCustomer(supabase, clientId, { userId: user.id, companyIds });
+        if (data) {
+            const client = data as unknown as Partial<Parameters<typeof saveCustomer>[1]> & Record<string, unknown>;
+            setFormData({
+            name: String(client.name || ''),
+            email: String(client.email || ''),
+            phone: String(client.phone || ''),
+            address: String(client.address || ''),
+            city: String(client.city || ''),
+            zip_code: String(client.zip_code || ''),
+            country: String(client.country || ''),
+            tax_id: String(client.tax_id || ''),
+            nui: String(client.nui || ''),
+            fiscal_number: String(client.fiscal_number || ''),
+            vat_number: String(client.vat_number || ''),
+            discount_percent: wholePercentageValue(client.discount_percent),
+            notes: String(client.notes || ''),
         });
+        }
     };
 
     const handleSave = async () => {
+        if (saveInFlight.current) return;
         if (!formData.name) {
-            Alert.alert('Error', 'Name is required');
+            Alert.alert(t('error', language), t('nameRequired', language));
             return;
         }
 
+        if (!user?.id) {
+            Alert.alert(t('error', language), t('loginRequired', language));
+            return;
+        }
+
+        saveInFlight.current = true;
         setLoading(true);
         try {
-            const { data: profileData, error: profileError } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user?.id).single();
+            // Do not use the user ID as a company ID. Older profiles can exist
+            // without a company yet, and the company-scoped RLS policy allows
+            // those creator-owned rows only when company_id is null.
+            // Resolve the selected company from the actual company rows so a
+            // legacy profile.company_id that points at the user UUID cannot be
+            // sent to the database as a non-existent company.
+            const { company } = await getWorkspaceScope(user.id);
+            const companyId = company?.id ?? null;
 
-            if (profileError) {
-                console.error('Profile fetch error:', profileError);
-                Alert.alert('Error', 'Failed to load profile: ' + profileError.message);
-                setLoading(false);
-                return;
-            }
-
-            const companyId = profileData?.active_company_id || profileData?.company_id || user?.id;
-
-            if (isEditing) {
-                const { error } = await supabase.from('clients').update(formData).eq('id', clientId);
-                if (error) {
-                    console.error('Update error:', error);
-                    Alert.alert('Error', 'Failed to update client: ' + error.message);
-                    setLoading(false);
-                    return;
-                }
-            } else {
-                const { error } = await supabase.from('clients').insert({ ...formData, user_id: user?.id, company_id: companyId });
-                if (error) {
-                    console.error('Insert error:', error);
-                    Alert.alert('Error', 'Failed to create client: ' + error.message);
-                    setLoading(false);
-                    return;
-                }
-            }
+            await saveCustomer(supabase, { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), user_id: user.id, company_id: companyId }, isEditing ? clientId : null);
             navigation.goBack();
         } catch (error: any) {
             console.error('Exception:', error);
-            Alert.alert('Error', 'Failed to save client: ' + (error.message || 'Unknown error'));
+            Alert.alert(t('error', language), `${t('saveError', language)}: ${getLocalizedErrorMessage(error, language, 'somethingWentWrong')}`);
         } finally {
+            saveInFlight.current = false;
             setLoading(false);
         }
     };
 
+    const handleDelete = () => {
+        if (!clientId) return;
+        Alert.alert(
+            t('delete', language),
+            t('deleteClientConfirmation', language),
+            [
+                { text: t('cancel', language), style: 'cancel' },
+                {
+                    text: t('delete', language),
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            if (!user?.id) throw new Error(t('loginRequired', language));
+                            setDeleting(true);
+                            const { company } = await getWorkspaceScope(user.id);
+                            await deleteCustomer(supabase, clientId, company?.id ?? null, user.id);
+                            navigation.goBack();
+                        } catch (error) {
+                            Alert.alert(
+                                t('error', language),
+                                error instanceof Error ? error.message : t('failedToDeleteClient', language),
+                            );
+                        } finally {
+                            setDeleting(false);
+                        }
+                    },
+                },
+            ],
+        );
+    };
+
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
+            testID="customer-form-screen"
             style={[styles.container, { backgroundColor: bgColor }]}
         >
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity testID="customer-form-back-button" accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>{isEditing ? 'Update Client' : 'New Client'}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>Client Details</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{isEditing ? t('updateClient', language) : t('newClient', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('clientDetails', language)}</Text>
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="none"
+            >
                 {/* Contact Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <User color="#004FFE" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Contact Information</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('contactInfo', language)}</Text>
                     </View>
-                    <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Client name" />
-                    <Input label="Email" value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
-                    <Input label="Phone" value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
+                    <Input testID="customer-name-input" label={`${t('name', language)} *`} value={formData.name} onChangeText={(text) => setFormData((current) => ({ ...current, name: text }))} placeholder={t('client', language)} />
+                    <Input testID="customer-email-input" label={t('email', language)} value={formData.email} onChangeText={(text) => setFormData((current) => ({ ...current, email: text }))} placeholder={t('email', language)} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} blurOnSubmit={false} />
+                    <Input testID="customer-phone-input" label={t('phone', language)} value={formData.phone} onChangeText={(text) => setFormData((current) => ({ ...current, phone: text }))} placeholder={t('phone', language)} keyboardType="phone-pad" blurOnSubmit={false} />
                 </View>
 
                 {/* Address Details */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <MapPin color="#12B76A" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Address Details</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('addressDetails', language)}</Text>
                     </View>
-                    <Input label="Street Address" value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
+                    <Input testID="customer-address-input" label={t('streetAddress', language)} value={formData.address} onChangeText={(text) => setFormData((current) => ({ ...current, address: text }))} placeholder={t('fullAddress', language)} multiline />
                     <View style={styles.row}>
                         <View style={styles.halfField}>
-                            <Input label="City" value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder="City" />
+                            <Input testID="customer-city-input" label={t('city', language)} value={formData.city} onChangeText={(text) => setFormData((current) => ({ ...current, city: text }))} placeholder={t('city', language)} />
                         </View>
                         <View style={styles.halfField}>
-                            <Input label="Zip Code" value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder="Zip" keyboardType="number-pad" />
+                            <Input testID="customer-zip-input" label={t('zipCode', language)} value={formData.zip_code} onChangeText={(text) => setFormData((current) => ({ ...current, zip_code: text }))} placeholder={t('zip', language)} keyboardType="number-pad" />
                         </View>
                     </View>
-                    <Input label="Country" value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder="Country" />
+                    <Input testID="customer-country-input" label={t('country', language)} value={formData.country} onChangeText={(text) => setFormData((current) => ({ ...current, country: text }))} placeholder={t('country', language)} />
                 </View>
 
+                <TouchableOpacity testID="customer-more-options-button" accessibilityRole="button" accessibilityState={{ expanded: showAdvanced }} onPress={() => setShowAdvanced((current) => !current)} style={styles.advancedToggle}>
+                    <Text style={[styles.advancedText, { color: '#004FFE' }]}>{showAdvanced ? t('hideBusinessDetails', language) : t('moreOptions', language)}</Text>
+                    {showAdvanced ? <ChevronUp color="#004FFE" size={17} /> : <ChevronDown color="#004FFE" size={17} />}
+                </TouchableOpacity>
+
                 {/* Business Info */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                {showAdvanced ? <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Globe color="#12B76A" size={20} />
                         <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={[styles.sectionTitle, { color: textColor }]}>Business Details</Text>
+                            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('businessDetails', language)}</Text>
                             <TouchableOpacity
+                                testID="customer-check-registry-button"
+                                accessibilityRole="button"
                                 style={{ backgroundColor: '#12B76A20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
                                 onPress={() => WebBrowser.openBrowserAsync('https://apps.atk-ks.org/BizPasiveApp/VatRegist/Index')}
                             >
-                                <Text style={{ color: '#12B76A', fontSize: 12, fontWeight: '600' }}>Check Registry ↗</Text>
+                                <Text style={{ color: '#12B76A', fontSize: 12, fontWeight: '600' }}>{t('checkRegistry', language)} ↗</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                    <Input label="Tax ID / NUI (Numri Unik Identifikues)" value={formData.nui || formData.tax_id} onChangeText={(text) => setFormData({ ...formData, nui: text, tax_id: text })} placeholder="NUI / Tax ID" />
-                    <Input label="Numri Fiskal" value={formData.fiscal_number} onChangeText={(text) => setFormData({ ...formData, fiscal_number: text })} placeholder="Numri Fiskal" />
-                    <Input label="Numri i TVSH (VAT Number)" value={formData.vat_number} onChangeText={(text) => setFormData({ ...formData, vat_number: text })} placeholder="VAT Number" />
-                </View>
+                    <Input label={t('taxIdNui', language)} value={formData.nui || formData.tax_id} onChangeText={(text) => setFormData((current) => ({ ...current, nui: text, tax_id: text }))} placeholder={t('taxIdRegistration', language)} />
+                    <Input label={t('fiscalNumber', language)} value={formData.fiscal_number} onChangeText={(text) => setFormData((current) => ({ ...current, fiscal_number: text }))} placeholder={t('fiscalNumber', language)} />
+                    <Input label={t('vatNumberLabel', language)} value={formData.vat_number} onChangeText={(text) => setFormData((current) => ({ ...current, vat_number: text }))} placeholder={t('vatNumber', language)} />
+                </View> : null}
 
                 {/* Discount */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                {showAdvanced ? <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Percent color="#f59e0b" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Client Discount</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('clientDiscount', language)}</Text>
                     </View>
                     <Text style={[styles.hintText, { color: mutedColor }]}>
-                        Set a default discount percentage that will be automatically applied to invoices for this client.
+                        {t('clientDiscountDescription', language)}
                     </Text>
                     <Input
-                        label="Discount (%)"
+                        label={`${t('discount', language)} (%)`}
                         value={String(formData.discount_percent || 0)}
-                        onChangeText={(text) => setFormData({ ...formData, discount_percent: Number(text) || 0 })}
+                        onChangeText={(text) => setFormData((current) => ({ ...current, discount_percent: wholePercentageValue(wholePercentageText(text)) }))}
                         placeholder="0"
-                        keyboardType="decimal-pad"
+                        keyboardType="number-pad"
                     />
-                </View>
+                </View> : null}
 
                 {/* Notes */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                {showAdvanced ? <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <Input
-                        label="Notes"
+                        label={t('notes', language)}
                         value={formData.notes}
-                        onChangeText={(text) => setFormData({ ...formData, notes: text })}
-                        placeholder="Additional notes about this client..."
+                        onChangeText={(text) => setFormData((current) => ({ ...current, notes: text }))}
+                        placeholder={t('additionalNotes', language)}
                         multiline
                         numberOfLines={3}
                     />
-                </View>
+                </View> : null}
 
                 <Button
-                    title={isEditing ? 'Update Client' : 'Create Client'}
+                    testID="customer-save-button"
+                    title={isEditing ? t('updateClient', language) : t('createClient', language)}
                     onPress={handleSave}
                     loading={loading}
                     style={styles.saveButton}
                 />
+                {isEditing ? (
+                    <Button
+                        testID="customer-delete-button"
+                        title={t('delete', language)}
+                        onPress={handleDelete}
+                        loading={deleting}
+                        disabled={loading || deleting}
+                        variant="danger"
+                        icon={Trash2}
+                        style={styles.deleteButton}
+                    />
+                ) : null}
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -237,9 +307,7 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row', gap: 12 },
     halfField: { flex: 1 },
     saveButton: { marginTop: 8 },
+    deleteButton: { marginTop: 12 },
+    advancedToggle: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+    advancedText: { fontSize: 13, fontWeight: '700' },
 });
-
-
-
-
-

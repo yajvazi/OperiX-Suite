@@ -1,0 +1,34 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: global-create-button
+- tapOn:
+    id: global-create-invoice-action
+- extendedWaitUntil:
+    visible:
+      id: invoice-form-screen
+    timeout: 15000
+- tapOn:
+    id: invoice-customer-selector
+- tapOn:
+    id: invoice-customer-option-${E2E_CUSTOMER_ID}
+- tapOn:
+    id: invoice-add-item-button
+- tapOn:
+    id: invoice-product-option-${E2E_PRODUCT_ID}
+- tapOn:
+    id: invoice-save-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-detail-screen
+    timeout: 30000
+- tapOn:
+    id: invoice-customer-detail-button
+- extendedWaitUntil:
+    visible:
+      id: customer-detail-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/customer-details.png"
+    thresholdPercentage: 98

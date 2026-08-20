@@ -1,0 +1,25 @@
+services:
+  operix-help-center:
+    build:
+      context: .
+      dockerfile: apps/OperiX Help Center/Dockerfile
+      args:
+        INDEXING_ALLOWED: ${INDEXING_ALLOWED:-true}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://helpdesk.operixsuite.com}
+    image: operix-help-center:build-20260813-logo
+    container_name: operix-help-center
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3015"
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://helpdesk.operixsuite.com}
+      NEXT_PUBLIC_SUPPORT_URL: ${NEXT_PUBLIC_SUPPORT_URL:-}
+      INDEXING_ALLOWED: ${INDEXING_ALLOWED:-true}
+    ports:
+      - "127.0.0.1:3042:3015"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3015/api/health', response => process.exit(response.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s

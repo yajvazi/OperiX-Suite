@@ -13,6 +13,7 @@ import {
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { SvgXml } from 'react-native-svg';
+import { ArrowRight, LockKeyhole, Mail, MapPin } from 'lucide-react-native';
 
 const googleLogoXml = `
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -66,50 +67,20 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
     };
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={[styles.container, { backgroundColor: bgColor }]}
-        >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-            >
-                <View style={styles.header}>
-                    <Text style={[styles.title, { color: primaryColor }]}>Invoice Pro</Text>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Sign in to your account</Text>
-                </View>
-
-                <View style={[styles.form, { backgroundColor: cardBg }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <View style={styles.hero}><View style={styles.logoRow}><View style={styles.logoMark}><MapPin color="#fff" size={16} /></View><Text style={styles.logoText}><Text>OperiX</Text><Text style={styles.logoProduct}> Tracker</Text></Text></View><Text style={styles.eyebrow}>OPERIX SUITE</Text><Text style={styles.heroTitle}>Make every movement feel effortless.</Text><Text style={styles.heroSubtitle}>One calm workspace for your team, locations, and daily work.</Text></View>
+                <View style={[styles.form, { backgroundColor: cardBg, borderColor }]}>
+                    <Text style={[styles.formEyebrow, { color: primaryColor }]}>WELCOME BACK</Text><Text style={[styles.formTitle, { color: textColor }]}>Sign in to Tracker</Text><Text style={[styles.formSubtitle, { color: mutedColor }]}>Use the same OperiX account you use across the Suite.</Text>
                     {error ? (
                         <View style={styles.errorBox}>
                             <Text style={styles.errorText}>{error}</Text>
                         </View>
                     ) : null}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Email</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Enter your email"
-                            placeholderTextColor={mutedColor}
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
-                    </View>
+                    <View style={styles.inputGroup}><Text style={[styles.label, { color: labelColor }]}>Email address</Text><View style={[styles.field, { borderColor }]}><Mail color={mutedColor} size={18} /><TextInput style={[styles.input, { color: textColor }]} placeholder="you@company.com" placeholderTextColor={mutedColor} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /></View></View>
 
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Password</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Enter your password"
-                            placeholderTextColor={mutedColor}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                        />
-                    </View>
+                    <View style={styles.inputGroup}><Text style={[styles.label, { color: labelColor }]}>Password</Text><View style={[styles.field, { borderColor }]}><LockKeyhole color={mutedColor} size={18} /><TextInput style={[styles.input, { color: textColor }]} placeholder="••••••••" placeholderTextColor={mutedColor} value={password} onChangeText={setPassword} secureTextEntry /></View></View>
 
                     <TouchableOpacity
                         style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]}
@@ -118,9 +89,7 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     >
                         {loading ? (
                             <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.buttonText}>Sign In</Text>
-                        )}
+                        ) : (<><Text style={styles.buttonText}>Sign in</Text><ArrowRight color="#fff" size={17} /></>)}
                     </TouchableOpacity>
 
                     <View style={styles.divider}>
@@ -141,8 +110,8 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                         disabled={loading}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                            <SvgXml xml={googleLogoXml} width={24} height={24} />
-                            <Text style={styles.googleButtonText}>Continue with Google</Text>
+                            <SvgXml xml={googleLogoXml} width={20} height={20} />
+                            <Text style={[styles.googleButtonText, { color: textColor }]}>Continue with Google</Text>
                         </View>
                     </TouchableOpacity>
 
@@ -152,6 +121,7 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                             <Text style={[styles.link, { color: primaryColor }]}>Sign Up</Text>
                         </TouchableOpacity>
                     </View>
+                    <Text style={[styles.securityNote, { color: mutedColor }]}>Protected by your OperiX account.</Text>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -167,22 +137,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 24,
     },
-    header: {
-        alignItems: 'center',
-        marginBottom: 48,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-    },
-    form: {
-        borderRadius: 16,
-        padding: 24,
-    },
+    hero: { minHeight: 260, justifyContent: 'flex-end', padding: 24, borderRadius: 22, backgroundColor: '#061A38', overflow: 'hidden' },
+    logoRow: { flexDirection: 'row', alignItems: 'center' },
+    logoMark: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#004FFE' },
+    logoText: { marginLeft: 9, color: '#fff', fontSize: 17, fontWeight: '700' },
+    logoProduct: { color: '#BFDBFE', fontWeight: '500' },
+    eyebrow: { marginTop: 30, color: '#8DB1FF', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+    heroTitle: { marginTop: 10, color: '#fff', fontSize: 30, lineHeight: 35, fontWeight: '900', letterSpacing: -0.7 },
+    heroSubtitle: { marginTop: 10, color: '#AAB9D3', fontSize: 12, lineHeight: 18 },
+    form: { marginTop: 14, borderRadius: 22, padding: 20, borderWidth: 1, shadowColor: '#101828', shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
+    formEyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+    formTitle: { marginTop: 7, fontSize: 22, fontWeight: '900' },
+    formSubtitle: { marginTop: 6, marginBottom: 18, fontSize: 12, lineHeight: 18 },
     errorBox: {
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         borderWidth: 1,
@@ -202,24 +168,23 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         fontWeight: '500',
     },
-    input: {
-        borderWidth: 1,
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-    },
+    field: { height: 50, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, borderWidth: 1, borderRadius: 12 },
+    input: { flex: 1, minWidth: 0, fontSize: 14 },
     button: {
         borderRadius: 12,
         padding: 16,
         alignItems: 'center',
-        marginTop: 8,
+        marginTop: 5,
+        flexDirection: 'row',
+        gap: 7,
+        justifyContent: 'center',
     },
     buttonDisabled: {
         opacity: 0.7,
     },
     buttonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
     },
     footer: {
@@ -236,7 +201,7 @@ const styles = StyleSheet.create({
     divider: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 20,
+        marginVertical: 18,
     },
     line: {
         flex: 1,
@@ -244,25 +209,24 @@ const styles = StyleSheet.create({
     },
     dividerText: {
         marginHorizontal: 10,
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: '600',
     },
     googleButton: {
-        backgroundColor: '#ffffff',
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-        marginTop: 8,
+        minHeight: 48,
+        backgroundColor: 'transparent',
+        borderRadius: 13,
+        padding: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 10,
         borderWidth: 1,
     },
     googleButtonText: {
-        color: '#1e293b',
-        fontSize: 16,
+        fontSize: 13,
         fontWeight: '600',
     },
+    securityNote: { marginTop: 17, textAlign: 'center', fontSize: 10, lineHeight: 15 },
 });
-
-
-
 
 

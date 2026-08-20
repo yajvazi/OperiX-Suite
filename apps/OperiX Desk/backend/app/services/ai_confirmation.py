@@ -1,7 +1,7 @@
 from app.schemas.ai import BookingConfirmationFacts
 from app.services.huggingface import generate_hf_chat
 
-CONFIRMATION_SYSTEM_PROMPT = """You write friendly DeskDibs booking confirmations.
+CONFIRMATION_SYSTEM_PROMPT = """You write friendly OperiX Desk booking confirmations.
 
 You receive reservation facts from the backend. Convert them into one or two natural sentences.
 

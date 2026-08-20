@@ -1,38 +1,149 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, Filter, MoreVertical, Plus, Search, TrendingUp } from "lucide-react";
-import { useBusinessData } from "@/hooks/use-business-data";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Download, FileText, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import type { InvoiceRow } from "@/lib/models";
-import { money, shortDate, statusClass } from "@/lib/format";
+import { money, shortDate } from "@/lib/format";
+import { EmptyState, ErrorState, LoadingSkeleton, MetricCard, MobileListCard, PageHeader, StatusBadge } from "./ui";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
+import { listInvoices } from "@invoice-monorepo/api/repositories";
+import { documentTypeLabel, resolveCommercialDocumentType } from "@invoice-monorepo/commercial-documents";
 
-const tabs = ["all","draft","sent","paid","partial","overdue"] as const;
+const tabs = ["all", "draft", "sent", "partial", "paid", "overdue", "cancelled"] as const;
+type InvoiceTab = (typeof tabs)[number];
+
+function canonicalStatus(invoice: InvoiceRow) { return String(invoice.commercial_status || invoice.status || "DRAFT").toUpperCase(); }
+function listStatus(invoice: InvoiceRow) { const status = canonicalStatus(invoice); return status === "ISSUED" ? "sent" : status === "PARTIALLY_PAID" ? "partial" : status.toLowerCase(); }
 
 export function InvoiceList({ type = "invoice" }: { type?: "invoice" | "offer" }) {
-  const router = useRouter();
-  const { data: fetched, loading, error } = useBusinessData<InvoiceRow>("invoices", "*, client:clients(name)");
-  const source = fetched.filter((row) => type === "invoice" ? row.type !== "offer" : row.type === "offer");
-  const [active, setActive] = useState<(typeof tabs)[number]>("all"); const [invoiceType, setInvoiceType] = useState("all"); const [query, setQuery] = useState(""); const [filtersOpen, setFiltersOpen] = useState(false); const [page, setPage] = useState(1);
-  const [from,setFrom]=useState("");const [to,setTo]=useState("");const [minimum,setMinimum]=useState("");
-  const filtered = useMemo(() => source.filter((invoice) => (active === "all" || invoice.status === active) && (invoiceType === "all" || (invoiceType === "recurring" ? Boolean(invoice.recurring_interval) : (invoice.type || "invoice") === invoiceType)) && `${invoice.invoice_number} ${invoice.client?.name}`.toLowerCase().includes(query.toLowerCase())&&(!from||invoice.issue_date>=from)&&(!to||invoice.issue_date<=to)&&(!minimum||Number(invoice.total_amount)>=Number(minimum))), [source,active,invoiceType,query,from,to,minimum]);
-  const perPage = 8; const pages = Math.max(1,Math.ceil(filtered.length/perPage)); const rows = filtered.slice((page-1)*perPage,page*perPage);
-  const total = source.reduce((sum,row)=>sum+Number(row.total_amount),0); const paid = source.filter(r=>r.status==="paid").reduce((sum,row)=>sum+Number(row.total_amount),0); const overdue = source.filter(r=>r.status==="overdue").reduce((sum,row)=>sum+Number(row.total_amount),0);
-  function exportCsv(){const lines=[["Number","Customer","Issue date","Due date","Amount","Status"],...filtered.map(row=>[row.invoice_number,row.client?.name||"",row.issue_date,row.due_date||"",row.total_amount,row.status])];const blob=new Blob([lines.map(line=>line.map(value=>`"${String(value).replaceAll("\"","\"\"")}"`).join(",")).join("\n")],{type:"text/csv"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`operix-${type}s-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
-  return <div className="p-4 lg:p-6 max-w-[1700px] mx-auto">
-    <div className="flex items-center justify-between gap-4"><h1 className="page-title">{type === "invoice" ? "Invoices" : "Quotes"}</h1><div className="flex gap-2">{type === "offer" && source[0] ? <Link href={`/invoices/new?convert=${source[0].id}`} className="btn hidden sm:inline-flex">Convert latest quote</Link> : null}<Link href={`/invoices/new${type === "offer" ? "?type=offer" : ""}`} className="btn btn-primary"><Plus size={17}/>New {type === "invoice" ? "Invoice" : "Quote"}</Link></div></div>
-    <div className="invoice-toolbar mt-5 flex flex-wrap items-center gap-3"><div className="invoice-status-tabs card flex min-w-0 max-w-full overflow-x-auto p-1">{tabs.map((tab)=><button key={tab} onClick={()=>{setActive(tab);setPage(1)}} className={`capitalize min-w-20 px-4 h-10 rounded-md text-xs ${active===tab ? "text-[#004ffe] bg-[#edf4ff] font-medium" : "muted hover:text-[#111827]"}`}>{tab}</button>)}</div><select aria-label="Filter by invoice type" className="select h-12 w-full sm:w-auto" value={invoiceType} onChange={event=>{setInvoiceType(event.target.value);setPage(1)}}><option value="all">All types</option><option value="invoice">Invoices</option><option value="offer">Quotes</option><option value="proforma">Proforma</option><option value="order">Orders</option><option value="recurring">Recurring</option></select><label className="relative min-w-[220px] flex-1 sm:min-w-[250px]"><Search size={18} className="absolute left-3 top-3 text-[#98a2b3]"/><input value={query} onChange={(e)=>{setQuery(e.target.value);setPage(1)}} className="input pl-10" placeholder={`Search ${type === "invoice" ? "invoices" : "quotes"}`}/></label><button className="btn shrink-0 justify-center whitespace-nowrap" onClick={()=>setFiltersOpen(!filtersOpen)}><Filter size={17}/>Filters</button><button className="btn shrink-0 justify-center whitespace-nowrap" onClick={exportCsv}><Download size={17}/>Export</button></div>
-    {filtersOpen && <div className="card mt-3 p-4 grid sm:grid-cols-4 gap-3"><label className="field"><span>From</span><input className="input" type="date" value={from} onChange={event=>{setFrom(event.target.value);setPage(1)}}/></label><label className="field"><span>To</span><input className="input" type="date" value={to} onChange={event=>{setTo(event.target.value);setPage(1)}}/></label><label className="field"><span>Minimum amount</span><input className="input" type="number" placeholder="€0.00" value={minimum} onChange={event=>{setMinimum(event.target.value);setPage(1)}}/></label><div className="flex items-end"><button className="btn w-full" onClick={()=>{setFrom("");setTo("");setMinimum("");setPage(1)}}>Clear filters</button></div></div>}
-    <section className="card mt-4 grid sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#e4e9f0]">
-      <Summary label={`Total ${type === "invoice" ? "Invoiced" : "Quoted"}`} value={money(total)} note="+12.5%" icon={TrendingUp}/><Summary label="Paid" value={money(paid)} note="+15.7%" icon={CheckCircle2} green/><Summary label="Outstanding" value={money(total-paid)} note={`${source.filter(i=>i.status!=="paid").length} documents`} icon={Clock3} orange/><Summary label="Overdue" value={money(overdue)} note={`${source.filter(i=>i.status==="overdue").length} documents`} icon={AlertCircle} red/>
+  return <Suspense fallback={<div className="ux-page"><LoadingSkeleton rows={6} /></div>}><InvoiceListContent type={type} /></Suspense>;
+}
+
+function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }) {
+  const searchParams = useSearchParams();
+  const workspace = useWorkspace();
+  const [fetched, setFetched] = useState<InvoiceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError("");
+      const supabase = createClient();
+      if (!supabase) { setFetched([]); setError("Supabase is not configured."); setLoading(false); return; }
+      if (workspace.loading) return;
+      if (!workspace.user || !workspace.companyIds.length) { setFetched([]); setLoading(false); return; }
+      try {
+        const rows = await listInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, type === "offer" ? { documentType: "QUOTE", legacyType: "offer" } : undefined);
+        if (!cancelled) setFetched(rows as unknown as InvoiceRow[]);
+      } catch (requestError) {
+        if (!cancelled) { setFetched([]); setError(requestError instanceof Error ? requestError.message : "Unable to load invoices."); }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [type, workspace.companyIds, workspace.loading, workspace.user]);
+  const source = useMemo(() => fetched.filter((row) => type === "invoice" ? resolveCommercialDocumentType(row) !== "QUOTE" : resolveCommercialDocumentType(row) === "QUOTE"), [fetched, type]);
+  const requestedStatus = searchParams.get("status");
+  const [active, setActive] = useState<InvoiceTab>(() => requestedStatus && tabs.includes(requestedStatus as InvoiceTab) ? requestedStatus as InvoiceTab : "all");
+  const [invoiceType, setInvoiceType] = useState("all");
+  const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [minimum, setMinimum] = useState("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const perPage = 10;
+
+  useEffect(() => {
+    if (requestedStatus && tabs.includes(requestedStatus as InvoiceTab)) {
+      queueMicrotask(() => setActive(requestedStatus as InvoiceTab));
+    }
+  }, [requestedStatus]);
+
+  const filtered = useMemo(() => source.filter((invoice) => {
+    const haystack = `${invoice.invoice_number} ${invoice.client?.name || ""}`.toLowerCase();
+    const documentType = resolveCommercialDocumentType(invoice);
+    return (active === "all" || listStatus(invoice) === active)
+      && (invoiceType === "all" || (invoiceType === "recurring" ? Boolean((invoice as InvoiceRow & { recurring_interval?: string }).recurring_interval) : invoiceType === "invoice" ? documentType === "INVOICE" : invoiceType === "offer" ? documentType === "QUOTE" : invoiceType === "proforma" ? documentType === "PROFORMA" : invoiceType === "order" ? documentType === "SALES_ORDER" : documentType === invoiceType.toUpperCase()))
+      && haystack.includes(query.trim().toLowerCase())
+      && (!from || invoice.issue_date >= from)
+      && (!to || invoice.issue_date <= to)
+      && (!minimum || Number(invoice.total_amount) >= Number(minimum));
+  }).sort((left, right) => {
+    const leftDate = String(left.issue_date || left.created_at || "");
+    const rightDate = String(right.issue_date || right.created_at || "");
+    return sortOrder === "desc" ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
+  }), [active, from, invoiceType, minimum, query, sortOrder, source, to]);
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const rows = filtered.slice((page - 1) * perPage, page * perPage);
+  const total = source.reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
+  const paid = source.filter((row) => canonicalStatus(row) === "PAID" || Number(row.amount_received || 0) >= Number(row.total_amount || 0)).reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
+  const outstanding = source.filter((row) => !["PAID", "CANCELLED"].includes(canonicalStatus(row))).reduce((sum, row) => sum + Math.max(0, Number(row.total_amount || 0) - Number(row.amount_received || 0)), 0);
+  const overdue = source.filter((row) => canonicalStatus(row) === "OVERDUE").reduce((sum, row) => sum + Math.max(0, Number(row.total_amount || 0) - Number(row.amount_received || 0)), 0);
+
+  function updateFilters() { setPage(1); }
+  function clearFilters() { setFrom(""); setTo(""); setMinimum(""); setInvoiceType("all"); setQuery(""); setActive("all"); setPage(1); }
+  function exportCsv() {
+    const lines = [["Number", "Customer", "Issue date", "Due date", "Amount", "Status"], ...filtered.map((row) => [row.invoice_number, row.client?.name || "", row.issue_date, row.due_date || "", row.total_amount, row.status])];
+    const blob = new Blob([lines.map((line) => line.map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`).join(",")).join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `operix-${type}s-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const title = type === "invoice" ? "Invoices" : "Quotes";
+  const singular = type === "invoice" ? "invoice" : "quote";
+  const newHref = type === "invoice" ? "/invoices/new" : "/invoices/new?type=offer";
+
+  return <div className="invoice-list-page">
+    <PageHeader title={title} description={type === "invoice" ? "Create, send, and keep track of every customer invoice." : "Prepare proposals and turn approved quotes into invoices."} actions={<><Link href={newHref} className="btn btn-primary"><Plus size={16} /> New {type === "invoice" ? "invoice" : "quote"}</Link>{type === "offer" && source.length ? <Link href={`/invoices/new?convert=${source[0].id}`} className="btn">Convert quote</Link> : null}</>} />
+    <section className="invoice-list-summary" aria-label={`${title} summary`}>
+      <MetricCard label={`Total ${type === "invoice" ? "invoiced" : "quoted"}`} value={money(total)} icon={FileText} />
+      <MetricCard label="Paid" value={money(paid)} icon={FileText} tone="green" />
+      <MetricCard label="Outstanding" value={money(outstanding)} icon={MoreHorizontal} tone="amber" />
+      <MetricCard label="Overdue" value={money(overdue)} icon={MoreHorizontal} tone="red" />
     </section>
-    <section className="card mt-4 overflow-hidden">
-      {error && <div className="m-4 p-3 text-xs rounded bg-[#fff3f2] text-[#d92d20]">{error}</div>}
-      <div className="table-wrap"><table className="data-table"><thead><tr><th>{type === "invoice" ? "Invoice #" : "Quote #"}</th><th>Customer</th><th>Issue Date</th><th>Due Date</th><th>Amount</th><th>Status</th><th className="w-20">Actions</th></tr></thead><tbody>{loading ? Array.from({length:6}).map((_,i)=><tr key={i}>{Array.from({length:7}).map((__,j)=><td key={j}><div className="skeleton h-4 rounded"/></td>)}</tr>) : rows.length ? rows.map((invoice)=><tr key={invoice.id} className="cursor-pointer hover:bg-[#fbfcff]" tabIndex={0} onClick={() => router.push(`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`); } }}><td><Link className="text-[#004ffe] font-medium" href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`} onClick={(event) => event.stopPropagation()}>{invoice.invoice_number}</Link></td><td>{invoice.client?.name || "—"}</td><td>{shortDate(invoice.issue_date)}</td><td className={invoice.status==="overdue" ? "text-[#ef4444]" : ""}>{shortDate(invoice.due_date)}</td><td className="font-medium">{money(invoice.total_amount)}</td><td><span className={statusClass(invoice.status)}>{invoice.status}</span></td><td><details className="relative" onClick={(event) => event.stopPropagation()}><summary className="list-none icon-btn border-0 w-8 h-8"><MoreVertical size={17}/></summary><div className="absolute right-0 z-10 w-40 card shadow-xl p-1"><Link href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`} className="block p-2 rounded hover:bg-[#f7f9fc] text-xs">View & download</Link><Link href={`/invoices/new?edit=${invoice.id}`} className="block p-2 rounded hover:bg-[#f7f9fc] text-xs">Edit</Link></div></details></td></tr>) : <tr><td colSpan={7} className="text-center muted py-14">No matching documents found.</td></tr>}</tbody></table></div>
-      <footer className="px-5 py-4 flex items-center border-t border-[#e4e9f0] text-xs muted"><span>Showing {filtered.length ? (page-1)*perPage+1 : 0}–{Math.min(page*perPage,filtered.length)} of {filtered.length} {type === "invoice" ? "invoices" : "quotes"}</span><div className="ml-auto flex items-center gap-2"><button className="icon-btn w-8 h-8" disabled={page===1} onClick={()=>setPage(p=>p-1)}><ChevronLeft size={15}/></button><span className="w-8 h-8 rounded bg-[#004ffe] text-white grid place-items-center">{page}</span><button className="icon-btn w-8 h-8" disabled={page===pages} onClick={()=>setPage(p=>p+1)}><ChevronRight size={15}/></button></div></footer>
-    </section>
+    <div className="invoice-list-toolbar">
+      <label className="ux-search-field"><Search size={17} aria-hidden="true" /><span className="sr-only">Search {title.toLowerCase()}</span><input value={query} onChange={(event) => { setQuery(event.target.value); updateFilters(); }} placeholder={`Search ${title.toLowerCase()}…`} /></label>
+      <select aria-label={`Filter ${title.toLowerCase()} type`} className="select invoice-type-filter" value={invoiceType} onChange={(event) => { setInvoiceType(event.target.value); updateFilters(); }}><option value="all">All types</option><option value="invoice">Invoices</option><option value="offer">Quotes</option><option value="proforma">Proforma</option><option value="order">Orders</option><option value="recurring">Recurring</option></select>
+      <select aria-label={`Sort ${title.toLowerCase()}`} className="select invoice-sort-filter" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "desc" | "asc")}><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
+      <button type="button" className={`ux-filter-button invoice-filter-trigger ${filtersOpen ? "is-active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}>{filtersOpen ? <X size={16} /> : <MoreHorizontal size={16} />} Filters{active !== "all" || from || to || minimum ? " · Active" : ""}</button>
+      <button type="button" className="ux-filter-button invoice-export-trigger" onClick={exportCsv}><Download size={16} /> Export</button>
+      <div className="invoice-status-tabs" aria-label={`${title} status`}>
+        {tabs.map((tab) => <button type="button" key={tab} className={`invoice-status-tab ${active === tab ? "is-active" : ""}`} onClick={() => { setActive(tab); setPage(1); }}>{tab === "all" ? "All" : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
+      </div>
+    </div>
+    {filtersOpen ? <div className="invoice-filter-surface"><div className="invoice-filter-sheet-title"><strong>Filter {title.toLowerCase()}</strong><button type="button" className="icon-btn" onClick={() => setFiltersOpen(false)} aria-label="Close filters"><X size={17} /></button></div><div className="invoice-filter-sheet-grid"><label className="field"><span>From</span><input className="input" type="date" value={from} onChange={(event) => { setFrom(event.target.value); updateFilters(); }} /></label><label className="field"><span>To</span><input className="input" type="date" value={to} onChange={(event) => { setTo(event.target.value); updateFilters(); }} /></label><label className="field"><span>Minimum amount</span><input className="input" type="number" min="0" placeholder="€0.00" value={minimum} onChange={(event) => { setMinimum(event.target.value); updateFilters(); }} /></label></div><div className="invoice-filter-actions"><button type="button" className="btn" onClick={clearFilters}>Clear filters</button><button type="button" className="btn btn-primary" onClick={() => setFiltersOpen(false)}>Show {filtered.length} results</button></div></div> : null}
+    {error ? <ErrorState message={error} /> : null}
+    {!loading && !error && !source.length ? <section className="ux-section-card"><EmptyState title={`No ${title.toLowerCase()} yet`} description={`Create your first ${singular} to start building your sales history.`} actionLabel={`New ${singular}`} actionHref={newHref} icon={FileText} /></section> : null}
+    {loading ? <section className="ux-section-card"><LoadingSkeleton rows={6} /></section> : null}
+    {!loading && !error && source.length ? <>
+      <section className="ux-section-card invoice-list-table-wrap">
+        {rows.length ? <table className="invoice-list-table"><thead><tr><th>{type === "invoice" ? "Document" : "Quote"}</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((invoice) => <InvoiceTableRow key={invoice.id} invoice={invoice} canEdit={workspace.roleCode !== "employee"} />)}</tbody></table> : <EmptyState title="No matching documents" description="Try changing the search or filters." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />}
+        <ListFooter page={page} pages={pages} count={filtered.length} label={type === "invoice" ? "invoices" : "quotes"} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(pages, value + 1))} />
+      </section>
+      <section className="invoice-mobile-cards">{rows.length ? rows.map((invoice) => <MobileListCard key={invoice.id} href={`/invoices/${invoice.id}`} icon={FileText} title={invoice.invoice_number} subtitle={`${documentTypeLabel(resolveCommercialDocumentType(invoice), "en")} · ${invoice.client?.name || "Citizen"}`} meta={`${shortDate(invoice.issue_date)}${invoice.due_date ? ` · Due ${shortDate(invoice.due_date)}` : ""}`} amount={money(invoice.total_amount, invoice.currency)} status={canonicalStatus(invoice)} />) : <EmptyState title="No matching documents" description="Try changing the search or filters." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />}<ListFooter page={page} pages={pages} count={filtered.length} label={type === "invoice" ? "invoices" : "quotes"} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(pages, value + 1))} /></section>
+    </> : null}
   </div>;
 }
 
-function Summary({label,value,note,icon:Icon,green,orange,red}:{label:string;value:string;note:string;icon:typeof TrendingUp;green?:boolean;orange?:boolean;red?:boolean}) { const tone=green?"text-[#12b76a] bg-[#e9f9f0]":orange?"text-[#f59e0b] bg-[#fff4e5]":red?"text-[#ef4444] bg-[#fff0ef]":"text-[#004ffe] bg-[#edf4ff]"; return <div className="p-5 flex items-center gap-4"><span className={`w-10 h-10 rounded-md grid place-items-center ${tone}`}><Icon size={20}/></span><div><span className="text-[11px] muted">{label}</span><strong className="block text-lg mt-1">{value}</strong><small className={red?"text-[#ef4444]":green?"text-[#12b76a]":"muted"}>{note}</small></div></div>; }
+function InvoiceTableRow({ invoice, canEdit }: { invoice: InvoiceRow; canEdit: boolean }) {
+  const router = useRouter();
+  const type = resolveCommercialDocumentType(invoice);
+  return <tr tabIndex={0} onClick={() => router.push(`/invoices/${invoice.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(`/invoices/${invoice.id}`); } }}><td><Link href={`/invoices/${invoice.id}`} onClick={(event) => event.stopPropagation()}><strong>{invoice.invoice_number}</strong></Link><small className="muted block">{documentTypeLabel(type, "en")}</small></td><td><span className="invoice-customer"><strong>{invoice.client?.name || "Citizen"}</strong><small>{invoice.client_id ? "Customer record" : "Walk-in customer"}</small></span></td><td>{shortDate(invoice.issue_date)}</td><td><strong>{money(invoice.total_amount, invoice.currency)}</strong></td><td><StatusBadge status={canonicalStatus(invoice)} /></td><td><details className="relative" onClick={(event) => event.stopPropagation()}><summary className="icon-btn list-none" aria-label={`Actions for ${invoice.invoice_number}`}><MoreHorizontal size={17} /></summary><div className="action-menu"><Link href={`/invoices/${invoice.id}`}>View document</Link>{canEdit && (type === "INVOICE" || type === "QUOTE") ? <Link href={`/invoices/new?edit=${invoice.id}`}>Edit</Link> : null}<Link href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`}>Preview PDF</Link></div></details></td></tr>;
+}
+
+function ListFooter({ page, pages, count, label, onPrevious, onNext }: { page: number; pages: number; count: number; label: string; onPrevious: () => void; onNext: () => void }) {
+  return <footer className="list-footer"><span>Showing {count ? (page - 1) * 10 + 1 : 0}–{Math.min(page * 10, count)} of {count} {label}</span><span className="list-footer-controls"><button type="button" className="icon-btn" disabled={page === 1} onClick={onPrevious} aria-label="Previous page">‹</button><strong>{page}</strong><button type="button" className="icon-btn" disabled={page === pages} onClick={onNext} aria-label="Next page">›</button></span></footer>;
+}

@@ -1,0 +1,75 @@
+name: OperiX Mobile QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Discovered app id or all'
+        required: true
+        default: 'all'
+
+permissions:
+  contents: read
+
+jobs:
+  repository-qa:
+    name: OperiX mobile repository QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install from lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run central QA checks
+        run: node scripts/operix-mobile-qa.mjs "${{ inputs.app || 'all' }}" --no-install --no-e2e --no-visual --no-build --ci
+      - name: Upload sanitized QA reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-mobile-qa-${{ github.run_id }}
+          path: |
+            docs/qa/OPERIX-MOBILE-QA-SUMMARY.md
+            docs/qa/OPERIX-MOBILE-APP-INVENTORY.md
+            docs/qa/OPERIX-MOBILE-QA-DASHBOARD.html
+            docs/qa/qa-results.json
+            docs/qa/*-QA-REPORT.md
+            docs/qa/*-E2E-FLOWS.md
+            docs/qa/artifacts/**
+            docs/qa/history/**
+          if-no-files-found: warn
+
+  simulator-qa:
+    name: Simulator E2E and visual QA (manual dispatch)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install Maestro
+        run: curl -Ls 'https://get.maestro.mobile.dev' | bash
+      - name: Run selected real-device gate
+        env:
+          # These must be dedicated QA secrets. They are not copied into source
+          # or included in reports.
+          OPERIX_QA_E2E_EMAIL: ${{ secrets.OPERIX_QA_E2E_EMAIL }}
+          OPERIX_QA_E2E_PASSWORD: ${{ secrets.OPERIX_QA_E2E_PASSWORD }}
+          OPERIX_QA_E2E_SUPABASE_URL: ${{ secrets.OPERIX_QA_E2E_SUPABASE_URL }}
+          OPERIX_QA_E2E_CUSTOMER_ID: ${{ secrets.OPERIX_QA_E2E_CUSTOMER_ID }}
+          OPERIX_QA_E2E_PRODUCT_ID: ${{ secrets.OPERIX_QA_E2E_PRODUCT_ID }}
+        run: node scripts/operix-mobile-qa.mjs "${{ inputs.app || 'all' }}"
+      - name: Upload simulator QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-mobile-simulator-qa-${{ github.run_id }}
+          path: docs/qa/**
+          if-no-files-found: warn

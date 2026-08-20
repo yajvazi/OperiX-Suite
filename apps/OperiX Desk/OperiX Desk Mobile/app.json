@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "OperiX Desk",
+    "slug": "operix-desk",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.operix.desk",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.operix.desk",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {},
+    "scheme": "operix-desk",
+    "plugins": ["expo-notifications"]
+  }
+}

@@ -24,12 +24,13 @@ import { useTheme } from "@invoice-monorepo/hooks";
 import { supabase } from "@invoice-monorepo/api";
 import { useAuth } from "@invoice-monorepo/hooks";
 import { Button, Card } from "@invoice-monorepo/ui";
-import { t } from "@invoice-monorepo/i18n";
-import { formatCurrency } from "@invoice-monorepo/i18n";
+import { formatCurrency, getLocalizedErrorMessage, t } from "@invoice-monorepo/i18n";
 import { Vendor, Profile } from "@invoice-monorepo/types";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { renderTransactionReportHtml } from "@invoice-monorepo/report-templates";
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 
 interface LedgerEntry {
   id: string;
@@ -92,25 +93,18 @@ export function VendorLedgerScreen({ navigation, route }: any) {
   const fetchInitialData = async () => {
     if (!user) return;
 
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-    if (profileData) {
-      setProfile(profileData);
-      const companyId =
-        profileData.active_company_id || profileData.company_id || user.id;
+    const { profile: workspaceProfile, company, companyIds } = await getWorkspaceScope(user.id);
+    setProfile({ ...workspaceProfile, company_name: (company as any)?.company_name || (company as any)?.name || workspaceProfile.company_name });
+    const scope = scopedResource(user.id, companyIds);
 
-      const { data: vendorsData } = await supabase
-        .from("vendors")
-        .select("*")
-        .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-        .order("name");
-      if (vendorsData) {
-        setVendors(vendorsData);
-        setFilteredVendors(vendorsData);
-      }
+    const { data: vendorsData } = await supabase
+      .from("vendors")
+      .select("*")
+      .or(scope)
+      .order("name");
+    if (vendorsData) {
+      setVendors(vendorsData);
+      setFilteredVendors(vendorsData);
     }
     setLoading(false);
   };
@@ -144,7 +138,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         entries.push({
           id: bill.id,
           date: bill.issue_date,
-          description: `Faturë Hyrëse #${bill.bill_number}`,
+          description: `${t('supplierBill', language)} #${bill.bill_number}`,
           debit: Number(bill.total_amount) || 0,
           credit: 0,
           balance: 0,
@@ -156,7 +150,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         entries.push({
           id: pmt.id,
           date: pmt.payment_date,
-          description: `Pagesë Furnitori - ${pmt.payment_method}`,
+          description: `${t('payment', language)} - ${pmt.payment_method}`,
           debit: 0,
           credit: Number(pmt.amount) || 0,
           balance: 0,
@@ -200,7 +194,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     try {
       const html = renderTransactionReportHtml({
         template: "vendor-ledger",
-        title: `Kartela e Furnitorit - ${selectedVendor.name}`,
+        title: `${t('supplierCard', language)} - ${selectedVendor.name}`,
         company: {
           name: profile.company_name,
           email: profile.email,
@@ -219,15 +213,16 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         rows: vendorBills,
       });
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-      await Sharing.shareAsync(uri, {
+      const namedUri = await namePdfFile(uri, reportPdfFileName(profile.company_name || t('company', language), t('supplierCard', language)));
+      await Sharing.shareAsync(namedUri, {
         mimeType: "application/pdf",
-        dialogTitle: `Kartela Furnitorit - ${selectedVendor.name}`,
+        dialogTitle: `${t('supplierCard', language)} - ${selectedVendor.name}`,
         UTI: "com.adobe.pdf",
       });
     } catch (error: any) {
       Alert.alert(
         t("error", language),
-        "Failed to export PDF: " + error.message,
+        `${t('failedToExportPdf', language)}: ${getLocalizedErrorMessage(error, language, 'failedToExportPdf')}`,
       );
     } finally {
       setExporting(false);
@@ -237,16 +232,11 @@ export function VendorLedgerScreen({ navigation, route }: any) {
   const generateLedgerHTML = () => {
     const formatDate = (dateStr: string) => {
       const d = new Date(dateStr);
-      return d.toLocaleDateString("sq-AL");
+      return d.toLocaleDateString(language === 'sq' ? "sq-XK" : "en-US");
     };
 
     const formatMoney = (amount: number) => {
-      return (
-        new Intl.NumberFormat("de-DE", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(amount) + " €"
-      );
+      return formatCurrency(amount, 'EUR', language);
     };
 
     const rows = ledgerEntries
@@ -295,16 +285,16 @@ export function VendorLedgerScreen({ navigation, route }: any) {
 <body>
     <div class="header">
         <div>
-            <div class="company-name">${profile?.company_name || "Company"}</div>
+            <div class="company-name">${profile?.company_name || t('business', language)}</div>
             <div style="color: #667085; margin-top: 5px;">
                 ${profile?.address || ""}<br/>
                 ${profile?.phone || ""} | ${profile?.email || ""}
             </div>
         </div>
         <div>
-            <div class="title">KARTELA E FURNITORIT</div>
+            <div class="title">${t('supplierCard', language)}</div>
             <div style="color: #667085; text-align: right; margin-top: 5px;">
-                Data: ${new Date().toLocaleDateString("sq-AL")}
+                ${t('dateLabel', language)}: ${new Date().toLocaleDateString(language === 'sq' ? "sq-XK" : "en-US")}
             </div>
         </div>
     </div>
@@ -312,20 +302,20 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     <div class="client-section">
         <div class="client-name">${selectedVendor?.name}</div>
         <div class="client-details">
-            ${selectedVendor?.email ? `Email: ${selectedVendor.email}` : ""}
-            ${selectedVendor?.phone ? ` | Tel: ${selectedVendor.phone}` : ""}
-            ${selectedVendor?.address ? `<br/>Adresa: ${selectedVendor.address}` : ""}
+            ${selectedVendor?.email ? `${t('email', language)}: ${selectedVendor.email}` : ""}
+            ${selectedVendor?.phone ? ` | ${t('phone', language)}: ${selectedVendor.phone}` : ""}
+            ${selectedVendor?.address ? `<br/>${t('address', language)}: ${selectedVendor.address}` : ""}
         </div>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th style="width: 15%;">Data</th>
-                <th style="width: 35%;">Përshkrimi</th>
-                <th style="width: 16%;">Debit (-)</th>
-                <th style="width: 16%;">Credit (+)</th>
-                <th style="width: 18%;">Gjendja</th>
+                <th style="width: 15%;">${t('dateLabel', language)}</th>
+                <th style="width: 35%;">${t('description', language)}</th>
+                <th style="width: 16%;">${t('debit', language)} (-)</th>
+                <th style="width: 16%;">${t('credit', language)} (+)</th>
+                <th style="width: 18%;">${t('balance', language)}</th>
             </tr>
         </thead>
         <tbody>
@@ -335,21 +325,21 @@ export function VendorLedgerScreen({ navigation, route }: any) {
 
     <div class="totals">
         <div class="totals-row">
-            <span>Total Debit:</span>
+            <span>${t('total', language)} ${t('debit', language)}:</span>
             <span>${formatMoney(totals.debit)}</span>
         </div>
         <div class="totals-row">
-            <span>Total Credit:</span>
+            <span>${t('total', language)} ${t('credit', language)}:</span>
             <span>${formatMoney(totals.credit)}</span>
         </div>
         <div class="totals-row">
-            <span>DETYRIMI AKTUAL:</span>
+            <span>${t('currentBalance', language)}:</span>
             <span>${formatMoney(totals.balance)}</span>
         </div>
     </div>
 
     <div class="footer">
-        Gjeneruar automatikisht • ${profile?.company_name || "Company"}
+        ${t('generatedByOperix', language)} • ${profile?.company_name || t('business', language)}
     </div>
 </body>
 </html>
@@ -371,7 +361,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
               {t("reports", language)}
             </Text>
             <Text style={[styles.mainTitle, { color: textColor }]}>
-              {t("supplierCard", language) || "Kartela e Furnitorit"}
+              {t("supplierCard", language)}
             </Text>
           </View>
         </View>
@@ -441,7 +431,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
               contentContainerStyle={{ paddingBottom: 20, gap: 12 }}
               ListEmptyComponent={
                 <Text style={[styles.emptyText, { color: mutedColor }]}>
-                  No vendors found
+                  {t('noVendorsFound', language)}
                 </Text>
               }
             />
@@ -480,7 +470,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
         {loading ? (
           <ActivityIndicator
             size="large"
@@ -499,7 +489,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                 <FileText color="#ef4444" size={20} />
                 <View>
                   <Text style={[styles.metricLabel, { color: mutedColor }]}>
-                    DEBIT
+                    {t('debit', language).toUpperCase()}
                   </Text>
                   <Text style={[styles.metricValue, { color: "#ef4444" }]}>
                     {formatCurrency(totals.debit)}
@@ -515,7 +505,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                 <CreditCard color="#12B76A" size={20} />
                 <View>
                   <Text style={[styles.metricLabel, { color: mutedColor }]}>
-                    CREDIT
+                    {t('credit', language).toUpperCase()}
                   </Text>
                   <Text style={[styles.metricValue, { color: "#12B76A" }]}>
                     {formatCurrency(totals.credit)}
@@ -537,7 +527,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
               <TrendingUp color={primaryColor} size={24} />
               <View>
                 <Text style={[styles.metricLabel, { color: mutedColor }]}>
-                  BALANCE (OWED)
+                  {t('balanceOwed', language).toUpperCase()}
                 </Text>
                 <Text
                   style={[
@@ -559,22 +549,22 @@ export function VendorLedgerScreen({ navigation, route }: any) {
               <View
                 style={[styles.tableHeader, { backgroundColor: primaryColor }]}
               >
-                <Text style={[styles.th, { flex: 1.2 }]}>DATE</Text>
-                <Text style={[styles.th, { flex: 2.5 }]}>DESCRIPTION</Text>
+                <Text style={[styles.th, { flex: 1.2 }]}>{t('date', language).toUpperCase()}</Text>
+                <Text style={[styles.th, { flex: 2.5 }]}>{t('description', language).toUpperCase()}</Text>
                 <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>
-                  DEBIT
+                  {t('debit', language).toUpperCase()}
                 </Text>
                 <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>
-                  CREDIT
+                  {t('credit', language).toUpperCase()}
                 </Text>
                 <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>
-                  BAL
+                  {t('balance', language).toUpperCase()}
                 </Text>
               </View>
 
               {ledgerEntries.length === 0 ? (
                 <Text style={[styles.emptyText, { color: mutedColor }]}>
-                  No transactions found
+                  {t('noTransactionsFound', language)}
                 </Text>
               ) : (
                 ledgerEntries.map((entry, idx) => (

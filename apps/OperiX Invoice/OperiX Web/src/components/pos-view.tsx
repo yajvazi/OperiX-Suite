@@ -32,6 +32,9 @@ import type {
   ProductRow,
 } from "@/lib/models";
 import type { DocumentCompany } from "./invoice-document";
+import { SignatureCapture } from "./signature-capture";
+import { calculateInvoice } from "@invoice-monorepo/money";
+import { completePosSale, saveInvoiceDocument, type InvoiceDraftInput } from "@invoice-monorepo/api/repositories";
 
 type DiscountMode = "amount" | "percent";
 type PosPayment = "cash" | "card" | "debt" | "other";
@@ -52,6 +55,8 @@ interface CartItem {
   unit: string;
   unitPrice: number;
   taxRate: number;
+  taxIncluded: boolean;
+  trackStock?: boolean;
   quantity: number;
   discountPercent: number;
 }
@@ -78,8 +83,8 @@ interface HeldOrder {
 
 interface PosTerminal {
   id: string;
-  terminal_code: string;
-  display_name: string;
+  code: string;
+  name: string;
   branch_id: string;
   warehouse_id: string | null;
   fiscal_location_id: string | null;
@@ -110,17 +115,13 @@ function parseDecimalInput(value: string) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
-function makeInvoiceNumber(type: PosInvoiceType) {
-  const prefix: Record<PosInvoiceType, string> = { invoice: "INV", offer: "QUO", proforma: "PRO", order: "ORD" };
-  return `${prefix[type]}-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-}
-
 export function PosView() {
   const router = useRouter();
   const workspace = useWorkspace();
   const productsQuery = useBusinessData<ProductRow>("products");
   const clientsQuery = useBusinessData<ClientRow>("clients");
   const [search, setSearch] = useState("");
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [category, setCategory] = useState("All");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [clientId, setClientId] = useState("");
@@ -134,6 +135,9 @@ export function PosView() {
   const [payment, setPayment] = useState<PosPayment>("cash");
   const [cashReceived, setCashReceived] = useState(0);
   const [cashReceivedText, setCashReceivedText] = useState("");
+  const [customerSignatureRequested, setCustomerSignatureRequested] = useState(false);
+  const [customerSignature, setCustomerSignature] = useState<string | null>(null);
+  const [showCustomerSignature, setShowCustomerSignature] = useState(false);
   const [heldOrder, setHeldOrder] = useState<HeldOrder | null>(null);
   const [terminals, setTerminals] = useState<PosTerminal[]>([]);
   const [terminalId, setTerminalId] = useState("");
@@ -163,7 +167,7 @@ export function PosView() {
   // change intentionally starts a new transaction.
   useEffect(() => {
     completionIdempotencyKeyRef.current = null;
-  }, [cart, clientId, discountMode, discountValue, invoiceType, note, payment, taxRate, terminalId]);
+  }, [cart, clientId, customerSignature, customerSignatureRequested, discountMode, discountValue, invoiceType, note, payment, taxRate, terminalId]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -221,10 +225,10 @@ export function PosView() {
       }
       const { data, error } = await supabase
         .from("pos_terminals")
-        .select("id,terminal_code,display_name,branch_id,warehouse_id,fiscal_location_id,cashier_shift_required")
+        .select("id,code,name,branch_id,warehouse_id,fiscal_location_id,cashier_shift_required")
         .eq("company_id", workspace.companyId)
-        .eq("active", true)
-        .order("display_name");
+        .eq("status", "active")
+        .order("name");
       if (cancelled) return;
       setTerminalsLoading(false);
       if (error) {
@@ -264,18 +268,24 @@ export function PosView() {
   }, [category, products, search]);
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-    const itemDiscount = cart.reduce((sum, item) => sum + item.quantity * item.unitPrice * Math.min(100, Math.max(0, item.discountPercent)) / 100, 0);
-    const afterItemDiscount = Math.max(0, subtotal - itemDiscount);
-    const globalDiscount = discountMode === "percent" ? afterItemDiscount * Math.min(100, Math.max(0, discountValue)) / 100 : Math.min(afterItemDiscount, Math.max(0, discountValue));
-    const discount = itemDiscount + globalDiscount;
-    const total = Math.max(0, subtotal - discount);
-    // POS product prices are tax-inclusive. Show the tax portion separately
-    // without adding it a second time to the amount the customer pays.
-    const tax = total * Math.max(0, taxRate) / (100 + Math.max(0, taxRate));
-    const taxable = total - tax;
-    return { subtotal, itemDiscount, globalDiscount, discount, tax, total, taxable };
-  }, [cart, discountMode, discountValue, taxRate]);
+    const lines = cart.map((item) => ({
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      discountPercent: item.discountPercent,
+      taxRate: item.taxRate,
+      taxIncluded: item.taxIncluded,
+    }));
+    const withoutDocumentDiscount = calculateInvoice({ lines, currency });
+    const result = calculateInvoice({
+      lines,
+      documentDiscountPercent: discountMode === "percent" ? discountValue : undefined,
+      documentDiscountAmount: discountMode === "amount" ? discountValue : undefined,
+      currency,
+    });
+    const itemDiscount = withoutDocumentDiscount.discount;
+    const globalDiscount = Math.max(0, result.discount - itemDiscount);
+    return { lines: result.lines, subtotal: result.subtotal, itemDiscount, globalDiscount, discount: result.discount, tax: result.tax, total: result.total, taxable: result.taxable };
+  }, [cart, currency, discountMode, discountValue]);
 
   const change = payment === "cash" ? Math.max(0, cashReceived - totals.total) : 0;
   const amountDue = payment === "cash" ? Math.max(0, totals.total - cashReceived) : 0;
@@ -296,6 +306,8 @@ export function PosView() {
         unit: product.unit ? String(product.unit) : "pcs",
         unitPrice: Number(product.unit_price) || 0,
         taxRate: Number(product.tax_rate) || 0,
+        taxIncluded: Boolean(product.tax_included),
+        trackStock: Boolean(product.track_stock),
         quantity,
         discountPercent: 0,
       }];
@@ -413,26 +425,34 @@ export function PosView() {
   }
 
   function createDraft(status: InvoiceDraft["status"]): InvoiceDraft {
-    const globalDiscountRate = totals.subtotal - totals.itemDiscount > 0 ? totals.globalDiscount / (totals.subtotal - totals.itemDiscount) * 100 : 0;
     return {
       client_id: clientId,
-      invoice_number: makeInvoiceNumber(invoiceType),
+      invoice_number: `DRAFT-${isoToday().replaceAll("-", "")}`,
       issue_date: isoToday(),
       due_date: addDays(isoToday(), 0),
       payment_method: paymentMethod(payment),
       amount_received: payment === "cash" ? cashReceived : status === "paid" ? totals.total : 0,
       notes: note,
       status,
-      items: cart.map((item): InvoiceEditorItem => ({
+      currency,
+      commercial_document_type: invoiceType === "offer" ? "QUOTE" : invoiceType === "proforma" ? "PROFORMA" : invoiceType === "order" ? "SALES_ORDER" : "INVOICE",
+      discount_percent: discountMode === "percent" ? Math.round(discountValue) : undefined,
+      buyer_signature_url: invoiceType === "invoice" && customerSignatureRequested ? customerSignature : null,
+      customer_signature_requested: invoiceType === "invoice" && customerSignatureRequested,
+      customer_signature_status: invoiceType !== "invoice" || !customerSignatureRequested ? "not_requested" : customerSignature ? "signed" : "pending",
+      customer_signature_name: invoiceType === "invoice" && customerSignatureRequested ? selectedClient?.name || "Citizen" : null,
+      customer_signed_at: invoiceType === "invoice" && customerSignature ? new Date().toISOString() : null,
+      items: cart.map((item, index): InvoiceEditorItem => ({
         id: item.id,
         product_id: item.productId,
         description: item.name,
         quantity: item.quantity,
-        unit_price: item.unitPrice * (1 - item.discountPercent / 100) * (1 - globalDiscountRate / 100) / (1 + Math.max(0, taxRate) / 100),
-        tax_rate: taxRate,
-        discount: 100 - (1 - item.discountPercent / 100) * (1 - globalDiscountRate / 100) * 100,
+        unit_price: item.unitPrice,
+        tax_rate: item.taxRate,
+        discount: totals.lines[index]?.effectiveDiscountPercent ?? item.discountPercent,
         unit: item.unit,
         sku: item.sku,
+        tax_included: item.taxIncluded,
       })),
     };
   }
@@ -443,6 +463,12 @@ export function PosView() {
       setMessage("Add at least one product before printing.");
       return;
     }
+    if (invoiceType === "invoice" && customerSignatureRequested && !customerSignature) {
+      setMessageTone("error");
+      setMessage("Ask the customer to sign before printing this invoice.");
+      setShowCustomerSignature(true);
+      return;
+    }
     const draft = createDraft("draft");
     const company: DocumentCompany = {
       name: source?.company_name || workspace.company?.name || "",
@@ -450,7 +476,9 @@ export function PosView() {
       phone: source?.phone || "",
       address: source?.address || "",
       city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "),
-      taxId: source?.tax_id || "",
+      taxId: source?.tax_id || workspace.company?.fiscal_number || workspace.company?.vat_number || "",
+      businessId: workspace.company?.unique_business_number,
+      vatNumber: workspace.company?.vat_number,
       bankName: source?.bank_name || "",
       iban: source?.bank_iban || "",
       website: source?.website || "",
@@ -467,16 +495,28 @@ export function PosView() {
       setMessage("Add at least one product before saving.");
       return;
     }
+    if (payment === "cash" && status === "complete" && totals.total >= 300) {
+      setMessageTone("error");
+      setMessage("Cash invoices must be below €300. Use a card or another payment method.");
+      return;
+    }
     if (payment === "cash" && status === "complete" && cashReceived < totals.total) {
       setMessageTone("error");
       setMessage(`Cash received is ${money(amountDue, currency)} short of the total.`);
       return;
     }
-    if (status === "complete" && !terminalId) {
+    const stockCheckout = cart.some((item) => item.trackStock);
+    if (status === "complete" && !terminalId && !stockCheckout) {
       setMessageTone("error");
       setMessage(terminals.length
         ? "Select a POS terminal before completing this sale."
         : "No active POS terminal is configured for this company.");
+      return;
+    }
+    if (status === "complete" && invoiceType === "invoice" && customerSignatureRequested && !customerSignature) {
+      setMessageTone("error");
+      setMessage("Ask the customer to sign before completing this invoice.");
+      setShowCustomerSignature(true);
       return;
     }
     const supabase = createClient();
@@ -489,126 +529,104 @@ export function PosView() {
     setMessageTone("error");
     setMessage("");
 
-    // Completion is one idempotent server command. Do not recreate the old
-    // browser-side invoice → lines → payment sequence here.
     if (status === "complete") {
-      const tenderedAmount = payment === "cash" ? cashReceived : totals.total;
-      const { data, error } = await supabase.rpc("complete_pos_sale", {
-        p_company_id: workspace.companyId,
-        p_terminal_id: terminalId,
-        p_customer_id: clientId || null,
-        p_items: cart.map((item) => ({
-          product_id: item.productId,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          discount_percent: item.discountPercent,
-        })),
-        p_payments: [{
-          method: payment === "debt" ? "customer_credit" : payment,
-          amount: totals.total,
-          tendered_amount: tenderedAmount,
-          reference: null,
-          settlement_account_id: null,
-        }],
-        p_invoice_type: invoiceType,
-        p_notes: note || null,
-        p_idempotency_key: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()),
-        p_occurred_at: new Date().toISOString(),
-      });
-      if (error) {
-        setMessage(error.message);
+      if (invoiceType !== "invoice") {
+        setMessage("Only invoices can be paid and completed in POS. Save this document as a draft first.");
         setSaving(false);
         return;
       }
-      const result = data as { invoice_number?: string } | null;
-      if (!result?.invoice_number) {
-        setMessage("The POS completion command returned no invoice number.");
+      try {
+        const result = await completePosSale(supabase, {
+          userId: workspace.user?.id || "",
+          companyId: workspace.companyId || "",
+          terminalId,
+          customerId: clientId || null,
+          lines: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, discountPercent: item.discountPercent, description: item.name, unit: item.unit, sku: item.sku || null })),
+          payment: payment === "debt" ? "customer_credit" : payment,
+          cashReceived: payment === "cash" ? cashReceived : totals.total,
+          documentDiscountPercent: discountMode === "percent" ? discountValue : undefined,
+          documentDiscountAmount: discountMode === "amount" ? discountValue : undefined,
+          notes: note || null,
+          currency,
+          idempotencyKey: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()),
+          customerSignature: invoiceType === "invoice" && customerSignatureRequested ? { requested: true, signatureUrl: customerSignature, name: selectedClient?.name || "Citizen" } : { requested: false },
+        });
+        if (result.paymentAllocationError) setMessage(`Sale completed, but payment allocation needs attention: ${result.paymentAllocationError.message}`);
+        setCart([]);
+        setCashReceived(0);
+        setCashReceivedText("");
+        setDiscountValue(0);
+        setNote("");
+        setCustomerSignatureRequested(false);
+        setCustomerSignature(null);
+        completionIdempotencyKeyRef.current = null;
         setSaving(false);
-        return;
+        router.push(`/invoices/preview/${encodeURIComponent(result.invoiceNumber)}`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "The POS sale could not be completed.");
+        setSaving(false);
       }
+      return;
+    }
+
+    const authData = workspace.user;
+    if (!authData || !workspace.companyId) {
+      setMessage("Your authenticated company workspace is required.");
+      setSaving(false);
+      return;
+    }
+    const selectedInvoiceType = invoiceTypes.find((option) => option.value === invoiceType) || invoiceTypes[0];
+    const commercialDocumentType = invoiceType === "offer" ? "QUOTE" : invoiceType === "proforma" ? "PROFORMA" : invoiceType === "order" ? "SALES_ORDER" : "INVOICE";
+    const draft: InvoiceDraftInput = {
+      userId: authData.id,
+      companyId: workspace.companyId,
+      clientId: clientId || null,
+      invoiceNumber: null,
+      issueDate: isoToday(),
+      dueDate: addDays(isoToday(), 0),
+      documentType: commercialDocumentType,
+      status: "draft",
+      commercialStatus: "DRAFT",
+      paymentMethod: paymentMethod(payment),
+      amountReceived: 0,
+      notes: note || null,
+      currency,
+      documentDiscountPercent: discountMode === "percent" ? discountValue : undefined,
+      documentDiscountAmount: discountMode === "amount" ? discountValue : undefined,
+      customerSignatureRequested: invoiceType === "invoice" && customerSignatureRequested,
+      buyerSignatureUrl: invoiceType === "invoice" && customerSignatureRequested ? customerSignature : null,
+      customerSignatureStatus: invoiceType !== "invoice" || !customerSignatureRequested ? "not_requested" : customerSignature ? "signed" : "pending",
+      customerSignatureName: invoiceType === "invoice" && customerSignatureRequested ? selectedClient?.name || "Citizen" : null,
+      customerSignedAt: invoiceType === "invoice" && customerSignature ? new Date().toISOString() : null,
+      lines: cart.map((item) => ({ productId: item.productId, description: item.name, quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate, discountPercent: item.discountPercent, unit: item.unit, sku: item.sku || null, taxIncluded: item.taxIncluded })),
+    };
+    try {
+      const saved = await saveInvoiceDocument(supabase, { draft, postInvoice: false, idempotencyKey: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()) });
       setCart([]);
       setCashReceived(0);
       setCashReceivedText("");
       setDiscountValue(0);
       setNote("");
-      completionIdempotencyKeyRef.current = null;
-      setSaving(false);
-      router.push(`/invoices/preview/${encodeURIComponent(result.invoice_number)}`);
-      return;
+      setCustomerSignatureRequested(false);
+      setCustomerSignature(null);
+      setMessageTone("success");
+      setMessage(`${selectedInvoiceType.label} saved as draft (${String(saved.invoice.invoice_number)}).`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The document could not be saved.");
     }
-
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      setMessage("Your session has expired. Please sign in again.");
-      setSaving(false);
-      return;
-    }
-    const draft = createDraft("draft");
-    const selectedInvoiceType = invoiceTypes.find((option) => option.value === invoiceType) || invoiceTypes[0];
-    const payload = {
-      user_id: authData.user.id,
-      company_id: workspace.companyId,
-      client_id: clientId || null,
-      invoice_number: draft.invoice_number,
-      issue_date: draft.issue_date,
-      due_date: draft.due_date,
-      status: draft.status,
-      type: selectedInvoiceType.type,
-      subtype: selectedInvoiceType.subtype,
-      discount_amount: totals.discount,
-      discount_percent: totals.subtotal ? totals.discount / totals.subtotal * 100 : 0,
-      tax_amount: totals.tax,
-      total_amount: totals.total,
-      notes: note || null,
-      template_id: "corporate",
-      payment_method: draft.payment_method,
-      amount_received: draft.amount_received,
-      change_amount: change,
-      paper_size: "A4",
-    };
-    const invoiceResult = await supabase.from("invoices").insert(payload).select("id").single();
-    if (invoiceResult.error) {
-      setMessage(invoiceResult.error.message);
-      setSaving(false);
-      return;
-    }
-    const globalDiscountRate = totals.subtotal - totals.itemDiscount > 0 ? totals.globalDiscount / (totals.subtotal - totals.itemDiscount) * 100 : 0;
-    const items = cart.map((item) => ({
-      invoice_id: invoiceResult.data.id,
-      product_id: item.productId,
-      description: item.name,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      tax_rate: taxRate,
-      discount: 100 - (1 - item.discountPercent / 100) * (1 - globalDiscountRate / 100) * 100,
-      amount: item.quantity * item.unitPrice * (1 - item.discountPercent / 100) * (1 - globalDiscountRate / 100) / (1 + Math.max(0, taxRate) / 100),
-      unit: item.unit,
-      sku: item.sku || null,
-    }));
-    const itemsResult = await supabase.from("invoice_items").insert(items);
-    if (itemsResult.error) {
-      setMessage(itemsResult.error.message);
-      setSaving(false);
-      return;
-    }
-    setCart([]);
-    setCashReceived(0);
-    setCashReceivedText("");
-    setDiscountValue(0);
-    setNote("");
-    setMessageTone("success");
-    setMessage(`${selectedInvoiceType.label} saved as draft.`);
     setSaving(false);
+    return;
   }
 
   const dataError = productsQuery.error || clientsQuery.error || workspace.error;
   const terminalReady = Boolean(terminalId);
+  const stockCheckout = cart.some((item) => item.trackStock);
 
-  return <div className="pos-page min-h-[calc(100vh-64px)] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5">
+  return <div className="pos-page min-h-[calc(100vh-64px)] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5" data-mobile-cart={mobileCartOpen ? "open" : "closed"}>
     <div className="mx-auto max-w-[1800px]">
       <header className="mb-4 flex flex-wrap items-end gap-3">
         <div className="w-full lg:w-auto"><h1 className="page-title">POS</h1><p className="muted mt-1 text-xs">Create an invoice from your product catalogue.</p></div>
-        <label className="order-1 min-w-0 flex-1 sm:max-w-64 lg:order-none lg:ml-auto"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#667085]">Terminal</span><select className="select h-10 w-full text-xs" value={terminalId} onChange={(event) => setTerminalId(event.target.value)} disabled={terminalsLoading || !terminals.length}><option value="">{terminalsLoading ? "Loading terminals…" : terminals.length ? "Select terminal" : "No active terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.display_name || terminal.terminal_code}</option>)}</select></label>
+        <label className="order-1 min-w-0 flex-1 sm:max-w-64 lg:order-none lg:ml-auto"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#667085]">Terminal</span><select className="select h-10 w-full text-xs" value={terminalId} onChange={(event) => setTerminalId(event.target.value)} disabled={terminalsLoading || !terminals.length}><option value="">{terminalsLoading ? "Loading terminals…" : terminals.length ? "Select terminal" : "No active terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name || terminal.code}</option>)}</select></label>
         <label className="relative order-2 min-w-0 flex-1 lg:order-none lg:w-[430px] lg:flex-none"><span className="sr-only">Search products</span><Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"/><input ref={searchRef} className="input pl-9 pr-14" placeholder="Search products, SKU or barcode…" value={search} onChange={(event) => setSearch(event.target.value)}/><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[#e4e9f0] px-1.5 py-0.5 text-[10px] muted">Ctrl K</kbd></label>
         <Link className="btn btn-primary order-3 shrink-0" href="/products"><Plus size={16}/>Add product</Link>
       </header>
@@ -622,15 +640,16 @@ export function PosView() {
         </section>
 
         <section className="card min-w-0 overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-[#edf0f4] p-4 sm:flex-row sm:items-start"><div className="min-w-0"><h2 className="text-lg font-semibold">{invoiceTypes.find((option) => option.value === invoiceType)?.label || "Invoice"} <span className="ml-1 rounded bg-[#ecfdf3] px-2 py-1 text-[10px] font-medium text-[#087443]">New</span></h2><p className="muted mt-1 text-[11px]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "No items added"} · {terminalReady ? terminals.find((terminal) => terminal.id === terminalId)?.display_name || "Terminal ready" : "Terminal required"}</p></div><div className="flex w-full min-w-0 justify-end gap-2 sm:ml-auto sm:w-auto"><label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Invoice type</span><select className="select h-9 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-32" value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as PosInvoiceType)}>{invoiceTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="btn h-9 shrink-0 px-3 text-xs" onClick={() => void holdCurrentCart()} disabled={saving || !terminalReady || (!cart.length && !heldOrder)} title={heldOrder && !cart.length ? "Resume held order" : "Hold order"}>{heldOrder && !cart.length ? <FileText size={15}/> : <WalletCards size={15}/>}<span className="hidden sm:inline">{heldOrder && !cart.length ? "Resume" : "Hold"}</span></button><button className="btn h-9 shrink-0 px-3 text-xs" onClick={clearCart} disabled={!cart.length || saving}><Trash2 size={15}/><span className="hidden sm:inline">Clear</span></button></div></div>
-          <div className="border-b border-[#edf0f4] p-4"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Customer</span><Link className="text-xs font-medium text-[#004ffe]" href="/customers"><Plus size={14} className="mr-1 inline"/>New customer</Link></div><div className="relative"><UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#667085]"/><input className="input pl-9 pr-9" placeholder="Search customers…" value={clientId ? (clients.find((client) => client.id === clientId)?.name || "") : customerSearch} onFocus={() => setCustomerPickerOpen(true)} onChange={(event) => { setCustomerSearch(event.target.value); setClientId(""); setCustomerPickerOpen(true); }} aria-label="Search customers"/><button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#667085]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(true); }} aria-label="Clear customer"><X size={15}/></button>{customerPickerOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#e4e9f0] bg-white p-1 shadow-lg"><button type="button" className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(false); }}>Walk-in Customer</button>{matchingClients.map((client) => <button type="button" key={client.id} className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(client.id); setCustomerSearch(""); setCustomerPickerOpen(false); }}><span className="block font-medium text-[#101828]">{client.name}</span>{client.email ? <span className="muted block text-[10px]">{client.email}</span> : null}</button>)}{!matchingClients.length ? <p className="p-2 text-xs muted">No customers found.</p> : null}</div> : null}</div></div>
-          <div className="max-h-[320px] overflow-y-auto border-b border-[#edf0f4]">{cart.length ? <div className="divide-y divide-[#edf0f4]">{cart.map((item) => <CartLine key={item.id} item={item} currency={currency} onQuantityChange={(value) => updateQuantity(item.id, value)} onDiscountChange={(value) => updateProductDiscount(item.id, value)} onRemove={() => updateQuantity(item.id, 0)}/>)}</div> : <div className="grid min-h-44 place-items-center p-6 text-center"><ShoppingCart size={34} className="text-[#98a2b3]"/><p className="mt-2 text-sm font-medium">No items added</p><p className="muted mt-1 text-xs">Browse products and add them to this invoice.</p></div>}</div>
-          <div className="grid gap-4 border-b border-[#edf0f4] p-4 md:grid-cols-[1fr_1fr]"><div className="space-y-3"><div><label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#667085]">Discount <select className="h-7 rounded border border-[#e4e9f0] bg-white px-2 text-[11px] font-normal" value={discountMode} onChange={(event) => {const mode=event.target.value as DiscountMode;setDiscountMode(mode);setDiscountValue(current=>mode === "percent" ? Math.min(100,current) : Math.min(totals.subtotal,current));}}><option value="percent">% Percent</option><option value="amount">€ Amount</option></select></label><input className="input" type="number" min="0" max={discountMode === "percent" ? 100 : totals.subtotal} step={discountMode === "percent" ? 1 : "0.01"} value={discountValue || ""} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {const value=Math.max(0,Number(event.target.value)||0);setDiscountValue(Math.min(discountMode === "percent" ? 100 : totals.subtotal,value));}}/></div><label className="field"><span>Note</span><textarea className="textarea min-h-16" maxLength={250} placeholder="Add note…" value={note} onChange={(event) => setNote(event.target.value)}/></label></div><div className="rounded-lg bg-[#f7f9fc] p-3"><SummaryRow label="Subtotal" value={totals.subtotal} currency={currency}/><SummaryRow label="Discount" value={-totals.discount} currency={currency}/><SummaryRow label={`Tax included (${taxRate}%)`} value={totals.tax} currency={currency}/><div className="mt-3 flex items-center border-t border-[#e4e9f0] pt-3 text-base font-semibold"><span>Total</span><strong className="ml-auto text-xl text-[#004ffe]">{money(totals.total, currency)}</strong></div></div></div>
-          <div className="border-b border-[#edf0f4] p-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentOptions.map((option) => {const Icon = option.icon; const active = payment === option.value; return <button key={option.value} type="button" aria-pressed={active} className={`btn pos-payment-option h-10 px-2 text-xs ${active ? "pos-payment-active" : ""}`} onClick={() => setPayment(option.value)}><Icon size={15}/>{option.label}</button>;})}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="field"><span>Cash received</span><div className="flex gap-2"><input className="input min-w-0" type="text" inputMode="decimal" placeholder="0.00" value={cashReceivedText} onChange={(event) => { const next = event.target.value; setCashReceivedText(next); setCashReceived(parseDecimalInput(next)); }} disabled={payment !== "cash"}/><button type="button" className="btn shrink-0 px-3 text-xs" onClick={() => { const amount = Number(totals.total.toFixed(2)); setCashReceived(amount); setCashReceivedText(String(amount)); }} disabled={payment !== "cash" || !cart.length}>Paid in full</button></div></label><div className="field"><span>{payment === "debt" ? "Customer balance" : amountDue > 0 ? "Amount due" : "Change"}</span><strong className={`input ${payment === "debt" ? "bg-[#fff8eb] text-[#b54708]" : amountDue > 0 ? "bg-[#fff8eb] text-[#b54708]" : "bg-[#ecfdf3] text-[#087443]"}`}>{payment === "debt" ? money(totals.total, currency) : money(amountDue || change, currency)}</strong></div></div></div>
-          <div className="grid gap-2 p-4 sm:grid-cols-3"><button className="btn" onClick={() => saveInvoice("draft")} disabled={busy || !cart.length}><FileText size={16}/>Save as Draft</button><button className="btn" onClick={printDraft} disabled={busy || !cart.length}><Printer size={16}/>Print</button><button className="btn btn-primary sm:col-span-1" onClick={() => saveInvoice("complete")} disabled={busy || !cart.length || !terminalReady} title={terminalReady ? undefined : "Configure and select an active POS terminal first"}><Banknote size={16}/>{saving ? "Saving…" : "Pay & Complete"}</button></div>
+          <div className="flex flex-col gap-3 border-b border-[#edf0f4] p-4 sm:flex-row sm:items-start"><div className="min-w-0"><h2 className="text-lg font-semibold">{invoiceTypes.find((option) => option.value === invoiceType)?.label || "Invoice"} <span className="ml-1 rounded bg-[#ecfdf3] px-2 py-1 text-[10px] font-medium text-[#087443]">New</span></h2><p className="muted mt-1 text-[11px]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "No items added"} · {terminalReady ? terminals.find((terminal) => terminal.id === terminalId)?.name || "Terminal ready" : stockCheckout ? "Inventory checkout" : "Terminal required"}</p></div><div className="flex w-full min-w-0 justify-end gap-2 sm:ml-auto sm:w-auto"><label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Invoice type</span><select className="select h-9 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-32" value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as PosInvoiceType)}>{invoiceTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="btn h-9 shrink-0 px-3 text-xs" onClick={() => void holdCurrentCart()} disabled={saving || !terminalReady || (!cart.length && !heldOrder)} title={heldOrder && !cart.length ? "Resume held order" : "Hold order"}>{heldOrder && !cart.length ? <FileText size={15}/> : <WalletCards size={15}/>}<span className="hidden sm:inline">{heldOrder && !cart.length ? "Resume" : "Hold"}</span></button><button className="btn h-9 shrink-0 px-3 text-xs" onClick={clearCart} disabled={!cart.length || saving}><Trash2 size={15}/><span className="hidden sm:inline">Clear</span></button></div></div>
+          <div className="border-b border-[#edf0f4] p-4"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Customer</span><Link className="text-xs font-medium text-[#004ffe]" href="/customers"><Plus size={14} className="mr-1 inline"/>New customer</Link></div><div className="relative"><UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#667085]"/><input className="input pl-9 pr-9" placeholder="Search customers…" value={clientId ? (clients.find((client) => client.id === clientId)?.name || "") : customerSearch} onFocus={() => setCustomerPickerOpen(true)} onChange={(event) => { setCustomerSearch(event.target.value); setClientId(""); setCustomerPickerOpen(true); }} aria-label="Search customers"/><button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#667085]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(true); }} aria-label="Clear customer"><X size={15}/></button>{customerPickerOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#e4e9f0] bg-white p-1 shadow-lg"><button type="button" className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(false); }}>Citizen</button>{matchingClients.map((client) => <button type="button" key={client.id} className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(client.id); setCustomerSearch(""); setCustomerPickerOpen(false); }}><span className="block font-medium text-[#101828]">{client.name}</span>{client.email ? <span className="muted block text-[10px]">{client.email}</span> : null}</button>)}{!matchingClients.length ? <p className="p-2 text-xs muted">No customers found.</p> : null}</div> : null}</div></div>
+          <div className="max-h-[320px] overflow-y-auto border-b border-[#edf0f4]">{cart.length ? <div className="divide-y divide-[#edf0f4]">{cart.map((item, index) => <CartLine key={item.id} item={item} currency={currency} lineTotal={totals.lines[index]?.total ?? 0} onQuantityChange={(value) => updateQuantity(item.id, value)} onDiscountChange={(value) => updateProductDiscount(item.id, value)} onRemove={() => updateQuantity(item.id, 0)}/>)}</div> : <div className="grid min-h-44 place-items-center p-6 text-center"><ShoppingCart size={34} className="text-[#98a2b3]"/><p className="mt-2 text-sm font-medium">No items added</p><p className="muted mt-1 text-xs">Browse products and add them to this invoice.</p></div>}</div>
+          <div className="grid gap-4 border-b border-[#edf0f4] p-4 md:grid-cols-[1fr_1fr]"><div className="space-y-3"><div><label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#667085]">Discount <select className="h-7 rounded border border-[#e4e9f0] bg-white px-2 text-[11px] font-normal" value={discountMode} onChange={(event) => {const mode=event.target.value as DiscountMode;setDiscountMode(mode);setDiscountValue(current=>mode === "percent" ? Math.min(100,Math.round(current)) : Math.min(totals.subtotal,current));}}><option value="percent">% Percent</option><option value="amount">€ Amount</option></select></label><input className="input" type="number" min="0" max={discountMode === "percent" ? 100 : totals.subtotal} step={discountMode === "percent" ? 1 : "0.01"} value={discountValue || ""} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {const value=Math.max(0,Number(event.target.value)||0);setDiscountValue(Math.min(discountMode === "percent" ? 100 : totals.subtotal,discountMode === "percent" ? Math.round(value) : value));}}/></div><label className="field"><span>Note</span><textarea className="textarea min-h-16" maxLength={250} placeholder="Add note…" value={note} onChange={(event) => setNote(event.target.value)}/></label></div><div className="rounded-lg bg-[#f7f9fc] p-3"><SummaryRow label="Subtotal" value={totals.subtotal} currency={currency}/><SummaryRow label="Discount" value={-totals.discount} currency={currency}/><SummaryRow label="Tax" value={totals.tax} currency={currency}/><div className="mt-3 flex items-center border-t border-[#e4e9f0] pt-3 text-base font-semibold"><span>Total</span><strong className="ml-auto text-xl text-[#004ffe]">{money(totals.total, currency)}</strong></div></div></div>
+          <div className="border-b border-[#edf0f4] p-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentOptions.map((option) => {const Icon = option.icon; const active = payment === option.value; return <button key={option.value} type="button" aria-pressed={active} className={`btn pos-payment-option h-10 px-2 text-xs ${active ? "pos-payment-active" : ""}`} onClick={() => setPayment(option.value)}><Icon size={15}/>{option.label}</button>;})}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="field"><span>Cash received</span><div className="flex gap-2"><input className="input min-w-0" type="text" inputMode="decimal" placeholder="0.00" value={cashReceivedText} onChange={(event) => { const next = event.target.value; setCashReceivedText(next); setCashReceived(parseDecimalInput(next)); }} disabled={payment !== "cash"}/><button type="button" className="btn shrink-0 px-3 text-xs" onClick={() => { const amount = Number(totals.total.toFixed(2)); setCashReceived(amount); setCashReceivedText(String(amount)); }} disabled={payment !== "cash" || !cart.length}>Paid in full</button></div></label><div className="field"><span>{payment === "debt" ? "Customer balance" : amountDue > 0 ? "Amount due" : "Change"}</span><strong className={`input ${payment === "debt" ? "bg-[#fff8eb] text-[#b54708]" : amountDue > 0 ? "bg-[#fff8eb] text-[#b54708]" : "bg-[#ecfdf3] text-[#087443]"}`}>{payment === "debt" ? money(totals.total, currency) : money(amountDue || change, currency)}</strong></div></div>{invoiceType === "invoice" ? <div className="mt-4 rounded-lg border border-[#d0d5dd] bg-[#f8fafc] p-3"><label className="flex cursor-pointer items-start gap-3"><input className="mt-1 h-4 w-4 accent-[#004ffe]" type="checkbox" checked={customerSignatureRequested} onChange={(event) => { const requested = event.target.checked; setCustomerSignatureRequested(requested); if (!requested) setCustomerSignature(null); }}/><span><strong className="block text-xs">Ask customer to sign this invoice</strong><span className="muted mt-1 block text-[11px]">Hand the phone to the customer before completing the sale. Their signature appears beside the issuer signature.</span></span></label>{customerSignatureRequested ? <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e4e9f0] pt-3">{customerSignature ? <img src={customerSignature} alt="Captured customer signature" className="h-10 max-w-32 rounded border border-[#d0d5dd] bg-white object-contain px-1"/> : <span className="text-[11px] text-[#b54708]">Signature required before completion.</span>}<button type="button" className="btn ml-auto px-3 text-xs" onClick={() => setShowCustomerSignature(true)}>{customerSignature ? "Replace" : "Capture signature"}</button></div> : null}</div> : null}</div>
+          <div className="grid gap-2 p-4 sm:grid-cols-3"><button className="btn" onClick={() => saveInvoice("draft")} disabled={busy || !cart.length}><FileText size={16}/>Save as Draft</button><button className="btn" onClick={printDraft} disabled={busy || !cart.length}><Printer size={16}/>Print</button><button className="btn btn-primary sm:col-span-1" onClick={() => saveInvoice("complete")} disabled={busy || !cart.length || (!terminalReady && !stockCheckout)} title={terminalReady || stockCheckout ? undefined : "Configure and select an active POS terminal first"}><Banknote size={16}/>{saving ? "Saving…" : "Pay & Complete"}</button></div>
         </section>
       </div>
     </div>
+  <button type="button" className="pos-mobile-cart-toggle" onClick={() => setMobileCartOpen((value) => !value)} aria-expanded={mobileCartOpen}><ShoppingCart size={18} /><span>{cart.length ? `${cart.length} item${cart.length === 1 ? "" : "s"}` : "Cart"}</span><strong>{money(totals.total, currency)}</strong><span>{mobileCartOpen ? "Close" : "View cart"}</span></button><SignatureCapture open={showCustomerSignature} customerName={selectedClient?.name || "Citizen"} onClose={() => setShowCustomerSignature(false)} onSave={(signature) => { setCustomerSignatureRequested(true); setCustomerSignature(signature); setMessageTone("success"); setMessage("Customer signature captured. Complete the invoice when ready."); }}/>
   </div>;
 }
 
@@ -642,8 +661,8 @@ function ProductCard({ product, currency, quantity, onAdd, onQuantityChange }: {
   return <div className="group min-w-0 overflow-hidden rounded-lg border border-[#e4e9f0] bg-white text-left transition hover:-translate-y-0.5 hover:border-[#9dbdff] hover:shadow-[0_8px_20px_rgba(16,24,40,.08)]"><button className="block w-full text-left disabled:cursor-not-allowed disabled:opacity-55" onClick={onAdd} disabled={outOfStock}>{imageUrl ? <div className="relative h-28 bg-[#f7f9fc] sm:h-32"><Image src={imageUrl} alt="" fill sizes="(max-width: 768px) 45vw, 220px" className="object-cover"/></div> : null}<div className="p-3"><strong className="block truncate text-xs text-[#101828]">{product.name}</strong><span className="mt-1 block truncate text-[10px] text-[#667085]">{String(product.sku || product.barcode || product.unit || "Product")}</span><div className="mt-2 flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#004ffe]">{money(Number(product.unit_price) || 0, currency)}</span>{outOfStock ? <span className="text-[9px] text-[#d92d20]">Out of stock</span> : <Plus size={15} className="text-[#004ffe] opacity-0 transition group-hover:opacity-100"/>}</div></div></button>{quantity > 0 ? <div className="mx-3 mb-3 flex items-center justify-between rounded-md border border-[#d0d5dd] bg-white"><button type="button" className="grid h-8 w-9 place-items-center text-[#004ffe] hover:bg-[#f2f5f9]" onClick={() => onQuantityChange(quantity - 1)} aria-label={`Decrease ${product.name}`}><Minus size={14}/></button><span className="text-xs font-semibold text-[#344054]">{quantity}</span><button type="button" className="grid h-8 w-9 place-items-center text-[#004ffe] hover:bg-[#f2f5f9]" onClick={() => onQuantityChange(quantity + 1)} aria-label={`Increase ${product.name}`}><Plus size={14}/></button></div> : null}</div>;
 }
 
-function CartLine({ item, currency, onQuantityChange, onDiscountChange, onRemove }: { item: CartItem; currency: string; onQuantityChange: (value: number) => void; onDiscountChange: (value: number) => void; onRemove: () => void }) {
-  return <div className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[#f2f5f9] text-[#667085]"><Package size={18}/></div><div className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.name}</strong><span className="muted mt-1 block truncate text-[10px]">{money(item.unitPrice, currency)} / {item.unit}</span></div><div className="flex shrink-0 items-center gap-1 text-[10px] text-[#667085]"><span>Disc %</span><div className="flex items-center rounded-md border border-[#e4e9f0] bg-white"><button type="button" className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onDiscountChange(item.discountPercent - 1)} aria-label={`Decrease discount for ${item.name}`}><Minus size={13}/></button><span className="grid h-8 w-8 place-items-center border-x border-[#e4e9f0] text-xs font-medium text-[#344054]">{item.discountPercent}</span><button type="button" className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onDiscountChange(item.discountPercent + 1)} aria-label={`Increase discount for ${item.name}`}><Plus size={13}/></button></div></div><div className="flex shrink-0 items-center rounded-md border border-[#e4e9f0] bg-white"><button className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onQuantityChange(item.quantity - 1)} aria-label={`Decrease ${item.name}`}><Minus size={13}/></button><input className="h-8 w-9 border-x border-[#e4e9f0] text-center text-xs font-medium outline-none" type="number" min="1" step="1" value={item.quantity} onChange={(event) => onQuantityChange(Number(event.target.value) || 1)} aria-label={`Quantity for ${item.name}`}/><button className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onQuantityChange(item.quantity + 1)} aria-label={`Increase ${item.name}`}><Plus size={13}/></button></div><strong className="w-20 shrink-0 text-right text-xs">{money(item.quantity * item.unitPrice * (1 - item.discountPercent / 100), currency)}</strong><button className="shrink-0 text-[#98a2b3] hover:text-[#d92d20]" onClick={onRemove} aria-label={`Remove ${item.name}`}><Trash2 size={16}/></button></div>;
+function CartLine({ item, currency, lineTotal, onQuantityChange, onDiscountChange, onRemove }: { item: CartItem; currency: string; lineTotal: number; onQuantityChange: (value: number) => void; onDiscountChange: (value: number) => void; onRemove: () => void }) {
+  return <div className="flex items-center gap-3 p-4"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[#f2f5f9] text-[#667085]"><Package size={18}/></div><div className="min-w-0 flex-1"><strong className="block truncate text-xs">{item.name}</strong><span className="muted mt-1 block truncate text-[10px]">{money(item.unitPrice, currency)} / {item.unit}{item.taxIncluded ? " · VAT incl." : ""}</span></div><div className="flex shrink-0 items-center gap-1 text-[10px] text-[#667085]"><span>Disc %</span><div className="flex items-center rounded-md border border-[#e4e9f0] bg-white"><button type="button" className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onDiscountChange(item.discountPercent - 1)} aria-label={`Decrease discount for ${item.name}`}><Minus size={13}/></button><span className="grid h-8 w-8 place-items-center border-x border-[#e4e9f0] text-xs font-medium text-[#344054]">{item.discountPercent}</span><button type="button" className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onDiscountChange(item.discountPercent + 1)} aria-label={`Increase discount for ${item.name}`}><Plus size={13}/></button></div></div><div className="flex shrink-0 items-center rounded-md border border-[#e4e9f0] bg-white"><button className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onQuantityChange(item.quantity - 1)} aria-label={`Decrease ${item.name}`}><Minus size={13}/></button><input className="h-8 w-9 border-x border-[#e4e9f0] text-center text-xs font-medium outline-none" type="number" min="1" step="1" value={item.quantity} onChange={(event) => onQuantityChange(Number(event.target.value) || 1)} aria-label={`Quantity for ${item.name}`}/><button className="grid h-8 w-7 place-items-center text-[#667085] hover:text-[#004ffe]" onClick={() => onQuantityChange(item.quantity + 1)} aria-label={`Increase ${item.name}`}><Plus size={13}/></button></div><strong className="w-20 shrink-0 text-right text-xs">{money(lineTotal, currency)}</strong><button className="shrink-0 text-[#98a2b3] hover:text-[#d92e20]" onClick={onRemove} aria-label={`Remove ${item.name}`}><Trash2 size={16}/></button></div>;
 }
 
 function SummaryRow({ label, value, currency }: { label: string; value: number; currency: string }) {

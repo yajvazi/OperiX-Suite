@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Download, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { getExpense, getPayment } from "@invoice-monorepo/api/repositories";
 import { Brand } from "./brand";
 import { money, shortDate } from "@/lib/format";
 
@@ -15,7 +16,25 @@ export function TransactionPreview(){
   const [row,setRow]=useState<Record<string,unknown>|null>(null);
   const [error,setError]=useState("");
   const workspace=useWorkspace();
-  useEffect(()=>{if(!id)return;const supabase=createClient();if(!supabase){queueMicrotask(()=>setError("Supabase is not configured."));return;}const table=type==="payments"?"payments":"expenses";void supabase.from(table).select("*").eq("id",id).single().then(({data,error:queryError})=>{if(queryError)setError(queryError.message);else setRow(data);});},[id,type]);
+  useEffect(()=>{
+    if(!id || workspace.loading) return;
+    let cancelled=false;
+    const load=async()=>{
+      if(!workspace.user){if(!cancelled)setError("Your session has expired.");return;}
+      const supabase=createClient();
+      if(!supabase){if(!cancelled)setError("Supabase is not configured.");return;}
+      const scope={userId:workspace.user.id,companyIds:workspace.companyIds};
+      try{
+        const data=type==="payments" ? await getPayment(supabase,id,scope) : await getExpense(supabase,id,scope);
+        if(cancelled)return;
+        if(!data)setError("This transaction could not be found in the current workspace.");else setRow(data);
+      }catch(queryError){
+        if(!cancelled)setError(queryError instanceof Error ? queryError.message : "The transaction could not be loaded.");
+      }
+    };
+    void load();
+    return()=>{cancelled=true;};
+  },[id,type,workspace.companyIds,workspace.loading,workspace.user]);
   const visibleError=!id?"Transaction ID is missing.":error;
   if(visibleError)return <main className="p-10"><p className="p-4 bg-[#fff3f2] text-[#d92d20] rounded">{visibleError}</p></main>;
   if(!row)return <main className="p-10"><div className="skeleton h-[700px] max-w-[794px] mx-auto rounded"/></main>;

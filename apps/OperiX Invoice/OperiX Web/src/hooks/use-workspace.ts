@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { resolveWorkspace } from "@invoice-monorepo/api/workspace";
 import { createClient } from "@/lib/supabase/client";
 import type { InvoiceTemplateConfig } from "@/lib/models";
 
@@ -36,6 +37,7 @@ export interface WorkspaceProfile {
 
 export interface WorkspaceCompany {
   id: string;
+  parent_company_id?: string | null;
   company_name?: string;
   name?: string;
   trade_name?: string;
@@ -79,6 +81,9 @@ export function useWorkspace() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
   const [company, setCompany] = useState<WorkspaceCompany | null>(null);
+  const [companies, setCompanies] = useState<WorkspaceCompany[]>([]);
+  const [companyIds, setCompanyIds] = useState<string[]>([]);
+  const [roleCode, setRoleCode] = useState<"super_administrator" | "company_administrator" | "manager" | "employee">("employee");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -87,46 +92,31 @@ export function useWorkspace() {
     setError("");
     const supabase = createClient();
     if (!supabase) {
-      setError("Supabase is not configured.");
+      setError("We couldn't connect to your organization workspace. Please try again or contact your administrator.");
       setLoading(false);
       return;
     }
 
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) {
-      setError(authError?.message || "Your session has expired.");
+      setError("Your session has expired. Please sign in again.");
       setLoading(false);
       return;
     }
 
-    setUser(authData.user);
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", authData.user.id)
-      .single();
-
-    if (profileError) {
-      setError(profileError.message);
+    try {
+      setUser(authData.user);
+      const resolved = await resolveWorkspace(supabase, authData.user.id);
+      setProfile(resolved.profile as WorkspaceProfile);
+      setCompany(resolved.company as WorkspaceCompany | null);
+      setCompanies(resolved.companies as WorkspaceCompany[]);
+      setCompanyIds(resolved.companyIds);
+      setRoleCode(resolved.roleCode);
+    } catch {
+      setError("We couldn't load your organization workspace. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const nextProfile = profileData as WorkspaceProfile;
-    setProfile(nextProfile);
-    const companyId = nextProfile.active_company_id || nextProfile.company_id;
-    if (companyId) {
-      const { data: companyData, error: companyError } = await supabase
-        .from("companies")
-        .select("*")
-        .eq("id", companyId)
-        .maybeSingle();
-      if (companyError) setError(companyError.message);
-      setCompany((companyData as WorkspaceCompany | null) || null);
-    } else {
-      setCompany(null);
-    }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -137,6 +127,10 @@ export function useWorkspace() {
     user,
     profile,
     company,
+    companies,
+    companyIds,
+    roleCode,
+    isGroup: companyIds.length > 1,
     companyId: profile?.active_company_id || profile?.company_id || null,
     loading,
     error,

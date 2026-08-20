@@ -1,0 +1,20 @@
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: auth-email-input
+    timeout: 30000
+- tapOn:
+    id: auth-email-input
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password-input
+- inputText: ${E2E_PASSWORD}
+- tapOn:
+    id: auth-sign-in-button
+- extendedWaitUntil:
+    visible:
+      id: home-screen
+    timeout: 30000

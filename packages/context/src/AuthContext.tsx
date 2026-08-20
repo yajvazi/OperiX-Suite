@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { supabase } from '@invoice-monorepo/api';
+import { clearLocalSupabaseSession, isStaleSupabaseSessionError, isSupabaseConfigured, supabase } from '@invoice-monorepo/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -19,6 +19,10 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const missingSupabaseConfiguration = () => new Error(
+    'Mobile authentication is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY before launching this app.'
+);
+
 interface AuthProviderProps {
     children: ReactNode;
 }
@@ -29,23 +33,76 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
+        let mounted = true;
+
+        if (!isSupabaseConfigured) {
             setLoading(false);
-        });
+            return () => {
+                mounted = false;
+            };
+        }
+
+        const resetToCleanLogin = async () => {
+            await clearLocalSupabaseSession();
+            if (!mounted) return;
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+        };
+
+        // Resolve the persisted session once. Any auth error means the local
+        // token is not trustworthy and must not be retried on the next call.
+        void supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+            if (error || isStaleSupabaseSessionError(error)) {
+                await resetToCleanLogin();
+                return;
+            }
+
+            // getSession() can return a cached JWT even after its user has
+            // been deleted from Supabase Auth. Verify the user server-side so
+            // a deleted account cannot keep the app on a dead workspace.
+            if (session) {
+                const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+                if (userError && isStaleSupabaseSessionError(userError)) {
+                    await resetToCleanLogin();
+                    return;
+                }
+                if (!verifiedUser && !userError) {
+                    await resetToCleanLogin();
+                    return;
+                }
+            }
+
+            if (!mounted) return;
+            setSession(session);
+            setUser((currentUser) => {
+                const nextUser = session?.user ?? null;
+                return currentUser?.id && currentUser.id === nextUser?.id ? currentUser : nextUser;
+            });
+            setLoading(false);
+        }).catch(() => resetToCleanLogin());
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, session) => {
+            (_event, session) => {
+                if (!session) {
+                    if (!mounted) return;
+                    setSession(null);
+                    setUser(null);
+                    setLoading(false);
+                    return;
+                }
+                if (!mounted) return;
                 setSession(session);
-                setUser(session?.user ?? null);
+                setUser((currentUser) => currentUser?.id === session.user.id ? currentUser : session.user);
                 setLoading(false);
             }
         );
 
-        return () => subscription.unsubscribe();
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const signUp = async (email: string, password: string, options?: {
@@ -57,6 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             tax_id: string; // company registered number
         }
     }) => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
         const { error } = await supabase.auth.signUp({
             email,
             password,
@@ -66,6 +124,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const signIn = async (email: string, password: string) => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         const { error } = await supabase.auth.signInWithPassword({
             email,
             password,
@@ -74,8 +134,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const signInWithGoogle = async () => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
         try {
-            const redirectTo = AuthSession.makeRedirectUri();
+            const redirectTo = AuthSession.makeRedirectUri({ scheme: 'operixbooking' });
             console.log('Redirecting to:', redirectTo);
 
             const { data, error } = await supabase.auth.signInWithOAuth({
@@ -95,21 +156,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             if (res.type === 'success') {
                 const { url } = res;
-                const params = new URL(url).hash.substring(1).split('&').reduce((acc: any, cur) => {
-                    const [key, value] = cur.split('=');
-                    acc[key] = value;
-                    return acc;
-                }, {});
-
-                const { access_token, refresh_token } = params;
-
-                if (access_token && refresh_token) {
-                    const { error: sessionError } = await supabase.auth.setSession({
-                        access_token,
-                        refresh_token,
-                    });
-                    if (sessionError) throw sessionError;
-                }
+                const callbackUrl = new URL(url);
+                const code = callbackUrl.searchParams.get('code');
+                const oauthError = callbackUrl.searchParams.get('error_description') || callbackUrl.searchParams.get('error');
+                if (oauthError) throw new Error(oauthError);
+                if (!code) throw new Error('Google sign-in did not return an authorization code.');
+                const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+                if (sessionError) throw sessionError;
             }
             return { error: null };
         } catch (error) {
@@ -119,6 +172,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const verifyEmailOtp = async (email: string, token: string) => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
         const { error } = await supabase.auth.verifyOtp({
             email,
             token,
@@ -128,7 +182,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        await clearLocalSupabaseSession();
+        setSession(null);
+        setUser(null);
     };
 
     return (
@@ -148,4 +204,3 @@ export function AuthProvider({ children }: AuthProviderProps) {
         </AuthContext.Provider>
     );
 }
-

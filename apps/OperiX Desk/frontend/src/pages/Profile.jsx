@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { updateMe } from '../api/client';
+import { getProfileImage, updateMe } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/ui/PageHeader';
 import { formatApiError } from '../lib/apiError';
@@ -66,7 +66,13 @@ export default function Profile() {
       current_password: '',
       new_password: '',
     });
-    setPreview(user.profile_image_path || '');
+    let active = true;
+    if (user.profile_image_path) {
+      getProfileImage().then((url) => { if (active) setPreview(url); }).catch(() => { if (active) setPreview(''); });
+    } else {
+      setPreview('');
+    }
+    return () => { active = false; };
   }, [user]);
 
   const handleSubmit = async (e) => {
@@ -103,7 +109,11 @@ export default function Profile() {
         new_password: '',
       }));
       setProfileImage(null);
-      setPreview(updated.profile_image_path || '');
+      if (updated.profile_image_path) {
+        getProfileImage().then(setPreview).catch(() => setPreview(''));
+      } else {
+        setPreview('');
+      }
       await refreshUser();
     } catch (err) {
       setError(formatApiError(err, 'Could not update profile.'));

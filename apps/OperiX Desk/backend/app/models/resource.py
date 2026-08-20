@@ -16,6 +16,9 @@ class Resource(Base):
     __tablename__ = "resources"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        "company_id", String(64), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(100))
     type: Mapped[ResourceType] = mapped_column(Enum(ResourceType))
     building: Mapped[str] = mapped_column(String(120), default="HQ - Prishtina")

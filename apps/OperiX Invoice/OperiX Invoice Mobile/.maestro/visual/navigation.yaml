@@ -1,0 +1,54 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: nav-sales-tab
+- extendedWaitUntil:
+    visible:
+      id: sales-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/invoice-list.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: sales-search-input
+- inputText: __operix_visual_no_match__
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/empty-invoice-list.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: nav-pos-tab
+- extendedWaitUntil:
+    visible:
+      id: pos-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/pos.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: nav-business-tab
+- extendedWaitUntil:
+    visible:
+      id: business-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/business.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: business-open-products-button
+- extendedWaitUntil:
+    visible:
+      id: products-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/product-list.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: product-row-${E2E_PRODUCT_ID}
+- extendedWaitUntil:
+    visible:
+      id: product-detail-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/product-details.png"
+    thresholdPercentage: 98

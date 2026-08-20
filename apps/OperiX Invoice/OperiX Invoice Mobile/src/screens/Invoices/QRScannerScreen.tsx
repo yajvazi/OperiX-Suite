@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { ArrowLeft, QrCode } from 'lucide-react-native';
+import { ArrowLeft, Flashlight, QrCode } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Button } from '@invoice-monorepo/ui';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { t } from '@invoice-monorepo/i18n';
 
 interface QRScannerScreenProps {
     navigation: any;
@@ -14,9 +16,10 @@ interface QRScannerScreenProps {
 
 export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+    const [torchOn, setTorchOn] = useState(false);
 
     const mode = route.params?.mode || 'invoice'; // 'invoice' or 'generic'
 
@@ -53,15 +56,140 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
             return;
         }
 
-        // Expected format: INVOICE:001-02-01-2026
-        if (data.startsWith('INVOICE:')) {
-            const invoiceNumber = data.replace('INVOICE:', '');
+        const scannedValue = data.trim();
+        if (mode === 'search') {
+            const returnTo = route.params?.returnTo;
+            if (returnTo === 'Business' || returnTo === 'GlobalSearch') {
+                navigation.navigate(returnTo === 'Business' ? 'MainTabs' : 'GlobalSearch', returnTo === 'Business'
+                    ? { screen: 'Business', params: { businessSearch: scannedValue }, merge: true }
+                    : { scannedSearch: scannedValue });
+                return;
+            }
+            if (returnTo !== 'POS' && user) {
+                const decodedValue = (() => {
+                    try { return decodeURIComponent(scannedValue); } catch { return scannedValue; }
+                })();
+                const qrToken = decodedValue.match(/\/qr\/([^/?#]+)/i)?.[1];
+                const invoiceNumber = decodedValue.replace(/^INVOICE:/i, '').trim();
+                const decodedToken = (() => {
+                    try { return qrToken ? decodeURIComponent(qrToken) : ''; } catch { return qrToken || ''; }
+                })();
+                try {
+                    const { companyIds } = await getWorkspaceScope(user.id);
+                    const baseInvoiceQuery = () => supabase
+                        .from('invoices')
+                        .select('id')
+                        .or(scopedResource(user.id, companyIds));
+                    let invoice: { id: string } | null = null;
+                    if (decodedToken) {
+                        const tokenResult = await baseInvoiceQuery().eq('public_qr_token', decodedToken).maybeSingle();
+                        invoice = tokenResult.data;
+                    }
+                    if (!invoice) {
+                        const numberResult = await baseInvoiceQuery()
+                            .eq('invoice_number', decodedToken || invoiceNumber)
+                            .maybeSingle();
+                        invoice = numberResult.data;
+                    }
+                    if (invoice) {
+                        navigation.navigate('InvoiceDetail', { invoiceId: invoice.id });
+                    } else {
+                        Alert.alert(t('notFound', language), [t('invoice', language), invoiceNumber || decodedToken || decodedValue, t('notFoundLower', language)].join(' '), [
+                            { text: t('scanAgain', language), onPress: () => setScanned(false) },
+                        ]);
+                    }
+                } catch (lookupError) {
+                    console.error('Invoice barcode lookup error:', lookupError);
+                    Alert.alert(t('notFound', language), [t('invoice', language), t('notFoundLower', language)].join(' '), [
+                        { text: t('scanAgain', language), onPress: () => setScanned(false) },
+                    ]);
+                }
+                return;
+            }
+            navigation.navigate('MainTabs', {
+                screen: returnTo === 'POS' ? 'POS' : 'Sales',
+                params: { [returnTo === 'POS' ? 'barcodeSearch' : 'invoiceSearch']: scannedValue },
+                merge: true,
+            });
+            return;
+        }
+        if (scannedValue.startsWith('EXPENSE:')) {
+            const expenseId = scannedValue.replace(/^EXPENSE:/, '').trim();
+            if (!user || !expenseId) {
+                Alert.alert(t('invalidQrCode', language), t('notValidInvoiceQr', language), [
+                    { text: t('scanAgain', language), onPress: () => setScanned(false) },
+                ]);
+                return;
+            }
+
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const { data: expense } = await supabase
+                .from('expenses')
+                .select('id')
+                .or(scopedResource(user.id, companyIds))
+                .eq('id', expenseId)
+                .maybeSingle();
+            if (expense) {
+                navigation.navigate('ExpenseForm', { expenseId: expense.id });
+                return;
+            }
+
+            Alert.alert(t('notFound', language), `${t('expense', language)} ${t('notFoundLower', language)}`, [
+                { text: t('scanAgain', language), onPress: () => setScanned(false) },
+            ]);
+            return;
+        }
+
+        if (scannedValue.startsWith('PAYMENT:')) {
+            const paymentNumber = scannedValue.replace(/^PAYMENT:/, '').trim();
+            if (!user || !paymentNumber) {
+                Alert.alert(t('invalidQrCode', language), t('notValidInvoiceQr', language), [
+                    { text: t('scanAgain', language), onPress: () => setScanned(false) },
+                ]);
+                return;
+            }
+
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const { data: customerPayment } = await supabase
+                .from('payments')
+                .select('id')
+                .or(scopedResource(user.id, companyIds))
+                .eq('payment_number', paymentNumber)
+                .maybeSingle();
+            if (customerPayment) {
+                navigation.navigate('PaymentForm', { paymentId: customerPayment.id });
+                return;
+            }
+
+            const { data: vendorPayment } = await supabase
+                .from('vendor_payments')
+                .select('id')
+                .or(scopedResource(user.id, companyIds))
+                .eq('payment_number', paymentNumber)
+                .maybeSingle();
+            if (vendorPayment) {
+                navigation.navigate('VendorPaymentForm', { paymentId: vendorPayment.id });
+                return;
+            }
+
+            Alert.alert(t('notFound', language), `${t('payment', language)} ${paymentNumber} ${t('notFoundLower', language)}`, [
+                { text: t('scanAgain', language), onPress: () => setScanned(false) },
+            ]);
+            return;
+        }
+
+        // Invoice QR codes use the INVOICE: prefix; printed invoice Code 128
+        // barcodes contain the invoice number directly.
+        const invoiceNumber = scannedValue.startsWith('INVOICE:') ? scannedValue.replace('INVOICE:', '') : scannedValue;
+        if (invoiceNumber) {
 
             // Find invoice by number
+            if (!user) return;
+            const { companyIds } = await getWorkspaceScope(user.id);
             const { data: invoice, error } = await supabase
                 .from('invoices')
                 .select('id')
-                .eq('user_id', user?.id)
+                .or(scopedResource(user.id, companyIds))
                 .eq('invoice_number', invoiceNumber)
                 .single();
 
@@ -74,13 +202,13 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
                     }
                 });
             } else {
-                Alert.alert('Not Found', `Invoice ${invoiceNumber} not found`, [
-                    { text: 'Scan Again', onPress: () => setScanned(false) },
+                Alert.alert(t('notFound', language), `${t('invoice', language)} ${invoiceNumber} ${t('notFoundLower', language)}`, [
+                    { text: t('scanAgain', language), onPress: () => setScanned(false) },
                 ]);
             }
         } else {
-            Alert.alert('Invalid QR Code', 'This is not a valid invoice QR code', [
-                { text: 'Scan Again', onPress: () => setScanned(false) },
+            Alert.alert(t('invalidQrCode', language), t('notValidInvoiceQr', language), [
+                { text: t('scanAgain', language), onPress: () => setScanned(false) },
             ]);
         }
     };
@@ -88,7 +216,7 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
     if (!permission) {
         return (
             <View style={[styles.container, { backgroundColor: bgColor }]}>
-                <Text style={[styles.text, { color: textColor }]}>Requesting camera permission...</Text>
+                <Text style={[styles.text, { color: textColor }]}>{t('requestingCameraPermission', language)}</Text>
             </View>
         );
     }
@@ -100,13 +228,13 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
                     <View style={[styles.iconContainer, { backgroundColor: `${primaryColor}15` }]}>
                         <QrCode color={primaryColor} size={64} />
                     </View>
-                    <Text style={[styles.title, { color: textColor }]}>Camera Access Needed</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('cameraAccessNeeded', language)}</Text>
                     <Text style={[styles.text, { color: mutedColor }]}>
-                        We need access to your camera to scan invoice QR codes and product barcodes.
+                        {t('cameraScanDescription', language)}
                     </Text>
-                    <Button title="Grant Permission" onPress={requestPermission} style={styles.button} />
+                    <Button title={t('grantPermission', language)} onPress={requestPermission} style={styles.button} />
                     <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Text style={[styles.cancelText, { color: primaryColor }]}>Cancel</Text>
+                        <Text style={[styles.cancelText, { color: primaryColor }]}>{t('cancel', language)}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -117,8 +245,9 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
         <View style={styles.container}>
             <CameraView
                 style={StyleSheet.absoluteFillObject}
+                enableTorch={torchOn}
                 barcodeScannerSettings={{
-                    barcodeTypes: mode === 'invoice' ? ['qr'] : ['qr', 'ean13', 'ean8', 'code128', 'upc_a', 'upc_e']
+                    barcodeTypes: mode === 'invoice' ? ['qr', 'code128', 'code39'] : ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e']
                 }}
                 onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
             />
@@ -127,8 +256,16 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <ArrowLeft color="#fff" size={24} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>{mode === 'invoice' ? 'Scan Invoice QR' : 'Scan Barcode'}</Text>
-                    <View style={{ width: 40 }} />
+                    <Text style={styles.headerTitle}>{mode === 'invoice' ? t('scanInvoiceQr', language) : t('scanBarcode', language)}</Text>
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle flashlight"
+                        accessibilityState={{ checked: torchOn }}
+                        onPress={() => setTorchOn((current) => !current)}
+                        style={[styles.backButton, torchOn && { backgroundColor: primaryColor }]}
+                    >
+                        <Flashlight color="#fff" size={22} />
+                    </TouchableOpacity>
                 </View>
                 <View style={styles.scanArea}>
                     <View style={styles.scanFrame}>
@@ -140,14 +277,14 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
                 </View>
                 <View style={styles.footer}>
                     <Text style={styles.instruction}>
-                        Position the code within the frame to scan automatically
+                        {t('scanInstruction', language)}
                     </Text>
                     {scanned && (
                         <TouchableOpacity
                             style={[styles.rescanButton, { backgroundColor: primaryColor }]}
                             onPress={() => setScanned(false)}
                         >
-                            <Text style={styles.rescanText}>Tap to Scan Again</Text>
+                            <Text style={styles.rescanText}>{t('scanAgain', language)}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -186,8 +323,3 @@ const styles = StyleSheet.create({
     rescanButton: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
     rescanText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
-
-
-
-
-

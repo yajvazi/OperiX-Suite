@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import { resetPassword } from '../api/client';
 import BrandMark from '../components/BrandMark';
+import { supabase } from '../utils/supabase';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -15,7 +16,7 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) {
+    if (!supabase && !token) {
       setMessage('Reset link is missing or invalid.');
       return;
     }
@@ -31,11 +32,18 @@ export default function ResetPassword() {
     setBusy(true);
     setMessage('');
     try {
-      await resetPassword(token, password);
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) throw new Error('Open the password reset link again to continue.');
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+      } else {
+        await resetPassword(token, password);
+      }
       setMessage('Password updated successfully. Redirecting to login...');
       setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
-      setMessage(String(err?.response?.data?.detail ?? 'Could not update password.'));
+      setMessage(String(err?.response?.data?.detail ?? err?.message ?? 'Could not update password.'));
     } finally {
       setBusy(false);
     }
@@ -46,7 +54,7 @@ export default function ResetPassword() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#1d4ed8_0%,transparent_35%),linear-gradient(135deg,#0f172a_0%,#172b4d_50%,#020617_100%)]" />
       <form onSubmit={handleSubmit} className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white p-6 shadow-2xl">
         <div className="mb-6 flex justify-center">
-          <BrandMark size={48} showWordmark darkText />
+          <BrandMark size={30} showWordmark darkText />
         </div>
         <Link to="/login" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-brand-700">
           <ArrowLeft size={16} />
@@ -55,7 +63,7 @@ export default function ResetPassword() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Set a New Password</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Choose a new password for your DeskDibs account.
+            Choose a new password for your shared OperiX account.
           </p>
         </div>
         <div className="relative mt-5">

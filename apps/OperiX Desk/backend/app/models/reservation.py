@@ -1,7 +1,7 @@
 import enum
 from datetime import date, time
 
-from sqlalchemy import Date, Enum, ForeignKey, Time
+from sqlalchemy import Date, Enum, ForeignKey, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -17,6 +17,9 @@ class Reservation(Base):
     __tablename__ = "reservations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        "company_id", String(64), nullable=True, index=True
+    )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     resource_id: Mapped[int] = mapped_column(ForeignKey("resources.id"))
     date: Mapped[date] = mapped_column(Date)

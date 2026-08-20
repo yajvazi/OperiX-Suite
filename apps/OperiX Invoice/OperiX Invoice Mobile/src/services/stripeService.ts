@@ -1,461 +1,269 @@
 /**
- * Stripe Connect OAuth Service
- * Handles Stripe Connect OAuth flow and syncs transactions via Edge Functions.
+ * Client-side Stripe integration facade.
+ *
+ * Stripe API calls and credentials stay in Supabase Edge Functions. The
+ * mobile app only starts OAuth, requests a server-side sync, and reads the
+ * tenant-scoped records imported by that sync.
  */
 
-import { supabase } from '@invoice-monorepo/api';
 import * as WebBrowser from 'expo-web-browser';
+import { supabase, supabaseUrl } from '@invoice-monorepo/api';
+import { notifyBusinessEvent } from './pushNotifications';
 
-// Stripe Connect OAuth configuration
-// Replace these with your actual values or load from environment
-const STRIPE_CLIENT_ID = 'ca_PZGXRrlBTAqHPKTlPNeo09U3LQFbWwhh'; // Replace with your Stripe Connect client ID
-const SUPABASE_URL = 'https://hprylepdcvakwngmoshy.supabase.co'; // Replace with your Supabase URL
+// Keep the function endpoint on the same Supabase project as the app session.
+// A separate URL is supported for deployments where Edge Functions are hosted
+// on a dedicated Supabase project, but it must be configured explicitly along
+// with the matching public key. Falling back to a hard-coded project here
+// creates a valid-looking request with a JWT that the function cannot verify.
+const configuredStripeSupabaseUrl = process.env.EXPO_PUBLIC_STRIPE_SUPABASE_URL?.trim();
+const stripeFunctionsBaseUrl = (configuredStripeSupabaseUrl || supabaseUrl)
+    .replace(/\/+$/, '')
+    .replace(/\/functions\/v1$/, '');
+const stripeFunctionsApiKey = (
+    process.env.EXPO_PUBLIC_STRIPE_SUPABASE_PUBLISHABLE_KEY
+    || process.env.EXPO_PUBLIC_STRIPE_SUPABASE_ANON_KEY
+    || process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    || ''
+).trim();
+
+export interface StripeStore {
+    id: string;
+    company_id: string;
+    branch_id?: string | null;
+    store_name: string;
+    stripe_account_id?: string | null;
+    account_email?: string | null;
+    livemode: boolean;
+    status: 'pending' | 'connected' | 'disconnected' | 'error' | string;
+    auto_sync: boolean;
+    auto_invoice_sales: boolean;
+    connected_at?: string | null;
+    last_synced_at?: string | null;
+    last_error?: string | null;
+}
 
 export interface StripeTransaction {
     id: string;
     stripe_id: string;
-    type: 'charge' | 'refund' | 'payout' | 'fee' | 'payment';
+    stripe_store_id?: string | null;
+    type: string;
     amount: number;
     currency: string;
-    description?: string;
+    description?: string | null;
     created_at: string;
-    status: string;
-    customer_email?: string;
-    fee?: number;
-    net?: number;
+    status?: string | null;
+    customer_email?: string | null;
+    customer_name?: string | null;
+    fee?: number | null;
+    net?: number | null;
+    invoice_id?: string | null;
+    client_id?: string | null;
+    store_name?: string | null;
     payment_details?: any;
 }
 
 export interface StripePayout {
     id: string;
     stripe_id: string;
+    stripe_store_id?: string | null;
     amount: number;
     currency: string;
     arrival_date: string;
-    status: 'pending' | 'in_transit' | 'paid' | 'failed' | 'canceled';
-    method?: string;
-    description?: string;
+    status: string;
+    method?: string | null;
+    description?: string | null;
+}
+
+export interface StripeBalance {
+    stripe_store_id: string;
+    company_id: string;
+    currency: string;
+    available_balance: number;
+    pending_balance: number;
+    as_of: string;
+}
+
+export interface StripeOnlineInvoice {
+    id: string;
+    invoice_number: string;
+    company_id?: string | null;
+    stripe_store_id?: string | null;
+    client_id?: string | null;
+    total_amount: number;
+    currency: string;
+    issue_date: string;
+    status: string;
+    payment_status?: string | null;
+    client_name?: string | null;
+    store_name?: string | null;
 }
 
 export interface StripeSyncResult {
+    storeId?: string;
     transactionsCount: number;
     payoutsCount: number;
+    invoicesCreated: number;
     totalSales: number;
     totalPayouts: number;
     totalFees: number;
+    balances?: Array<{ currency: string; available: number; pending: number }>;
+    truncated?: boolean;
+    warnings?: string[];
+}
+
+async function sessionToken() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+    return session.access_token;
+}
+
+function responseMessage(payload: unknown, fallback: string) {
+    if (typeof payload === 'string' && payload.trim()) return payload.trim();
+    if (!payload || typeof payload !== 'object') return fallback;
+
+    const record = payload as { error?: unknown; message?: unknown };
+    if (typeof record.error === 'string' && record.error.trim()) return record.error.trim();
+    if (record.error && typeof record.error === 'object' && 'message' in record.error) {
+        const nestedMessage = (record.error as { message?: unknown }).message;
+        if (typeof nestedMessage === 'string' && nestedMessage.trim()) return nestedMessage.trim();
+    }
+    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+    return fallback;
+}
+
+async function callFunction<T>(name: string, body: Record<string, unknown> = {}) {
+    const token = await sessionToken();
+    const response = await fetch(`${stripeFunctionsBaseUrl}/functions/v1/${name}`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            ...(stripeFunctionsApiKey ? { apikey: stripeFunctionsApiKey } : {}),
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+    const rawBody = await response.text();
+    let data: unknown = {};
+    if (rawBody.trim()) {
+        try {
+            data = JSON.parse(rawBody);
+        } catch (_) {
+            data = rawBody;
+        }
+    }
+    if (!response.ok) {
+        const error = new Error(responseMessage(data, `${name} failed`));
+        Object.assign(error, { status: response.status });
+        throw error;
+    }
+    if (typeof data !== 'object' || data === null) {
+        throw new Error(`${name} returned an invalid response`);
+    }
+    return data as T;
 }
 
 class StripeService {
-    /**
-     * Get the Stripe Connect OAuth URL
-     */
-    getOAuthUrl(userId: string): string {
-        const redirectUri = `${SUPABASE_URL}/functions/v1/stripe-connect`;
-
-        const params = new URLSearchParams({
-            client_id: STRIPE_CLIENT_ID,
-            response_type: 'code',
-            scope: 'read_write',
-            state: userId, // Pass user_id to callback
-            redirect_uri: redirectUri,
-        });
-
-        return `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
-    }
-
-    /**
-     * Initiate Stripe Connect OAuth flow
-     * Opens an in-app browser for the user to authorize
-     */
-    async initiateOAuth(userId: string): Promise<{ success: boolean; error?: string }> {
+    async initiateOAuth(
+        _userId: string,
+        options: { companyId?: string; storeId?: string; storeName?: string } = {},
+    ): Promise<{ success: boolean; error?: string; storeId?: string; accountId?: string }> {
         try {
-            const oauthUrl = this.getOAuthUrl(userId);
-
-            // Open in-app browser
-            const result = await WebBrowser.openAuthSessionAsync(
-                oauthUrl,
-                'faturicka://stripe-callback'
-            );
-
-            if (result.type === 'success' && result.url) {
-                const url = new URL(result.url);
-                const success = url.searchParams.get('success');
-                const error = url.searchParams.get('error');
-
-                if (success === 'true') {
-                    return { success: true };
-                } else if (error) {
-                    return { success: false, error };
-                }
-            }
-
-            if (result.type === 'cancel') {
-                return { success: false, error: 'User cancelled authorization' };
-            }
-
-            return { success: false, error: 'OAuth flow failed' };
-        } catch (error: any) {
-            return { success: false, error: error.message };
-        }
-    }
-
-
-
-    /**
-     * Disconnect Stripe account
-     */
-    async disconnect(userId: string): Promise<boolean> {
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                stripe_access_token: null,
-                stripe_refresh_token: null,
-                stripe_account_id: null,
-                stripe_connected_at: null,
-                stripe_livemode: null,
-                stripe_api_key: null, // Also clear API key
-            })
-            .eq('id', userId);
-
-        return !error;
-    }
-
-    // ============================================
-    // DEVELOPER MODE: Manual API Key Methods
-    // ============================================
-
-    private apiKey: string | null = null;
-
-    /**
-     * Set API key for direct requests (developer mode)
-     */
-    setApiKey(key: string) {
-        this.apiKey = key;
-    }
-
-    /**
-     * Make direct request to Stripe API (developer mode)
-     */
-    private async directRequest<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
-        if (!this.apiKey) {
-            throw new Error('API key not set');
-        }
-
-        const url = new URL(`https://api.stripe.com/v1${endpoint}`);
-        if (params) {
-            Object.entries(params).forEach(([key, value]) => {
-                if (Array.isArray(value)) {
-                    value.forEach(v => url.searchParams.append(key, v));
-                } else {
-                    url.searchParams.append(key, value);
-                }
+            const start = await callFunction<{ url: string; store_id: string }>('stripe-start', {
+                company_id: options.companyId,
+                store_id: options.storeId,
+                store_name: options.storeName,
             });
-        }
-
-        const response = await fetch(url.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'Stripe API error');
-        }
-
-        return response.json();
-    }
-
-    /**
-     * Validate API key by fetching account info (developer mode)
-     */
-    async validateApiKey(apiKey: string): Promise<{ valid: boolean; accountId?: string; email?: string }> {
-        try {
-            this.setApiKey(apiKey);
-            const account = await this.directRequest<any>('/account');
-            return {
-                valid: true,
-                accountId: account.id,
-                email: account.email,
-            };
-        } catch (error) {
-            return { valid: false };
-        }
-    }
-
-    /**
-     * Connect using manual API key (developer mode)
-     */
-    async connectWithApiKey(userId: string, apiKey: string): Promise<{ success: boolean; error?: string; accountId?: string }> {
-        try {
-            const validation = await this.validateApiKey(apiKey);
-
-            if (!validation.valid) {
-                return { success: false, error: 'Invalid API key' };
+            if (!start.url) throw new Error('Stripe connection did not return an authorization URL');
+            const result = await WebBrowser.openAuthSessionAsync(start.url, 'operix-invoice://stripe-callback');
+            if (result.type === 'success' && result.url) {
+                const callback = new URL(result.url);
+                const success = callback.searchParams.get('success') === 'true';
+                return {
+                    success,
+                    storeId: callback.searchParams.get('store_id') || start.store_id,
+                    accountId: callback.searchParams.get('account_id') || undefined,
+                    error: success ? undefined : callback.searchParams.get('error') || 'Stripe authorization failed',
+                };
             }
-
-            // Save to profile
-            const { error } = await supabase.from('profiles').update({
-                stripe_api_key: apiKey,
-                stripe_account_id: validation.accountId,
-                stripe_connected_at: new Date().toISOString(),
-            }).eq('id', userId);
-
-            if (error) throw error;
-
-            return { success: true, accountId: validation.accountId };
+            return { success: false, error: result.type === 'cancel' ? 'User cancelled authorization' : 'OAuth flow failed' };
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return { success: false, error: error?.message || 'Could not connect Stripe' };
         }
     }
 
-    /**
-     * Check if user is connected to Stripe (via OAuth OR API key)
-     */
-    async checkConnectionStatus(userId: string): Promise<{
+    async listStores(companyIds?: string | string[]): Promise<StripeStore[]> {
+        const ids = Array.isArray(companyIds) ? companyIds : companyIds ? [companyIds] : [];
+        let query = supabase.from('stripe_stores').select('*').order('created_at', { ascending: true });
+        if (ids.length === 1) query = query.eq('company_id', ids[0]);
+        if (ids.length > 1) query = query.in('company_id', ids);
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []) as StripeStore[];
+    }
+
+    async checkConnectionStatus(userId: string, companyIds?: string | string[]): Promise<{
         connected: boolean;
-        method?: 'oauth' | 'apikey';
+        method?: 'oauth';
         accountId?: string;
         livemode?: boolean;
         connectedAt?: string;
+        stores: StripeStore[];
     }> {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('stripe_access_token, stripe_api_key, stripe_account_id, stripe_livemode, stripe_connected_at')
-            .eq('id', userId)
-            .single();
-
-        if (error || (!data?.stripe_access_token && !data?.stripe_api_key)) {
-            return { connected: false };
+        try {
+            const stores = await this.listStores(companyIds);
+            const connected = stores.find((store) => store.status === 'connected');
+            return {
+                connected: Boolean(connected),
+                method: connected ? 'oauth' : undefined,
+                accountId: connected?.stripe_account_id || undefined,
+                livemode: connected?.livemode,
+                connectedAt: connected?.connected_at || undefined,
+                stores,
+            };
+        } catch (_) {
+            // Keep the old argument in the API for callers while avoiding any
+            // profile credential read on the client.
+            void userId;
+            return { connected: false, stores: [] };
         }
-
-        return {
-            connected: true,
-            method: data.stripe_access_token ? 'oauth' : 'apikey',
-            accountId: data.stripe_account_id,
-            livemode: data.stripe_livemode,
-            connectedAt: data.stripe_connected_at,
-        };
     }
 
-    /**
-     * Sync directly with API key (developer mode) - bypasses Edge Function
-     */
-    async syncDirectWithApiKey(userId: string, apiKey: string, companyId?: string, force: boolean = false): Promise<StripeSyncResult> {
-        this.setApiKey(apiKey);
-
-        // Prepare parallel fetches for Transactions and Payouts
-        const fetchTransactions = async () => {
-            let lastTimestamp = 0;
-
-            // If not forcing a full sync, check when we last synced to do incremental fetch
-            if (!force) {
-                const { data: latestTx } = await supabase
-                    .from('stripe_transactions')
-                    .select('created_at')
-                    .eq('user_id', userId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                lastTimestamp = latestTx ? Math.floor(new Date(latestTx.created_at).getTime() / 1000) : 0;
-            }
-
-            let allTransactions: any[] = [];
-            let hasMore = true;
-            let startingAfter: string | undefined;
-            // Fetch more records during a force sync (up to 1000)
-            const maxRecords = force ? 1000 : 120;
-
-            while (hasMore && allTransactions.length < maxRecords) {
-                const params: any = {
-                    limit: '50',
-                    'expand[]': ['data.source', 'data.source.payment_method'] // Deep expansion
-                };
-                if (lastTimestamp > 0 && !force) params['created[gt]'] = lastTimestamp.toString();
-                if (startingAfter) params.starting_after = startingAfter;
-
-                const response = await this.directRequest<{ data: any[]; has_more: boolean }>('/balance_transactions', params);
-                allTransactions = [...allTransactions, ...response.data];
-                hasMore = response.has_more;
-                if (response.data.length > 0) {
-                    startingAfter = response.data[response.data.length - 1].id;
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allTransactions;
-        };
-
-        const fetchPayouts = async () => {
-            let lastPayoutTimestamp = 0;
-
-            if (!force) {
-                const { data: latestPayout } = await supabase
-                    .from('stripe_payouts')
-                    .select('created_at')
-                    .eq('user_id', userId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                lastPayoutTimestamp = latestPayout ? Math.floor(new Date(latestPayout.created_at).getTime() / 1000) : 0;
-            }
-
-            let allPayouts: any[] = [];
-            let hasMore = true;
-            let startingAfter: string | undefined;
-            const maxPayouts = force ? 100 : 50;
-
-            while (hasMore && allPayouts.length < maxPayouts) {
-                const params: any = { limit: '50' };
-                if (lastPayoutTimestamp > 0) params['created[gt]'] = lastPayoutTimestamp.toString();
-                if (startingAfter) params.starting_after = startingAfter;
-
-                const response = await this.directRequest<{ data: any[]; has_more: boolean }>('/payouts', params);
-                allPayouts = [...allPayouts, ...response.data];
-                hasMore = response.has_more;
-                if (response.data.length > 0) {
-                    startingAfter = response.data[response.data.length - 1].id;
-                } else {
-                    hasMore = false;
-                }
-            }
-            return allPayouts;
-        };
-
-        // Execute in parallel
-        const [allTransactions, allPayouts] = await Promise.all([
-            fetchTransactions(),
-            fetchPayouts()
-        ]);
-
-        // Sync to database in batches
-        let transactionsCount = 0;
-        let payoutsCount = 0;
-        let totalSales = 0;
-        let totalPayouts = 0;
-        let totalFees = 0;
-
-        // Process transactions in batches
-        if (allTransactions.length > 0) {
-            const txRecords = allTransactions.map(tx => {
-                const amount = tx.amount / 100;
-                const fee = (tx.fee || 0) / 100;
-
-                if (tx.type === 'charge' || tx.type === 'payment') {
-                    totalSales += amount;
-                }
-                totalFees += fee;
-
-                // Prioritize the detailed description from the source (charge) if available
-                // If tx.source is a string, it means it wasn't expanded
-                const charge = typeof tx.source === 'object' ? tx.source : {};
-                const description = charge?.description || tx.description || 'Stripe Transaction';
-                const email = charge?.receipt_email ||
-                    charge?.billing_details?.email ||
-                    charge?.metadata?.customer_email ||
-                    charge?.metadata?.email ||
-                    null;
-
-                return {
-                    user_id: userId,
-                    company_id: companyId,
-                    stripe_id: tx.id,
-                    type: tx.type,
-                    amount: amount,
-                    currency: tx.currency,
-                    description: description,
-                    status: tx.status,
-                    fee: fee,
-                    net: (tx.net || 0) / 100,
-                    created_at: new Date(tx.created * 1000).toISOString(),
-                    payment_details: charge,
-                    customer_email: email,
-                };
-            });
-
-            // Upsert in chunks
-            const chunkSize = 50;
-            for (let i = 0; i < txRecords.length; i += chunkSize) {
-                const chunk = txRecords.slice(i, i + chunkSize);
-                await supabase.from('stripe_transactions').upsert(chunk, { onConflict: 'stripe_id' });
-                transactionsCount += chunk.length;
-            }
+    async disconnect(_userId: string, storeId?: string): Promise<boolean> {
+        try {
+            await callFunction('stripe-disconnect', { store_id: storeId });
+            return true;
+        } catch (_) {
+            return false;
         }
-
-        // Process payouts in batches
-        if (allPayouts.length > 0) {
-            const payoutRecords = allPayouts.map(payout => {
-                if (payout.status === 'paid') {
-                    totalPayouts += payout.amount / 100;
-                }
-
-                return {
-                    user_id: userId,
-                    company_id: companyId,
-                    stripe_id: payout.id,
-                    amount: payout.amount / 100,
-                    currency: payout.currency,
-                    arrival_date: new Date(payout.arrival_date * 1000).toISOString().split('T')[0],
-                    status: payout.status,
-                    method: payout.method,
-                    description: payout.description,
-                    created_at: new Date(payout.created * 1000).toISOString(),
-                };
-            });
-
-            const chunkSize = 50;
-            for (let i = 0; i < payoutRecords.length; i += chunkSize) {
-                const chunk = payoutRecords.slice(i, i + chunkSize);
-                await supabase.from('stripe_payouts').upsert(chunk, { onConflict: 'stripe_id' });
-                payoutsCount += chunk.length;
-            }
-        }
-
-        // Update last synced
-        await supabase
-            .from('profiles')
-            .update({ stripe_last_synced: new Date().toISOString() })
-            .eq('id', userId);
-
-        return { transactionsCount, payoutsCount, totalSales, totalPayouts, totalFees };
     }
 
-    /**
-     * Sync Stripe data via Edge Function
-     * This calls the secure server-side function that uses the stored access token
-     */
-    async syncViaEdgeFunction(): Promise<StripeSyncResult> {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-            throw new Error('Not authenticated');
+    async syncViaEdgeFunction(storeId?: string, force = false): Promise<StripeSyncResult> {
+        try {
+            return await callFunction<StripeSyncResult>('stripe-sync', { store_id: storeId, force });
+        } catch (error) {
+            if (storeId) {
+                const { data: store } = await supabase.from('stripe_stores').select('company_id').eq('id', storeId).maybeSingle();
+                if (store?.company_id) {
+                    void notifyBusinessEvent('sync_failed', String(store.company_id), storeId, {
+                        message: error instanceof Error ? error.message : 'Stripe synchronization failed.',
+                    }).catch((notificationError) => console.warn('Sync failure notification could not be sent:', notificationError));
+                }
+            }
+            throw error;
         }
+    }
 
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/stripe-sync`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Content-Type': 'application/json',
-            },
+    async updateStoreSettings(storeId: string, settings: { autoSync?: boolean; autoInvoiceSales?: boolean }) {
+        return callFunction('stripe-settings', {
+            store_id: storeId,
+            auto_sync: settings.autoSync,
+            auto_invoice_sales: settings.autoInvoiceSales,
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Sync failed');
-        }
-
-        return data;
     }
 
-    /**
-     * Get dashboard summary from local database
-     */
-    async getDashboardSummary(userId: string, companyId?: string): Promise<{
+    async getDashboardSummary(_userId: string, companyIds?: string | string[]): Promise<{
         totalSales: number;
         totalPayouts: number;
         totalFees: number;
@@ -463,57 +271,57 @@ class StripeService {
         pendingPayouts: number;
         recentTransactions: StripeTransaction[];
         recentPayouts: StripePayout[];
+        stores: StripeStore[];
+        balances: StripeBalance[];
+        onlineInvoices: StripeOnlineInvoice[];
     }> {
-        const filter = companyId
-            ? `user_id.eq.${userId},company_id.eq.${companyId}`
-            : `user_id.eq.${userId}`;
+        const ids = Array.isArray(companyIds) ? companyIds : companyIds ? [companyIds] : [];
+        const stores = await this.listStores(ids);
 
-        // Fetch all transactions for totals
-        const { data: allTransactions } = await supabase
-            .from('stripe_transactions')
-            .select('*')
-            .or(filter);
-
-        // Fetch all payouts for totals
-        const { data: allPayouts } = await supabase
-            .from('stripe_payouts')
-            .select('*')
-            .or(filter);
-
-        // Calculate totals
-        const transactions = allTransactions || [];
-        const payouts = allPayouts || [];
-
+        let transactionsQuery = supabase.from('stripe_transactions').select('*').order('created_at', { ascending: false });
+        let payoutsQuery = supabase.from('stripe_payouts').select('*').order('created_at', { ascending: false });
+        let balancesQuery = supabase.from('stripe_balance_snapshots').select('*').order('as_of', { ascending: false });
+        let invoicesQuery = supabase
+                .from('invoices')
+            .select('id,invoice_number,company_id,stripe_store_id,client_id,total_amount,currency,issue_date,status,payment_status')
+            .eq('source_document_type', 'stripe_transaction')
+            .order('issue_date', { ascending: false });
+        if (ids.length === 1) {
+            transactionsQuery = transactionsQuery.eq('company_id', ids[0]);
+            payoutsQuery = payoutsQuery.eq('company_id', ids[0]);
+            balancesQuery = balancesQuery.eq('company_id', ids[0]);
+            invoicesQuery = invoicesQuery.eq('company_id', ids[0]);
+        } else if (ids.length > 1) {
+            transactionsQuery = transactionsQuery.in('company_id', ids);
+            payoutsQuery = payoutsQuery.in('company_id', ids);
+            balancesQuery = balancesQuery.in('company_id', ids);
+            invoicesQuery = invoicesQuery.in('company_id', ids);
+        }
+        const [{ data: transactionRows }, { data: payoutRows }, { data: balanceRows }, { data: invoiceRows }] = await Promise.all([
+            transactionsQuery,
+            payoutsQuery,
+            balancesQuery,
+            invoicesQuery,
+        ]);
+        const transactions = (transactionRows || []) as StripeTransaction[];
+        const payouts = (payoutRows || []) as StripePayout[];
         const totalSales = transactions
-            .filter(t => t.type === 'charge' || t.type === 'payment')
-            .reduce((sum, t) => sum + Number(t.amount), 0);
-
-        const totalFees = transactions
-            .reduce((sum, t) => sum + Number(t.fee || 0), 0);
-
-        const totalNet = transactions
-            .filter(t => t.type === 'charge' || t.type === 'payment' || t.type === 'refund')
-            .reduce((sum, t) => {
-                if (t.type === 'refund') return sum - Number(t.amount);
-                return sum + Number(t.amount) - Number(t.fee || 0);
-            }, 0);
-
-        const totalPayouts = payouts
-            .filter(p => p.status === 'paid')
-            .reduce((sum, p) => sum + Number(p.amount), 0);
-
+            .filter((row) => row.type === 'charge' || row.type === 'payment')
+            .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        const totalFees = transactions.reduce((sum, row) => sum + Number(row.fee || 0), 0);
+        const totalNet = transactions.reduce((sum, row) => sum + Number(row.net || 0), 0);
+        const totalPayouts = payouts.filter((row) => row.status === 'paid').reduce((sum, row) => sum + Number(row.amount || 0), 0);
         const pendingPayouts = payouts
-            .filter(p => p.status === 'pending' || p.status === 'in_transit')
-            .reduce((sum, p) => sum + Number(p.amount), 0);
+            .filter((row) => row.status === 'pending' || row.status === 'in_transit')
+            .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-        // Get recent versions for the list
-        const recentTransactions = [...transactions]
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 20);
-
-        const recentPayouts = [...payouts]
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .slice(0, 10);
+        const invoiceRowsWithClients = (invoiceRows || []) as StripeOnlineInvoice[];
+        const clientIds = [...new Set(invoiceRowsWithClients.map((invoice) => invoice.client_id).filter(Boolean))] as string[];
+        let clientsById = new Map<string, string>();
+        if (clientIds.length) {
+            const { data: clients } = await supabase.from('clients').select('id,name,email').in('id', clientIds);
+            clientsById = new Map((clients || []).map((client) => [client.id, client.name || client.email || 'Stripe customer']));
+        }
 
         return {
             totalSales,
@@ -521,15 +329,20 @@ class StripeService {
             totalFees,
             totalNet,
             pendingPayouts,
-            recentTransactions,
-            recentPayouts,
+            recentTransactions: transactions.slice(0, 20).map((transaction) => ({
+                ...transaction,
+                store_name: transaction.stripe_store_id ? stores.find((store) => store.id === transaction.stripe_store_id)?.store_name || null : null,
+            })),
+            recentPayouts: payouts.slice(0, 10),
+            stores,
+            balances: (balanceRows || []) as StripeBalance[],
+            onlineInvoices: invoiceRowsWithClients.map((invoice) => ({
+                ...invoice,
+                client_name: invoice.client_id ? clientsById.get(invoice.client_id) || null : null,
+                store_name: invoice.stripe_store_id ? stores.find((store) => store.id === invoice.stripe_store_id)?.store_name || null : null,
+            })),
         };
     }
 }
 
 export const stripeService = new StripeService();
-
-
-
-
-

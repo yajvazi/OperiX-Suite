@@ -1,160 +1,40 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ArrowLeft, Banknote, CalendarDays, FileCheck2, LockKeyhole, ShieldCheck } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
-import { Button, Card, LoadingOverlay } from '@invoice-monorepo/ui';
-import { supabase } from '@invoice-monorepo/api';
-import { ArrowLeft, DollarSign, Calculator, Percent, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { formatCurrency } from '@invoice-monorepo/i18n';
+import { supabase } from '@invoice-monorepo/api';
+import { Card } from '@invoice-monorepo/ui';
 
 export function PayrollDetailScreen({ navigation, route }: any) {
-    const { payroll } = route.params;
-    const { isDark, primaryColor } = useTheme();
-    const [loading, setLoading] = useState(false);
+  const { isDark } = useTheme();
+  const payslip = route.params?.payslip;
+  const [snapshot, setSnapshot] = useState<Record<string, any>>(payslip?.snapshot || {});
+  const [loading, setLoading] = useState(Boolean(payslip?.id));
+  const colors = { bg: isDark ? '#0f172a' : '#f8fafc', card: isDark ? '#1e293b' : '#fff', text: isDark ? '#fff' : '#1e293b', muted: isDark ? '#94a3b8' : '#64748b', border: isDark ? '#334155' : '#e4e9f0' };
 
-    const [bonus, setBonus] = useState(payroll.bonus?.toString() || '0');
-    const [deductions, setDeductions] = useState(payroll.deductions?.toString() || '0');
-    const [expenses, setExpenses] = useState(payroll.expenses_reimbursed?.toString() || '0');
+  useEffect(() => {
+    if (!payslip?.id) { setLoading(false); return; }
+    void (async () => {
+      const { data, error } = await supabase.rpc('access_payroll_payslip', { p_payslip_id: payslip.id, p_access_type: 'view' });
+      if (error) Alert.alert('Unable to open payslip', error.message);
+      if (data?.snapshot) setSnapshot(data.snapshot);
+      setLoading(false);
+    })();
+  }, [payslip?.id]);
 
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-    const inputBorder = isDark ? '#334155' : '#e2e8f0';
+  if (!payslip) return <View style={[styles.center, { backgroundColor: colors.bg }]}><Text style={{ color: colors.muted }}>Payslip not found.</Text></View>;
+  const currency = String(snapshot.currency || snapshot.details?.currency || 'EUR');
+  const value = (...keys: string[]) => { for (const key of keys) { if (snapshot[key] !== undefined && snapshot[key] !== null) return Number(snapshot[key]) || 0; } return 0; };
+  const gross = value('grossPay', 'gross', 'gross_salary');
+  const tax = value('personalIncomeTax', 'taxes', 'tax');
+  const deductions = value('otherDeductions', 'deductions');
+  const net = value('netSalary', 'net', 'net_salary');
+  const employerCost = value('employerCost');
 
-    const baseSalary = parseFloat(payroll.base_salary || 0);
-    const bonusVal = parseFloat(bonus || 0);
-    const deductionsVal = parseFloat(deductions || 0);
-    const expensesVal = parseFloat(expenses || 0);
-    const totalPayout = baseSalary + bonusVal + expensesVal - deductionsVal;
-
-    const handleSave = async () => {
-        setLoading(true);
-        try {
-            const { error } = await supabase
-                .from('payrolls')
-                .update({
-                    bonus: bonusVal,
-                    deductions: deductionsVal,
-                    expenses_reimbursed: expensesVal,
-                    total_payout: totalPayout
-                })
-                .eq('id', payroll.id);
-
-            if (error) throw error;
-
-            Alert.alert("Success", "Payroll record updated.");
-            navigation.goBack();
-        } catch (error: any) {
-            Alert.alert("Error", error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <LoadingOverlay visible={loading} />
-
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Adjust Payroll</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.employeeInfo}>
-                    <Text style={[styles.empName, { color: textColor }]}>{payroll.employees?.first_name} {payroll.employees?.last_name}</Text>
-                    <Text style={{ color: mutedColor }}>Period: {payroll.period_start} to {payroll.period_end}</Text>
-                </View>
-
-                {/* Calculation breakdown */}
-                <Card style={[styles.calcCard, { backgroundColor: cardBg }]}>
-                    <View style={styles.calcRow}>
-                        <Text style={[styles.calcLabel, { color: mutedColor }]}>Base Salary</Text>
-                        <Text style={[styles.calcValue, { color: textColor }]}>{formatCurrency(baseSalary)}</Text>
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <View style={styles.labelRow}>
-                            <TrendingUp size={14} color="#10b981" />
-                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Bonus</Text>
-                        </View>
-                        <TextInput
-                            style={[styles.input, { borderColor: inputBorder, color: textColor }]}
-                            keyboardType="numeric"
-                            value={bonus}
-                            onChangeText={setBonus}
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <View style={styles.labelRow}>
-                            <Percent size={14} color="#6366f1" />
-                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Expenses Reimbursed</Text>
-                        </View>
-                        <TextInput
-                            style={[styles.input, { borderColor: inputBorder, color: textColor }]}
-                            keyboardType="numeric"
-                            value={expenses}
-                            onChangeText={setExpenses}
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <View style={styles.labelRow}>
-                            <TrendingDown size={14} color="#ef4444" />
-                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Deductions</Text>
-                        </View>
-                        <TextInput
-                            style={[styles.input, { borderColor: inputBorder, color: textColor }]}
-                            keyboardType="numeric"
-                            value={deductions}
-                            onChangeText={setDeductions}
-                        />
-                    </View>
-
-                    <View style={[styles.divider, { backgroundColor: inputBorder }]} />
-
-                    <View style={styles.calcRow}>
-                        <Text style={[styles.totalLabel, { color: textColor }]}>Total Payout</Text>
-                        <Text style={[styles.totalValue, { color: primaryColor }]}>{formatCurrency(totalPayout)}</Text>
-                    </View>
-                </Card>
-
-                <Button
-                    title="Save Changes"
-                    onPress={handleSave}
-                    style={{ marginTop: 24 }}
-                />
-            </ScrollView>
-        </View>
-    );
+  if (loading) return <View style={[styles.center, { backgroundColor: colors.bg }]}><ActivityIndicator color="#004FFE" size="large" /></View>;
+  return <View style={[styles.container, { backgroundColor: colors.bg }]}><View style={styles.header}><TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}><ArrowLeft color={colors.text} size={22} /></TouchableOpacity><View><Text style={[styles.kicker, { color: '#004FFE' }]}>PRIVATE PAYSLIP</Text><Text style={[styles.title, { color: colors.text }]}>Payslip details</Text></View><LockKeyhole color={colors.muted} size={19} /></View><ScrollView contentContainerStyle={styles.content}><Card style={[styles.hero, { backgroundColor: '#004FFE' }]}><FileCheck2 color="#fff" size={23} /><Text style={styles.heroLabel}>Net salary</Text><Text style={styles.heroValue}>{formatCurrency(net, currency)}</Text><Text style={styles.heroMeta}>{String(snapshot.runNumber || payslip.verification_reference || 'Payroll period')}</Text></Card><Card style={[styles.card, { backgroundColor: colors.card }]}><Line label="Gross salary" value={formatCurrency(gross, currency)} icon={<Banknote size={15} color="#004FFE" />} colors={colors} /><Line label="Taxes" value={formatCurrency(tax, currency)} icon={<ShieldCheck size={15} color="#c43d53" />} colors={colors} /><Line label="Other deductions" value={formatCurrency(deductions, currency)} icon={<ShieldCheck size={15} color="#b97709" />} colors={colors} /><Line label="Employer cost" value={formatCurrency(employerCost, currency)} icon={<Banknote size={15} color="#138a62" />} colors={colors} /></Card><Card style={[styles.card, { backgroundColor: colors.card }]}><Line label="Generated" value={payslip.generated_at ? new Date(payslip.generated_at).toLocaleDateString() : '—'} icon={<CalendarDays size={15} color="#6c4ed9" />} colors={colors} /><Line label="Language" value={payslip.language || 'en'} icon={<FileCheck2 size={15} color="#004FFE" />} colors={colors} /><Text style={[styles.note, { color: colors.muted }]}>This payslip is a finalized snapshot. Changes must go through the authorized payroll workflow.</Text></Card></ScrollView></View>;
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    backButton: { padding: 8 },
-    title: { fontSize: 20, fontWeight: '700' },
-    content: { padding: 20 },
-    employeeInfo: { marginBottom: 24 },
-    empName: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
-    calcCard: { padding: 20, borderRadius: 20 },
-    calcRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    calcLabel: { fontSize: 14, fontWeight: '600' },
-    calcValue: { fontSize: 16, fontWeight: '700' },
-    inputGroup: { marginBottom: 16 },
-    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-    inputLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
-    input: { height: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, fontSize: 16 },
-    divider: { height: 1, marginVertical: 16 },
-    totalLabel: { fontSize: 18, fontWeight: '800' },
-    totalValue: { fontSize: 24, fontWeight: '800' }
-});
-
-
-
-
-
+function Line({ label, value, icon, colors }: { label: string; value: string; icon: React.ReactNode; colors: { text: string; muted: string; border: string } }) { return <View style={[styles.line, { borderBottomColor: colors.border }]}><View style={styles.lineIcon}>{icon}</View><Text style={[styles.lineLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.lineValue, { color: colors.text }]}>{value}</Text></View>; }
+const styles = StyleSheet.create({ container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 56, paddingBottom: 13 }, back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center' }, title: { marginTop: 3, fontSize: 20, fontWeight: '800' }, content: { padding: 15, paddingBottom: 36 }, hero: { padding: 20, borderRadius: 17 }, heroLabel: { marginTop: 18, color: 'rgba(255,255,255,.76)', fontSize: 12, fontWeight: '700' }, heroValue: { marginTop: 5, color: '#fff', fontSize: 31, fontWeight: '800' }, heroMeta: { marginTop: 13, color: 'rgba(255,255,255,.78)', fontSize: 11 }, card: { marginTop: 14, padding: 14, borderRadius: 14 }, line: { minHeight: 45, flexDirection: 'row', alignItems: 'center', gap: 9, borderBottomWidth: StyleSheet.hairlineWidth }, lineIcon: { width: 27, height: 27, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#edf3ff' }, lineLabel: { flex: 1, fontSize: 11 }, lineValue: { fontSize: 12, fontWeight: '800' }, note: { marginTop: 13, fontSize: 10, lineHeight: 16 } });

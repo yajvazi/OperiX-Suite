@@ -8,6 +8,7 @@ import {
   createReservation,
   createTeamBookings,
   getFloorPlans,
+  getFloorPlanImage,
   getFloors,
   getResources,
   getMyReservations,
@@ -25,6 +26,7 @@ import { ZONE_OPTIONS } from '../lib/constants';
 import { getAlternativeDesks, isResourceAvailable, isResourceReservedByOther } from '../lib/desks';
 import { useAuth } from '../context/AuthContext';
 import { sortByNaturalName } from '../lib/sort';
+import { supabase } from '../utils/supabase';
 
 const STATUS = {
   available: { dot: 'bg-emerald-500', ring: 'ring-emerald-300', label: 'Available' },
@@ -53,6 +55,7 @@ export default function FloorPlan() {
   const [teamHint, setTeamHint] = useState('');
   const [message, setMessage] = useState('');
   const [missingPlanImages, setMissingPlanImages] = useState({});
+  const [planImageUrl, setPlanImageUrl] = useState(null);
   const [reservationMode, setReservationMode] = useState('all_day');
   const [roomStartTime, setRoomStartTime] = useState('09:00');
   const [roomEndTime, setRoomEndTime] = useState('17:00');
@@ -81,7 +84,7 @@ export default function FloorPlan() {
         if (cancelled) return;
         setFloors(f);
         setPlans(planData);
-        if (f.length && !floor) setFloor(f[0]);
+        if (f.length) setFloor((currentFloor) => currentFloor || f[0]);
       })
       .finally(() => {
         if (!cancelled) setInitialLoading(false);
@@ -167,6 +170,44 @@ export default function FloorPlan() {
   }, [type, user?.role]);
 
   const plan = plans.find((p) => p.floor === floor);
+
+  useEffect(() => {
+    if (!plan) {
+      setPlanImageUrl(null);
+      return undefined;
+    }
+    let active = true;
+    let objectUrl = null;
+    getFloorPlanImage(plan.id)
+      .then((url) => {
+        objectUrl = url;
+        if (active) setPlanImageUrl(url);
+      })
+      .catch(() => {
+        if (active) setMissingPlanImages((current) => ({ ...current, [plan.id]: true }));
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [plan]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    const refreshLiveResources = () => {
+      getResources({ date, floor: floor || undefined, zone, type: type || undefined })
+        .then((data) => setResources(sortByNaturalName(data)))
+        .catch(() => {});
+    };
+    const channel = supabase
+      .channel('operix-desk-floor-plan')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, refreshLiveResources)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'resources' }, refreshLiveResources)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [date, floor, zone, type]);
   const maxDate = format(addDays(new Date(), 14), 'yyyy-MM-dd');
   const alternativeDesks = selected ? getAlternativeDesks(resources, selected) : [];
   const canReserveResource = (resource) =>
@@ -504,9 +545,17 @@ export default function FloorPlan() {
             </div>
           ) : plan ? (
             <div className="relative isolate max-h-[720px] w-full">
-              {!missingPlanImages[plan.id] ? (
+              {missingPlanImages[plan.id] ? (
+                <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-6 text-center text-amber-900">
+                  <p className="text-sm font-semibold">Floor plan image is missing</p>
+                  <p className="max-w-md text-sm">
+                    The floor exists, but the uploaded image is no longer available.
+                    Replace the floor plan image from Admin Floor Builder.
+                  </p>
+                </div>
+              ) : planImageUrl ? (
                 <img
-                  src={plan.image_url}
+                  src={planImageUrl}
                   alt={`Floor ${floor}`}
                   className="block max-h-[720px] w-full object-contain"
                   onError={() => {
@@ -515,13 +564,7 @@ export default function FloorPlan() {
                   }}
                 />
               ) : (
-                <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-6 text-center text-amber-900">
-                  <p className="text-sm font-semibold">Floor plan image is missing</p>
-                  <p className="max-w-md text-sm">
-                    The floor exists, but the uploaded image is no longer available.
-                    Replace the floor plan image from Admin Floor Builder.
-                  </p>
-                </div>
+                <SkeletonBlock className="min-h-[480px] w-full rounded-lg" />
               )}
               {resources
                 .filter((r) => r.floor_plan_x != null && r.floor_plan_y != null)

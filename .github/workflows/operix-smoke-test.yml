@@ -1,0 +1,33 @@
+name: OperiX Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      url:
+        required: true
+        type: string
+      expected_status:
+        required: false
+        default: "200"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: HTTPS health and render smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check public endpoint
+        env:
+          URL: ${{ inputs.url }}
+          EXPECTED_STATUS: ${{ inputs.expected_status }}
+        run: |
+          set -euo pipefail
+          test "${URL#https://}" != "$URL" || { echo "Smoke URL must use HTTPS"; exit 1; }
+          status=$(curl --silent --show-error --location --retry 5 --retry-delay 2 --max-time 25 --output "$RUNNER_TEMP/operix-smoke-body" --write-out '%{http_code}' "$URL")
+          test "$status" = "$EXPECTED_STATUS" || { echo "Expected HTTP $EXPECTED_STATUS, got $status"; exit 1; }
+          test -s "$RUNNER_TEMP/operix-smoke-body"
+          echo "STAGING_READY/PRODUCTION_READY: $URL returned HTTP $status" >> "$GITHUB_STEP_SUMMARY"

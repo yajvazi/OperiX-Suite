@@ -4,6 +4,7 @@ import {
   DecimalAmount,
   MoneyAmount,
   atomsToDecimal,
+  calculateInvoice,
   decimalToAtoms,
   rescaleAtoms,
 } from "./index.ts";
@@ -46,4 +47,44 @@ test("rejects unsafe or incompatible inputs", () => {
       ),
     /same currency/,
   );
+});
+
+test("calculates the shared invoice example with transport", () => {
+  const result = calculateInvoice({
+    lines: [{ quantity: 10, unitPrice: 1.5, taxRate: 0 }],
+    transport: { amount: 0.5, taxRate: 0 },
+  });
+
+  assert.equal(result.subtotal, 15);
+  assert.equal(result.transport, 0.5);
+  assert.equal(result.total, 15.5);
+});
+
+test("supports VAT, discounts, inclusive prices, and payment state", () => {
+  const result = calculateInvoice({
+    lines: [
+      { quantity: 2, unitPrice: "100.00", discountPercent: 10, taxRate: 18 },
+      { quantity: 1, unitPrice: "11.80", taxRate: 18, taxIncluded: true },
+    ],
+    documentDiscountPercent: 5,
+    paidAmount: 100,
+  });
+
+  assert.equal(result.subtotal, 211.8);
+  assert.equal(result.discount, 29.5);
+  assert.equal(result.taxable, 180.5);
+  assert.equal(result.tax, 32.49);
+  assert.equal(result.total, 212.99);
+  assert.equal(result.remaining, 112.99);
+  assert.equal(result.change, 0);
+});
+
+test("exposes the effective POS discount after document allocation", () => {
+  const result = calculateInvoice({
+    lines: [{ quantity: 1, unitPrice: "11.80", taxRate: 18, taxIncluded: true }],
+    documentDiscountAmount: "0.50",
+  });
+
+  assert.equal(result.lines[0].effectiveDiscountPercent, 5);
+  assert.equal(result.total, 11.21);
 });

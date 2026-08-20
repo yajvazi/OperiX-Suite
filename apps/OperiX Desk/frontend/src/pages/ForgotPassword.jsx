@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Mail } from 'lucide-react';
 import BrandMark from '../components/BrandMark';
 import { requestPasswordReset } from '../api/client';
+import { supabase } from '../utils/supabase';
 import { emailDomainHint, emailValidationError } from '../lib/email';
 
 export default function ForgotPassword() {
@@ -24,10 +25,19 @@ export default function ForgotPassword() {
 
     setBusy(true);
     try {
-      const response = await requestPasswordReset(email);
-      setMessage(response.detail || 'If an account exists, a reset link has been sent.');
+      if (supabase) {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          email.trim().toLowerCase(),
+          { redirectTo: `${window.location.origin}/reset-password` },
+        );
+        if (resetError) throw resetError;
+        setMessage('If an account exists, a secure OperiX reset link has been sent.');
+      } else {
+        const response = await requestPasswordReset(email);
+        setMessage(response.detail || 'If an account exists, a reset link has been sent.');
+      }
     } catch (err) {
-      setError(String(err?.response?.data?.detail ?? 'Could not send reset link right now.'));
+      setError(String(err?.response?.data?.detail ?? err?.message ?? 'Could not send reset link right now.'));
     } finally {
       setBusy(false);
     }
@@ -38,7 +48,7 @@ export default function ForgotPassword() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#1d4ed8_0%,transparent_35%),linear-gradient(135deg,#0f172a_0%,#172b4d_50%,#020617_100%)]" />
       <div className="relative w-full max-w-md">
         <div className="mb-6 flex justify-center">
-          <BrandMark size={48} showWordmark />
+          <BrandMark size={30} showWordmark />
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-3xl border border-white/10 bg-white p-6 shadow-2xl">
@@ -49,7 +59,7 @@ export default function ForgotPassword() {
 
           <h1 className="text-2xl font-bold text-slate-900">Forgot password?</h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Enter your email and we will send you a secure link to reset your DeskDibs password.
+            Enter your email and we will send you a secure link to reset your OperiX account password.
           </p>
 
           <div className="mt-6">

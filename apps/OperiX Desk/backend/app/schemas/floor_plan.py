@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class FloorPlanOut(BaseModel):
     id: int
+    organization_id: str | None = None
     name: str | None = None
     building: str
     floor: str

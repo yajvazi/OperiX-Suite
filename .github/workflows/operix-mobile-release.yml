@@ -1,0 +1,115 @@
+name: OperiX Mobile Release (approval-gated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Mobile app id"
+        required: true
+      platform:
+        description: "ios, android, or all"
+        required: true
+        default: ios
+      manual_qa_state:
+        description: "Must be MANUAL_QA_APPROVED"
+        required: true
+      confirmation:
+        description: "Type RELEASE to continue"
+        required: true
+      destination:
+        description: "build-only, testflight, or google-play-internal"
+        required: true
+        default: build-only
+      publish:
+        description: "Set true only for the explicitly selected store upload"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operix-mobile-release-${{ inputs.app }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Mobile release approval preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate explicit release approval
+        env:
+          QA_STATE: ${{ inputs.manual_qa_state }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PLATFORM: ${{ inputs.platform }}
+          DESTINATION: ${{ inputs.destination }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          [[ "$QA_STATE" == MANUAL_QA_APPROVED ]] || { echo "Manual QA approval is required"; exit 1; }
+          [[ "$CONFIRMATION" == RELEASE ]] || { echo "Mobile release requires confirmation=RELEASE"; exit 1; }
+          [[ "$PLATFORM" == ios || "$PLATFORM" == android || "$PLATFORM" == all ]] || { echo "Invalid platform"; exit 1; }
+          [[ "$DESTINATION" == build-only || "$DESTINATION" == testflight || "$DESTINATION" == google-play-internal ]] || { echo "Invalid destination"; exit 1; }
+          if [[ "$DESTINATION" == testflight && "$PLATFORM" == android ]]; then echo "TestFlight requires iOS"; exit 1; fi
+          if [[ "$DESTINATION" == google-play-internal && "$PLATFORM" == ios ]]; then echo "Google Play requires Android"; exit 1; fi
+          if [[ "$DESTINATION" != build-only && "$PUBLISH" != true ]]; then echo "Store upload requires publish=true"; exit 1; fi
+
+  release:
+    name: Build and optionally upload mobile release
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: mobile-release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build approved production profile
+        env:
+          APP_ID: ${{ inputs.app }}
+          PLATFORM: ${{ inputs.platform }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$EXPO_TOKEN" ]] || { echo "EXPO_TOKEN is not configured in mobile-release"; exit 1; }
+          APP_PATH=$(node -e 'const c=require("./.github/operix-apps.json"); const a=c.apps.find(x=>x.id===process.argv[1]&&x.type==="MOBILE"); if(!a) process.exit(1); process.stdout.write(a.path)' "$APP_ID")
+          test -d "$APP_PATH" || { echo "Expected mobile app path is not present: $APP_PATH"; exit 1; }
+          cd "$APP_PATH"
+          npx --no-install eas-cli build --profile production --platform "$PLATFORM" --non-interactive --no-wait 2>&1 | tee "$RUNNER_TEMP/operix-mobile-release.log"
+          echo "READY_FOR_TESTFLIGHT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to TestFlight when explicitly selected
+        if: inputs.destination == 'testflight' && inputs.publish == true
+        env:
+          APP_ID: ${{ inputs.app }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP_PATH=$(node -e 'const c=require("./.github/operix-apps.json"); const a=c.apps.find(x=>x.id===process.argv[1]&&x.type==="MOBILE"); if(!a) process.exit(1); process.stdout.write(a.path)' "$APP_ID")
+          cd "$APP_PATH"
+          npx --no-install eas-cli submit --platform ios --latest --non-interactive
+          echo "TESTFLIGHT_READY (not submitted to App Store review)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to Google Play internal track when explicitly selected
+        if: inputs.destination == 'google-play-internal' && inputs.publish == true
+        env:
+          APP_ID: ${{ inputs.app }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP_PATH=$(node -e 'const c=require("./.github/operix-apps.json"); const a=c.apps.find(x=>x.id===process.argv[1]&&x.type==="MOBILE"); if(!a) process.exit(1); process.stdout.write(a.path)' "$APP_ID")
+          cd "$APP_PATH"
+          npx --no-install eas-cli submit --platform android --latest --non-interactive
+          echo "GOOGLE_PLAY_INTERNAL_READY (no public production publish)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload mobile release log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-mobile-release-${{ inputs.app }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/operix-mobile-release.log
+          if-no-files-found: ignore
+          retention-days: 90

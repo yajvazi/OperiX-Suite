@@ -1,1 +1,1 @@
-"""DeskDibs AI feature modules (team builder, future agents)."""
+"""OperiX Desk AI feature modules (team builder and workplace assistant)."""

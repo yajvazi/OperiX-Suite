@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import { InvoiceDetail } from "@/components/invoice-detail";
 
-export default async function InvoiceDetailPage(){
-  redirect("/pos");
+export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <InvoiceDetail id={decodeURIComponent(id)} />;
 }

@@ -1,16 +1,19 @@
 import { Contract, Client, Profile } from '@invoice-monorepo/types';
+import { t, type AppLocale } from '@invoice-monorepo/i18n';
 import { normalizeBrandColor } from '../../theme/brand';
 
 interface ContractPDFData {
     contract: Contract;
     client: Client | null;
     profile: Profile;
+    language?: AppLocale;
 }
 
 export function generateServiceAgreementHTML(data: ContractPDFData): string {
     const { contract, client, profile } = data;
+    const language = data.language || 'en';
     const content = contract.content || {};
-    const today = new Date(contract.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const today = new Date(contract.created_at).toLocaleDateString(language === 'sq' ? 'sq-XK' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     const primaryColor = normalizeBrandColor(profile.primary_color);
 
@@ -149,84 +152,84 @@ export function generateServiceAgreementHTML(data: ContractPDFData): string {
 <body>
     <div class="header">
         <h1>${contract.title}</h1>
-        <div class="subtitle">Service Agreement • ${today}</div>
+        <div class="subtitle">${t('serviceAgreement', language)} • ${today}</div>
     </div>
 
     <div class="parties">
         <div class="party">
-            <div class="party-label">Service Provider</div>
-            <div class="party-name">${profile.company_name || 'Provider'}</div>
+            <div class="party-label">${t('serviceProvider', language)}</div>
+            <div class="party-name">${profile.company_name || t('provider', language)}</div>
             <div class="party-details">
                 ${profile.address || ''}<br>
                 ${profile.email || ''}<br>
-                ${profile.tax_id ? `Tax ID: ${profile.tax_id}` : ''}
+                ${profile.tax_id ? `${t('taxIdLabel', language)}: ${profile.tax_id}` : ''}
             </div>
         </div>
         <div class="party">
-            <div class="party-label">Client</div>
-            <div class="party-name">${client?.name || 'Client'}</div>
+            <div class="party-label">${t('client', language)}</div>
+            <div class="party-name">${client?.name || t('client', language)}</div>
             <div class="party-details">
                 ${client?.address || ''}<br>
                 ${client?.email || ''}<br>
-                ${client?.tax_id ? `Tax ID: ${client.tax_id}` : ''}
+                ${client?.tax_id ? `${t('taxIdLabel', language)}: ${client.tax_id}` : ''}
             </div>
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">1. Scope of Services</div>
+        <div class="section-title">1. ${t('scopeOfServices', language)}</div>
         <div class="section-content">
-            ${content.scope || 'Services to be provided as agreed between parties.'}
+            ${content.scope || t('servicesAgreed', language)}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">2. Payment Terms</div>
+        <div class="section-title">2. ${t('paymentTerms', language)}</div>
         <div class="section-content">
-            ${content.paymentTerms || 'Payment terms to be agreed upon by both parties.'}
+            ${content.paymentTerms || t('paymentTermsAgreed', language)}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">3. Timeline</div>
+        <div class="section-title">3. ${t('timeline', language)}</div>
         <div class="section-content">
-            ${content.timeline || 'Project timeline to be determined.'}
+            ${content.timeline || t('projectTimeline', language)}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">4. General Terms</div>
+        <div class="section-title">4. ${t('generalTerms', language)}</div>
         <div class="terms">
-            <p><strong>Confidentiality:</strong> Both parties agree to keep all project-related information confidential and not disclose it to third parties without written consent.</p>
-            <p><strong>Intellectual Property:</strong> Upon full payment, all deliverables and intellectual property rights will be transferred to the Client.</p>
-            <p><strong>Termination:</strong> Either party may terminate this agreement with 14 days written notice. Outstanding payments remain due upon termination.</p>
-            <p><strong>Liability:</strong> The Service Provider's liability is limited to the total amount paid under this agreement.</p>
-            <p><strong>Governing Law:</strong> This agreement shall be governed by the laws of the jurisdiction where the Service Provider is located.</p>
+            <p><strong>${t('confidentiality', language)}:</strong> ${t('confidentialityText', language)}</p>
+            <p><strong>${t('intellectualProperty', language)}:</strong> ${t('intellectualPropertyText', language)}</p>
+            <p><strong>${t('termination', language)}:</strong> ${t('terminationText', language)}</p>
+            <p><strong>${t('liability', language)}:</strong> ${t('liabilityText', language)}</p>
+            <p><strong>${t('governingLaw', language)}:</strong> ${t('governingLawText', language)}</p>
         </div>
     </div>
 
     <div class="signatures">
         <div class="signature-box">
             <div class="signature-line">
-                ${contract.signature_url ? `<img src="${contract.signature_url}" alt="Provider Signature">` : ''}
+                ${contract.signature_url ? `<img src="${contract.signature_url}" alt="${t('serviceProviderSignature', language)}">` : ''}
             </div>
-            <div class="signature-label">Service Provider Signature</div>
+            <div class="signature-label">${t('serviceProviderSignature', language)}</div>
             <div class="signature-name">${profile.company_name || ''}</div>
-            <div class="date-line">Date: _______________</div>
+            <div class="date-line">${t('dateLabel', language)}: _______________</div>
         </div>
         <div class="signature-box">
             <div class="signature-line">
-                ${contract.counterparty_signature_url ? `<img src="${contract.counterparty_signature_url}" alt="Client Signature">` : ''}
+                ${contract.counterparty_signature_url ? `<img src="${contract.counterparty_signature_url}" alt="${t('clientSignature', language)}">` : ''}
             </div>
-            <div class="signature-label">Client Signature</div>
+            <div class="signature-label">${t('clientSignature', language)}</div>
             <div class="signature-name">${client?.name || ''}</div>
-            <div class="date-line">Date: _______________</div>
+            <div class="date-line">${t('dateLabel', language)}: _______________</div>
         </div>
     </div>
 
     <div class="footer">
-        Contract ID: ${contract.id}<br>
-        Generated on ${new Date().toLocaleDateString()}
+        ${t('contractId', language)}: ${contract.id}<br>
+        ${t('generatedOn', language)} ${new Date().toLocaleDateString(language === 'sq' ? 'sq-XK' : 'en-US')}
     </div>
 </body>
 </html>
@@ -235,8 +238,9 @@ export function generateServiceAgreementHTML(data: ContractPDFData): string {
 
 export function generateNDAHTML(data: ContractPDFData): string {
     const { contract, client, profile } = data;
+    const language = data.language || 'en';
     const content = contract.content || {};
-    const today = new Date(contract.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const today = new Date(contract.created_at).toLocaleDateString(language === 'sq' ? 'sq-XK' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     const primaryColor = normalizeBrandColor(profile.primary_color);
 
@@ -374,22 +378,22 @@ export function generateNDAHTML(data: ContractPDFData): string {
 </head>
 <body>
     <div class="header">
-        <h1>Non-Disclosure Agreement</h1>
-        <div class="subtitle">Confidentiality Agreement • ${today}</div>
+        <h1>${t('nonDisclosureAgreement', language)}</h1>
+        <div class="subtitle">${t('confidentialityAgreement', language)} • ${today}</div>
     </div>
 
     <div class="parties">
         <div class="party">
-            <div class="party-label">Disclosing Party</div>
-            <div class="party-name">${profile.company_name || 'Disclosing Party'}</div>
+            <div class="party-label">${t('disclosingParty', language)}</div>
+            <div class="party-name">${profile.company_name || t('disclosingParty', language)}</div>
             <div class="party-details">
                 ${profile.address || ''}<br>
                 ${profile.email || ''}
             </div>
         </div>
         <div class="party">
-            <div class="party-label">Receiving Party</div>
-            <div class="party-name">${client?.name || 'Receiving Party'}</div>
+            <div class="party-label">${t('receivingParty', language)}</div>
+            <div class="party-name">${client?.name || t('receivingParty', language)}</div>
             <div class="party-details">
                 ${client?.address || ''}<br>
                 ${client?.email || ''}
@@ -398,64 +402,64 @@ export function generateNDAHTML(data: ContractPDFData): string {
     </div>
 
     <div class="section">
-        <div class="section-title">1. Definition of Confidential Information</div>
+        <div class="section-title">1. ${t('definitionConfidentialInfo', language)}</div>
         <div class="section-content">
-            ${content.confidentialInfo || 'All non-public information disclosed by the Disclosing Party to the Receiving Party, whether in writing, orally, or by any other means.'}
+            ${content.confidentialInfo || t('confidentialInfoDefault', language)}
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">2. Duration of Confidentiality</div>
+        <div class="section-title">2. ${t('durationConfidentiality', language)}</div>
         <div class="section-content">
-            The obligations of confidentiality shall remain in effect for: <strong>${content.duration || '2 years from the date of disclosure'}</strong>.
+            ${t('durationText', language)} <strong>${content.duration || t('durationConfidentialityPlaceholder', language)}</strong>.
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">3. Obligations</div>
+        <div class="section-title">3. ${t('obligations', language)}</div>
         <div class="terms">
-            <p>The Receiving Party agrees to:</p>
-            <p>• Hold and maintain the Confidential Information in strict confidence.</p>
-            <p>• Not disclose the Confidential Information to any third parties without prior written consent.</p>
-            <p>• Use the Confidential Information solely for the purpose for which it was disclosed.</p>
-            <p>• Take reasonable measures to protect the secrecy of the Confidential Information.</p>
-            <p>• Promptly notify the Disclosing Party if any unauthorized disclosure occurs.</p>
+            <p>${t('receivingPartyAgrees', language)}</p>
+            <p>• ${t('holdConfidential', language)}</p>
+            <p>• ${t('noDisclose', language)}</p>
+            <p>• ${t('useSolely', language)}</p>
+            <p>• ${t('protectSecrecy', language)}</p>
+            <p>• ${t('notifyUnauthorized', language)}</p>
         </div>
     </div>
 
     <div class="section">
-        <div class="section-title">4. Exclusions</div>
+        <div class="section-title">4. ${t('exclusions', language)}</div>
         <div class="terms">
-            <p>This agreement does not apply to information that:</p>
-            <p>• Is or becomes publicly available through no fault of the Receiving Party.</p>
-            <p>• Was in the Receiving Party's possession prior to disclosure.</p>
-            <p>• Is independently developed by the Receiving Party without use of Confidential Information.</p>
-            <p>• Is required to be disclosed by law or court order.</p>
+            <p>${t('agreementDoesNotApply', language)}</p>
+            <p>• ${t('publicInfo', language)}</p>
+            <p>• ${t('priorPossession', language)}</p>
+            <p>• ${t('independentlyDeveloped', language)}</p>
+            <p>• ${t('requiredByLaw', language)}</p>
         </div>
     </div>
 
     <div class="signatures">
         <div class="signature-box">
             <div class="signature-line">
-                ${contract.signature_url ? `<img src="${contract.signature_url}" alt="Disclosing Party Signature">` : ''}
+                ${contract.signature_url ? `<img src="${contract.signature_url}" alt="${t('disclosingParty', language)}">` : ''}
             </div>
-            <div class="signature-label">Disclosing Party Signature</div>
+            <div class="signature-label">${t('disclosingParty', language)} · ${t('signature', language)}</div>
             <div class="signature-name">${profile.company_name || ''}</div>
-            <div class="date-line">Date: _______________</div>
+            <div class="date-line">${t('dateLabel', language)}: _______________</div>
         </div>
         <div class="signature-box">
             <div class="signature-line">
-                ${contract.counterparty_signature_url ? `<img src="${contract.counterparty_signature_url}" alt="Receiving Party Signature">` : ''}
+                ${contract.counterparty_signature_url ? `<img src="${contract.counterparty_signature_url}" alt="${t('receivingParty', language)}">` : ''}
             </div>
-            <div class="signature-label">Receiving Party Signature</div>
+            <div class="signature-label">${t('receivingParty', language)} · ${t('signature', language)}</div>
             <div class="signature-name">${client?.name || ''}</div>
-            <div class="date-line">Date: _______________</div>
+            <div class="date-line">${t('dateLabel', language)}: _______________</div>
         </div>
     </div>
 
     <div class="footer">
-        Contract ID: ${contract.id}<br>
-        Generated on ${new Date().toLocaleDateString()}
+        ${t('contractId', language)}: ${contract.id}<br>
+        ${t('generatedOn', language)} ${new Date().toLocaleDateString(language === 'sq' ? 'sq-XK' : 'en-US')}
     </div>
 </body>
 </html>
@@ -472,7 +476,6 @@ export function generateContractHTML(data: ContractPDFData): string {
     // Default to service agreement
     return generateServiceAgreementHTML(data);
 }
-
 
 
 

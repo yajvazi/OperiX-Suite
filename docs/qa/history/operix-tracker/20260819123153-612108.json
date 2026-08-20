@@ -1,0 +1,614 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260819123153-612108",
+  "generatedAt": "2026-08-19T12:33:55.860Z",
+  "app": "OperiX Tracker",
+  "appId": "operix-tracker",
+  "repository": "/root/OperiX",
+  "path": "apps/OperiX Tracker",
+  "branch": "agent/phase-f-payroll",
+  "commit": "6b99267abf9c420f495450dc105e0bc1dd823a0d",
+  "worktreeDirtyAtStart": true,
+  "framework": "Expo / React Native",
+  "expoSdk": "54",
+  "reactNativeVersion": "0.81.5",
+  "bundleId": "com.internetkudo.operixtracker",
+  "androidPackage": "com.internetkudo.operixtracker",
+  "backend": "Supabase / PostgreSQL (shared workspace)",
+  "state": "BLOCKED",
+  "tests": {
+    "lint": "ENVIRONMENT_FAILURE",
+    "typecheck": "PASS",
+    "unit": "ENVIRONMENT_FAILURE",
+    "ui": "ENVIRONMENT_FAILURE",
+    "backend": "ENVIRONMENT_FAILURE",
+    "database": "ENVIRONMENT_FAILURE",
+    "authentication": "ENVIRONMENT_FAILURE",
+    "security": "ENVIRONMENT_FAILURE",
+    "rls": "ENVIRONMENT_FAILURE",
+    "e2e": "ENVIRONMENT_FAILURE",
+    "visual": "VISUAL_REVIEW_REQUIRED",
+    "build": "PASS",
+    "developmentBuild": "NOT_RUN"
+  },
+  "stages": {
+    "environment": {
+      "status": "PASS",
+      "evidence": [
+        "Node 22.22.0 (required major >= 20)",
+        "npm 10.9.4 with repository packageManager npm@10.9.4",
+        "React Native 0.81.5; Expo SDK 54",
+        "Expo config app.json",
+        "iOS bundle identifier com.internetkudo.operixtracker; Android package com.internetkudo.operixtracker",
+        "app scheme operix-tracker; slug operix-tracker; version 1.0.0",
+        "native project mode: managed Expo (native folders not checked in)",
+        "iOS simulator/build host: xcodebuild unavailable; Android host: adb unavailable"
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": false,
+      "warnings": [
+        "xcodebuild/xcrun is unavailable in this environment; iOS native build and simulator UI validation cannot run here.",
+        "adb is unavailable in this environment; Android emulator validation cannot run here.",
+        "Dedicated QA environment variables not configured: OPERIX_QA_SUPABASE_URL, OPERIX_QA_SUPABASE_ANON_KEY, OPERIX_QA_TENANT_A_USER, OPERIX_QA_TENANT_B_USER"
+      ]
+    },
+    "install": {
+      "status": "PASS",
+      "evidence": [
+        "Dependency installation was explicitly skipped; existing node_modules presence was checked."
+      ],
+      "classification": null,
+      "diagnosis": "Skipped by command-line option.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": false,
+      "warnings": [
+        "Use the repository lockfile with npm ci for a clean dependency validation."
+      ]
+    },
+    "lint": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "No lint script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real lint test command for this app or document why the category is genuinely not applicable.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "typecheck": {
+      "status": "PASS",
+      "evidence": [
+        "typecheck completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run typecheck --workspace=operix-tracker",
+      "log": "docs/qa/artifacts/20260819123153-612108/operix-tracker/typecheck.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 3579,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "unit": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "No unit script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real unit test command for this app or document why the category is genuinely not applicable.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "ui": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "No ui script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real ui test command for this app or document why the category is genuinely not applicable.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "legacy": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "core": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "fullSuite": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "backend": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Backend detected, but no app integration test command is declared."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a safe backend/integration test command. Do not point it at production.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "database": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Supabase SQL test files discovered: invoice_customer_signatures.sql, operix_booking_security.sql, operix_control_security.sql, operix_desk_security.sql, operix_hr_security.sql, operix_invoice_mobile_security.sql, phase_3_reporting_mobile_compliance.sql",
+        "Supabase CLI is not installed; no remote database calls were attempted."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Install/configure a local or dedicated QA Supabase environment before claiming database or RLS coverage.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Required OPERIX_QA_* variables are not configured."
+      ]
+    },
+    "authentication": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Authentication is detected, but dedicated QA accounts are not configured."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run login, invalid login, expired/restored session, protected-route, and backend-token checks with non-production accounts.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "security": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Static mobile secret scan passed, but live authorization/RLS tests were not executed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a dedicated QA Supabase environment, two isolated users/tenants, and run the app-specific security SQL suite.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Static scan is not a substitute for actual backend authorization tests."
+      ]
+    },
+    "rls": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Tenant signals were detected, but live cross-tenant SELECT/INSERT/UPDATE/DELETE/RPC checks were not executed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run deterministic Tenant A/Tenant B tests against the dedicated QA database and verify actual resulting state.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "e2e": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "No Maestro or Detox flow/configuration was discovered for this app."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add app-specific real-device flows or document why E2E is genuinely not applicable.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "visual": {
+      "status": "VISUAL_REVIEW_REQUIRED",
+      "evidence": [
+        "No approved baseline screenshots exist for this app. Actual screenshots cannot be compared yet."
+      ],
+      "classification": "VISUAL_CHANGE_EXPECTED",
+      "diagnosis": "Run the real-device screenshot flow, review baseline/actual/diff artifacts, then explicitly approve baselines.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Baseline update is never automatic."
+      ]
+    },
+    "performance": {
+      "status": "PASS",
+      "evidence": [
+        "Static sanity scan completed: 0 intervals, 0 effects, 1 API call sites."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "console": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Runtime console capture requires the real-device E2E/debug session; no runtime claim was made from static code."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Capture exceptions, unhandled rejections, functional React Native warnings, and network failures during simulator/manual preparation.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "build": {
+      "status": "PASS",
+      "evidence": [
+        "build:check completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run build:check --workspace=operix-tracker",
+      "log": "docs/qa/artifacts/20260819123153-612108/operix-tracker/build.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 8417,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "developmentBuild": {
+      "status": "NOT_RUN",
+      "evidence": [
+        "Development build was not started because critical automated gates remain unresolved."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Resolve the earlier blocking issues, then rerun the full app pipeline.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    }
+  },
+  "bugsFound": 0,
+  "bugsFixed": 0,
+  "blockingIssues": [
+    {
+      "stage": "lint",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real lint test command for this app or document why the category is genuinely not applicable.",
+      "evidence": [
+        "No lint script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "unit",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real unit test command for this app or document why the category is genuinely not applicable.",
+      "evidence": [
+        "No unit script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "ui",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add a real ui test command for this app or document why the category is genuinely not applicable.",
+      "evidence": [
+        "No ui script is declared in apps/OperiX Tracker/package.json; the runner did not invent a test or mark it as passed."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "backend",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a safe backend/integration test command. Do not point it at production.",
+      "evidence": [
+        "Backend detected, but no app integration test command is declared."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "database",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Install/configure a local or dedicated QA Supabase environment before claiming database or RLS coverage.",
+      "evidence": [
+        "Supabase SQL test files discovered: invoice_customer_signatures.sql, operix_booking_security.sql, operix_control_security.sql, operix_desk_security.sql, operix_hr_security.sql, operix_invoice_mobile_security.sql, phase_3_reporting_mobile_compliance.sql",
+        "Supabase CLI is not installed; no remote database calls were attempted."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "authentication",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run login, invalid login, expired/restored session, protected-route, and backend-token checks with non-production accounts.",
+      "evidence": [
+        "Authentication is detected, but dedicated QA accounts are not configured."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "security",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a dedicated QA Supabase environment, two isolated users/tenants, and run the app-specific security SQL suite.",
+      "evidence": [
+        "Static mobile secret scan passed, but live authorization/RLS tests were not executed."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "rls",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run deterministic Tenant A/Tenant B tests against the dedicated QA database and verify actual resulting state.",
+      "evidence": [
+        "Tenant signals were detected, but live cross-tenant SELECT/INSERT/UPDATE/DELETE/RPC checks were not executed."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "e2e",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Add app-specific real-device flows or document why E2E is genuinely not applicable.",
+      "evidence": [
+        "No Maestro or Detox flow/configuration was discovered for this app."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "visual",
+      "status": "VISUAL_REVIEW_REQUIRED",
+      "classification": "VISUAL_CHANGE_EXPECTED",
+      "diagnosis": "Run the real-device screenshot flow, review baseline/actual/diff artifacts, then explicitly approve baselines.",
+      "evidence": [
+        "No approved baseline screenshots exist for this app. Actual screenshots cannot be compared yet."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "console",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Capture exceptions, unhandled rejections, functional React Native warnings, and network failures during simulator/manual preparation.",
+      "evidence": [
+        "Runtime console capture requires the real-device E2E/debug session; no runtime claim was made from static code."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    },
+    {
+      "stage": "developmentBuild",
+      "status": "NOT_RUN",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Resolve the earlier blocking issues, then rerun the full app pipeline.",
+      "evidence": [
+        "Development build was not started because critical automated gates remain unresolved."
+      ],
+      "log": null,
+      "attempt": 1,
+      "maxAttempts": 2
+    }
+  ],
+  "fixes": [],
+  "attempts": {
+    "maxPerFailure": 2,
+    "previous": {},
+    "current": {
+      "lint": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Add a real lint test command for this app or document why the category is genuinely not applicable."
+      },
+      "unit": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Add a real unit test command for this app or document why the category is genuinely not applicable."
+      },
+      "ui": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Add a real ui test command for this app or document why the category is genuinely not applicable."
+      },
+      "backend": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Configure a safe backend/integration test command. Do not point it at production."
+      },
+      "database": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Install/configure a local or dedicated QA Supabase environment before claiming database or RLS coverage."
+      },
+      "authentication": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Run login, invalid login, expired/restored session, protected-route, and backend-token checks with non-production accounts."
+      },
+      "security": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Configure a dedicated QA Supabase environment, two isolated users/tenants, and run the app-specific security SQL suite."
+      },
+      "rls": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Run deterministic Tenant A/Tenant B tests against the dedicated QA database and verify actual resulting state."
+      },
+      "e2e": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Add app-specific real-device flows or document why E2E is genuinely not applicable."
+      },
+      "visual": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "VISUAL_CHANGE_EXPECTED",
+        "diagnosis": "Run the real-device screenshot flow, review baseline/actual/diff artifacts, then explicitly approve baselines."
+      },
+      "console": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Capture exceptions, unhandled rejections, functional React Native warnings, and network failures during simulator/manual preparation."
+      },
+      "developmentBuild": {
+        "attempts": 1,
+        "max": 2,
+        "classification": "ENVIRONMENT_FAILURE",
+        "diagnosis": "Resolve the earlier blocking issues, then rerun the full app pipeline."
+      }
+    }
+  },
+  "build": {
+    "status": "READY",
+    "developmentBuild": "NOT_RUN",
+    "location": "/tmp Expo web export smoke build (not a release artifact)",
+    "details": [
+      "build:check completed."
+    ]
+  },
+  "expoGo": {
+    "status": "UNKNOWN",
+    "details": "Not claimed until a real Expo Go launch is validated."
+  },
+  "manualQaState": "NOT_STARTED",
+  "manualQaIssues": [],
+  "safety": {
+    "productionSubmission": "DISABLED",
+    "productionData": "DISABLED",
+    "serviceRoleInMobile": "NOT_ALLOWED"
+  },
+  "finishedAt": "2026-08-19T12:34:07.932Z"
+}

@@ -1,28 +1,74 @@
 services:
   backend:
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: "1.0"
     build:
       context: ./backend
     env_file:
       - .env
+      - ./frontend/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Supabase Postgres connection string}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-https://desk.operixsuite.com}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://desk.operixsuite.com}
+      SUPABASE_URL: ${SUPABASE_INTERNAL_URL:-http://supabase_kong_OperiX:8000}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-${VITE_SUPABASE_PUBLISHABLE_KEY:-}}
+      SHARED_AUTH_ENABLED: ${SHARED_AUTH_ENABLED:-true}
+      LEGACY_AUTH_ENABLED: ${LEGACY_AUTH_ENABLED:-false}
+      ALLOW_LEGACY_UNSCOPED_DATA: ${ALLOW_LEGACY_UNSCOPED_DATA:-false}
     volumes:
       - backend-uploads:/app/uploads
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - default
+      - supabase
+    logging: &logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   frontend:
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.75"
     build:
-      context: ./frontend
+      context: ../..
+      dockerfile: apps/OperiX Desk/frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-http://127.0.0.1:54321}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
     environment:
       VITE_API_URL: /api
-      VITE_SUPABASE_URL: https://gxmbwmbvdfvpdbtqybcl.supabase.co
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+    env_file:
+      - ./frontend/.env
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "3007:3000"
+      - "127.0.0.1:3007:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logs
 
 volumes:
   backend-uploads:
+
+networks:
+  supabase:
+    external: true
+    name: supabase_network_OperiX

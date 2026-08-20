@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260819121828-a8faa1",
+  "generatedAt": "2026-08-19T12:18:28.307Z",
+  "app": "OperiX Invoice",
+  "appId": "operix-invoice",
+  "repository": "/root/OperiX",
+  "path": "apps/OperiX Invoice/OperiX Invoice Mobile",
+  "branch": "agent/phase-f-payroll",
+  "commit": "6b99267abf9c420f495450dc105e0bc1dd823a0d",
+  "worktreeDirtyAtStart": true,
+  "framework": "Expo / React Native",
+  "expoSdk": "54",
+  "reactNativeVersion": "0.81.5",
+  "bundleId": "com.lrdygroup.operixinvoice",
+  "androidPackage": "com.internetkudo.invoiceapp",
+  "backend": "Supabase / PostgreSQL (shared workspace)",
+  "state": "VISUAL_REVIEW_REQUIRED",
+  "tests": {
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "unit": "PASS",
+    "ui": "PASS",
+    "backend": "PASS",
+    "database": "ENVIRONMENT_FAILURE",
+    "authentication": "ENVIRONMENT_FAILURE",
+    "security": "ENVIRONMENT_FAILURE",
+    "rls": "ENVIRONMENT_FAILURE",
+    "e2e": "ENVIRONMENT_FAILURE",
+    "visual": "VISUAL_REVIEW_REQUIRED",
+    "build": "PASS",
+    "developmentBuild": "NOT_RUN"
+  },
+  "stages": {
+    "environment": {
+      "status": "PASS",
+      "evidence": [
+        "Node 22.22.0 (required major >= 20)",
+        "npm 10.9.4 with repository packageManager npm@10.9.4",
+        "React Native 0.81.5; Expo SDK 54",
+        "Expo config app.json, app.config.js",
+        "iOS bundle identifier com.lrdygroup.operixinvoice; Android package com.internetkudo.invoiceapp",
+        "app scheme operix-invoice; slug invoice-app; version 1.0.0",
+        "native project mode: managed Expo (native folders not checked in)"
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": false,
+      "warnings": [
+        "Dedicated QA environment variables not configured: OPERIX_QA_SUPABASE_URL, OPERIX_QA_SUPABASE_ANON_KEY, OPERIX_QA_TENANT_A_USER, OPERIX_QA_TENANT_B_USER"
+      ]
+    },
+    "install": {
+      "status": "PASS",
+      "evidence": [
+        "npm ci completed from package-lock.json."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm ci --ignore-scripts --no-audit --no-fund",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/install.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 24659,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "lint": {
+      "status": "PASS",
+      "evidence": [
+        "lint completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run lint --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/lint.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 6971,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "typecheck": {
+      "status": "PASS",
+      "evidence": [
+        "typecheck completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run typecheck --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/typecheck.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 14210,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "unit": {
+      "status": "PASS",
+      "evidence": [
+        "test:unit completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run test:unit --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/unit.log",
+      "counts": {
+        "tests": {
+          "passed": 47,
+          "failed": 0,
+          "skipped": 0,
+          "total": 47
+        },
+        "suites": {
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0,
+          "total": 7
+        },
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 2102,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "ui": {
+      "status": "PASS",
+      "evidence": [
+        "test:component completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run test:component --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/ui.log",
+      "counts": {
+        "tests": {
+          "passed": 27,
+          "failed": 0,
+          "skipped": 0,
+          "total": 27
+        },
+        "suites": {
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0,
+          "total": 6
+        },
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 4966,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "legacy": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "core": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "fullSuite": {
+      "status": "N/A",
+      "evidence": [
+        "This check is not applicable to the discovered app architecture."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": false,
+      "blocking": false,
+      "warnings": []
+    },
+    "backend": {
+      "status": "PASS",
+      "evidence": [
+        "test:integration completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run test:integration --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/backend.log",
+      "counts": {
+        "tests": {
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0,
+          "total": 3
+        },
+        "suites": {
+          "passed": 1,
+          "failed": 0,
+          "skipped": 0,
+          "total": 1
+        },
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 1145,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "database": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Supabase SQL test files discovered: invoice_customer_signatures.sql, operix_booking_security.sql, operix_control_security.sql, operix_desk_security.sql, operix_hr_security.sql, operix_invoice_mobile_security.sql, phase_3_reporting_mobile_compliance.sql",
+        "Supabase CLI is not installed; no remote database calls were attempted."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Install/configure a local or dedicated QA Supabase environment before claiming database or RLS coverage.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Required OPERIX_QA_* variables are not configured."
+      ]
+    },
+    "authentication": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Authentication is detected, but dedicated QA accounts are not configured."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run login, invalid login, expired/restored session, protected-route, and backend-token checks with non-production accounts.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "security": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Static mobile secret scan passed, but live authorization/RLS tests were not executed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a dedicated QA Supabase environment, two isolated users/tenants, and run the app-specific security SQL suite.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Static scan is not a substitute for actual backend authorization tests."
+      ]
+    },
+    "rls": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Tenant signals were detected, but live cross-tenant SELECT/INSERT/UPDATE/DELETE/RPC checks were not executed."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run deterministic Tenant A/Tenant B tests against the dedicated QA database and verify actual resulting state.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "e2e": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Maestro flows exist, but the Maestro CLI is not installed in this environment."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "The required command or executable is unavailable in this environment.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "visual": {
+      "status": "VISUAL_REVIEW_REQUIRED",
+      "evidence": [
+        "No approved baseline screenshots exist for this app. Actual screenshots cannot be compared yet."
+      ],
+      "classification": "VISUAL_CHANGE_EXPECTED",
+      "diagnosis": "Run the real-device screenshot flow, review baseline/actual/diff artifacts, then explicitly approve baselines.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": [
+        "Baseline update is never automatic."
+      ]
+    },
+    "performance": {
+      "status": "PASS",
+      "evidence": [
+        "Static sanity scan completed: 0 intervals, 55 effects, 158 API call sites."
+      ],
+      "classification": null,
+      "diagnosis": null,
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": false,
+      "warnings": [
+        "158 API call sites detected; inspect list screens for repeated requests."
+      ]
+    },
+    "console": {
+      "status": "ENVIRONMENT_FAILURE",
+      "evidence": [
+        "Runtime console capture requires the real-device E2E/debug session; no runtime claim was made from static code."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Capture exceptions, unhandled rejections, functional React Native warnings, and network failures during simulator/manual preparation.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    },
+    "build": {
+      "status": "PASS",
+      "evidence": [
+        "build:check completed."
+      ],
+      "classification": null,
+      "diagnosis": "Completed.",
+      "command": "npm run build:check --workspace=operix-invoice",
+      "log": "docs/qa/artifacts/20260819121828-a8faa1/operix-invoice/build.log",
+      "counts": {
+        "tests": null,
+        "suites": null,
+        "passing": null,
+        "failing": null
+      },
+      "durationMs": 11977,
+      "applicable": true,
+      "blocking": false,
+      "warnings": []
+    },
+    "developmentBuild": {
+      "status": "NOT_RUN",
+      "evidence": [
+        "Development build was not started because critical automated gates remain unresolved."
+      ],
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Resolve the earlier blocking issues, then rerun the full app pipeline.",
+      "command": null,
+      "log": null,
+      "counts": null,
+      "durationMs": 0,
+      "applicable": true,
+      "blocking": true,
+      "warnings": []
+    }
+  },
+  "bugsFound": 0,
+  "bugsFixed": 0,
+  "blockingIssues": [
+    {
+      "stage": "database",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Install/configure a local or dedicated QA Supabase environment before claiming database or RLS coverage.",
+      "evidence": [
+        "Supabase SQL test files discovered: invoice_customer_signatures.sql, operix_booking_security.sql, operix_control_security.sql, operix_desk_security.sql, operix_hr_security.sql, operix_invoice_mobile_security.sql, phase_3_reporting_mobile_compliance.sql",
+        "Supabase CLI is not installed; no remote database calls were attempted."
+      ],
+      "log": null
+    },
+    {
+      "stage": "authentication",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run login, invalid login, expired/restored session, protected-route, and backend-token checks with non-production accounts.",
+      "evidence": [
+        "Authentication is detected, but dedicated QA accounts are not configured."
+      ],
+      "log": null
+    },
+    {
+      "stage": "security",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Configure a dedicated QA Supabase environment, two isolated users/tenants, and run the app-specific security SQL suite.",
+      "evidence": [
+        "Static mobile secret scan passed, but live authorization/RLS tests were not executed."
+      ],
+      "log": null
+    },
+    {
+      "stage": "rls",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Run deterministic Tenant A/Tenant B tests against the dedicated QA database and verify actual resulting state.",
+      "evidence": [
+        "Tenant signals were detected, but live cross-tenant SELECT/INSERT/UPDATE/DELETE/RPC checks were not executed."
+      ],
+      "log": null
+    },
+    {
+      "stage": "e2e",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "The required command or executable is unavailable in this environment.",
+      "evidence": [
+        "Maestro flows exist, but the Maestro CLI is not installed in this environment."
+      ],
+      "log": null
+    },
+    {
+      "stage": "visual",
+      "status": "VISUAL_REVIEW_REQUIRED",
+      "classification": "VISUAL_CHANGE_EXPECTED",
+      "diagnosis": "Run the real-device screenshot flow, review baseline/actual/diff artifacts, then explicitly approve baselines.",
+      "evidence": [
+        "No approved baseline screenshots exist for this app. Actual screenshots cannot be compared yet."
+      ],
+      "log": null
+    },
+    {
+      "stage": "console",
+      "status": "ENVIRONMENT_FAILURE",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Capture exceptions, unhandled rejections, functional React Native warnings, and network failures during simulator/manual preparation.",
+      "evidence": [
+        "Runtime console capture requires the real-device E2E/debug session; no runtime claim was made from static code."
+      ],
+      "log": null
+    },
+    {
+      "stage": "developmentBuild",
+      "status": "NOT_RUN",
+      "classification": "ENVIRONMENT_FAILURE",
+      "diagnosis": "Resolve the earlier blocking issues, then rerun the full app pipeline.",
+      "evidence": [
+        "Development build was not started because critical automated gates remain unresolved."
+      ],
+      "log": null
+    }
+  ],
+  "fixes": [],
+  "attempts": {},
+  "build": {
+    "status": "READY",
+    "developmentBuild": "NOT_RUN",
+    "location": "/tmp Expo web export smoke build (not a release artifact)",
+    "details": [
+      "build:check completed."
+    ]
+  },
+  "expoGo": {
+    "status": "UNKNOWN",
+    "details": "Not claimed until a real Expo Go launch is validated."
+  },
+  "manualQaState": "NOT_STARTED",
+  "manualQaIssues": [],
+  "safety": {
+    "productionSubmission": "DISABLED",
+    "productionData": "DISABLED",
+    "serviceRoleInMobile": "NOT_ALLOWED"
+  },
+  "finishedAt": "2026-08-19T12:19:34.454Z"
+}

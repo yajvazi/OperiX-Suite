@@ -29,6 +29,7 @@ import { Card } from '@invoice-monorepo/ui';
 import { Profile } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 const { width } = Dimensions.get('window');
 
@@ -55,7 +56,6 @@ const expenseActions: ActionItem[] = [
 // Income tracking items
 const incomeActions: ActionItem[] = [
     { key: 'trackIncomes', labelKey: 'trackIncomes', icon: LayoutDashboard, color: '#12B76A', action: 'list' },
-    { key: 'addIncome', labelKey: 'addIncome', icon: Plus, color: '#059669', action: 'add' },
 ];
 
 export function ExpensesDashboardScreen({ navigation }: any) {
@@ -82,16 +82,16 @@ export function ExpensesDashboardScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            setProfile(profileData);
-            const companyId = profileData.company_id || user.id;
+        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        if (workspaceProfile) {
+            setProfile(workspaceProfile);
+            const scope = scopedResource(user.id, companyIds);
 
             // Get current month start date
             const now = new Date();
@@ -101,20 +101,22 @@ export function ExpensesDashboardScreen({ navigation }: any) {
             const { data: expenses } = await supabase
                 .from('expenses')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(scope);
 
-            // Calculate totals
-            const totalExpenses = expenses?.reduce((sum, exp) => sum + Number(exp.amount || 0), 0) || 0;
+            // Calculate totals from expense records only. Income records are
+            // represented by paid invoices in this dashboard.
+            const expenseRows = expenses?.filter(exp => exp.type !== 'income') || [];
+            const totalExpenses = expenseRows.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
             // Calculate monthly expenses
-            const monthlyExpenses = expenses?.filter(exp => exp.date >= monthStart)
+            const monthlyExpenses = expenseRows.filter(exp => exp.date >= monthStart)
                 .reduce((sum, exp) => sum + Number(exp.amount || 0), 0) || 0;
 
             // Fetch invoices for income (paid invoices)
             const { data: paidInvoices } = await supabase
                 .from('invoices')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .or(scope)
                 .eq('status', 'paid');
 
             const totalIncomes = paidInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
@@ -128,7 +130,7 @@ export function ExpensesDashboardScreen({ navigation }: any) {
                 balance: totalIncomes - totalExpenses,
                 monthlyExpenses,
                 monthlyIncomes,
-                expenseCount: expenses?.length || 0,
+                expenseCount: expenseRows.length,
                 incomeCount: paidInvoices?.length || 0,
             });
         }
@@ -148,8 +150,7 @@ export function ExpensesDashboardScreen({ navigation }: any) {
                 navigation.navigate('ExpensesList', { type });
                 break;
             case 'add':
-                // Both expense and income use ExpenseForm, just with different type param
-                navigation.navigate('ExpenseForm', { type: type === 'income' ? 'income' : 'expense' });
+                navigation.navigate('ExpenseForm', { type: 'expense' });
                 break;
         }
     };
@@ -427,8 +428,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 });
-
-
-
-
 

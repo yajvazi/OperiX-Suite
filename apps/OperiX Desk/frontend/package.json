@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@invoice-monorepo/app-shell": "*",
+    "@invoice-monorepo/operix-ui": "*",
+    "@invoice-monorepo/i18n": "*",
     "@supabase/supabase-js": "^2.108.2",
     "axios": "^1.17.0",
     "date-fns": "^4.4.0",

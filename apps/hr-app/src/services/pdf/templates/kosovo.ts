@@ -10,7 +10,7 @@ export function kosovoTemplate(data: InvoiceData): string {
         showLogo: true,
         showSignature: true,
         showStamp: true,
-        visibleColumns: { sku: true, unit: true, tax: true, quantity: true, price: true },
+        visibleColumns: { rowNumber: false, sku: true, description: true, quantity: true, unit: true, unitPrice: true, discount: false, taxRate: true, lineTotal: true, grossPrice: false },
         labels: {},
         pageSize: 'A4'
     };
@@ -56,7 +56,7 @@ export function kosovoTemplate(data: InvoiceData): string {
         ${config.visibleColumns.unit ? `<td class="cell center">${item.unit || 'CP'}</td>` : ''}
         <td class="cell right">${formatNumber(item.price)}</td>
         <td class="cell center">${formatNumber(item.discount || 0)}</td>
-        ${config.visibleColumns.tax ? `<td class="cell center">${item.taxRate || 18}.00</td>` : ''}
+        ${config.visibleColumns.taxRate ? `<td class="cell center">${item.taxRate || 18}.00</td>` : ''}
         <td class="cell right">${formatNumber(priceWithDiscount)}</td>
         <td class="cell right">${formatNumber(priceWithVat)}</td>
         <td class="cell right">${formatNumber(totalValue)}</td>
@@ -433,7 +433,7 @@ export function kosovoTemplate(data: InvoiceData): string {
         ${config.visibleColumns.unit ? '<th style="width: 35px;">Njësia</th>' : ''}
         <th style="width: 55px;">Çmimi pa<br>Tvsh</th>
         <th style="width: 40px;">Rabati<br>(%)</th>
-        ${config.visibleColumns.tax ? '<th style="width: 40px;">Tvsh %</th>' : ''}
+        ${config.visibleColumns.taxRate ? '<th style="width: 40px;">Tvsh %</th>' : ''}
         <th style="width: 55px;">Çmimi me<br>rabat</th>
         <th style="width: 55px;">Çmimi<br>shitës</th>
         <th style="width: 65px;">Vlera shitëse</th>
@@ -524,7 +524,6 @@ export function kosovoTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
 
 
 

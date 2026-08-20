@@ -1,390 +1,160 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
-import { useTheme } from '@invoice-monorepo/hooks';
-import { useAuth } from '@invoice-monorepo/hooks';
-import { Card, Button } from '@invoice-monorepo/ui';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Activity, ArrowRight, Bell, CalendarDays, Clock3, FileText, Users } from 'lucide-react-native';
+import { useAuth, useTheme } from '@invoice-monorepo/hooks';
+import { resolveWorkspace, supabase } from '@invoice-monorepo/api';
 import {
-    Users, UserPlus, UserCheck, ClipboardList, Copy, RefreshCw,
-    ChevronRight, Shield, FileText, Clock, Calendar, CalendarCheck, DollarSign, Wallet, ShieldCheck, User, Briefcase, Settings
-} from 'lucide-react-native';
-import { supabase } from '@invoice-monorepo/api';
-import * as Clipboard from 'expo-clipboard';
-import { t } from '@invoice-monorepo/i18n';
+    listAnnouncements,
+    listAttendance,
+    listEmployees,
+    listHrApprovals,
+    listJobOpenings,
+    listLeaveRequests,
+    type HrAnnouncement,
+    type HrApproval,
+    type HrAttendanceRecord,
+    type HrEmployee,
+    type HrJobOpening,
+    type HrLeaveRequest,
+} from '@invoice-monorepo/hr';
+import { Avatar, EmptyState, LoadingState, IconButton, MetricCard, MobileScreen, SectionTitle, ShortcutRow } from '../../components/mobile/MobileUI';
+import { brand, getPalette } from '../../theme/brand';
 
 export function HRDashboardScreen({ navigation }: any) {
-    const { isDark, primaryColor, language } = useTheme();
     const { user } = useAuth();
-    const [loading, setLoading] = useState(false);
+    const { isDark } = useTheme();
+    const palette = getPalette(isDark);
+    const [employees, setEmployees] = useState<HrEmployee[]>([]);
+    const [attendance, setAttendance] = useState<HrAttendanceRecord[]>([]);
+    const [leaveRequests, setLeaveRequests] = useState<HrLeaveRequest[]>([]);
+    const [announcements, setAnnouncements] = useState<HrAnnouncement[]>([]);
+    const [approvals, setApprovals] = useState<HrApproval[]>([]);
+    const [openings, setOpenings] = useState<HrJobOpening[]>([]);
     const [refreshing, setRefreshing] = useState(false);
-    const [stats, setStats] = useState({ total: 0, active: 0, pending: 0 });
-    const [inviteToken, setInviteToken] = useState<string | null>(null);
-    const [isOwner, setIsOwner] = useState(false);
-    const [pendingCount, setPendingCount] = useState(0);
+    const [loading, setLoading] = useState(true);
 
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
+    const load = useCallback(async () => {
         if (!user) return;
-        setLoading(true);
+        setRefreshing(true);
         try {
-            // Get user's profile and company
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('active_company_id, company_id')
-                .eq('id', user.id)
-                .single();
-
-            const companyId = profile?.active_company_id || profile?.company_id;
-
-            // Check if user is owner
-            const { data: membership } = await supabase
-                .from('memberships')
-                .select('role')
-                .eq('user_id', user.id)
-                .eq('company_id', companyId)
-                .single();
-
-            setIsOwner(membership?.role === 'owner' || membership?.role === 'admin');
-
-            // Get company invite token
-            if (companyId) {
-                const { data: company } = await supabase
-                    .from('companies')
-                    .select('invite_token')
-                    .eq('id', companyId)
-                    .single();
-                setInviteToken(company?.invite_token);
-            }
-
-            // Get employee stats
-            const { data: employees } = await supabase
-                .from('employees')
-                .select('id, status')
-                .eq('company_id', companyId);
-
-            if (employees) {
-                setStats({
-                    total: employees.length,
-                    active: employees.filter(e => e.status === 'active').length,
-                    pending: employees.filter(e => e.status === 'onboarding').length
-                });
-            }
-
-            // Get pending join requests
-            if (membership?.role === 'owner') {
-                const { data: pending } = await supabase
-                    .from('memberships')
-                    .select('id')
-                    .eq('company_id', companyId)
-                    .eq('status', 'pending');
-                setPendingCount(pending?.length || 0);
-            }
-
+            const workspace = await resolveWorkspace(supabase, user.id);
+            const today = new Date();
+            const start = new Date(today);
+            start.setDate(today.getDate() - 6);
+            const date = (value: Date) => value.toISOString().slice(0, 10);
+            const [people, records, requests, news, approvalRows, openingRows] = await Promise.all([
+                listEmployees(supabase, workspace.companyIds),
+                listAttendance(supabase, workspace.companyIds, date(start), date(today)),
+                listLeaveRequests(supabase, workspace.companyIds),
+                listAnnouncements(supabase, workspace.companyId),
+                listHrApprovals(supabase, workspace.companyId),
+                listJobOpenings(supabase, workspace.companyId),
+            ]);
+            setEmployees(people);
+            setAttendance(records);
+            setLeaveRequests(requests);
+            setAnnouncements(news);
+            setApprovals(approvalRows);
+            setOpenings(openingRows);
         } catch (error) {
-            console.error('Error fetching HR data:', error);
+            console.warn('Unable to load HR dashboard', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [user]);
 
-    const generateToken = async () => {
-        if (!user) return;
-        setLoading(true);
-        try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('active_company_id')
-                .eq('id', user.id)
-                .single();
+    useFocusEffect(useCallback(() => { void load(); return undefined; }, [load]));
 
-            if (profile?.active_company_id) {
-                const { data, error } = await supabase.rpc('generate_company_invite_token', {
-                    company_uuid: profile.active_company_id
-                });
-
-                if (error) throw error;
-                setInviteToken(data);
-                Alert.alert('Success', 'New invite token generated!');
-            }
-        } catch (error: any) {
-            Alert.alert('Error', error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const copyToken = async () => {
-        if (inviteToken) {
-            await Clipboard.setStringAsync(inviteToken);
-            Alert.alert('Copied', 'Invite token copied to clipboard. Share this with new employees.');
-        }
-    };
-
-    const renderStatCard = (title: string, value: number, icon: any, color: string) => {
-        const Icon = icon;
-        return (
-            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
-                <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-                    <Icon color={color} size={20} />
-                </View>
-                <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
-                <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
-            </View>
-        );
-    };
-
-    const renderActionCard = (
-        title: string,
-        subtitle: string,
-        icon: any,
-        color: string,
-        onPress: () => void,
-        badge?: number
-    ) => {
-        const Icon = icon;
-        return (
-            <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={onPress}>
-                <View style={[styles.actionIcon, { backgroundColor: `${color}15` }]}>
-                    <Icon color={color} size={22} />
-                </View>
-                <View style={styles.actionInfo}>
-                    <Text style={[styles.actionTitle, { color: textColor }]}>{title}</Text>
-                    <Text style={[styles.actionSubtitle, { color: mutedColor }]}>{subtitle}</Text>
-                </View>
-                {badge !== undefined && badge > 0 && (
-                    <View style={[styles.badge, { backgroundColor: '#ef4444' }]}>
-                        <Text style={styles.badgeText}>{badge}</Text>
-                    </View>
-                )}
-                <ChevronRight color={mutedColor} size={18} />
-            </TouchableOpacity>
-        );
-    };
+    const today = new Date().toISOString().slice(0, 10);
+    const present = attendance.filter((record) => record.date === today && ['present', 'remote', 'late'].includes(record.status)).length;
+    const onLeave = leaveRequests.filter((request) => request.status === 'approved' && request.start_date <= today && request.end_date >= today).length;
+    const pendingApprovals = approvals.filter((approval) => approval.status === 'pending');
+    const upcoming = leaveRequests.filter((request) => request.status === 'approved' && request.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 3);
+    const firstName = user?.user_metadata?.first_name || 'there';
+    const initials = firstName.slice(0, 1).toUpperCase();
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
+        <MobileScreen>
             <View style={styles.header}>
-                <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Human Resources</Text>
-                    <Text style={[styles.title, { color: textColor }]}>HR Dashboard</Text>
-                </View>
-                <View style={styles.headerActions}>
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })} style={[styles.iconButton, { backgroundColor: cardBg }]}>
-                            <Settings color={isDark ? '#fff' : '#1e293b'} size={24} />
-                        </TouchableOpacity>
+                <TouchableOpacity style={styles.profileHeader} onPress={() => navigation.navigate('MoreTab', { screen: 'Profile' })}>
+                    <Avatar label={initials} />
+                    <View style={styles.headerCopy}>
+                        <Text style={[styles.greeting, { color: palette.muted }]}>Good morning, {firstName}</Text>
+                        <Text style={[styles.companyName, { color: palette.text }]}>OperiX HR</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
+                <IconButton label="Notifications" onPress={() => navigation.navigate('MoreTab', { screen: 'Approvals' })}><Bell color={palette.text} size={20} /></IconButton>
             </View>
 
-            <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
-            >
-                {/* Stats Row */}
-                <View style={styles.statsRow}>
-                    {renderStatCard('Total', stats.total, Users, '#6366f1')}
-                    {renderStatCard('Active', stats.active, UserCheck, '#10b981')}
-                    {renderStatCard('Onboarding', stats.pending, Clock, '#f59e0b')}
-                </View>
-
-                {/* Invite Token Card - Owner Only */}
-                {isOwner && (
-                    <Card style={[styles.tokenCard, { backgroundColor: cardBg }]}>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Workspace Invite Token</Text>
-                        <Text style={[styles.hint, { color: mutedColor }]}>
-                            Share this token with employees to invite them to your workspace.
-                        </Text>
-
-                        <View style={styles.tokenRow}>
-                            <View style={[styles.tokenBox, { backgroundColor: isDark ? '#334155' : '#f1f5f9' }]}>
-                                <Text style={[styles.tokenText, { color: textColor }]} numberOfLines={1}>
-                                    {inviteToken || 'No token generated'}
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.tokenBtn, { backgroundColor: primaryColor }]}
-                                onPress={copyToken}
-                                disabled={!inviteToken}
-                            >
-                                <Copy color="#fff" size={18} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.tokenBtn, { backgroundColor: '#10b981' }]}
-                                onPress={generateToken}
-                            >
-                                <RefreshCw color="#fff" size={18} />
-                            </TouchableOpacity>
+            {loading ? <LoadingState label="Opening your workspace" /> : (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} tintColor={brand.colors.primary} />}>
+                    <View style={[styles.overviewCard, { backgroundColor: brand.colors.primary }]}>
+                        <View style={styles.overviewTop}><View><Text style={styles.overviewLabel}>TEAM OVERVIEW</Text><Text style={styles.overviewTitle}>Your people at a glance</Text></View><View style={styles.overviewIcon}><Users color="#fff" size={22} /></View></View>
+                        <View style={styles.overviewStats}>
+                            <OverviewStat label="Employees" value={employees.length} />
+                            <OverviewStat label="Present" value={present} />
+                            <OverviewStat label="On leave" value={onLeave} />
                         </View>
-                    </Card>
-                )}
+                    </View>
 
-                {/* Actions */}
-                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24, marginBottom: 12 }]}>
-                    Quick Actions
-                </Text>
+                    <View style={styles.metricRow}>
+                        <MetricCard label="Open positions" value={openings.filter((opening) => opening.status === 'open').length} />
+                        <MetricCard label="Needs review" value={pendingApprovals.length} tone={pendingApprovals.length ? 'warning' : 'success'} />
+                    </View>
 
-                {renderActionCard(
-                    'Employee Directory',
-                    'View and manage all employees',
-                    Users,
-                    '#6366f1',
-                    () => navigation.navigate('EmployeeDirectory')
-                )}
+                    <SectionTitle title="Quick actions" />
+                    <View style={styles.quickGrid}>
+                        <QuickAction icon={Clock3} label="Clock in" onPress={() => navigation.navigate('Attendance')} palette={palette} />
+                        <QuickAction icon={CalendarDays} label="Request leave" onPress={() => navigation.navigate('Leave')} palette={palette} />
+                        <QuickAction icon={Users} label="Employees" onPress={() => navigation.navigate('EmployeesTab', { screen: 'EmployeeDirectory' })} palette={palette} />
+                        <QuickAction icon={FileText} label="Payslips" onPress={() => navigation.navigate('MoreTab', { screen: 'Payroll' })} palette={palette} />
+                    </View>
 
-                {isOwner && renderActionCard(
-                    'Add New Employee',
-                    'Create employee profile',
-                    UserPlus,
-                    '#10b981',
-                    () => navigation.navigate('EmployeeForm')
-                )}
+                    <SectionTitle title="Approvals" action="Open inbox" onPress={() => navigation.navigate('MoreTab', { screen: 'Approvals' })} />
+                    {pendingApprovals.length ? pendingApprovals.slice(0, 3).map((approval) => <ShortcutRow key={approval.id} icon={Clock3} title={approval.resource_type.replace(/_/g, ' ')} description="Needs manager review" onPress={() => navigation.navigate('MoreTab', { screen: 'Approvals' })} trailing={<ArrowRight color={palette.muted} size={18} />} />) : <EmptyState title="Nothing needs your attention" description="Pending requests will appear here." icon={Activity} />}
 
-                {isOwner && renderActionCard(
-                    'Join Requests',
-                    'Review pending requests',
-                    ClipboardList,
-                    '#f59e0b',
-                    () => navigation.navigate('JoinRequests'),
-                    pendingCount
-                )}
+                    <SectionTitle title="Upcoming leave" action="View all" onPress={() => navigation.navigate('Leave')} />
+                    {upcoming.length ? upcoming.map((request) => <ShortcutRow key={request.id} icon={CalendarDays} title={request.employee ? `${request.employee.first_name} ${request.employee.last_name}` : 'Employee'} description={`${request.leave_type} · ${request.start_date}`} onPress={() => navigation.navigate('Leave')} trailing={<Text style={[styles.days, { color: palette.muted }]}>{request.requested_days || '—'}d</Text>} />) : <EmptyState title="No upcoming leave" description="Approved leave will appear here." icon={CalendarDays} />}
 
-                {renderActionCard(
-                    'Employee Contracts',
-                    'Manage employment contracts',
-                    FileText,
-                    '#8b5cf6',
-                    () => navigation.navigate('EmployeeVault')
-                )}
-
-                {/* Time Management Section */}
-                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24, marginBottom: 12 }]}>
-                    Koha & Prezenca
-                </Text>
-
-                {renderActionCard(
-                    'Prezenca',
-                    'Mbikëqyr prezencën e punëtorëve',
-                    Clock,
-                    '#0891b2',
-                    () => navigation.navigate('Attendance')
-                )}
-
-                {renderActionCard(
-                    'Kërkesa për leje',
-                    'Kërko dhe menaxho pushime',
-                    CalendarCheck,
-                    '#10b981',
-                    () => navigation.navigate('LeaveRequests')
-                )}
-
-                {renderActionCard(
-                    'Orari i turneve',
-                    'Planifiko oraret e punës',
-                    Calendar,
-                    '#f59e0b',
-                    () => navigation.navigate('Schedule')
-                )}
-
-                {/* Finance Section */}
-                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24, marginBottom: 12 }]}>
-                    Financa & Pagat
-                </Text>
-
-                {renderActionCard(
-                    'Pagat',
-                    'Menaxho listëpagesa dhe bonuse',
-                    DollarSign,
-                    '#6366f1',
-                    () => navigation.navigate('Payroll')
-                )}
-
-                {renderActionCard(
-                    'Komplianca',
-                    'Dokumentet ligjore dhe raportet',
-                    ShieldCheck,
-                    '#ec4899',
-                    () => navigation.navigate('Compliance')
-                )}
-
-                <View style={{ height: 40 }} />
-            </ScrollView>
-        </View>
+                    <SectionTitle title="Announcements" action={announcements.length ? 'View all' : undefined} onPress={() => navigation.navigate('MoreTab', { screen: 'Settings' })} />
+                    {announcements.length ? announcements.slice(0, 3).map((announcement) => <ShortcutRow key={announcement.id} icon={Bell} title={announcement.title} description={announcement.body} onPress={() => navigation.navigate('MoreTab', { screen: 'Settings' })} />) : <EmptyState title="No announcements yet" description="Company updates will appear here." icon={Bell} />}
+                    <View style={{ height: 92 }} />
+                </ScrollView>
+            )}
+        </MobileScreen>
     );
 }
 
+function OverviewStat({ label, value }: { label: string; value: number }) {
+    return <View style={styles.overviewStat}><Text style={styles.overviewValue}>{value}</Text><Text style={styles.overviewStatLabel}>{label}</Text></View>;
+}
+
+function QuickAction({ icon: Icon, label, onPress, palette }: { icon: React.ComponentType<{ color?: string; size?: number }>; label: string; onPress: () => void; palette: ReturnType<typeof getPalette> }) {
+    return <TouchableOpacity style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]} onPress={onPress}><View style={[styles.quickIcon, { backgroundColor: palette.iconSurface }]}><Icon color={brand.colors.primary} size={20} /></View><Text style={[styles.quickLabel, { color: palette.text }]}>{label}</Text><ArrowRight color={palette.muted} size={15} /></TouchableOpacity>;
+}
+
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
-    headerActions: { flexDirection: 'row', alignItems: 'center' },
-    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
-    title: { fontSize: 28, fontWeight: '800' },
-    scroll: { flex: 1 },
-    scrollContent: { padding: 16 },
-    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-    statCard: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 16,
-        alignItems: 'center',
-        gap: 8
-    },
-    statIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    statValue: { fontSize: 24, fontWeight: 'bold' },
-    statLabel: { fontSize: 12 },
-    tokenCard: { padding: 16, borderRadius: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-    hint: { fontSize: 13, marginBottom: 12 },
-    tokenRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    tokenBox: { flex: 1, padding: 12, borderRadius: 10 },
-    tokenText: { fontSize: 13, fontFamily: 'monospace' },
-    tokenBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    actionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 14,
-        marginBottom: 10,
-        gap: 14
-    },
-    actionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    actionInfo: { flex: 1 },
-    actionTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
-    actionSubtitle: { fontSize: 13 },
-    badge: {
-        minWidth: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 6
-    },
-    badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+    header: { minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 7, paddingBottom: 12 },
+    profileHeader: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+    headerCopy: { flex: 1, marginLeft: 10 },
+    greeting: { fontSize: 11, fontFamily: brand.fonts.medium },
+    companyName: { fontSize: 15, fontFamily: brand.fonts.semibold, marginTop: 3 },
+    content: { paddingHorizontal: 20, paddingBottom: 20 },
+    overviewCard: { borderRadius: 20, padding: 19, marginBottom: 12, ...brand.shadow.floating },
+    overviewTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    overviewLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: brand.fonts.medium, letterSpacing: 1.1 },
+    overviewTitle: { color: '#fff', fontSize: 20, lineHeight: 27, fontFamily: brand.fonts.semibold, marginTop: 5 },
+    overviewIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+    overviewStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 21, paddingTop: 13, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.18)' },
+    overviewStat: { flex: 1 },
+    overviewValue: { color: '#fff', fontSize: 22, fontFamily: brand.fonts.semibold },
+    overviewStatLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: brand.fonts.medium, marginTop: 2 },
+    metricRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 23 },
+    quickAction: { width: '48.5%', minHeight: 72, borderRadius: 16, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 9 },
+    quickIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    quickLabel: { flex: 1, fontSize: 13, fontFamily: brand.fonts.semibold },
+    days: { fontSize: 12, fontFamily: brand.fonts.medium },
 });
-
-
-
-
-

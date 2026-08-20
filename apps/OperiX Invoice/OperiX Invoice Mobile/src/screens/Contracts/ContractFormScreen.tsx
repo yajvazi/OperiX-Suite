@@ -17,20 +17,23 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { Button, Input, Card, SignaturePadModal } from '@invoice-monorepo/ui';
 import { Client } from '@invoice-monorepo/types';
 import { SvgXml } from 'react-native-svg';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import type { ContractTemplate } from '@invoice-monorepo/types';
+import { formatContractNumber, renderBlocks } from '../../services/contracts/contractBuilder';
 
 interface ContractFormScreenProps {
     navigation: any;
     route: any;
 }
 
-const CONTRACT_TYPES = [
-    { id: 'service_agreement', label: 'Service Agreement', description: 'Standard contract for services provided.' },
-    { id: 'nda', label: 'Non-Disclosure Agreement', description: 'Protect confidential information.' },
-];
-
 export function ContractFormScreen({ navigation, route }: ContractFormScreenProps) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
+    const contractTypes = [
+        { id: 'service_agreement', label: t('serviceAgreement', language), description: t('serviceAgreementDescription', language) },
+        { id: 'nda', label: t('nda', language), description: t('ndaDescription', language) },
+    ];
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
 
@@ -39,6 +42,8 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     const [title, setTitle] = useState('');
     const [clientId, setClientId] = useState<string | null>(null);
     const [clients, setClients] = useState<Client[]>([]);
+    const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
     const [answers, setAnswers] = useState<Record<string, string>>({});
 
     // Signatures
@@ -54,55 +59,145 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     const mutedColor = isDark ? '#98A2B3' : '#667085';
 
     useEffect(() => {
-        fetchClients();
-        const subtype = route.params?.subtype;
-        if (subtype) {
-            const foundType = CONTRACT_TYPES.find(t => t.id === subtype || (subtype === 'employment' && t.id === 'employment') || (subtype === 'collaboration' && t.id === 'service_agreement'));
-            if (foundType) {
-                setType(foundType.id);
-                setTitle(`${foundType.label} - ${new Date().toLocaleDateString()}`);
-                setStep(1);
-            } else if (subtype === 'employment' || subtype === 'collaboration' || subtype === 'nda') {
-                // Map or add if missing
-                const label = subtype === 'employment' ? 'Employment Contract' : subtype === 'collaboration' ? 'Collaboration Contract' : 'NDA';
-                const id = subtype === 'nda' ? 'nda' : subtype === 'employment' ? 'employment' : 'service_agreement';
-                setType(id);
-                setTitle(`${label} - ${new Date().toLocaleDateString()}`);
-                setStep(1);
-            }
-        }
-    }, [route.params?.subtype]);
+        let cancelled = false;
 
-    const fetchClients = async () => {
-        if (!user) return;
-        const { data } = await supabase.from('clients').select('*').eq('user_id', user.id);
-        if (data) setClients(data);
-    };
+        const loadFormData = async () => {
+            const subtype = route?.params?.subtype;
+            if (subtype) {
+                const foundType = contractTypes.find(t => t.id === subtype || (subtype === 'employment' && t.id === 'employment') || (subtype === 'collaboration' && t.id === 'service_agreement'));
+                if (foundType) {
+                    setType(foundType.id);
+                    setTitle(`${foundType.label} - ${formatDate(new Date().toISOString(), language)}`);
+                    setStep(1);
+                } else if (subtype === 'employment' || subtype === 'collaboration' || subtype === 'nda') {
+                    const label = subtype === 'employment' ? t('employmentContract', language) : subtype === 'collaboration' ? t('collaborationContract', language) : t('nda', language);
+                    const id = subtype === 'nda' ? 'nda' : subtype === 'employment' ? 'employment' : 'service_agreement';
+                    setType(id);
+                    setTitle(`${label} - ${formatDate(new Date().toISOString(), language)}`);
+                    setStep(1);
+                }
+            }
+
+            if (!user) return;
+
+            try {
+                let companyIds: string[] = [];
+                try {
+                    const workspace = await getWorkspaceScope(user.id);
+                    companyIds = workspace.companyIds;
+                } catch (workspaceError) {
+                    // Older accounts can exist without an active company. Keep the
+                    // user-owned contract flow usable while the workspace is repaired.
+                    console.warn('Contract workspace scope unavailable:', workspaceError);
+                }
+
+                const clientsQuery = companyIds.length
+                    ? supabase.from('clients').select('*').or(scopedResource(user.id, companyIds))
+                    : supabase.from('clients').select('*').eq('user_id', user.id);
+                const templatesQuery = companyIds.length
+                    ? supabase.from('contract_templates').select('*').or(scopedResource(user.id, companyIds)).order('updated_at', { ascending: false })
+                    : supabase.from('contract_templates').select('*').eq('user_id', user.id).order('updated_at', { ascending: false });
+
+                const [clientsResult, templatesResult] = await Promise.all([clientsQuery, templatesQuery]);
+                if (cancelled) return;
+                if (clientsResult.error) throw clientsResult.error;
+                if (clientsResult.data) setClients(clientsResult.data);
+                if (templatesResult.error) {
+                    // Templates are optional: built-in contract types remain available
+                    // even if the builder migration is not deployed yet.
+                    console.warn('Contract templates could not be loaded:', templatesResult.error);
+                } else if (templatesResult.data) {
+                    setTemplates(templatesResult.data as ContractTemplate[]);
+                }
+            } catch (error) {
+                if (!cancelled) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
+            }
+        };
+
+        void loadFormData();
+        return () => { cancelled = true; };
+    }, [user?.id, route?.params?.subtype, language]);
 
     const handleSave = async () => {
         if (!title || !clientId || !type) {
-            Alert.alert('Error', 'Please complete all required fields');
+            Alert.alert(t('error', language), t('requiredFields', language));
             return;
         }
 
         setLoading(true);
         try {
-            const { error } = await supabase.from('contracts').insert({
-                user_id: user?.id,
+            if (!user) throw new Error(t('signInCreateContract', language));
+            let companyId: string | null = null;
+            try {
+                companyId = (await getWorkspaceScope(user.id)).companyId;
+            } catch (workspaceError) {
+                console.warn('Contract workspace scope unavailable while saving:', workspaceError);
+            }
+            const requiredFields = (selectedTemplate?.fields || []).filter((field) => field.required && !String(answers[field.key || field.id] || '').trim());
+            if (requiredFields.length) {
+                Alert.alert(t('error', language), `${t('requiredFields', language)}: ${requiredFields.map((field) => field.label).join(', ')}`);
+                return;
+            }
+            const selectedClient = clients.find((client) => client.id === clientId);
+            const templateVariables = {
+                ...Object.fromEntries(Object.entries(answers).map(([key, value]) => [`custom.${key}`, value])),
+                'customer.name': selectedClient?.name,
+                'customer.email': selectedClient?.email,
+                'contract.title': title,
+            };
+            const numbering = selectedTemplate?.numbering || {};
+            const prefix = String(numbering.prefix || 'CTR');
+            const safePrefix = prefix.replace(/[^A-Za-z0-9_-]/g, '') || 'CTR';
+            const year = new Date().getFullYear();
+            const manualNumber = String(numbering.manual || numbering.manualNumber || numbering.manual_number || '').trim();
+            let number = manualNumber || undefined;
+            if (selectedTemplate && !number) {
+                if (companyId) {
+                    const { data: reservedNumber, error: numberingError } = await supabase.rpc('reserve_contract_number', {
+                        p_company_id: companyId,
+                        p_prefix: safePrefix,
+                        p_year: year,
+                        p_manual_number: null,
+                    });
+                    if (!numberingError && reservedNumber) number = String(reservedNumber);
+                }
+                if (!number && companyId) {
+                    const { data: existingNumbers } = await supabase
+                        .from('contracts')
+                        .select('contract_number')
+                        .eq('company_id', companyId)
+                        .like('contract_number', `${safePrefix}-${year}-%`);
+                    const nextSequence = (existingNumbers || []).reduce((highest, row) => {
+                        const match = String(row.contract_number || '').match(/-(\d+)$/);
+                        return Math.max(highest, match ? Number(match[1]) : 0);
+                    }, 0) + 1;
+                    number = formatContractNumber(safePrefix, year, nextSequence, Number(numbering.padding) || 4);
+                }
+                if (!number) number = formatContractNumber(safePrefix, year, 1, Number(numbering.padding) || 4);
+            }
+            if (number) templateVariables['contract.number'] = number;
+            const rendered = selectedTemplate?.blocks?.length ? renderBlocks(selectedTemplate.blocks, templateVariables) : { html: '', missing: [] };
+            const { data: created, error } = await supabase.from('contracts').insert({
+                user_id: user.id,
+                company_id: companyId,
+                template_id: selectedTemplate?.id || null,
+                contract_number: number,
                 client_id: clientId,
                 title,
                 type,
                 content: answers,
+                variables: templateVariables,
+                html_body: rendered.html || null,
                 status: signature && counterpartySignature ? 'signed' : 'draft',
                 signature_url: signature,
                 counterparty_signature_url: counterpartySignature,
-            });
+            }).select('id').single();
 
             if (error) throw error;
-            Alert.alert('Success', 'Contract created successfully!');
-            navigation.navigate('InvoicesList', { tab: 'contract' });
+            if (created?.id && companyId) await supabase.from('contract_events').insert({ company_id: companyId, contract_id: created.id, actor_id: user.id, event_type: 'contract_created', metadata: { template_id: selectedTemplate?.id || null } });
+            Alert.alert(t('success', language), t('contractCreated', language), [{ text: t('done', language), onPress: () => created?.id ? navigation.navigate('ContractDetail', { contractId: created.id }) : navigation.navigate('InvoicesList', { tab: 'contract' }) }]);
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
         } finally {
             setLoading(false);
         }
@@ -147,7 +242,7 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                     onPress={onSign}
                 >
                     <PenTool color={primaryColor} size={24} />
-                    <Text style={{ color: primaryColor, marginTop: 8, fontWeight: '600' }}>Tap to Sign</Text>
+                    <Text style={{ color: primaryColor, marginTop: 8, fontWeight: '600' }}>{t('tapToSign', language)}</Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -155,14 +250,15 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
 
     const renderTypeSelection = () => (
         <View>
-            <Text style={[styles.stepTitle, { color: textColor }]}>Select Contract Type</Text>
-            {CONTRACT_TYPES.map(t => (
+            <Text style={[styles.stepTitle, { color: textColor }]}>{t('selectContractType', language)}</Text>
+            {templates.length ? <><Text style={[styles.stepSubtitle, { color: mutedColor }]}>{t('contractTemplates', language)}</Text>{templates.map(template => <TouchableOpacity key={template.id} style={[styles.typeCard, { backgroundColor: cardBg }, selectedTemplate?.id === template.id && { borderColor: primaryColor, borderWidth: 2 }]} onPress={() => { setSelectedTemplate(template); setTitle(template.name); setType(template.category || 'service_agreement'); setAnswers(Object.fromEntries((template.fields || []).map(field => [field.key || field.id, field.defaultValue || '']))); setStep(1); }}><View style={styles.iconCircle}><FileText color={primaryColor} size={24} /></View><View style={{ flex: 1 }}><Text style={[styles.typeTitle, { color: textColor }]}>{template.name}</Text><Text style={[styles.typeDesc, { color: '#98A2B3' }]}>{template.description || t('contractBuilder', language)}</Text></View><ChevronRight color="#98A2B3" size={20} /></TouchableOpacity>)}</> : null}
+            {contractTypes.map(contractType => (
                 <TouchableOpacity
-                    key={t.id}
-                    style={[styles.typeCard, { backgroundColor: cardBg }, type === t.id && { borderColor: primaryColor, borderWidth: 2 }]}
+                    key={contractType.id}
+                    style={[styles.typeCard, { backgroundColor: cardBg }, type === contractType.id && { borderColor: primaryColor, borderWidth: 2 }]}
                     onPress={() => {
-                        setType(t.id);
-                        setTitle(`${t.label} - ${new Date().toLocaleDateString()}`);
+                        setType(contractType.id);
+                        setTitle(`${contractType.label} - ${new Date().toLocaleDateString(language === 'sq' ? 'sq-XK' : 'en-US')}`);
                         setStep(1);
                     }}
                 >
@@ -170,8 +266,8 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                         <FileText color={primaryColor} size={24} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.typeTitle, { color: textColor }]}>{t.label}</Text>
-                        <Text style={[styles.typeDesc, { color: '#98A2B3' }]}>{t.description}</Text>
+                        <Text style={[styles.typeTitle, { color: textColor }]}>{contractType.label}</Text>
+                        <Text style={[styles.typeDesc, { color: '#98A2B3' }]}>{contractType.description}</Text>
                     </View>
                     <ChevronRight color="#98A2B3" size={20} />
                 </TouchableOpacity>
@@ -181,18 +277,18 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
 
     const renderBasicInfo = () => (
         <View>
-            <Text style={[styles.stepTitle, { color: textColor }]}>Basic Information</Text>
+            <Text style={[styles.stepTitle, { color: textColor }]}>{t('basicInformation', language)}</Text>
 
             <View style={[styles.section, { backgroundColor: cardBg }]}>
                 <Input
-                    label="Contract Title"
+                    label={t('contractTitle', language)}
                     value={title}
                     onChangeText={setTitle}
-                    placeholder="e.g. Web Development Agreement"
+                    placeholder={t('contractTitlePlaceholder', language)}
                 />
 
-                <Text style={[styles.label, { color: textColor, marginTop: 16 }]}>Select Client</Text>
-                <ScrollView style={{ maxHeight: 200, marginTop: 8 }}>
+                <Text style={[styles.label, { color: textColor, marginTop: 16 }]}>{t('selectClient', language)}</Text>
+                <ScrollView style={{ maxHeight: 200, marginTop: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                     {clients.map(c => (
                         <TouchableOpacity
                             key={c.id}
@@ -209,15 +305,15 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                         </TouchableOpacity>
                     ))}
                     {clients.length === 0 && (
-                        <Text style={{ color: '#98A2B3', padding: 8 }}>No clients found. Add one in the Clients tab first.</Text>
+                        <Text style={{ color: '#98A2B3', padding: 8 }}>{t('noClientsAddFirst', language)}</Text>
                     )}
                 </ScrollView>
             </View>
 
             <Button
-                title="Next: Contract Details"
+                title={t('nextContractDetails', language)}
                 onPress={() => {
-                    if (!clientId) { Alert.alert('Required', 'Please select a client'); return; }
+                    if (!clientId) { Alert.alert(t('required', language), t('requiredSelectClient', language)); return; }
                     setStep(2);
                 }}
                 style={{ marginTop: 24 }}
@@ -227,52 +323,53 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
 
     const renderQuestions = () => (
         <View>
-            <Text style={[styles.stepTitle, { color: textColor }]}>Contract Details</Text>
+            <Text style={[styles.stepTitle, { color: textColor }]}>{t('contractDetails', language)}</Text>
             <Card style={{ backgroundColor: cardBg, padding: 16 }}>
-                {type === 'service_agreement' ? (
+                {selectedTemplate?.fields?.length ? selectedTemplate.fields.map(field => <Input key={field.id} label={field.label} placeholder={field.placeholder} value={answers[field.key || field.id] || ''} onChangeText={value => setAnswers({ ...answers, [field.key || field.id]: value })} multiline={field.type === 'textarea'} keyboardType={field.type === 'number' || field.type === 'currency' || field.type === 'percentage' ? 'decimal-pad' : field.type === 'phone' ? 'phone-pad' : field.type === 'email' ? 'email-address' : 'default'} />) : null}
+                {!selectedTemplate && type === 'service_agreement' ? (
                     <>
                         <Input
-                            label="Scope of Services"
-                            placeholder="Describe what services will be provided..."
+                            label={t('scopeOfServices', language)}
+                            placeholder={t('scopeOfServicesPlaceholder', language)}
                             value={answers.scope}
                             onChangeText={t => setAnswers({ ...answers, scope: t })}
                             multiline
                             numberOfLines={4}
                         />
                         <Input
-                            label="Payment Terms"
-                            placeholder="e.g. 50% upfront, 50% upon completion"
+                            label={t('paymentTerms', language)}
+                            placeholder={t('paymentTermsPlaceholder', language)}
                             value={answers.paymentTerms}
                             onChangeText={t => setAnswers({ ...answers, paymentTerms: t })}
                         />
                         <Input
-                            label="Timeline / Duration"
-                            placeholder="e.g. 2 weeks, or starting from Jan 1st"
+                            label={t('timelineDuration', language)}
+                            placeholder={t('timelinePlaceholder', language)}
                             value={answers.timeline}
                             onChangeText={t => setAnswers({ ...answers, timeline: t })}
                         />
                     </>
-                ) : (
+                ) : !selectedTemplate ? (
                     <>
                         <Input
-                            label="Confidential Information Description"
-                            placeholder="What information is considered confidential?"
+                            label={t('confidentialInfoDescription', language)}
+                            placeholder={t('confidentialInfoPlaceholder', language)}
                             value={answers.confidentialInfo}
                             onChangeText={t => setAnswers({ ...answers, confidentialInfo: t })}
                             multiline
                         />
                         <Input
-                            label="Duration of Confidentiality"
-                            placeholder="e.g. 2 years, Indefinite"
+                            label={t('durationConfidentiality', language)}
+                            placeholder={t('durationConfidentialityPlaceholder', language)}
                             value={answers.duration}
                             onChangeText={t => setAnswers({ ...answers, duration: t })}
                         />
                     </>
-                )}
+                ) : null}
             </Card>
 
             <Button
-                title="Next: Signatures"
+                title={t('nextSignatures', language)}
                 onPress={() => setStep(3)}
                 style={{ marginTop: 24 }}
             />
@@ -281,14 +378,14 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
 
     const renderSignatures = () => (
         <View>
-            <Text style={[styles.stepTitle, { color: textColor }]}>Signatures</Text>
+            <Text style={[styles.stepTitle, { color: textColor }]}>{t('signatures', language)}</Text>
             <Text style={[styles.stepSubtitle, { color: mutedColor }]}>
-                Both parties must sign to finalize the contract.
+                {t('bothPartiesSign', language)}
             </Text>
 
             <Card style={{ backgroundColor: cardBg, padding: 16 }}>
                 {renderSignatureBox(
-                    'Your Signature (Provider)',
+                    t('providerSignature', language),
                     signature,
                     () => openSignaturePad('user'),
                     () => setSignature(null)
@@ -297,7 +394,7 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                 <View style={styles.divider} />
 
                 {renderSignatureBox(
-                    'Client Signature (Counterparty)',
+                    t('clientSignatureCounterparty', language),
                     counterpartySignature,
                     () => openSignaturePad('counterparty'),
                     () => setCounterpartySignature(null)
@@ -307,18 +404,18 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
             <View style={styles.signatureStatus}>
                 <View style={[styles.statusBadge, { backgroundColor: signature ? '#12B76A20' : '#ef444420' }]}>
                     <Text style={{ color: signature ? '#12B76A' : '#ef4444', fontSize: 12, fontWeight: '600' }}>
-                        {signature ? '✓ Provider Signed' : '○ Awaiting Provider'}
+                        {signature ? t('providerSigned', language) : t('awaitingProvider', language)}
                     </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: counterpartySignature ? '#12B76A20' : '#ef444420' }]}>
                     <Text style={{ color: counterpartySignature ? '#12B76A' : '#ef4444', fontSize: 12, fontWeight: '600' }}>
-                        {counterpartySignature ? '✓ Client Signed' : '○ Awaiting Client'}
+                        {counterpartySignature ? t('clientSigned', language) : t('awaitingClient', language)}
                     </Text>
                 </View>
             </View>
 
             <Button
-                title={signature && counterpartySignature ? 'Finalize Contract' : 'Save as Draft'}
+                title={signature && counterpartySignature ? t('finalizeContract', language) : t('saveAsDraft', language)}
                 onPress={handleSave}
                 loading={loading}
                 style={{ marginTop: 24 }}
@@ -327,18 +424,18 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     );
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0} style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => step > 0 ? setStep(step - 1) : navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <Text style={[styles.title, { color: textColor }]}>
-                    {step === 0 ? 'New Contract' : step === 1 ? 'Setup' : step === 2 ? 'Details' : 'Sign'}
+                    {step === 0 ? t('newContract', language) : step === 1 ? t('setup', language) : step === 2 ? t('details', language) : t('sign', language)}
                 </Text>
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
                 {step === 0 && renderTypeSelection()}
                 {step === 1 && renderBasicInfo()}
                 {step === 2 && renderQuestions()}
@@ -380,8 +477,3 @@ const styles = StyleSheet.create({
     signatureStatus: { flexDirection: 'row', gap: 12, marginTop: 16 },
     statusBadge: { flex: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },
 });
-
-
-
-
-

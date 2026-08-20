@@ -24,6 +24,9 @@ export interface PayrollRuleConfiguration {
   roundingMode: PayrollRoundingMode;
   employeePensionRatePercent: string;
   employerPensionRatePercent: string;
+  /** Kosovo primary/secondary-employer treatment is effective-dated in the DB. */
+  taxpayerType?: "primary" | "secondary";
+  secondaryTaxRatePercent?: string;
   minimumPensionBase?: string | null;
   maximumPensionBase?: string | null;
   taxBrackets: readonly PayrollTaxBracket[];
@@ -146,6 +149,13 @@ function progressiveTax(
   config: PayrollRuleConfiguration,
 ) {
   if (taxableIncome <= ZERO) return ZERO;
+  if (config.taxpayerType === "secondary") {
+    return applyPercent(
+      taxableIncome,
+      config.secondaryTaxRatePercent ?? "10",
+      config.roundingMode,
+    );
+  }
   const scale = config.scale;
   let total = ZERO;
   const brackets = [...config.taxBrackets].sort(

@@ -10,7 +10,11 @@ services:
     environment:
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      SUPABASE_INTERNAL_URL: http://supabase_kong_OperiX:8000
       CHROME_EXECUTABLE_PATH: /usr/bin/chromium
+    networks:
+      - default
+      - supabase
     ports:
       - "3006:3000"
     healthcheck:
@@ -19,3 +23,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+networks:
+  supabase:
+    external: true
+    name: supabase_network_OperiX

@@ -118,6 +118,8 @@ export async function POST(request: Request) {
       roundingMode: config.rounding_mode as "half-up" | "half-even" | "truncate",
       employeePensionRatePercent: String(pensionProfile.employee_rate_override ?? pensionRule.employee_rate_percent),
       employerPensionRatePercent: String(pensionProfile.employer_rate_override ?? pensionRule.employer_rate_percent),
+      taxpayerType: String(taxProfile.tax_status || "primary").toLowerCase() === "secondary" ? "secondary" : "primary",
+      secondaryTaxRatePercent: "10",
       minimumPensionBase: pensionRule.minimum_contribution_base ? String(pensionRule.minimum_contribution_base) : null,
       maximumPensionBase: pensionRule.maximum_contribution_base ? String(pensionRule.maximum_contribution_base) : null,
       taxBrackets: (bracketsResult.data || []).map((bracket) => ({

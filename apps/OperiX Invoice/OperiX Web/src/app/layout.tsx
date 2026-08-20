@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins } from "next/font/google";
+import { Inter } from "next/font/google";
 import { PwaRegister } from "@/components/pwa-register";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const poppins = Poppins({
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
@@ -29,10 +30,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${poppins.variable} antialiased`}>
-        {children}
-        <PwaRegister />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} antialiased`}>
+        <ThemeProvider>
+          {children}
+          <PwaRegister />
+        </ThemeProvider>
       </body>
     </html>
   );

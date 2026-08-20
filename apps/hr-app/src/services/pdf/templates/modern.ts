@@ -10,7 +10,7 @@ export function modernTemplate(data: InvoiceData): string {
     showLogo: true,
     showSignature: true,
     showStamp: true,
-    visibleColumns: { sku: false, unit: true, tax: false, quantity: true, price: true },
+    visibleColumns: { rowNumber: false, sku: false, description: true, quantity: true, unit: true, unitPrice: true, discount: false, taxRate: false, lineTotal: true, grossPrice: false },
     labels: {},
     pageSize: 'A4'
   };
@@ -37,7 +37,7 @@ export function modernTemplate(data: InvoiceData): string {
       <tr>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">${item.description}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: center;">${item.quantity} ${config.visibleColumns.unit ? (item.unit || '') : ''}</td>
-        ${config.visibleColumns.price ? `<td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
+        ${config.visibleColumns.unitPrice ? `<td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
         <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 600;">${formatCurrency(item.total)}</td>
       </tr>
     `
@@ -87,7 +87,7 @@ export function modernTemplate(data: InvoiceData): string {
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     th { background: ${isGrayscale ? '#1e293b' : primaryColor}; color: white; padding: 10px 12px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
     th:nth-child(2) { text-align: center; }
-    ${config.visibleColumns.price ? 'th:nth-child(3), th:nth-child(4) { text-align: right; }' : 'th:nth-child(3) { text-align: right; }'}
+    ${config.visibleColumns.unitPrice ? 'th:nth-child(3), th:nth-child(4) { text-align: right; }' : 'th:nth-child(3) { text-align: right; }'}
     td { font-size: ${isA5 ? '9px' : '10px'}; }
     tbody tr:nth-child(even) { background: #f8fafc; }
     .summary-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
@@ -160,7 +160,7 @@ export function modernTemplate(data: InvoiceData): string {
         <tr>
           <th>${getLabel('item', t.description)}</th>
           <th style="text-align: center;">${getLabel('quantity', t.qty)}</th>
-          ${config.visibleColumns.price ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
+          ${config.visibleColumns.unitPrice ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
           <th style="text-align: right;">${getLabel('total', t.total)}</th>
         </tr>
       </thead>
@@ -249,7 +249,6 @@ export function modernTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
 
 
 

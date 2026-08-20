@@ -1,4 +1,4 @@
-import { InvoiceData } from '@invoice-monorepo/types';
+import { InvoiceData, TemplateConfig } from '@invoice-monorepo/types';
 import { pdfTranslations } from '../translations';
 
 export function kosovoTemplate(data: InvoiceData): string {
@@ -6,13 +6,20 @@ export function kosovoTemplate(data: InvoiceData): string {
     const isGrayscale = data.company.isGrayscale;
     const lang = data.details.language || 'sq';
     const t = pdfTranslations[lang] || pdfTranslations.sq;
-    const config = data.config || {
-        showLogo: true,
-        showSignature: true,
-        showStamp: true,
-        visibleColumns: { sku: true, unit: true, tax: true, quantity: true, price: true },
-        labels: {},
-        pageSize: 'A4'
+    const config: TemplateConfig = {
+        ...data.config,
+        showLogo: data.config?.showLogo ?? true,
+        showSignature: data.config?.showSignature ?? true,
+        showBuyerSignature: data.config?.showBuyerSignature ?? true,
+        showStamp: data.config?.showStamp ?? true,
+        showQrCode: data.config?.showQrCode ?? true,
+        showNotes: data.config?.showNotes ?? true,
+        showDiscount: data.config?.showDiscount ?? true,
+        showTax: data.config?.showTax ?? true,
+        showBankDetails: data.config?.showBankDetails ?? true,
+        visibleColumns: { rowNumber: true, sku: true, description: true, quantity: true, unit: true, discount: true, unitPrice: true, taxRate: true, lineTotal: true, grossPrice: true, ...(data.config?.visibleColumns || {}) },
+        labels: data.config?.labels || {},
+        pageSize: data.config?.pageSize || 'A4',
     };
 
     const pageSize = config.pageSize || 'A4';
@@ -56,7 +63,7 @@ export function kosovoTemplate(data: InvoiceData): string {
         ${config.visibleColumns.unit ? `<td class="cell center">${item.unit || 'CP'}</td>` : ''}
         <td class="cell right">${formatNumber(item.price)}</td>
         <td class="cell center">${formatNumber(item.discount || 0)}</td>
-        ${config.visibleColumns.tax ? `<td class="cell center">${item.taxRate || 18}.00</td>` : ''}
+        ${config.visibleColumns.taxRate ? `<td class="cell center">${item.taxRate || 18}.00</td>` : ''}
         <td class="cell right">${formatNumber(priceWithDiscount)}</td>
         <td class="cell right">${formatNumber(priceWithVat)}</td>
         <td class="cell right">${formatNumber(totalValue)}</td>
@@ -397,7 +404,7 @@ export function kosovoTemplate(data: InvoiceData): string {
   <!-- Document Details Row -->
   <div class="doc-details">
     <div class="doc-detail-cell">
-      <div class="doc-detail-label">Njësia Org.</div>
+      <div class="doc-detail-label">${config.labels?.department || 'Branch'}</div>
       <div class="doc-detail-value">${data.details.department || 'DEPO KRYESORE'}</div>
     </div>
     <div class="doc-detail-cell">
@@ -409,11 +416,11 @@ export function kosovoTemplate(data: InvoiceData): string {
       <div class="doc-detail-value">${data.details.dueDate || ''}</div>
     </div>
     <div class="doc-detail-cell">
-      <div class="doc-detail-label">Referenca</div>
-      <div class="doc-detail-value">${data.details.reference || ''}</div>
+      <div class="doc-detail-label">${config.labels?.reference || 'Agent'}</div>
+      <div class="doc-detail-value">${data.details.agent || data.details.reference || ''}</div>
     </div>
     <div class="doc-detail-cell">
-      <div class="doc-detail-label">Referenti i juaj</div>
+      <div class="doc-detail-label">${config.labels?.yourReference || 'Payment Type'}</div>
       <div class="doc-detail-value">${data.details.yourReference || ''}</div>
     </div>
     <div class="doc-detail-cell">
@@ -433,7 +440,7 @@ export function kosovoTemplate(data: InvoiceData): string {
         ${config.visibleColumns.unit ? '<th style="width: 35px;">Njësia</th>' : ''}
         <th style="width: 55px;">Çmimi pa<br>Tvsh</th>
         <th style="width: 40px;">Rabati<br>(%)</th>
-        ${config.visibleColumns.tax ? '<th style="width: 40px;">Tvsh %</th>' : ''}
+        ${config.visibleColumns.taxRate ? '<th style="width: 40px;">Tvsh %</th>' : ''}
         <th style="width: 55px;">Çmimi me<br>rabat</th>
         <th style="width: 55px;">Çmimi<br>shitës</th>
         <th style="width: 65px;">Vlera shitëse</th>
@@ -524,8 +531,3 @@ export function kosovoTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
-
-
-
-

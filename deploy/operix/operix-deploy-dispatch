@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# This command is intended to be installed root-owned on the VPS and exposed
+# only through a forced SSH command/sudo allowlist. It is deliberately not
+# installed or executed by this rollout. The GitHub workflows fail closed when
+# the command or an app policy file is absent.
+
+CONFIG_ROOT=${OPERIX_DEPLOY_CONFIG_ROOT:-/etc/operix/deploy/apps.d}
+STATE_ROOT=${OPERIX_DEPLOY_STATE_ROOT:-/opt/operix/state}
+INCOMING_ROOT=${OPERIX_DEPLOY_INCOMING_ROOT:-/opt/operix/incoming}
+
+die() { printf 'operix-deploy: %s\n' "$*" >&2; exit 1; }
+need_root() { [[ "$(id -u)" == 0 ]] || die 'root is required behind the restricted sudo rule'; }
+valid_app() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{1,63}$ ]]; }
+valid_env() { [[ "$1" == staging || "$1" == production ]]; }
+valid_commit() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+valid_image() { [[ "$1" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; }
+valid_release_id() { [[ "$1" =~ ^sha-[0-9a-f]{40}$ ]]; }
+
+load_policy() {
+  local app=$1
+  valid_app "$app" || die 'invalid app id'
+  local policy="$CONFIG_ROOT/$app.env"
+  [[ -r "$policy" ]] || die "no deployment policy for $app"
+  # Policy files are installed by root and are not accepted from the network.
+  # shellcheck disable=SC1090
+  source "$policy"
+  [[ "${APP_ID:-}" == "$app" ]] || die 'policy app id mismatch'
+  [[ "${APP_KIND:-}" == docker || "${APP_KIND:-}" == pm2 ]] || die 'unsupported application kind'
+  [[ "${PUBLIC_HEALTH_URL:-}" == https://* ]] || die 'public health URL must use HTTPS'
+}
+
+state_dir() { printf '%s/%s/%s' "$STATE_ROOT" "$DEPLOY_ENV" "$APP_ID"; }
+current_state() { printf '%s/current.json' "$(state_dir)"; }
+lock_file() { printf '%s/%s/%s.lock' "$STATE_ROOT" "$DEPLOY_ENV" "$APP_ID"; }
+
+write_state() {
+  local status=$1 artifact=$2 commit=$3 previous=$4
+  install -d -o root -g root -m 750 "$(state_dir)"
+  local tmp
+  tmp=$(mktemp "$(state_dir)/.state.XXXXXX")
+  jq -n \
+    --arg app "$APP_ID" \
+    --arg environment "$DEPLOY_ENV" \
+    --arg commit "$commit" \
+    --arg artifact "$artifact" \
+    --arg previous "$previous" \
+    --arg deployedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg status "$status" \
+    '{app:$app,environment:$environment,commit:$commit,artifact:$artifact,previousArtifact:$previous,deployedAt:$deployedAt,status:$status}' \
+    > "$tmp"
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$(current_state)"
+}
+
+health_check() {
+  curl --fail --silent --show-error --location --max-time 20 --retry 5 --retry-delay 2 "$PUBLIC_HEALTH_URL" >/dev/null
+}
+
+nginx_check() {
+  nginx -t >/dev/null
+  if [[ "${RELOAD_NGINX:-0}" == 1 ]]; then systemctl reload nginx; fi
+}
+
+load_pm2_env() {
+  [[ -z "${PM2_ENV_FILE:-}" ]] && return 0
+  [[ "$PM2_ENV_FILE" == /* && "$PM2_ENV_FILE" != *..* ]] || die 'PM2 environment file path is unsafe'
+  [[ -r "$PM2_ENV_FILE" ]] || die 'PM2 environment file is not readable'
+  # This file is a root-owned deployment policy input, not network data.
+  set -a
+  # shellcheck disable=SC1090
+  source "$PM2_ENV_FILE"
+  set +a
+}
+
+docker_override() {
+  local artifact=$1
+  valid_image "$artifact" || die 'Docker deployments require a GHCR image digest'
+  [[ "$artifact" == "${ARTIFACT_REPOSITORY}@sha256:"* ]] || die 'artifact repository does not match app policy'
+  install -d -o root -g root -m 750 "${OPERIX_RUNTIME_ROOT:-/run/operix-deploy}/$APP_ID"
+  local override="${OPERIX_RUNTIME_ROOT:-/run/operix-deploy}/$APP_ID/$RELEASE_ID.override.yml"
+  cat > "$override" <<EOF
+services:
+  $COMPOSE_SERVICE:
+    image: $artifact
+    environment:
+      OPERIX_COMMIT_SHA: $RELEASE_COMMIT
+      OPERIX_BUILD_TIMESTAMP: $RELEASE_BUILD_TIMESTAMP
+EOF
+  printf '%s\n' "$override"
+}
+
+docker_deploy() {
+  local artifact=$1
+  docker pull "$artifact" >/dev/null
+  local previous=''
+  if [[ -f "$(current_state)" ]]; then
+    previous=$(jq -r '.artifact // empty' "$(current_state)")
+  fi
+  if docker inspect "$DOCKER_CONTAINER" >/dev/null 2>&1; then
+    [[ -n "$previous" ]] || previous=$(docker inspect "$DOCKER_CONTAINER" --format '{{.Config.Image}}')
+  fi
+  local override
+  override=$(docker_override "$artifact")
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" -f "$override" config --quiet
+  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" -f "$override" up -d --no-deps --no-build "$COMPOSE_SERVICE"
+  nginx_check
+  health_check
+  local ready_state=PRODUCTION_READY
+  [[ "$DEPLOY_ENV" == staging ]] && ready_state=STAGING_READY
+  write_state "$ready_state" "$artifact" "$RELEASE_COMMIT" "$previous"
+}
+
+safe_archive() {
+  local archive=$1
+  [[ -f "$archive" ]] || die "release archive not found: $archive"
+  tar -tzf "$archive" | awk '
+    $0 ~ /^\// || $0 ~ /(^|\/)\.\.($|\/)/ { bad=1 }
+    END { exit bad }
+  ' || die 'release archive contains an unsafe path'
+}
+
+pm2_deploy() {
+  local artifact=$1
+  valid_release_id "$artifact" || die 'PM2 deployments require a commit-shaped release id'
+  local archive="$INCOMING_ROOT/$APP_ID/$artifact.tar.gz"
+  safe_archive "$archive"
+  local release="$PM2_RELEASE_ROOT/$RELEASE_ID"
+  [[ ! -e "$release" ]] || die 'PM2 release already exists'
+  install -d -o root -g root -m 755 "$PM2_RELEASE_ROOT"
+  install -d -o root -g root -m 755 "$release"
+  tar --extract --gzip --file "$archive" --directory "$release" --no-same-owner --no-same-permissions
+  local ecosystem
+  if [[ -n "${PM2_ECOSYSTEM_FILE:-}" ]]; then
+    [[ "$PM2_ECOSYSTEM_FILE" != /* && "$PM2_ECOSYSTEM_FILE" != *..* ]] || die 'PM2 ecosystem path is unsafe'
+    ecosystem="$release/$PM2_ECOSYSTEM_FILE"
+    [[ -f "$ecosystem" ]] || die 'PM2 artifact has no declared ecosystem file'
+  else
+    [[ "${PM2_WORKSPACE:-}" =~ ^[A-Za-z0-9._-]+$ ]] || die 'PM2 policy needs a safe workspace name'
+    [[ "${PM2_START_ARGS:-}" =~ ^[[:alnum:]_.:/\ -]*$ ]] || die 'PM2 start arguments contain unsupported characters'
+    ecosystem="$release/operix-ecosystem.config.cjs"
+    local npm_args="start --workspace $PM2_WORKSPACE"
+    [[ -z "${PM2_START_ARGS:-}" ]] || npm_args+=" -- $PM2_START_ARGS"
+    cat > "$ecosystem" <<EOF
+module.exports = { apps: [{ name: "$PM2_PROCESS", cwd: "$release", script: "npm", args: "$npm_args" }] };
+EOF
+    chmod 640 "$ecosystem"
+  fi
+  load_pm2_env
+  local current="$PM2_RELEASE_ROOT/current"
+  local previous previous_release
+  previous=$(readlink -f "$current" 2>/dev/null || true)
+  previous_release=''
+  if [[ -n "$previous" && "$previous" == "$PM2_RELEASE_ROOT"/* ]]; then
+    previous_release=${previous##*/}
+  fi
+  local next="$PM2_RELEASE_ROOT/.current.$RELEASE_ID.$$"
+  ln -s "$release" "$next"
+  mv -Tf "$next" "$current"
+  pm2 startOrReload "$ecosystem" --only "$PM2_PROCESS" --update-env
+  pm2 describe "$PM2_PROCESS" >/dev/null
+  nginx_check
+  health_check
+  local ready_state=PRODUCTION_READY
+  [[ "$DEPLOY_ENV" == staging ]] && ready_state=STAGING_READY
+  write_state "$ready_state" "$artifact" "$RELEASE_COMMIT" "$previous_release"
+}
+
+rollback_to() {
+  local artifact=$1
+  if [[ "$APP_KIND" == docker ]]; then
+    docker pull "$artifact" >/dev/null
+    local override
+    override=$(docker_override "$artifact")
+    docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" -f "$override" config --quiet
+    docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" -f "$override" up -d --no-deps --no-build "$COMPOSE_SERVICE"
+  else
+    [[ -d "$PM2_RELEASE_ROOT/$artifact" ]] || die 'requested PM2 release is not retained'
+    local next="$PM2_RELEASE_ROOT/.current.rollback.$$.tmp"
+    ln -s "$PM2_RELEASE_ROOT/$artifact" "$next"
+    mv -Tf "$next" "$PM2_RELEASE_ROOT/current"
+    local ecosystem="$PM2_RELEASE_ROOT/$artifact/${PM2_ECOSYSTEM_FILE:-operix-ecosystem.config.cjs}"
+    [[ -f "$ecosystem" ]] || die 'requested PM2 release has no ecosystem configuration'
+    load_pm2_env
+    pm2 startOrReload "$ecosystem" --only "$PM2_PROCESS" --update-env
+    pm2 describe "$PM2_PROCESS" >/dev/null
+  fi
+  nginx_check
+  health_check
+}
+
+deploy() {
+  local artifact=$1 commit=$2
+  valid_commit "$commit" || die 'deployment commit must be a full 40-character SHA'
+  RELEASE_ID="sha-$commit"
+  RELEASE_COMMIT="$commit"
+  RELEASE_BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  install -d -o root -g root -m 750 "$STATE_ROOT/$DEPLOY_ENV"
+  exec 9>"$(lock_file)"
+  flock -n 9 || die "another $APP_ID deployment is running"
+  local previous='' previous_commit=''
+  if [[ -f "$(current_state)" ]]; then
+    previous=$(jq -r '.artifact // empty' "$(current_state)")
+    previous_commit=$(jq -r '.commit // empty' "$(current_state)")
+  fi
+  set +e
+  if [[ "$APP_KIND" == docker ]]; then docker_deploy "$artifact" "$commit"; else pm2_deploy "$artifact"; fi
+  local status=$?
+  set -e
+  if (( status == 0 )); then
+    local ready_state=PRODUCTION_READY
+    [[ "$DEPLOY_ENV" == staging ]] && ready_state=STAGING_READY
+    printf '%s %s %s\n' "$ready_state" "$APP_ID" "$commit"
+    return 0
+  fi
+  if [[ -n "$previous" ]]; then
+    if rollback_to "$previous"; then
+      write_state ROLLED_BACK "$previous" "${previous_commit:-rollback}" "$artifact"
+      printf 'DEPLOYMENT_FAILED_ROLLED_BACK %s\n' "$APP_ID" >&2
+      return 1
+    fi
+  fi
+  printf 'DEPLOYMENT_FAILED_ROLLBACK_FAILED %s\n' "$APP_ID" >&2
+  return 2
+}
+
+manual_rollback() {
+  local artifact=$1
+  if [[ "$artifact" == auto ]]; then
+    [[ -f "$(current_state)" ]] || die 'no current release metadata exists for automatic rollback'
+    artifact=$(jq -r '.previousArtifact // empty' "$(current_state)")
+    [[ -n "$artifact" ]] || die 'no previous artifact is recorded for automatic rollback'
+  fi
+  if [[ "$APP_KIND" == pm2 ]]; then
+    valid_release_id "$artifact" || die 'PM2 rollback requires a commit-shaped release id'
+  else
+    valid_image "$artifact" || die 'Docker rollback requires an immutable image digest'
+  fi
+  RELEASE_ID="rollback-$(date -u +%Y%m%dT%H%M%SZ)"
+  RELEASE_COMMIT="rollback"
+  exec 9>"$(lock_file)"
+  flock -n 9 || die "another $APP_ID deployment is running"
+  rollback_to "$artifact"
+  local rollback_commit=rollback
+  if [[ "$APP_KIND" == pm2 && "$artifact" =~ ^sha-([0-9a-f]{40})$ ]]; then rollback_commit="${BASH_REMATCH[1]}"; fi
+  write_state ROLLED_BACK "$artifact" "$rollback_commit" ""
+  printf 'ROLLED_BACK %s %s\n' "$APP_ID" "$artifact"
+}
+
+need_root
+[[ "$#" -ge 4 ]] || die 'usage: dispatch deploy|rollback APP ENV ARTIFACT COMMIT'
+operation=$1
+APP_ID=$2
+DEPLOY_ENV=$3
+artifact=$4
+valid_env "$DEPLOY_ENV" || die 'environment must be staging or production'
+load_policy "$APP_ID"
+
+case "$operation" in
+  deploy)
+    [[ "$#" -eq 5 ]] || die 'deploy requires APP ENV ARTIFACT COMMIT'
+    deploy "$artifact" "$5"
+    ;;
+  rollback)
+    [[ "$#" -eq 4 ]] || die 'rollback requires APP ENV ARTIFACT'
+    manual_rollback "$artifact"
+    ;;
+  *) die 'operation must be deploy or rollback' ;;
+esac

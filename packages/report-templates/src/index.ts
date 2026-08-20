@@ -116,6 +116,11 @@ export interface ReportCompany {
   bankName?: string;
   iban?: string;
   logoUrl?: string;
+  signatureUrl?: string;
+  stampUrl?: string;
+  showSignature?: boolean;
+  showStamp?: boolean;
+  showClientSignature?: boolean;
 }
 
 export interface CustomerLedgerReport {
@@ -307,21 +312,24 @@ const money = (value: number) =>
   }).format(value);
 
 const reportDate = (value: string) => {
-  const parsed = new Date(`${value.slice(0, 10)}T12:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? esc(value)
-    : new Intl.DateTimeFormat("sq-AL", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(parsed);
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value).trim());
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : esc(value);
 };
 
 export function renderCustomerLedgerHtml(payload: CustomerLedgerReport) {
   const { customer, company, range, summary, entries } = payload;
-  const logo = company.logoUrl
-    ? `<img class="logo" src="${esc(company.logoUrl)}" alt="">`
-    : `<div class="company-name">${esc(company.name)}</div>`;
+  const signature = company.showSignature !== false && company.signatureUrl
+    ? `<div class="signature-block"><div class="signature-asset"><img src="${esc(company.signatureUrl)}" alt="Nënshkrimi"/></div><div class="signature-line"></div><div class="signature-label">Nënshkrimi</div></div>`
+    : '';
+  const stamp = company.showStamp !== false && company.stampUrl
+    ? `<div class="signature-block"><div class="stamp-asset"><img src="${esc(company.stampUrl)}" alt="Vula zyrtare"/></div><div class="signature-label">Vula zyrtare</div></div>`
+    : '';
+  const clientSignature = company.showClientSignature
+    ? `<div class="signature-block"><div class="signature-asset"></div><div class="signature-line"></div><div class="signature-label">Nënshkrimi i klientit</div></div>`
+    : '';
+  const signatures = signature || stamp || clientSignature
+    ? `<section class="signatures">${signature}${stamp}${clientSignature}</section>`
+    : '';
   const rows = entries
     .map(
       (entry, index) => `<tr>
@@ -342,8 +350,8 @@ export function renderCustomerLedgerHtml(payload: CustomerLedgerReport) {
 
   return `<!doctype html><html lang="sq"><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#101828;font-family:Arial,Helvetica,sans-serif}
-    @page{size:A4 landscape;margin:0}.page{width:297mm;min-height:210mm;padding:9mm 6mm 7mm;display:flex;flex-direction:column;background:#fff}
-    .head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}.logo{max-width:108mm;max-height:22mm;object-fit:contain;object-position:left top}
+    @page{size:A4 landscape;margin:0}.page{width:297mm;min-height:297mm;height:297mm;padding:9mm 6mm 7mm;display:flex;flex-direction:column;background:#fff}
+    .head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
     .company-name{font-size:24px;font-weight:900}.subject{text-align:right;font-size:10px;line-height:1.5}.subject b{font-size:13px}
     .range{text-align:right;font-size:11px;font-weight:700;margin:3px 0 8px}table{width:100%;border-collapse:collapse;table-layout:fixed}
     th{background:#d0d0d0;border:1px solid #999;padding:3px 1px;font-size:5.2px;line-height:1.1;text-align:center}
@@ -351,16 +359,19 @@ export function renderCustomerLedgerHtml(payload: CustomerLedgerReport) {
     .num{text-align:right;font-variant-numeric:tabular-nums}.strong{font-weight:800}tfoot td{background:#d0d0d0;font-weight:800}
     .summary{margin:10px 8% 0 auto;width:60mm;font-size:11px}.summary-row{display:flex;justify-content:space-between;gap:20px;padding:2px 0}
     .summary-row.balance{font-size:14px;border-bottom:2px solid #101828;font-weight:900}
-    .footer{margin-top:auto;border-top:1px solid #101828;padding-top:5px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:7.5px;line-height:1.35}
+    .signatures{position:fixed;left:6mm;right:6mm;bottom:20mm;display:grid;grid-template-columns:repeat(3,1fr);gap:28px;padding:0;page-break-inside:avoid}
+    .signature-block{text-align:center;font-size:7.5px;color:#667085}.signature-asset{height:20mm;display:flex;align-items:flex-end;justify-content:center}.signature-asset img{max-width:100%;max-height:18mm;object-fit:contain}.stamp-asset{height:20mm;display:flex;align-items:center;justify-content:center}.stamp-asset img{max-width:24mm;max-height:20mm;object-fit:contain}.signature-line{border-top:1px solid #101828;margin-top:2mm}.signature-label{margin-top:1.5mm;line-height:1.2}
+    .footer{position:fixed;left:6mm;right:6mm;bottom:7mm;border-top:1px solid #101828;padding-top:5px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:7.5px;line-height:1.35}
     .footer-center{text-align:center}.footer-right{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}
   </style></head><body><main class="page">
-    <header class="head"><div>${logo}</div><div class="subject"><b>Kartela e Blerësit: ${esc(customer.name)}</b><br>Nr. identifikues: ${esc(customer.taxId || customer.fiscalNumber || "—")}<br>Nr. fiskal: ${esc(customer.fiscalNumber || customer.taxId || "—")}<br>Nr. i biznesit: ${esc(customer.businessNumber || "—")}</div></header>
+    <header class="head"><div><div class="company-name">${esc(company.name)}</div></div><div class="subject"><b>Kartela e Blerësit: ${esc(customer.name)}</b><br>Nr. identifikues: ${esc(customer.taxId || customer.fiscalNumber || "—")}<br>Nr. fiskal: ${esc(customer.fiscalNumber || customer.taxId || "—")}<br>Nr. i biznesit: ${esc(customer.businessNumber || "—")}</div></header>
     <div class="range">Intervali: ${reportDate(range.from)} - ${reportDate(range.to)}</div>
     <table>
     <thead><tr><th>Dokumenti</th><th>Nr.</th><th>Data</th><th>Llogaria</th><th>Lloji i dokumentit</th><th>Dok. paraprak</th><th>Dok. i ndërlidhur</th><th>Fatura e furnitorit</th><th>Referenca</th><th>Përshkrimi</th><th>Subjekti / Malli</th><th>Agjenti</th><th>Mënyra e pagesës</th><th>Njësia org.</th><th>Saldo paraprake</th><th>Debi</th><th>Kredi</th><th>Saldo</th><th>Valuta</th><th>Saldo e jashtme</th><th>Debi e jashtme</th><th>Kredi e jashtme</th><th>Saldo e jashtme përfund.</th><th>Pagesa</th><th>Mbetur</th><th>Përqindja</th><th>Përdoruesi</th><th>Data e krijimit</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="28" style="padding:18px">Nuk ka dokumente për intervalin e zgjedhur.</td></tr>`}</tbody>
     <tfoot><tr><td class="left">Dokumentet: ${entries.length}</td><td colspan="13"></td><td class="num">${money(summary.openingBalance)}</td><td class="num">${money(summary.totalDebit)}</td><td class="num">${money(summary.totalCredit)}</td><td class="num">${money(summary.closingBalance)}</td><td>EUR</td><td class="num">${money(summary.openingBalance)}</td><td class="num">${money(summary.totalDebit)}</td><td class="num">${money(summary.totalCredit)}</td><td class="num">${money(summary.closingBalance)}</td><td class="num">${money(summary.totalPayments)}</td><td class="num">${money(Math.max(0, summary.closingBalance))}</td><td colspan="3"></td></tr></tfoot></table>
     <section class="summary"><div class="summary-row"><span>Kërkesa:</span><b>${money(summary.totalDebit + Math.max(0, summary.openingBalance))}</b></div><div class="summary-row"><span>Obligimi:</span><b>${money(summary.totalCredit)}</b></div><div class="summary-row balance"><span>Saldo:</span><span>${money(summary.closingBalance)}</span></div></section>
+    ${signatures}
     <footer class="footer"><div>Nr. ID: ${esc(company.taxId || "—")}<br>Nr. TVSH: ${esc(company.vatNumber || "—")}<br>${esc(company.bankName || "")}${company.iban ? ` · IBAN: ${esc(company.iban)}` : ""}</div><div class="footer-center">${esc(company.address || "")}<br>${esc(company.phone || "")}</div><div class="footer-right">${esc(company.email || "")}<br>${esc(company.website || "")}<br>© OperiX Invoice</div></footer>
   </main></body></html>`;
 }

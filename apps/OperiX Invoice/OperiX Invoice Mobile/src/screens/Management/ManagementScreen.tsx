@@ -20,6 +20,7 @@ import { t } from '@invoice-monorepo/i18n';
 import { supabase } from '@invoice-monorepo/api';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
+import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 export function ManagementScreen({ navigation }: any) {
     const { isDark, language, primaryColor } = useTheme();
@@ -42,23 +43,27 @@ export function ManagementScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchStats();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchStats = async () => {
         if (!user) return;
         try {
+            const workspaceScope = await getWorkspaceScope(user.id);
+            const { companyIds } = workspaceScope;
+            const scope = scopedResource(user.id, companyIds);
+            const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
             // Fetch clients count
             const { count: clientsCount } = await supabase
                 .from('clients')
                 .select('id', { count: 'exact', head: true })
-                .eq('user_id', user.id);
+                .or(scope);
 
             // Fetch products count and value
             const { data: products } = await supabase
                 .from('products')
                 .select('unit_price, stock_quantity')
-                .eq('user_id', user.id);
+                .or(productScope);
 
             const inventoryValue = products?.reduce((sum, p) => sum + (Number(p.unit_price || 0) * Number(p.stock_quantity || 0)), 0) || 0;
 
@@ -66,13 +71,13 @@ export function ManagementScreen({ navigation }: any) {
             const { count: vendorsCount } = await supabase
                 .from('vendors')
                 .select('id', { count: 'exact', head: true })
-                .eq('user_id', user.id);
+                .or(scope);
 
             // Fetch revenue from invoices
             const { data: invoices } = await supabase
                 .from('invoices')
                 .select('total_amount')
-                .eq('user_id', user.id)
+                .or(scope)
                 .eq('status', 'paid');
 
             const totalRevenue = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
@@ -147,7 +152,7 @@ export function ManagementScreen({ navigation }: any) {
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.headerSubtitle, { color: mutedColor }]}>{t('management', language)}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>Overview</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('overview', language)}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })} style={[styles.iconButton, { backgroundColor: cardBg }]}>
@@ -164,20 +169,20 @@ export function ManagementScreen({ navigation }: any) {
                 {/* Stats Dashboard */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                        {renderStatCard('Klientë', stats.totalClients, Users, '#004FFE')}
-                        {renderStatCard('Produkte', stats.totalProducts, Package, '#3388FF')}
-                        {renderStatCard('Furnizues', stats.totalVendors, Building2, '#06B6D4')}
-                        {renderStatCard('Të ardhura', formatCurrency(stats.totalRevenue), TrendingUp, '#12B76A')}
-                        {renderStatCard('Inventari', formatCurrency(stats.inventoryValue), DollarSign, '#f59e0b')}
+                        {renderStatCard(t('clients', language), stats.totalClients, Users, '#004FFE')}
+                        {renderStatCard(t('products', language), stats.totalProducts, Package, '#3388FF')}
+                        {renderStatCard(t('vendors', language), stats.totalVendors, Building2, '#06B6D4')}
+                        {renderStatCard(t('totalRevenue', language), formatCurrency(stats.totalRevenue), TrendingUp, '#12B76A')}
+                        {renderStatCard(t('inventory', language), formatCurrency(stats.inventoryValue), DollarSign, '#f59e0b')}
                     </ScrollView>
                 </View>
 
                 {/* Management Cards */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Modules</Text>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('modules', language)}</Text>
                 <View style={styles.section}>
                     {renderCard(
                         t('clients', language),
-                        'Manage your client base',
+                        t('manageClientBase', language),
                         Users,
                         '#004FFE',
                         () => navigation.navigate('ClientsList'),
@@ -185,7 +190,7 @@ export function ManagementScreen({ navigation }: any) {
                     )}
                     {renderCard(
                         t('products', language),
-                        'Inventory and service catalog',
+                        t('inventoryServiceCatalog', language),
                         Package,
                         '#3388FF',
                         () => navigation.navigate('ProductsList'),
@@ -193,7 +198,7 @@ export function ManagementScreen({ navigation }: any) {
                     )}
                     {renderCard(
                         t('vendors', language),
-                        'Suppliers and partners',
+                        t('suppliersPartners', language),
                         Building2,
                         '#06B6D4',
                         () => navigation.navigate('VendorsList'),
@@ -274,7 +279,3 @@ const styles = StyleSheet.create({
     },
     badgeText: { fontSize: 12, fontWeight: 'bold' },
 });
-
-
-
-

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Input } from './Input';
@@ -42,12 +42,12 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
     };
 
     return (
-        <Modal visible={visible} transparent animationType="slide">
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <KeyboardAvoidingView
                 style={styles.overlay}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                <TouchableOpacity style={styles.dismiss} onPress={onClose} />
+                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
                 <View style={[styles.content, { backgroundColor: bgColor }]}>
                     <View style={styles.header}>
                         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
@@ -56,8 +56,12 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
-                        {fields.map(field => (
+                    <ScrollView
+                        style={styles.scroll}
+                        keyboardShouldPersistTaps="always"
+                        keyboardDismissMode="none"
+                    >
+                        {fields.map((field, index) => (
                             <Input
                                 key={field.key}
                                 label={field.label}
@@ -66,6 +70,7 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
                                 onChangeText={(t) => setData({ ...data, [field.key]: t })}
                                 keyboardType={field.keyboardType}
                                 multiline={field.multiline}
+                                autoFocus={visible && index === 0}
                             />
                         ))}
                     </ScrollView>
@@ -88,9 +93,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'flex-end',
-    },
-    dismiss: {
-        flex: 1,
     },
     content: {
         borderTopLeftRadius: 24,
@@ -115,4 +117,3 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
 });
-

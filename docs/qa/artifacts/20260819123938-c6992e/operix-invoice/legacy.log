@@ -1,0 +1,70 @@
+command: "npm" "run" "test:legacy" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 312
+
+> operix-invoice@1.0.0 test:legacy
+> node --test src/navigation/navigation.test.mjs src/services/contracts/contractBuilder.test.mjs
+
+TAP version 13
+# Subtest: mobile primary navigation exposes exactly five task destinations
+ok 1 - mobile primary navigation exposes exactly five task destinations
+  ---
+  duration_ms: 1.900268
+  type: 'test'
+  ...
+# Subtest: removed legacy tab aliases are not used as navigation destinations
+ok 2 - removed legacy tab aliases are not used as navigation destinations
+  ---
+  duration_ms: 17.158166
+  type: 'test'
+  ...
+# Subtest: critical root routes are registered and authentication gates protected navigation
+ok 3 - critical root routes are registered and authentication gates protected navigation
+  ---
+  duration_ms: 0.651443
+  type: 'test'
+  ...
+# Subtest: all declared root routes are represented by a registered screen or compatibility navigator
+ok 4 - all declared root routes are represented by a registered screen or compatibility navigator
+  ---
+  duration_ms: 0.410489
+  type: 'test'
+  ...
+# (node:2009861) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///root/OperiX/apps/OperiX%20Invoice/OperiX%20Invoice%20Mobile/src/services/contracts/contractBuilder.ts is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /root/OperiX/apps/OperiX Invoice/OperiX Invoice Mobile/package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: extracts and resolves variables while retaining missing tokens
+ok 5 - extracts and resolves variables while retaining missing tokens
+  ---
+  duration_ms: 1.647406
+  type: 'test'
+  ...
+# Subtest: evaluates the supported simple conditions
+ok 6 - evaluates the supported simple conditions
+  ---
+  duration_ms: 0.198539
+  type: 'test'
+  ...
+# Subtest: validates template basics and formats contract numbers
+ok 7 - validates template basics and formats contract numbers
+  ---
+  duration_ms: 0.206882
+  type: 'test'
+  ...
+# Subtest: keeps malformed legacy document data from crashing rendering
+ok 8 - keeps malformed legacy document data from crashing rendering
+  ---
+  duration_ms: 0.170328
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108.175279

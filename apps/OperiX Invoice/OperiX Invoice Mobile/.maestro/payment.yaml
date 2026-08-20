@@ -1,0 +1,44 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: login.yaml
+- tapOn:
+    id: global-create-button
+- tapOn:
+    id: global-create-invoice-action
+- extendedWaitUntil:
+    visible:
+      id: invoice-form-screen
+    timeout: 15000
+- tapOn:
+    id: invoice-customer-selector
+- tapOn:
+    id: invoice-customer-option-${E2E_CUSTOMER_ID}
+- tapOn:
+    id: invoice-add-item-button
+- tapOn:
+    id: invoice-product-option-${E2E_PRODUCT_ID}
+- tapOn:
+    id: invoice-save-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-detail-screen
+    timeout: 30000
+- tapOn:
+    id: invoice-add-payment-button
+- extendedWaitUntil:
+    visible:
+      id: payment-form-screen
+    timeout: 15000
+- tapOn:
+    id: payment-customer-selector
+- tapOn:
+    id: payment-customer-option-${E2E_CUSTOMER_ID}
+- tapOn:
+    id: payment-amount-input
+- inputText: "10.50"
+- tapOn:
+    id: payment-save-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-detail-screen
+    timeout: 30000

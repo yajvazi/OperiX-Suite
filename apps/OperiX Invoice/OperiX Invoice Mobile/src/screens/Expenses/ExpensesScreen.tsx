@@ -19,6 +19,8 @@ import { Card, FAB } from '@invoice-monorepo/ui';
 import { Expense, ExpenseCategory } from '@invoice-monorepo/types';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope } from '../../services/workspace';
+import { deleteExpense, listExpenses } from '@invoice-monorepo/api/repositories';
 
 export function ExpensesScreen({ navigation }: any) {
     const { user } = useAuth();
@@ -32,6 +34,19 @@ export function ExpensesScreen({ navigation }: any) {
     const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
 
     const categories = ['All', 'Travel', 'Supplies', 'Marketing', 'Software', 'Rent', 'Utilities', 'Sales', 'Refund', 'Grant', 'Other'];
+    const categoryLabel = (category: string) => ({
+        All: t('all', language),
+        Travel: t('travelCategory', language),
+        Supplies: t('suppliesCategory', language),
+        Marketing: t('marketingCategory', language),
+        Software: t('softwareCategory', language),
+        Rent: t('rentCategory', language),
+        Utilities: t('utilitiesCategory', language),
+        Sales: t('salesCategory', language),
+        Refund: t('refundCategory', language),
+        Grant: t('grantCategory', language),
+        Other: t('other', language),
+    } as Record<string, string>)[category] || category;
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -42,21 +57,16 @@ export function ExpensesScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchExpenses();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchExpenses = async () => {
         if (!user) return;
-        const { data } = await supabase
-            .from('expenses')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('date', { ascending: false });
-
-        if (data) {
-            setExpenses(data);
-            applyFilters(data, selectedCategory, searchQuery, typeFilter);
-        }
+        const { companyIds } = await getWorkspaceScope(user.id);
+        const data = await listExpenses(supabase, { userId: user.id, companyIds });
+        const expenseRows = data as unknown as Expense[];
+        setExpenses(expenseRows);
+        applyFilters(expenseRows, selectedCategory, searchQuery, typeFilter);
     };
 
     const applyFilters = (data: Expense[], category: string, query: string, type: string) => {
@@ -73,7 +83,9 @@ export function ExpensesScreen({ navigation }: any) {
             const q = query.toLowerCase();
             filtered = filtered.filter(e =>
                 e.description?.toLowerCase().includes(q) ||
-                e.category.toLowerCase().includes(q)
+                e.category.toLowerCase().includes(q) ||
+                e.vendor_name?.toLowerCase().includes(q) ||
+                e.invoice_number?.toLowerCase().includes(q)
             );
         }
         setFilteredExpenses(filtered);
@@ -92,8 +104,14 @@ export function ExpensesScreen({ navigation }: any) {
                 text: t('delete', language),
                 style: 'destructive',
                 onPress: async () => {
-                    await supabase.from('expenses').delete().eq('id', id);
-                    fetchExpenses();
+                    try {
+                        if (!user) throw new Error('Your session has expired.');
+                        const { companyId } = await getWorkspaceScope(user.id);
+                        await deleteExpense(supabase, id, companyId, user.id);
+                        await fetchExpenses();
+                    } catch (error) {
+                        Alert.alert(t('error', language), error instanceof Error ? error.message : t('failedToSaveExpense', language));
+                    }
                 },
             },
         ]);
@@ -123,8 +141,13 @@ export function ExpensesScreen({ navigation }: any) {
                         {(item.type === 'income') ? <TrendingUp color='#12B76A' size={20} /> : <TrendingDown color='#ef4444' size={20} />}
                     </View>
                     <View style={styles.expenseTitle}>
-                        <Text style={[styles.category, { color: textColor }]}>{item.category}</Text>
-                        <Text style={[styles.description, { color: mutedColor }]} numberOfLines={1}>{item.description || 'No description'}</Text>
+                        <Text style={[styles.category, { color: textColor }]}>{categoryLabel(item.category)}</Text>
+                        <Text style={[styles.description, { color: mutedColor }]} numberOfLines={1}>{item.description || t('noDescription', language)}</Text>
+                        {(item.vendor_name || item.invoice_number) ? (
+                            <Text style={[styles.description, { color: mutedColor }]} numberOfLines={1}>
+                                {[item.vendor_name, item.invoice_number].filter(Boolean).join(' • ')}
+                            </Text>
+                        ) : null}
                     </View>
                     <Text style={[styles.amount, { color: (item.type === 'income') ? '#12B76A' : textColor }]}>
                         {(item.type === 'income') ? '+' : '-'}{formatCurrency(Number(item.amount))}
@@ -213,7 +236,7 @@ export function ExpensesScreen({ navigation }: any) {
                                 styles.filterText,
                                 { color: mutedColor },
                                 selectedCategory === cat && { color: '#fff', fontWeight: '600' }
-                            ]}>{cat}</Text>
+                            ]}>{categoryLabel(cat)}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -224,6 +247,8 @@ export function ExpensesScreen({ navigation }: any) {
                 renderItem={renderExpense}
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.listContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
@@ -288,8 +313,3 @@ const styles = StyleSheet.create({
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
     emptyText: { fontSize: 15, fontWeight: '500' },
 });
-
-
-
-
-

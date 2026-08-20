@@ -5,10 +5,12 @@ export type AccountType =
   | "liability"
   | "equity"
   | "revenue"
-  | "expense";
+  | "expense"
+  | "contra_asset"
+  | "contra_revenue";
 export type NormalBalance = "debit" | "credit";
 export type JournalStatus = "draft" | "posted" | "reversed";
-export type PeriodStatus = "open" | "closed" | "locked";
+export type PeriodStatus = "open" | "soft_closed" | "closed" | "locked";
 
 export interface AccountingAccount {
   id: string;
@@ -38,7 +40,14 @@ export interface JournalEntry {
   company_id: string;
   entry_number: string;
   status: JournalStatus;
-  entry_type: "manual" | "automatic" | "recurring" | "reversal" | "adjustment";
+  entry_type:
+    | "manual"
+    | "automatic"
+    | "opening"
+    | "closing"
+    | "recurring"
+    | "reversal"
+    | "adjustment";
   posting_date: string;
   document_date: string;
   description: string;

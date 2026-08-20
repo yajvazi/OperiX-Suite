@@ -1,0 +1,63 @@
+command: "npm" "run" "build:check" "--workspace=operix-desk-mobile"
+cwd: .
+exitCode: 0
+durationMs: 24920
+
+> operix-desk-mobile@1.0.0 build:check
+> expo export --platform web --output-dir /tmp/operix-desk-mobile-web
+
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_DESK_API_URL EXPO_PUBLIC_DESK_WEB_URL
+Starting Metro Bundler
+| (node:1933895) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Web apps/OperiX Desk/OperiX Desk Mobile/index.ts ░░░░░░░░░░░░░░░░  1.0% (1/1)
+| (node:1933896) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:1933908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:1933922) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:1933915) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:1933902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Web apps/OperiX Desk/OperiX Desk Mobile/index.ts ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65.2% (209/386)
+Web apps/OperiX Desk/OperiX Desk Mobile/index.ts ▓▓▓▓▓▓▓▓▓▓░░░░░░ 65.2% (550/723)
+Web apps/OperiX Desk/OperiX Desk Mobile/index.ts ▓▓▓▓▓▓▓▓▓▓░░░░░░ 68.0% ( 972/2512)
+Web apps/OperiX Desk/OperiX Desk Mobile/index.ts ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74.2% (2164/2513)
+Web Bundled 17468ms apps/OperiX Desk/OperiX Desk Mobile/index.ts (2652 modules)
+
+› Assets (29):
+../../../node_modules/@expo-google-fonts/poppins/100Thin_Italic/Poppins_100Thin_Italic.01555d25092b213d2ea3a982123722c9.ttf (187 kB)
+../../../node_modules/@expo-google-fonts/poppins/100Thin/Poppins_100Thin.9ec263601ee3fcd71763941207c9ad0d.ttf (162 kB)
+../../../node_modules/@expo-google-fonts/poppins/200ExtraLight_Italic/Poppins_200ExtraLight_Italic.a9bed017984a258097841902b696a7a6.ttf (186 kB)
+../../../node_modules/@expo-google-fonts/poppins/200ExtraLight/Poppins_200ExtraLight.6f8391bbdaeaa540388796c858dfd8ca.ttf (161 kB)
+../../../node_modules/@expo-google-fonts/poppins/300Light_Italic/Poppins_300Light_Italic.0613c488cf7911af70db821bdd05dfc4.ttf (184 kB)
+../../../node_modules/@expo-google-fonts/poppins/300Light/Poppins_300Light.fcc40ae9a542d001971e53eaed948410.ttf (160 kB)
+../../../node_modules/@expo-google-fonts/poppins/400Regular_Italic/Poppins_400Regular_Italic.c1034239929f4651cc17d09ed3a28c69.ttf (182 kB)
+../../../node_modules/@expo-google-fonts/poppins/400Regular/Poppins_400Regular.093ee89be9ede30383f39a899c485a82.ttf (158 kB)
+../../../node_modules/@expo-google-fonts/poppins/500Medium_Italic/Poppins_500Medium_Italic.cf5ba39d9ac24652e25df8c291121506.ttf (180 kB)
+../../../node_modules/@expo-google-fonts/poppins/500Medium/Poppins_500Medium.bf59c687bc6d3a70204d3944082c5cc0.ttf (157 kB)
+../../../node_modules/@expo-google-fonts/poppins/600SemiBold_Italic/Poppins_600SemiBold_Italic.9841f3d906521f7479a5ba70612aa8c8.ttf (179 kB)
+../../../node_modules/@expo-google-fonts/poppins/600SemiBold/Poppins_600SemiBold.6f1520d107205975713ba09df778f93f.ttf (155 kB)
+../../../node_modules/@expo-google-fonts/poppins/700Bold_Italic/Poppins_700Bold_Italic.19406f767addf00d2ea82cdc9ab104ce.ttf (177 kB)
+../../../node_modules/@expo-google-fonts/poppins/700Bold/Poppins_700Bold.08c20a487911694291bd8c5de41315ad.ttf (154 kB)
+../../../node_modules/@expo-google-fonts/poppins/800ExtraBold_Italic/Poppins_800ExtraBold_Italic.8afe4dc13b83b66fec0ea671419954cc.ttf (174 kB)
+../../../node_modules/@expo-google-fonts/poppins/800ExtraBold/Poppins_800ExtraBold.d45bdbc2d4a98c1ecb17821a1dbbd3a4.ttf (153 kB)
+../../../node_modules/@expo-google-fonts/poppins/900Black_Italic/Poppins_900Black_Italic.e9c5c588e39d0765d30bcd6594734102.ttf (172 kB)
+../../../node_modules/@expo-google-fonts/poppins/900Black/Poppins_900Black.14d00dab1f6802e787183ecab5cce85e.ttf (151 kB)
+../../../node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.0a328cd9c1afd0afe8e3b1ec5165b1b4.png (653 B)
+../../../node_modules/@react-navigation/elements/lib/module/assets/back-icon.35ba0eaec5a4f5ed12ca16fabeae451d.png (207 B)
+../../../node_modules/@react-navigation/elements/lib/module/assets/clear-icon.c94f6478e7ae0cdd9f15de1fcb9e5e55.png (4 variations | 425 B)
+../../../node_modules/@react-navigation/elements/lib/module/assets/close-icon.808e1b1b9b53114ec2838071a7e6daa7.png (4 variations | 235 B)
+../../../node_modules/@react-navigation/elements/lib/module/assets/search-icon.286d67d3f74808a60a78d3ebf1a5fb57.png (928 B)
+
+› web bundles (1):
+_expo/static/js/web/index-32f602bc980da7b12ec2c0daa7af7ec9.js (3.64 MB)
+
+› Files (2):
+index.html (1.18 kB)
+metadata.json (49 B)
+
+Exported: /tmp/operix-desk-mobile-web

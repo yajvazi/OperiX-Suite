@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OperiX release metadata",
+  "type": "object",
+  "required": ["schemaVersion", "app", "environment", "commit", "artifact", "artifactKind", "buildTimestamp", "status"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "app": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+    "environment": { "type": "string", "enum": ["artifact", "staging", "production"] },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "artifact": { "type": "string" },
+    "artifactKind": { "type": "string", "enum": ["ghcr-image", "pm2-archive"] },
+    "artifactDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "buildTimestamp": { "type": "string", "format": "date-time" },
+    "status": { "type": "string" },
+    "version": { "type": "string" },
+    "workflowRun": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "artifactKind": { "const": "ghcr-image" } } },
+      "then": { "properties": { "artifact": { "pattern": "^ghcr\\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$" } } }
+    },
+    {
+      "if": { "properties": { "artifactKind": { "const": "pm2-archive" } } },
+      "then": {
+        "required": ["artifactDigest"],
+        "properties": { "artifact": { "pattern": "^pm2://[a-z0-9][a-z0-9-]{1,63}/sha-[0-9a-f]{40}$" } }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

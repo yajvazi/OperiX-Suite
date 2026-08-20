@@ -1,6 +1,8 @@
-# DeskDibs
+# OperiX Desk
 
-A desk and meeting-room reservation application built with **FastAPI**, **PostgreSQL**, and **Next.js**.
+A desk and meeting-room reservation application built with **FastAPI**,
+**PostgreSQL**, and **Vite + React**. OperiX Desk uses the shared OperiX
+Supabase Auth account and organization context.
 
 ## Prerequisites
 
@@ -8,27 +10,24 @@ Before running the project, make sure you have installed:
 
 * Python 3.12+ (or the version used by the team)
 * Node.js and npm
-* PostgreSQL
-* pgAdmin 4 (optional, for database management)
+* Docker with the local Supabase stack running
 
 ---
 
 ## Database Setup
 
-1. Open PostgreSQL/pgAdmin.
-2. Create a new database named:
-
-```sql
-deskdibs
-```
-
-3. Configure your backend `.env` file:
+1. Apply the root OperiX Supabase migrations, including the Desk legacy schema
+   and shared-workspace migration.
+2. Configure your backend `.env` file:
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/deskdibs
+DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:54322/postgres
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_INTERNAL_URL=http://127.0.0.1:54321
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SHARED_AUTH_ENABLED=true
+LEGACY_AUTH_ENABLED=false
 ```
-
-Replace `YOUR_PASSWORD` with your PostgreSQL password.
 
 ---
 
@@ -117,7 +116,7 @@ http://localhost:3000
 ## Project Structure
 
 ```text
-DeskDibs/
+OperiX Desk/
 │
 ├── backend/
 │   ├── app/
@@ -174,11 +173,11 @@ git push origin feature/your-feature-name
 * SQLAlchemy
 * PostgreSQL
 * Alembic
-* JWT Authentication
+* Shared OperiX Supabase Auth
 
 ### Frontend
 
-* Next.js
+* Vite
 * React
 * Axios
 * Recharts

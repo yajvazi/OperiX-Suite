@@ -1,0 +1,203 @@
+name: OperiX Immutable Release Artifacts
+
+on:
+  workflow_run:
+    workflows: ["OperiX CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App id to publish, or all"
+        required: true
+        default: "all"
+      ref:
+        description: "Full commit SHA to build"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: operix-artifacts-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Select releaseable web artifacts and PM2 bundles
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    outputs:
+      apps_json: ${{ steps.select.outputs.apps_json }}
+      docker_apps_json: ${{ steps.select.outputs.docker_apps_json }}
+      pm2_apps_json: ${{ steps.select.outputs.pm2_apps_json }}
+      has_apps: ${{ steps.select.outputs.has_apps }}
+      has_docker: ${{ steps.select.outputs.has_docker }}
+      has_pm2: ${{ steps.select.outputs.has_pm2 }}
+      ref: ${{ steps.select.outputs.ref }}
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.ref || github.sha }}
+          fetch-depth: 1
+      - name: Download affected-app manifest from CI
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: operix-affected-apps
+          path: ${{ runner.temp }}/operix-affected
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Select immutable release artifacts
+        id: select
+        env:
+          APP_REQUEST: ${{ inputs.app || '' }}
+          BUILD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.ref || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            source_json="$RUNNER_TEMP/operix-affected/operix-affected.json"
+            test -f "$source_json"
+          else
+            if [[ "$APP_REQUEST" == all || -z "$APP_REQUEST" ]]; then
+              node scripts/cicd/affected-apps.mjs --all > "$RUNNER_TEMP/operix-affected.json"
+            else
+              node scripts/cicd/affected-apps.mjs --app="$APP_REQUEST" > "$RUNNER_TEMP/operix-affected.json"
+            fi
+            source_json="$RUNNER_TEMP/operix-affected.json"
+          fi
+          selected=$(jq -c --arg request "$APP_REQUEST" '.releaseApps | if $request == "" or $request == "all" then . else map(select(.id == $request)) end' "$source_json")
+          docker_selected=$(jq -c 'map(select(.dockerfile != ""))' <<< "$selected")
+          pm2_selected=$(jq -c 'map(select(.dockerfile == "" and .deployment.kind == "pm2"))' <<< "$selected")
+          echo "apps_json=$selected" >> "$GITHUB_OUTPUT"
+          echo "docker_apps_json=$docker_selected" >> "$GITHUB_OUTPUT"
+          echo "pm2_apps_json=$pm2_selected" >> "$GITHUB_OUTPUT"
+          echo "has_apps=$(jq 'length > 0' <<< "$selected")" >> "$GITHUB_OUTPUT"
+          echo "has_docker=$(jq 'length > 0' <<< "$docker_selected")" >> "$GITHUB_OUTPUT"
+          echo "has_pm2=$(jq 'length > 0' <<< "$pm2_selected")" >> "$GITHUB_OUTPUT"
+          echo "ref=$BUILD_REF" >> "$GITHUB_OUTPUT"
+          echo "Release ref: $BUILD_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release apps: $(jq -r 'map(.id) | join(", ")' <<< "$selected")" >> "$GITHUB_STEP_SUMMARY"
+
+  docker-build:
+    name: Publish Docker image ${{ matrix.app.name }}
+    needs: prepare
+    if: needs.prepare.outputs.has_docker == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.prepare.outputs.docker_apps_json) }}
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 1
+      - name: Login to GHCR with the job token
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push immutable image
+        env:
+          APP_ID: ${{ matrix.app.id }}
+          IMAGE_REPOSITORY: ${{ matrix.app.artifactRepository }}
+          DOCKERFILE: ${{ matrix.app.dockerfile }}
+          BUILD_CONTEXT: ${{ matrix.app.buildContext || '.' }}
+          COMMIT: ${{ needs.prepare.outputs.ref }}
+        run: |
+          set -euo pipefail
+          tag="$IMAGE_REPOSITORY:sha-$COMMIT"
+          docker build --file "$DOCKERFILE" --tag "$tag" "$BUILD_CONTEXT"
+          docker push "$tag"
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$tag")
+          [[ "$digest" == "$IMAGE_REPOSITORY@sha256:"* ]] || { echo "No immutable registry digest was returned"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/operix-release-$APP_ID"
+          node scripts/cicd/write-release-metadata.mjs \
+            --app="$APP_ID" \
+            --environment=artifact \
+            --commit="$COMMIT" \
+            --artifact="$digest" \
+            --status=ARTIFACT_READY \
+            --output="$RUNNER_TEMP/operix-release-$APP_ID/release.json"
+          cat "$RUNNER_TEMP/operix-release-$APP_ID/release.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload release metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-release-${{ matrix.app.id }}
+          path: ${{ runner.temp }}/operix-release-${{ matrix.app.id }}/release.json
+          retention-days: 90
+
+  pm2-build:
+    name: Package PM2 artifact ${{ matrix.app.name }}
+    needs: prepare
+    if: needs.prepare.outputs.has_pm2 == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.prepare.outputs.pm2_apps_json) }}
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: operix-ci-placeholder
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: operix-ci-placeholder
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          fetch-depth: 1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Rebuild exact PM2 release source
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' build --required
+      - name: Create immutable PM2 release archive
+        env:
+          APP_ID: ${{ matrix.app.id }}
+          APP_PATH: ${{ matrix.app.path }}
+          COMMIT: ${{ needs.prepare.outputs.ref }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/operix-release-$APP_ID"
+          mkdir -p "$release_dir"
+          release_id="sha-$COMMIT"
+          archive="$release_dir/$release_id.tar.gz"
+          tar --create --gzip --file "$archive" --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            --exclude='*/.env' --exclude='*/.env.*' --exclude='*.env' --exclude='*.env.*' \
+            --exclude='*.pem' --exclude='*.p8' \
+            package.json package-lock.json packages "$APP_PATH" node_modules
+          digest=$(sha256sum "$archive" | awk '{print $1}')
+          node scripts/cicd/write-release-metadata.mjs \
+            --app="$APP_ID" \
+            --environment=artifact \
+            --commit="$COMMIT" \
+            --artifact="pm2://$APP_ID/$release_id" \
+            --artifact-kind=pm2-archive \
+            --artifact-digest="sha256:$digest" \
+            --status=ARTIFACT_READY \
+            --output="$release_dir/release.json"
+          cat "$release_dir/release.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload PM2 release archive and metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-release-${{ matrix.app.id }}
+          path: ${{ runner.temp }}/operix-release-${{ matrix.app.id }}/*
+          retention-days: 90

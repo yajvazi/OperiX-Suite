@@ -1,0 +1,30 @@
+{
+  "requiredNodeMajor": 20,
+  "packageManager": "npm@10.9.4",
+  "e2eFramework": "maestro",
+  "maxFixAttemptsPerFailure": 2,
+  "states": [
+    "NOT_TESTED",
+    "TESTING",
+    "FIXING",
+    "RETESTING",
+    "BLOCKED",
+    "BLOCKED_SECURITY",
+    "BUILDING",
+    "BUILD_FAILED",
+    "VISUAL_REVIEW_REQUIRED",
+    "READY_FOR_MANUAL_QA",
+    "MANUAL_QA_FAILED",
+    "MANUAL_QA_APPROVED",
+    "READY_FOR_TESTFLIGHT"
+  ],
+  "requiredQaEnvironmentVariables": [
+    "OPERIX_QA_SUPABASE_URL",
+    "OPERIX_QA_SUPABASE_ANON_KEY",
+    "OPERIX_QA_TENANT_A_USER",
+    "OPERIX_QA_TENANT_B_USER"
+  ],
+  "productionSubmissionDisabled": true,
+  "productionDataDisabled": true,
+  "serviceRoleKeysAllowedInMobile": false
+}

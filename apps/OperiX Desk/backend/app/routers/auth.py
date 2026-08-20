@@ -3,6 +3,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,7 @@ from app.schemas.auth import (
 from app.utils.user_profile import serialize_skills
 from app.utils.email_validation import normalize_email, validate_allowed_email
 from app.services.audit import record_audit
+from app.services.workspace import scope_query, stamp_organization
 from app.services.notifications import (
     build_account_created_email,
     build_password_reset_email,
@@ -43,6 +45,7 @@ from app.services.notifications import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 PROFILE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def _parse_optional_enum(value: str | None, enum_cls):
@@ -81,17 +84,24 @@ async def _store_profile_image(file: UploadFile) -> str:
 
     filename = f"{uuid.uuid4().hex}{ext}"
     content = await file.read()
+    if len(content) > MAX_PROFILE_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Profile image must be 5 MB or smaller")
     os.makedirs(settings.upload_dir, exist_ok=True)
     filepath = os.path.join(settings.upload_dir, filename)
     with open(filepath, "wb") as handle:
         handle.write(content)
-    return f"/uploads/{filename}"
+    return "/api/auth/profile-image"
 
 
 @router.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
+    if not settings.legacy_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="OperiX Desk uses the shared OperiX account. Sign in through Supabase Auth.",
+        )
     email = normalize_email(form_data.username)
     validate_allowed_email(email)
     user = db.query(User).filter(User.email == email).first()
@@ -107,6 +117,19 @@ def login(
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/profile-image")
+def profile_image(current_user: User = Depends(get_current_user)):
+    """Serve the signed-in user's profile image without exposing the upload directory."""
+    if not current_user.profile_image_path:
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    upload_root = os.path.abspath(settings.upload_dir)
+    filename = os.path.basename(current_user.profile_image_path)
+    image_path = os.path.abspath(os.path.join(upload_root, filename))
+    if os.path.commonpath([upload_root, image_path]) != upload_root or not os.path.isfile(image_path):
+        raise HTTPException(status_code=404, detail="Profile image not found")
+    return FileResponse(image_path, headers={"Cache-Control": "private, no-store"})
 
 
 @router.put("/me", response_model=UserOut)
@@ -125,6 +148,11 @@ async def update_me(
     current_user: User = Depends(get_current_user),
 ):
     if new_password:
+        if current_user.supabase_user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Change this password from your shared OperiX account settings",
+            )
         if not current_password:
             raise HTTPException(status_code=400, detail="Current password is required")
         if not verify_password(current_password, current_user.hashed_password):
@@ -204,6 +232,7 @@ def register(
         password_reset_expires_at=reset_token_expiry(),
         must_change_password=True,
     )
+    stamp_organization(user, admin_user)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -211,7 +240,7 @@ def register(
     try:
         send_email(
             user.email,
-            "Your DeskDibs account is ready",
+            "Your OperiX Desk account is ready",
             build_account_created_email(
                 user.full_name,
                 user.email,
@@ -240,6 +269,11 @@ def register(
 
 @router.post("/forgot-password")
 def forgot_password(data: PasswordResetEmailRequest, db: Session = Depends(get_db)):
+    if not settings.legacy_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Use the shared OperiX account password reset flow",
+        )
     email = normalize_email(data.email)
     validate_allowed_email(email)
     user = db.query(User).filter(User.email == email).first()
@@ -253,7 +287,7 @@ def forgot_password(data: PasswordResetEmailRequest, db: Session = Depends(get_d
         try:
             send_email(
                 user.email,
-                "Reset your DeskDibs password",
+                "Reset your OperiX Desk password",
                 build_password_reset_email(
                     user.full_name,
                     build_reset_link(reset_token),
@@ -269,6 +303,11 @@ def forgot_password(data: PasswordResetEmailRequest, db: Session = Depends(get_d
 
 @router.post("/reset-password")
 def reset_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
+    if not settings.legacy_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Use the shared OperiX account password reset flow",
+        )
     now = datetime.now(timezone.utc)
     candidates = (
         db.query(User)

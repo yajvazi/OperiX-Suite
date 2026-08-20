@@ -1,17 +1,15 @@
 import logging
 import os
-from pathlib import Path
 
 from sqlalchemy import inspect, text
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from app.auth import hash_password
 from app.config import settings
 from app.database import Base, engine
 from app.models import AuditLog, Favorite, FloorPlan, Reservation, Resource, User
 from app.models.user import UserRole
-from app.routers import ai, analytics, audit, auth, floor_plans, reservations, resources, users
+from app.routers import ai, analytics, audit, auth, floor_plans, notifications, reservations, resources, users
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +18,7 @@ try:
 except OSError as exc:
     logger.warning("Upload directory unavailable: %s", exc)
 
-app = FastAPI(title="DeskDibs API", version="1.0.0")
-app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
-
+app = FastAPI(title="OperiX Desk API", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -33,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(resources.router, prefix="/api")
 app.include_router(reservations.router, prefix="/api")
@@ -53,32 +50,33 @@ def _add_column_if_missing(conn, table_name: str, column_name: str, column_defin
 
 
 def _ensure_database_schema():
-    if engine.dialect.name == "postgresql":
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'amenity'"))
-
+    # Let SQLAlchemy create the legacy tables/enums for a new local instance
+    # before extending the resource enum. Production Supabase deployments
+    # receive the same change through the root migrations first.
     Base.metadata.create_all(bind=engine)
 
-    dialect = engine.dialect.name
-    is_sqlite = dialect == "sqlite"
     with engine.begin() as conn:
-        if not is_sqlite:
-            conn.execute(text("ALTER TABLE reservations DROP CONSTRAINT IF EXISTS uq_resource_date"))
+        conn.execute(text("ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'amenity'"))
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE reservations DROP CONSTRAINT IF EXISTS uq_resource_date"))
 
         _add_column_if_missing(conn, "users", "team_name", "VARCHAR(150)")
+        _add_column_if_missing(conn, "users", "supabase_user_id", "VARCHAR(64)")
+        _add_column_if_missing(conn, "users", "company_id", "VARCHAR(64)")
         _add_column_if_missing(conn, "users", "team_leader_id", "INTEGER")
         _add_column_if_missing(conn, "users", "password_reset_token_hash", "VARCHAR(255)")
         _add_column_if_missing(
             conn,
             "users",
             "password_reset_expires_at",
-            "DATETIME" if is_sqlite else "TIMESTAMP WITH TIME ZONE",
+            "TIMESTAMP WITH TIME ZONE",
         )
         _add_column_if_missing(
             conn,
             "users",
             "must_change_password",
-            "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT false",
+            "BOOLEAN DEFAULT false",
         )
         _add_column_if_missing(conn, "users", "profile_image_path", "VARCHAR(255)")
         _add_column_if_missing(conn, "users", "department", "VARCHAR(120)")
@@ -88,12 +86,45 @@ def _ensure_database_schema():
             conn,
             "users",
             "skills",
-            "TEXT" if is_sqlite else "JSONB",
+            "JSONB",
         )
         _add_column_if_missing(conn, "users", "availability", "REAL")
 
         _add_column_if_missing(conn, "reservations", "start_time", "TIME")
         _add_column_if_missing(conn, "reservations", "end_time", "TIME")
+        _add_column_if_missing(conn, "reservations", "company_id", "VARCHAR(64)")
+
+        _add_column_if_missing(conn, "resources", "company_id", "VARCHAR(64)")
+        _add_column_if_missing(conn, "floor_plans", "company_id", "VARCHAR(64)")
+        _add_column_if_missing(conn, "favorites", "company_id", "VARCHAR(64)")
+        _add_column_if_missing(conn, "audit_logs", "company_id", "VARCHAR(64)")
+
+        # This is the database boundary for the most common race: two users
+        # reserving the same all-day desk. Timed rooms are serialized by the
+        # booking service because their overlap rule is not representable by
+        # a simple unique index.
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "operix_desk_active_all_day_resource_unique "
+                "ON reservations (resource_id, date) "
+                "WHERE status = 'active' AND start_time IS NULL AND end_time IS NULL"
+            )
+        )
+
+        if settings.default_company_id:
+            for table in ("users", "resources", "floor_plans", "favorites", "audit_logs"):
+                conn.execute(
+                    text(f"UPDATE {table} SET company_id = :company_id WHERE company_id IS NULL"),
+                    {"company_id": settings.default_company_id},
+                )
+            conn.execute(
+                text(
+                    "UPDATE reservations SET company_id = :company_id "
+                    "WHERE company_id IS NULL"
+                ),
+                {"company_id": settings.default_company_id},
+            )
 
         _add_column_if_missing(
             conn,
@@ -106,29 +137,11 @@ def _ensure_database_schema():
             conn,
             "resources",
             "restricted_to_team_leaders",
-            "BOOLEAN DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT false",
+            "BOOLEAN DEFAULT false",
         )
 
         _add_column_if_missing(conn, "floor_plans", "name", "VARCHAR(150)")
         conn.execute(text("UPDATE floor_plans SET name = 'Floor ' || floor WHERE name IS NULL"))
-
-        if is_sqlite and "image_path" in _column_names(conn, "floor_plans"):
-            plans = conn.execute(text("SELECT id, image_path FROM floor_plans")).fetchall()
-            uploads_dir = Path(settings.upload_dir).resolve()
-            for plan_id, image_path in plans:
-                if not image_path or image_path.startswith(("http://", "https://")):
-                    continue
-                path = Path(image_path)
-                resolved = (uploads_dir / path.name).resolve() if not path.is_absolute() else path
-                if not resolved.exists():
-                    local_copy = (uploads_dir / path.name).resolve()
-                    if local_copy.exists():
-                        resolved = local_copy
-                if resolved.exists() and str(resolved) != image_path:
-                    conn.execute(
-                        text("UPDATE floor_plans SET image_path = :path WHERE id = :id"),
-                        {"path": str(resolved), "id": plan_id},
-                    )
 
 
 def _ensure_initial_admin():
@@ -153,6 +166,7 @@ def _ensure_initial_admin():
                 full_name=settings.initial_admin_name,
                 role=UserRole.admin,
                 job_title="Office Manager",
+                organization_id=settings.default_company_id,
             )
         )
         db.commit()
@@ -162,8 +176,6 @@ def _ensure_initial_admin():
 def startup():
     if not settings.database_configured:
         raise RuntimeError("DATABASE_URL must be set to the Supabase Postgres connection string")
-    if settings.using_sqlite:
-        raise RuntimeError("SQLite is disabled for this deployment; set DATABASE_URL to Supabase Postgres")
 
     try:
         _ensure_database_schema()
@@ -177,7 +189,7 @@ def startup():
 @app.get("/")
 def root():
     return {
-        "name": "DeskDibs API",
+        "name": "OperiX Desk API",
         "health": "/api/health",
         "docs": "/docs",
     }

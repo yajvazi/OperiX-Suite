@@ -1,54 +1,60 @@
-# Vercel Production Setup
+# OperiX Desk Local Supabase Setup
 
-This app deploys as one Vercel project with:
+OperiX Desk runs as two Docker Compose services against the local OperiX
+Supabase stack:
 
-- `backend/index.py` as the Python serverless API
-- `frontend/package.json` as the static frontend build
+- The frontend serves the browser client on `http://127.0.0.1:54321`.
+- The backend reaches Supabase through the Docker network alias
+  `supabase_kong_OperiX` and its Postgres service through
+  `supabase_db_OperiX`.
+- Uploaded floor plans and profile images persist in the `operixdesk_backend-uploads` Docker volume.
 
-## Required environment variables
+## Required environment
 
-Set these in the Vercel project for production:
-
-```env
-DATABASE_URL=postgresql://postgres.gxmbwmbvdfvpdbtqybcl:YOUR_URL_ENCODED_DB_PASSWORD@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
-SECRET_KEY=generate-a-long-random-secret
-INITIAL_ADMIN_EMAIL=your-admin@email.com
-INITIAL_ADMIN_PASSWORD=temporary-password
-INITIAL_ADMIN_NAME=Your Name
-BLOB_READ_WRITE_TOKEN=vercel-blob-read-write-token
-RESEND_API_KEY=re_xxxxxxxxx
-RESEND_FROM_EMAIL=DeskDibs <notifications@your-verified-domain.com>
-ADMIN_NOTIFICATION_EMAIL=admin@example.com
-FRONTEND_BASE_URL=https://deskdibs.vercel.app
-```
-
-## Supabase
-
-- Create or open the Supabase project.
-- Go to **Project Settings -> Database -> Connection string**.
-- Copy the **Transaction pooler** connection string into `DATABASE_URL`.
-- Make sure `sslmode=require` is included.
-- For this project, the URL should look like:
+Keep production values in `apps/OperiX Desk/.env` on the VPS. Do not commit it or expose service credentials to the web or mobile clients.
 
 ```env
-DATABASE_URL=postgresql://postgres.gxmbwmbvdfvpdbtqybcl:YOUR_URL_ENCODED_DB_PASSWORD@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres:postgres@supabase_db_OperiX:5432/postgres
+SECRET_KEY=long-random-server-only-secret
+FRONTEND_BASE_URL=http://127.0.0.1:3007
+CORS_ORIGINS=http://127.0.0.1:3007,http://127.0.0.1:5173
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_INTERNAL_URL=http://supabase_kong_OperiX:8000
+SUPABASE_PUBLISHABLE_KEY=the-same-shared-publishable-key-used-by-OperiX
+SHARED_AUTH_ENABLED=true
+LEGACY_AUTH_ENABLED=false
+ALLOW_LEGACY_UNSCOPED_DATA=false
 ```
 
-## Vercel Blob
+The frontend `.env` contains only public Vite configuration (`VITE_SUPABASE_URL` and the publishable key). Never use a Supabase service-role key there.
 
-- Create a Blob store in the Vercel project.
-- Vercel adds `BLOB_READ_WRITE_TOKEN` automatically when the store is connected.
-- Floor plan uploads use Blob in production when that token is present.
+## Database safety
 
-## Resend email
+Before a schema change:
 
-- Create a Resend API key and set it as `RESEND_API_KEY`.
-- Set `RESEND_FROM_EMAIL` to a sender from a verified Resend domain. For testing, Resend's onboarding sender may only deliver to verified recipients.
-- Set `ADMIN_NOTIFICATION_EMAIL` to the admin inbox that should receive every new reservation notification. If it is omitted, the app emails all users with the `admin` role.
-- Set `FRONTEND_BASE_URL` so password reset links point to production.
+1. Take a Postgres backup.
+2. Apply `20260813145000_operix_desk_legacy_schema.sql`.
+3. Apply `20260813150000_operix_desk_shared_workspace.sql`.
+4. Verify users, resources, reservations, floor plans, company ids, and RLS state.
 
-## Notes
+The Desk migration is additive and retains the legacy integer ids so reservation ownership can be mapped to shared Supabase Auth users without deleting data. Do not reset the shared database.
 
-- Floor plan images are stored in Blob when available.
-- The initial admin account is created automatically on startup when the admin env vars are set.
-- If you change the admin password env vars later, the startup bootstrap will promote that account to admin if it already exists.
+## Deploy and verify
+
+```bash
+cd "/root/OperiX/apps/OperiX Desk"
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+curl -fsS http://127.0.0.1:8002/api/health
+curl -fsSI http://127.0.0.1:3007/
+```
+
+The host Nginx vhost is `/etc/nginx/sites-available/desk.operixsuite.com`. After changing it, run `nginx -t` and reload Nginx. Keep the application ports bound to loopback; only Nginx should be public.
+
+## Operations
+
+- `docker compose logs -f backend` shows API startup and database errors.
+- `docker compose logs -f frontend` shows the static Nginx container.
+- Keep `docker compose down` out of routine local restarts; `up -d --build` recreates only the Desk services.
+- Shared account sign-in is handled by Supabase Auth; legacy Desk passwords remain disabled in production.

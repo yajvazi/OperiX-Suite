@@ -1,0 +1,96 @@
+command: "npm" "run" "test:core" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 453
+
+> operix-invoice@1.0.0 test:core
+> node --import tsx --test ../../../packages/money/src/index.test.ts ../../../packages/api/src/domain.test.ts ../../../packages/api/src/workspace.test.ts
+
+TAP version 13
+# Subtest: builds one canonical tax-exclusive invoice persistence shape
+ok 1 - builds one canonical tax-exclusive invoice persistence shape
+  ---
+  duration_ms: 2.483016
+  type: 'test'
+  ...
+# Subtest: maps platform-neutral save statuses to the shared commercial status
+ok 2 - maps platform-neutral save statuses to the shared commercial status
+  ---
+  duration_ms: 0.58341
+  type: 'test'
+  ...
+# Subtest: rejects invalid financial input before a Supabase write
+ok 3 - rejects invalid financial input before a Supabase write
+  ---
+  duration_ms: 0.478932
+  type: 'test'
+  ...
+# Subtest: workspace scope includes descendants without leaking unrelated companies
+ok 4 - workspace scope includes descendants without leaking unrelated companies
+  ---
+  duration_ms: 1.170687
+  type: 'test'
+  ...
+# Subtest: tenant filters retain legacy creator rows and company-owned rows
+ok 5 - tenant filters retain legacy creator rows and company-owned rows
+  ---
+  duration_ms: 0.345652
+  type: 'test'
+  ...
+# Subtest: parses decimal strings without binary floating-point
+ok 6 - parses decimal strings without binary floating-point
+  ---
+  duration_ms: 1.130176
+  type: 'test'
+  ...
+# Subtest: supports deterministic half-up and half-even rounding
+ok 7 - supports deterministic half-up and half-even rounding
+  ---
+  duration_ms: 0.184227
+  type: 'test'
+  ...
+# Subtest: adds and multiplies exact decimal amounts
+ok 8 - adds and multiplies exact decimal amounts
+  ---
+  duration_ms: 0.294845
+  type: 'test'
+  ...
+# Subtest: serializes money as a decimal string and currency
+ok 9 - serializes money as a decimal string and currency
+  ---
+  duration_ms: 0.802462
+  type: 'test'
+  ...
+# Subtest: rejects unsafe or incompatible inputs
+ok 10 - rejects unsafe or incompatible inputs
+  ---
+  duration_ms: 0.401775
+  type: 'test'
+  ...
+# Subtest: calculates the shared invoice example with transport
+ok 11 - calculates the shared invoice example with transport
+  ---
+  duration_ms: 0.884624
+  type: 'test'
+  ...
+# Subtest: supports VAT, discounts, inclusive prices, and payment state
+ok 12 - supports VAT, discounts, inclusive prices, and payment state
+  ---
+  duration_ms: 0.357068
+  type: 'test'
+  ...
+# Subtest: exposes the effective POS discount after document allocation
+ok 13 - exposes the effective POS discount after document allocation
+  ---
+  duration_ms: 0.255726
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 244.942866

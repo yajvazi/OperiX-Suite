@@ -15,10 +15,12 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, StatusBadge, Button, FAB } from '@invoice-monorepo/ui';
 import { Invoice, Profile, Client, Expense } from '@invoice-monorepo/types';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate } from '@invoice-monorepo/i18n';
 import { stripeService } from '../../services/stripeService';
 import { t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
+import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { syncDailySalesWidget } from '../../services/iosWidgetService';
 
 const { width } = Dimensions.get('window');
 
@@ -73,51 +75,83 @@ export function DashboardScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            const companyId = profileData.active_company_id || profileData.company_id || user.id;
-
-            // Fetch active company name if using a different company
-            let displayCompanyName = profileData.company_name;
-            if (profileData.active_company_id && profileData.active_company_id !== user.id) {
-                const { data: companyData } = await supabase
-                    .from('companies')
-                    .select('company_name')
-                    .eq('id', profileData.active_company_id)
-                    .single();
-                if (companyData?.company_name) {
-                    displayCompanyName = companyData.company_name;
-                }
-            }
-
-            setProfile({ ...profileData, company_name: displayCompanyName });
+        const workspaceScope = await getWorkspaceScope(user.id);
+        const { profile: workspaceProfile, companyIds, company: activeCompany } = workspaceScope;
+        {
+            const displayCompanyName = activeCompany?.company_name || workspaceProfile.company_name;
+            setProfile({ ...workspaceProfile, company_name: displayCompanyName });
+            const scope = scopedResource(user.id, companyIds);
+            const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
 
             const { data: invoicesData } = await supabase
                 .from('invoices')
                 .select(`*, client:clients(name), items:invoice_items(*)`)
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .or(scope)
                 .order('created_at', { ascending: false });
 
             const { data: expensesData } = await supabase
                 .from('expenses')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(scope);
 
             const { data: clientsData } = await supabase
                 .from('clients')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(scope);
 
             const { data: allProducts } = await supabase
                 .from('products')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(productScope);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayKey = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0'),
+            ].join('-');
+            const invoiceRows = (invoicesData || []) as any[];
+            const widgetTenants = workspaceScope.companyIds.map((companyId) => {
+                const company = workspaceScope.companies.find((candidate) => candidate.id === companyId);
+                return {
+                    id: companyId,
+                    name: company?.company_name || (companyId === workspaceScope.companyId
+                        ? workspaceProfile.company_name || 'OperiX tenant'
+                        : 'OperiX tenant'),
+                };
+            });
+            const widgetSales = Object.fromEntries(widgetTenants.map((tenant) => {
+                const tenantInvoices = invoiceRows.filter((invoice) => {
+                    const invoiceCompanyId = invoice.company_id || workspaceScope.companyId;
+                    const invoiceDate = new Date(invoice.issue_date);
+                    invoiceDate.setHours(0, 0, 0, 0);
+                    return invoiceCompanyId === tenant.id
+                        && invoiceDate.getTime() === today.getTime();
+                });
+                return [tenant.id, {
+                    ...tenant,
+                    date: todayKey,
+                    currency: workspaceProfile.currency || 'EUR',
+                    sales: tenantInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
+                    orders: tenantInvoices.length,
+                }];
+            }));
+            try {
+                syncDailySalesWidget(widgetTenants, {
+                    updatedAt: new Date().toISOString(),
+                    defaultTenantId: workspaceScope.companyId,
+                    tenants: widgetSales,
+                });
+            } catch (widgetError) {
+                console.warn('iOS sales widget sync unavailable:', widgetError);
+            }
 
             if (allProducts) {
                 const lowStock = allProducts.filter(p => (p as any).track_stock && ((p as any).stock_quantity || 0) <= ((p as any).low_stock_threshold || 5));
@@ -127,7 +161,7 @@ export function DashboardScreen({ navigation }: any) {
             // Fetch Stripe summary
             const stripeStatus = await stripeService.checkConnectionStatus(user.id);
             if (stripeStatus.connected) {
-                const summary = await stripeService.getDashboardSummary(user.id, companyId);
+                const summary = await stripeService.getDashboardSummary(user.id, companyIds);
                 setStripeSummary({
                     totalSales: summary.totalSales,
                     totalNet: summary.totalNet,
@@ -212,7 +246,7 @@ export function DashboardScreen({ navigation }: any) {
                 // Top clients
                 const clientSales: any = {};
                 (invoicesData as any[]).forEach(inv => {
-                    const name = inv.client?.name || 'Unknown';
+                    const name = inv.client?.name || t('unknownError', language);
                     clientSales[name] = (clientSales[name] || 0) + Number(inv.total_amount);
                 });
                 const sortedClients = Object.entries(clientSales).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5);
@@ -268,7 +302,7 @@ export function DashboardScreen({ navigation }: any) {
                 <View>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('welcomeBack', language)},</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Text style={[styles.title, { color: textColor }]}>{profile?.company_name || 'My Business'}</Text>
+                        <Text style={[styles.title, { color: textColor }]}>{profile?.company_name || t('myBusiness', language)}</Text>
                         <TouchableOpacity onPress={() => setIsPrivacyMode(!isPrivacyMode)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                             {isPrivacyMode ? (
                                 <EyeOff color={mutedColor} size={20} />
@@ -385,15 +419,15 @@ export function DashboardScreen({ navigation }: any) {
                         {selectedMonth && (
                             <View style={styles.statsRow}>
                                 <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
-                                    <Text style={[styles.statLabel, { color: mutedColor }]}>In</Text>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>{t('income', language)}</Text>
                                     <Text style={[styles.statValue, { color: '#12B76A', fontSize: 16 }]}>{isPrivacyMode ? '****' : formatCurrency(selectedMonth.revenue)}</Text>
                                 </View>
                                 <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
-                                    <Text style={[styles.statLabel, { color: mutedColor }]}>Out</Text>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>{t('expenses', language)}</Text>
                                     <Text style={[styles.statValue, { color: '#ef4444', fontSize: 16 }]}>{isPrivacyMode ? '****' : formatCurrency(selectedMonth.expenses)}</Text>
                                 </View>
                                 <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
-                                    <Text style={[styles.statLabel, { color: mutedColor }]}>Net</Text>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>{t('netProfit', language)}</Text>
                                     <Text style={[styles.statValue, { color: selectedMonth.revenue >= selectedMonth.expenses ? primaryColor : '#ef4444', fontSize: 16 }]}>
                                         {isPrivacyMode ? '****' : formatCurrency(selectedMonth.revenue - selectedMonth.expenses)}
                                     </Text>
@@ -428,7 +462,7 @@ export function DashboardScreen({ navigation }: any) {
                             <View style={styles.invoiceInfo}>
                                 <Text style={[styles.invoiceNumber, { color: textColor }]}>{inv.invoice_number}</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || 'Quick Invoice'}</Text>
+                                <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || t('quickInvoice', language)}</Text>
                                     <Text style={[styles.clientName, { color: mutedColor, fontSize: 11 }]}>
                                         • {inv.items?.length || 0} {t('items', language).toLowerCase()}
                                     </Text>
@@ -462,7 +496,7 @@ export function DashboardScreen({ navigation }: any) {
                         {/* Online Sales Quick Stats */}
                         <View style={[styles.onlineSalesStats, { borderBottomColor: borderColor }]}>
                             <View style={styles.onlineSalesStat}>
-                                <Text style={[styles.onlineSalesStatLabel, { color: mutedColor }]}>{t('totalSales', language) || 'Total Sales'}</Text>
+                                <Text style={[styles.onlineSalesStatLabel, { color: mutedColor }]}>{t('totalSales', language)}</Text>
                                 <Text style={[styles.onlineSalesStatValue, { color: '#12B76A' }]}>
                                     {isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalSales)}
                                 </Text>
@@ -492,10 +526,10 @@ export function DashboardScreen({ navigation }: any) {
                                     </View>
                                     <View style={styles.transactionInfo}>
                                         <Text style={[styles.transactionDesc, { color: textColor }]} numberOfLines={1}>
-                                            {txn.description || txn.customer_email || 'Online Payment'}
+                                            {txn.description || txn.customer_email || t('onlinePayment', language)}
                                         </Text>
                                         <Text style={[styles.transactionDate, { color: mutedColor }]}>
-                                            {new Date(txn.created_at).toLocaleDateString()}
+                                            {formatDate(txn.created_at, language)}
                                         </Text>
                                     </View>
                                     <Text style={[
@@ -508,7 +542,7 @@ export function DashboardScreen({ navigation }: any) {
                             ))
                         ) : (
                             <Text style={[styles.emptyText, { color: mutedColor }]}>
-                                {t('noTransactions', language) || 'No recent transactions'}
+                                {t('noTransactions', language)}
                             </Text>
                         )}
                     </Card>
@@ -520,15 +554,15 @@ export function DashboardScreen({ navigation }: any) {
                             </View>
                             <View style={styles.connectTextContent}>
                                 <Text style={[styles.connectTitle, { color: textColor }]}>
-                                    {t('connectStripe', language) || 'Connect Stripe'}
+                                    {t('connectStripe', language)}
                                 </Text>
                                 <Text style={[styles.connectDesc, { color: mutedColor }]}>
-                                    {t('connectStripeDesc', language) || 'Accept online payments and track transactions'}
+                                    {t('connectStripeDesc', language)}
                                 </Text>
                             </View>
                         </View>
                         <Button
-                            title={t('connect', language) || 'Connect'}
+                            title={t('connect', language)}
                             variant="primary"
                             icon={ChevronRight}
                             onPress={() => navigation.navigate('Settings', { screen: 'PaymentIntegrations' })}
@@ -557,7 +591,7 @@ export function DashboardScreen({ navigation }: any) {
                 onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceForm' })}
                 actions={[
                     { label: t('newInvoice', language), icon: FileText, color: primaryColor, onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceForm' }) },
-                    { label: t('addExpense', language), icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('ExpensesTab', { screen: 'ExpenseForm' }) },
+                    { label: t('addExpense', language), icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('ExpenseForm') },
                     { label: t('newClient', language), icon: Users, color: '#12B76A', onPress: () => navigation.navigate('Management', { screen: 'ClientForm' }) },
                     { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ProductForm' }) },
                 ]}
@@ -793,7 +827,3 @@ const styles = StyleSheet.create({
         fontSize: 13,
     },
 });
-
-
-
-

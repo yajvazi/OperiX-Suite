@@ -1,7 +1,7 @@
 const MAX_CONVERSATIONS = 30;
 
 function storageKey(userId) {
-  return `deskdibs-ai-chats-${userId ?? 'guest'}`;
+  return `operix-desk-ai-chats-${userId ?? 'guest'}`;
 }
 
 function createConversation(title = 'New conversation') {

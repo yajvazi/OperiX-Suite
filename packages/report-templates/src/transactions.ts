@@ -15,6 +15,10 @@ export type TransactionReportCompany = {
   iban?: string;
   swift?: string;
   logoUrl?: string;
+  signatureUrl?: string;
+  stampUrl?: string;
+  showSignature?: boolean;
+  showStamp?: boolean;
 };
 
 export type TransactionReportPayload = {
@@ -51,14 +55,9 @@ const money = (value: unknown) =>
   }).format(num(value));
 const date = (value: unknown) => {
   if (!value) return "—";
-  const parsed = new Date(`${String(value).slice(0, 10)}T12:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? esc(value)
-    : new Intl.DateTimeFormat("sq-AL", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(parsed);
+  const raw = String(value).trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : esc(value);
 };
 const relation = (row: Row, key: string) =>
   row[key] && typeof row[key] === "object" ? (row[key] as Row) : {};
@@ -76,7 +75,7 @@ const baseCss = `
 body{font-size:10px}.page{min-height:100vh;padding:12mm 13mm;display:flex;flex-direction:column;background:#fff}
 .company-head{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1.5px solid #101828;padding-bottom:10px}
 .company-name{font-size:23px;font-weight:800;letter-spacing:.02em}.company-sub{font-size:11px;font-weight:700;margin-top:5px}
-.brand-logo{max-width:160px;max-height:55px;object-fit:contain}.document-mark{text-align:center;margin:13px 0 8px}
+.document-mark{text-align:center;margin:13px 0 8px}
 .document-mark h1{font-size:18px;margin:0 0 3px}.document-number{font-weight:700}
 .info-row{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #98a2b3;margin:8px 0 10px}
 .info-cell{padding:7px;border-right:1px solid #98a2b3}.info-cell:last-child{border-right:0}
@@ -86,7 +85,7 @@ td{border:1px solid #98a2b3;padding:6px 5px;vertical-align:top}td.num,th.num{tex
 .totals{margin:10px 0 0 auto;width:43%;border:1px solid #98a2b3;padding:7px}.totals-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
 .totals-row.grand{font-size:13px;font-weight:800;border-top:1.5px solid #101828;border-bottom:1.5px solid #101828;margin-top:4px;padding:6px 0}
 .signatures{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:28px;padding-top:25px}
-.signature{border-top:1px solid #101828;text-align:center;padding-top:5px}
+.signature{text-align:center;padding-top:5px}.signature-asset{height:20mm;display:flex;align-items:flex-end;justify-content:center}.signature-asset img{max-width:100%;max-height:18mm;object-fit:contain}.stamp-asset{height:20mm;display:flex;align-items:center;justify-content:center}.stamp-asset img{max-width:24mm;max-height:20mm;object-fit:contain}.signature-line{border-top:1px solid #101828;margin-top:2mm}.signature-label{margin-top:1.5mm;line-height:1.2}
 .footer{border-top:1px solid #101828;margin-top:14px;padding-top:7px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:8px}
 .footer-center{text-align:center}.footer-right{text-align:right}.ledger-page{padding:9mm 8mm}
 .ledger-title{text-align:center;font-size:16px;font-weight:800;margin-bottom:3px}.ledger-company{text-align:center;margin-bottom:10px}
@@ -98,17 +97,23 @@ td{border:1px solid #98a2b3;padding:6px 5px;vertical-align:top}td.num,th.num{tex
 
 const companyHeader = (payload: TransactionReportPayload, subtitle: string) => {
   const company = payload.company || {};
-  const identity = company.logoUrl
-    ? `<img class="brand-logo" src="${esc(company.logoUrl)}" alt="">`
-    : `<div class="company-name">${esc(company.name || "OperiX")}</div>`;
-  return `<div class="company-head"><div>${identity}<div class="company-sub">${esc(subtitle)}</div></div><div style="text-align:right"><b>${esc(company.name || "")}</b><br>${esc(company.taxId || "")}</div></div>`;
+  const identity = `<div class="company-name">${esc(company.name || "—")}</div>`;
+  return `<div class="company-head"><div>${identity}<div class="company-sub">${esc(subtitle)}</div></div><div style="text-align:right"><b>${esc(company.taxId || "")}</b></div></div>`;
 };
 const footer = (payload: TransactionReportPayload) => {
   const company = payload.company || {};
   return `<div class="footer"><div><b>Detajet bankare:</b> ${esc(company.bankName || "—")}<br>IBAN: ${esc(company.iban || company.bankAccount || "—")}</div><div class="footer-center">${esc([company.address, company.city, company.country].filter(Boolean).join(", "))}<br>${esc(company.phone || "")}</div><div class="footer-right">${esc(company.email || "")}<br>${esc(company.website || "")}<br>© OperiX Invoice</div></div>`;
 };
-const signatures = (labels: string[]) =>
-  `<div class="signatures">${labels.map((label) => `<div class="signature">${esc(label)}</div>`).join("")}</div>`;
+const signatures = (labels: string[], company: TransactionReportCompany = {}) => {
+  const signature = company.showSignature !== false && company.signatureUrl
+    ? `<div class="signature"><div class="signature-asset"><img src="${esc(company.signatureUrl)}" alt="Nënshkrimi"/></div><div class="signature-line"></div><div class="signature-label">Nënshkrimi</div></div>`
+    : `<div class="signature">${esc(labels[0] || "Nënshkrimi")}</div>`;
+  const stamp = company.showStamp !== false && company.stampUrl
+    ? `<div class="signature"><div class="stamp-asset"><img src="${esc(company.stampUrl)}" alt="Vula zyrtare"/></div><div class="signature-label">Vula zyrtare</div></div>`
+    : `<div class="signature">${esc(labels[1] || "Vula zyrtare")}</div>`;
+  const third = `<div class="signature">${esc(labels[2] || "")}</div>`;
+  return `<div class="signatures">${signature}${stamp}${third}</div>`;
+};
 const htmlDocument = (body: string, landscape = false) =>
   `<!doctype html><html lang="sq"><head><meta charset="utf-8"><style>${baseCss}${landscape ? "@page{size:A4 landscape;margin:0}" : ""}</style></head><body>${body}</body></html>`;
 
@@ -125,7 +130,7 @@ function expenseReport(payload: TransactionReportPayload) {
   <div class="document-mark"><h1>Blerje / Shpenzime</h1><div class="document-number">${esc(payload.title)}</div></div>
   <div class="info-row"><div class="info-cell"><div class="label">Periudha nga</div><div class="value">${date(range.from)}</div></div><div class="info-cell"><div class="label">Periudha deri</div><div class="value">${date(range.to)}</div></div><div class="info-cell"><div class="label">Referenca</div><div class="value">Regjistri i shpenzimeve</div></div><div class="info-cell"><div class="label">Valuta</div><div class="value">EUR</div></div></div>
   <table><thead><tr><th>Nr.</th><th>Furnitori</th><th>Përshkrimi</th><th>Kategoria</th><th class="num">Vlera</th><th class="num">TVSH</th><th class="num">Për pagesë</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Nuk ka të dhëna për periudhën.</td></tr>`}</tbody></table>
-  <div class="totals"><div class="totals-row"><span>Vlera:</span><b>${money(total)} EUR</b></div><div class="totals-row grand"><span>Vlera për pagesë:</span><span>${money(total)} EUR</span></div></div>${signatures(["Përgatiti", "Kontrolloi", "Pranoi"])}${footer(payload)}</main>`);
+  <div class="totals"><div class="totals-row"><span>Vlera:</span><b>${money(total)} EUR</b></div><div class="totals-row grand"><span>Vlera për pagesë:</span><span>${money(total)} EUR</span></div></div>${signatures(["Përgatiti", "Kontrolloi", "Pranoi"], payload.company)}${footer(payload)}</main>`);
 }
 
 function incomeReport(payload: TransactionReportPayload) {
@@ -151,7 +156,7 @@ function incomeReport(payload: TransactionReportPayload) {
   return htmlDocument(`<main class="page">${companyHeader(payload, "DOKUMENT I PAGESËS HYRËSE")}
   <div class="document-mark"><h1>Pagesat hyrëse</h1><div class="document-number">${esc(payload.title)}</div></div>
   <table><thead><tr><th>Nr.</th><th>Dokumenti</th><th>Subjekti</th><th>Përshkrimi</th><th class="num">Për pagesë</th><th class="num">Pagesa</th><th class="num">Mbetja</th></tr></thead><tbody>${rows || `<tr><td colspan="7">Nuk ka të dhëna për periudhën.</td></tr>`}</tbody><tfoot><tr><td colspan="5"><b>Gjithsej</b></td><td class="num"><b>${money(total)} EUR</b></td><td class="num"><b>${money(remaining)} EUR</b></td></tr></tfoot></table>
-  ${signatures(["Arkëtari", "Likuiduesi", "Subjekti"])}${footer(payload)}</main>`);
+  ${signatures(["Arkëtari", "Likuiduesi", "Subjekti"], payload.company)}${footer(payload)}</main>`);
 }
 
 export type KosovoSalesBookAmounts = {

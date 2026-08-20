@@ -7,6 +7,7 @@ export const NOTIFICATION_CHANNELS = [
   "discord",
   "slack",
   "microsoft-teams",
+  "in_app",
 ] as const;
 
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -91,6 +92,20 @@ export function createEmailTransport(sender: EmailSender): NotificationTransport
         providerMessageId: result.providerMessageId,
         acceptedAt: new Date().toISOString(),
       };
+    },
+  };
+}
+
+export type NotificationSink = (request: NotificationRequest) => Promise<{ providerMessageId?: string }>;
+
+/** Adapter for shared application-level notification sinks (in-app, push, or a future provider). */
+export function createNotificationSinkTransport(channel: NotificationChannel, sink: NotificationSink): NotificationTransport {
+  return {
+    channel,
+    async send(request) {
+      if (request.channel !== channel) throw new NotificationError("invalid_channel", `The ${channel} transport received a ${request.channel} request`);
+      const result = await sink(request);
+      return { channel, providerMessageId: result.providerMessageId, acceptedAt: new Date().toISOString() };
     },
   };
 }

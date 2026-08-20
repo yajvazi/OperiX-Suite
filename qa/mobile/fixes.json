@@ -1,0 +1,15 @@
+[
+  {
+    "id": "operix-invoice-help-route-fixture",
+    "appId": "operix-invoice",
+    "classification": "TEST_BUG",
+    "severity": "BLOCKER",
+    "status": "FIXED",
+    "description": "The HelpSupport UI regression test supplied an incomplete React Navigation route object, so the application typecheck failed before the test suite could be considered release-ready.",
+    "file": "apps/OperiX Invoice/OperiX Invoice Mobile/test/ui/ui-surfaces.test.tsx",
+    "regressionTest": "apps/OperiX Invoice/OperiX Invoice Mobile/test/ui/ui-surfaces.test.tsx",
+    "fix": "Use the typed HelpSupport route shape with key, name, and params; no assertion or application behavior was weakened.",
+    "verifiedBy": ["typecheck", "test:component", "test:ci"],
+    "verifiedStatus": "PASS"
+  }
+]

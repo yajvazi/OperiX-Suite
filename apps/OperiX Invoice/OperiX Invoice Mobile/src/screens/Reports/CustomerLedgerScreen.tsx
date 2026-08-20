@@ -9,14 +9,14 @@ import {
     ActivityIndicator,
     TextInput,
     FlatList,
+    Switch,
 } from 'react-native';
 import { ArrowLeft, Download, User, FileText, CreditCard, TrendingUp, Search, X } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { Button, Card } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { Client, Profile } from '@invoice-monorepo/types';
 import {
     buildCustomerLedger,
@@ -27,6 +27,9 @@ import {
 } from '@invoice-monorepo/report-templates';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
+import { listCustomerInvoices, listCustomerPayments } from '@invoice-monorepo/api/repositories';
 
 const LEDGER_RANGE = { from: '1900-01-01', to: '9999-12-31' };
 
@@ -51,6 +54,9 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         closingBalance: 0,
         totalPayments: 0,
     });
+    const [showLedgerSignature, setShowLedgerSignature] = useState(true);
+    const [showLedgerStamp, setShowLedgerStamp] = useState(true);
+    const [showLedgerClientSignature, setShowLedgerClientSignature] = useState(true);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -84,20 +90,25 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     const fetchInitialData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            setProfile(profileData);
-            const companyId = profileData.active_company_id || profileData.company_id || user.id;
+        const { profile: workspaceProfile, company, companyIds } = await getWorkspaceScope(user.id);
+        const tenant = company as any;
+        setProfile({
+            ...workspaceProfile,
+            company_name: tenant?.company_name || tenant?.name || workspaceProfile.company_name,
+            logo_url: tenant?.logo_url || workspaceProfile.logo_url,
+            signature_url: tenant?.signature_url || workspaceProfile.signature_url,
+            stamp_url: tenant?.stamp_url || workspaceProfile.stamp_url,
+        });
+        const scope = scopedResource(user.id, companyIds);
 
-            const { data: clientsData } = await supabase
-                .from('clients')
-                .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-                .order('name');
-            if (clientsData) {
-                setClients(clientsData);
-                setFilteredClients(clientsData);
-            }
+        const { data: clientsData } = await supabase
+            .from('clients')
+            .select('*')
+            .or(scope)
+            .order('name');
+        if (clientsData) {
+            setClients(clientsData);
+            setFilteredClients(clientsData);
         }
         setLoading(false);
     };
@@ -107,26 +118,15 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         setLoading(true);
 
         try {
-            const { data: invoices } = await supabase
-                .from('invoices')
-                .select('id, invoice_number, issue_date, status, type, subtype, total_amount, payment_method, notes, created_at')
-                .eq('client_id', selectedClientId)
-                .order('issue_date', { ascending: true });
-
-            const { data: payments } = await supabase
-                .from('payments')
-                .select('id, payment_number, payment_date, amount, payment_method, bank_reference, notes, invoice_id, created_at, invoice:invoices(invoice_number)')
-                .eq('client_id', selectedClientId)
-                .order('payment_date', { ascending: true });
-
-            const normalizedPayments = (payments || []).map((payment: any) => ({
-                ...payment,
-                invoice_number: Array.isArray(payment.invoice)
-                    ? payment.invoice[0]?.invoice_number
-                    : payment.invoice?.invoice_number,
-            })) as CustomerLedgerPayment[];
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const scope = { userId: user.id, companyIds };
+            const [invoices, payments] = await Promise.all([
+                listCustomerInvoices(supabase, scope, selectedClientId),
+                listCustomerPayments(supabase, scope, selectedClientId),
+            ]);
+            const normalizedPayments = payments as unknown as CustomerLedgerPayment[];
             const ledger = buildCustomerLedger({
-                invoices: (invoices || []) as CustomerLedgerInvoice[],
+                invoices: invoices as unknown as CustomerLedgerInvoice[],
                 payments: normalizedPayments,
                 customerName: clients.find(client => client.id === selectedClientId)?.name || '—',
                 organizationUnit: profile?.company_name || '—',
@@ -182,20 +182,25 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                     website: profile.website,
                     bankName: profile.bank_name,
                     iban: profile.bank_iban || profile.bank_account,
-                    logoUrl: profile.logo_url,
+                    showSignature: showLedgerSignature,
+                    showStamp: showLedgerStamp,
+                    showClientSignature: showLedgerClientSignature,
+                    signatureUrl: profile.signature_url,
+                    stampUrl: profile.stamp_url,
                 },
                 range: LEDGER_RANGE,
                 summary: ledgerSummary,
                 entries: ledgerEntries,
             });
             const { uri } = await Print.printToFileAsync({ html, base64: false });
-            await Sharing.shareAsync(uri, {
+            const namedUri = await namePdfFile(uri, reportPdfFileName(profile.company_name || t('company', language), t('customerLedger', language)));
+            await Sharing.shareAsync(namedUri, {
                 mimeType: 'application/pdf',
-                dialogTitle: `Kartela - ${selectedClient.name}`,
+                dialogTitle: `${t('customerLedger', language)} - ${selectedClient.name}`,
                 UTI: 'com.adobe.pdf',
             });
         } catch (error: any) {
-            Alert.alert(t('error', language), 'Failed to export PDF: ' + error.message);
+            Alert.alert(t('error', language), `${t('failedToExportPdf', language)}: ${getLocalizedErrorMessage(error, language, 'failedToExportPdf')}`);
         } finally {
             setExporting(false);
         }
@@ -251,7 +256,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                             )}
                             contentContainerStyle={{ paddingBottom: 20, gap: 12 }}
                             ListEmptyComponent={
-                                <Text style={[styles.emptyText, { color: mutedColor }]}>No clients found</Text>
+                                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noClientsFound', language)}</Text>
                             }
                         />
                     )}
@@ -268,7 +273,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginHorizontal: 12 }}>
                     <Text style={[styles.mainTitle, { color: textColor, fontSize: 18 }]} numberOfLines={1}>{selectedClient?.name}</Text>
-                    <Text style={{ color: mutedColor, fontSize: 12 }}>Customer Ledger</Text>
+                    <Text style={{ color: mutedColor, fontSize: 12 }}>{t('customerLedger', language)}</Text>
                 </View>
                 <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: cardBg }]}
@@ -279,7 +284,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {loading ? (
                     <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 40 }} />
                 ) : (
@@ -288,37 +293,61 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                             <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                                 <FileText color="#ef4444" size={20} />
                                 <View>
-                                    <Text style={[styles.metricLabel, { color: mutedColor }]}>DEBIT</Text>
+                                <Text style={[styles.metricLabel, { color: mutedColor }]}>{t('debit', language).toUpperCase()}</Text>
                                     <Text style={[styles.metricValue, { color: '#ef4444' }]}>{formatCurrency(totals.debit)}</Text>
                                 </View>
                             </Card>
                             <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                                 <CreditCard color="#12B76A" size={20} />
                                 <View>
-                                    <Text style={[styles.metricLabel, { color: mutedColor }]}>CREDIT</Text>
+                                <Text style={[styles.metricLabel, { color: mutedColor }]}>{t('credit', language).toUpperCase()}</Text>
                                     <Text style={[styles.metricValue, { color: '#12B76A' }]}>{formatCurrency(totals.credit)}</Text>
                                 </View>
                             </Card>
                         </View>
-                        <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1, marginBottom: 20 }]}>
+                        <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1, marginBottom: 20 }]}> 
                             <TrendingUp color={primaryColor} size={24} />
                             <View>
-                                <Text style={[styles.metricLabel, { color: mutedColor }]}>CURRENT BALANCE</Text>
+                                <Text style={[styles.metricLabel, { color: mutedColor }]}>{t('currentBalance', language).toUpperCase()}</Text>
                                 <Text style={[styles.metricValue, { color: primaryColor, fontSize: 24 }]}>{formatCurrency(totals.balance)}</Text>
+                            </View>
+                        </Card>
+
+                        <Card style={[styles.optionsCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}> 
+                            <View style={styles.optionRow}>
+                                <View style={styles.optionCopy}>
+                                    <Text style={[styles.optionTitle, { color: textColor }]}>{t('showSignature', language)}</Text>
+                                    <Text style={[styles.optionDescription, { color: mutedColor }]}>{t('showSignature', language)}</Text>
+                                </View>
+                                <Switch value={showLedgerSignature} onValueChange={setShowLedgerSignature} trackColor={{ false: borderColor, true: `${primaryColor}88` }} thumbColor={showLedgerSignature ? primaryColor : '#f4f4f5'} />
+                            </View>
+                            <View style={[styles.optionRow, { marginTop: 10 }]}>
+                                <View style={styles.optionCopy}>
+                                    <Text style={[styles.optionTitle, { color: textColor }]}>{t('showCompanyStamp', language)}</Text>
+                                    <Text style={[styles.optionDescription, { color: mutedColor }]}>{t('showCompanyStamp', language)}</Text>
+                                </View>
+                                <Switch value={showLedgerStamp} onValueChange={setShowLedgerStamp} trackColor={{ false: borderColor, true: `${primaryColor}88` }} thumbColor={showLedgerStamp ? primaryColor : '#f4f4f5'} />
+                            </View>
+                            <View style={[styles.optionRow, { marginTop: 10 }]}>
+                                <View style={styles.optionCopy}>
+                                    <Text style={[styles.optionTitle, { color: textColor }]}>{t('clientSignature', language)}</Text>
+                                    <Text style={[styles.optionDescription, { color: mutedColor }]}>{t('clientSignature', language)}</Text>
+                                </View>
+                                <Switch value={showLedgerClientSignature} onValueChange={setShowLedgerClientSignature} trackColor={{ false: borderColor, true: `${primaryColor}88` }} thumbColor={showLedgerClientSignature ? primaryColor : '#f4f4f5'} />
                             </View>
                         </Card>
 
                         <Card style={[styles.tableCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                             <View style={[styles.tableHeader, { backgroundColor: primaryColor }]}>
-                                <Text style={[styles.th, { flex: 1.2 }]}>DATE</Text>
-                                <Text style={[styles.th, { flex: 2.5 }]}>DESCRIPTION</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>DEBIT</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>CREDIT</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>BAL</Text>
+                                <Text style={[styles.th, { flex: 1.2 }]}>{t('date', language).toUpperCase()}</Text>
+                                <Text style={[styles.th, { flex: 2.5 }]}>{t('description', language).toUpperCase()}</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>{t('debit', language).toUpperCase()}</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>{t('credit', language).toUpperCase()}</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>{t('balance', language).toUpperCase()}</Text>
                             </View>
 
                             {ledgerEntries.length === 0 ? (
-                                <Text style={[styles.emptyText, { color: mutedColor }]}>No transactions found</Text>
+                                <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noTransactionsFound', language)}</Text>
                             ) : (
                                 ledgerEntries.map((entry, idx) => (
                                     <View
@@ -375,6 +404,11 @@ const styles = StyleSheet.create({
     metricCard: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16 },
     metricLabel: { fontSize: 11, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
     metricValue: { fontSize: 16, fontWeight: '800' },
+    optionsCard: { padding: 16, borderRadius: 16, marginBottom: 20 },
+    optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    optionCopy: { flex: 1, paddingRight: 12 },
+    optionTitle: { fontSize: 14, fontWeight: '700' },
+    optionDescription: { marginTop: 3, fontSize: 12 },
 
     tableCard: { borderRadius: 16, overflow: 'hidden' },
     tableHeader: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 12 },
@@ -386,5 +420,3 @@ const styles = StyleSheet.create({
 
     emptyText: { padding: 40, textAlign: 'center', fontSize: 14, fontWeight: '500' },
 });
-
-

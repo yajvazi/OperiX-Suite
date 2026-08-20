@@ -1,0 +1,84 @@
+name: OperiX Mobile QA Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Mobile app id"
+        required: true
+      confirmation:
+        description: "Type BUILD_QA to create an internal QA build"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operix-mobile-qa-${{ inputs.app }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: QA build preflight
+    runs-on: ubuntu-latest
+    outputs:
+      apps_json: ${{ steps.select.outputs.apps_json }}
+    steps:
+      - name: Require explicit QA build confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == BUILD_QA ]] || { echo "QA build requires confirmation=BUILD_QA"; exit 1; }
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select mobile app
+        id: select
+        env:
+          APP_ID: ${{ inputs.app }}
+        run: |
+          set -euo pipefail
+          node scripts/cicd/affected-apps.mjs --app="$APP_ID" > "$RUNNER_TEMP/operix-mobile-selection.json"
+          test "$(jq -r '.mobileApps | length' "$RUNNER_TEMP/operix-mobile-selection.json")" = 1
+          echo "apps_json=$(jq -c '.mobileApps' "$RUNNER_TEMP/operix-mobile-selection.json")" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Reuse central mobile CI
+    needs: preflight
+    uses: ./.github/workflows/operix-mobile-build.yml
+    with:
+      apps_json: ${{ needs.preflight.outputs.apps_json }}
+
+  build:
+    name: Create internal EAS/Expo QA build
+    needs: [preflight, validate]
+    runs-on: ubuntu-latest
+    environment: mobile-qa
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Create internal development/preview build
+        env:
+          APP_PATH: ${{ fromJSON(needs.preflight.outputs.apps_json)[0].path }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$EXPO_TOKEN" ]] || { echo "EXPO_TOKEN is not configured in mobile-qa"; exit 1; }
+          cd "$APP_PATH"
+          npx --no-install eas-cli build --profile preview --platform all --non-interactive --no-wait 2>&1 | tee "$RUNNER_TEMP/operix-mobile-qa-build.log"
+          echo "READY_FOR_MANUAL_QA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload QA build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-mobile-qa-build-${{ inputs.app }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/operix-mobile-qa-build.log
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
     ActivityIndicator,
-    StyleSheet,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useAuth } from '@invoice-monorepo/hooks';
-import { useTheme } from '@invoice-monorepo/hooks';
+import { useAuth, useTheme } from '@invoice-monorepo/hooks';
+import { t } from '@invoice-monorepo/i18n';
+import { OperixLogo } from '../../components/OperixLogo';
+import { brand, getPalette } from '../../theme/brand';
 
 interface SignUpScreenProps {
     onNavigateToSignIn: () => void;
@@ -20,7 +22,8 @@ interface SignUpScreenProps {
 
 export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenProps) {
     const { signUp, verifyEmailOtp } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
+    const palette = getPalette(isDark);
     const [email, setEmail] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -29,78 +32,60 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
     const [companyRegNumber, setCompanyRegNumber] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [verificationCode, setVerificationCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
 
-    // Dynamic theme colors
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const inputBg = isDark ? '#0f172a' : '#f1f5f9';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const labelColor = isDark ? '#e2e8f0' : '#374151';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-    const borderColor = isDark ? '#334155' : '#e2e8f0';
-
     const handleSignUp = async () => {
-        if (!email || !password || !confirmPassword || !firstName || !lastName || !phone) {
-            setError('Please fill in all required fields marked with *');
+        if (!email.trim() || !password || !confirmPassword || !firstName.trim() || !lastName.trim() || !phone.trim()) {
+            setError(t('requiredFields', language));
             return;
         }
-
         if (password !== confirmPassword) {
-            setError('Passwords do not match');
+            setError(t('passwordMismatch', language));
             return;
         }
-
         if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+            setError(t('passwordMin', language));
             return;
         }
 
         setLoading(true);
         setError('');
-
         try {
-            const { error: signUpError } = await signUp(email, password, {
+            const { error: signUpError } = await signUp(email.trim().toLowerCase(), password, {
                 data: {
-                    first_name: firstName,
-                    last_name: lastName,
-                    full_name: `${firstName} ${lastName}`,
-                    phone: phone,
-                    company_name: companyName,
-                    tax_id: companyRegNumber
-                }
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
+                    full_name: `${firstName.trim()} ${lastName.trim()}`,
+                    phone: phone.trim(),
+                    company_name: companyName.trim(),
+                    tax_id: companyRegNumber.trim(),
+                },
             });
-            if (signUpError) {
-                setError(signUpError.message);
-            } else {
-                setSuccess(true);
-            }
-        } catch (e) {
-            setError('An unexpected error occurred');
+            if (signUpError) setError(t('signUpFailed', language));
+            else setSuccess(true);
+        } catch {
+            setError(t('unexpectedError', language));
         } finally {
             setLoading(false);
         }
     };
 
-    const [verificationCode, setVerificationCode] = useState('');
-
     const handleVerify = async () => {
-        if (!verificationCode) {
-            setError('Please enter the code');
+        if (!verificationCode.trim()) {
+            setError(t('enterVerificationCode', language));
             return;
         }
         setLoading(true);
+        setError('');
         try {
-            const { error } = await verifyEmailOtp(email, verificationCode);
-            if (error) {
-                setError(error.message);
-            } else {
-                onNavigateToSignIn();
-            }
-        } catch (e) {
-            setError('Verification failed');
+            const { error: verificationError } = await verifyEmailOtp(email.trim().toLowerCase(), verificationCode.trim());
+            if (verificationError) setError(t('verificationFailed', language));
+            else onNavigateToSignIn();
+        } catch {
+            setError(t('verificationFailed', language));
         } finally {
             setLoading(false);
         }
@@ -108,281 +93,102 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
 
     if (success) {
         return (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
-                <View style={styles.successBox}>
-                    <Text style={styles.successTitle}>Verify Email</Text>
-                    <Text style={[styles.successText, { color: mutedColor }]}>
-                        Please enter the verification code sent to {email}
-                    </Text>
-
-                    {error ? (
-                        <View style={styles.errorBox}>
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    ) : null}
-
-                    <TextInput
-                        style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor, width: '100%', textAlign: 'center', fontSize: 24, letterSpacing: 4 }]}
-                        placeholder="000000"
-                        placeholderTextColor={mutedColor}
-                        value={verificationCode}
-                        onChangeText={setVerificationCode}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                    />
-
-                    <TouchableOpacity style={[styles.button, { backgroundColor: primaryColor, marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify Code</Text>}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={{ marginTop: 16 }} onPress={onNavigateToSignIn}>
-                        <Text style={[styles.link, { color: primaryColor }]}>Skip to Sign In</Text>
-                    </TouchableOpacity>
-                </View>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: palette.background }]}>
+                <ScrollView contentContainerStyle={styles.successScroll} keyboardShouldPersistTaps="handled">
+                    <OperixLogo width={190} reversed={isDark} />
+                    <View style={[styles.successCard, { backgroundColor: palette.surface }]}>
+                        <Text style={[styles.successTitle, { color: palette.text }]}>Verify your email</Text>
+                        <Text style={[styles.successText, { color: palette.muted }]}>Enter the verification code sent to {email}.</Text>
+                        {error ? <ErrorMessage message={error} /> : null}
+                        <TextInput
+                            style={[styles.input, styles.codeInput, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }]}
+                            placeholder="000000"
+                            placeholderTextColor={palette.muted}
+                            value={verificationCode}
+                            onChangeText={setVerificationCode}
+                            keyboardType="number-pad"
+                            maxLength={6}
+                        />
+                        <TouchableOpacity style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]} onPress={() => void handleVerify()} disabled={loading}>
+                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify code</Text>}
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onNavigateToSignIn} style={styles.secondaryAction}>
+                            <Text style={[styles.link, { color: primaryColor }]}>Back to sign in</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         );
     }
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={[styles.container, { backgroundColor: bgColor }]}
-        >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-            >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: palette.background }]}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
-                    <Text style={[styles.title, { color: primaryColor }]}>Create Account</Text>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Start managing your invoices</Text>
+                    <OperixLogo width={190} reversed={isDark} />
+                    <Text style={[styles.title, { color: palette.text }]}>Create your account</Text>
+                    <Text style={[styles.subtitle, { color: palette.muted }]}>Set up your OperiX HR workspace.</Text>
                 </View>
 
-                <View style={[styles.form, { backgroundColor: cardBg }]}>
-                    {error ? (
-                        <View style={styles.errorBox}>
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    ) : null}
+                <View style={[styles.form, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                    {error ? <ErrorMessage message={error} /> : null}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Name *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="First Name"
-                            placeholderTextColor={mutedColor}
-                            value={firstName}
-                            onChangeText={setFirstName}
-                        />
-                    </View>
+                    <Field label="First name *" value={firstName} onChangeText={setFirstName} placeholder="John" palette={palette} />
+                    <Field label="Last name *" value={lastName} onChangeText={setLastName} placeholder="Doe" palette={palette} />
+                    <Field label="Email *" value={email} onChangeText={setEmail} placeholder="john@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} palette={palette} />
+                    <Field label="Password *" value={password} onChangeText={setPassword} placeholder="Create a password" secureTextEntry palette={palette} />
+                    <Field label="Confirm password *" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm your password" secureTextEntry palette={palette} />
+                    <Field label="Phone number *" value={phone} onChangeText={setPhone} placeholder="+1 234 567 8900" keyboardType="phone-pad" palette={palette} />
+                    <Field label="Company name" value={companyName} onChangeText={setCompanyName} placeholder="Your company" palette={palette} />
+                    <Field label="Company registration number" value={companyRegNumber} onChangeText={setCompanyRegNumber} placeholder="Tax ID / registration" palette={palette} />
 
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Last Name *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Last Name"
-                            placeholderTextColor={mutedColor}
-                            value={lastName}
-                            onChangeText={setLastName}
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Email *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Enter your email"
-                            placeholderTextColor={mutedColor}
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Password *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Create a password"
-                            placeholderTextColor={mutedColor}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Confirm Password *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Confirm your password"
-                            placeholderTextColor={mutedColor}
-                            value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                            secureTextEntry
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Phone Number *</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="+1 234 567 8900"
-                            placeholderTextColor={mutedColor}
-                            value={phone}
-                            onChangeText={setPhone}
-                            keyboardType="phone-pad"
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Company Name</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Your Company Details"
-                            placeholderTextColor={mutedColor}
-                            value={companyName}
-                            onChangeText={setCompanyName}
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={[styles.label, { color: labelColor }]}>Company Registered Number</Text>
-                        <TextInput
-                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
-                            placeholder="Tax ID / Registration"
-                            placeholderTextColor={mutedColor}
-                            value={companyRegNumber}
-                            onChangeText={setCompanyRegNumber}
-                        />
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]}
-                        onPress={handleSignUp}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.buttonText}>Create Account</Text>
-                        )}
+                    <TouchableOpacity style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]} onPress={() => void handleSignUp()} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create account</Text>}
                     </TouchableOpacity>
 
-                    <View style={styles.footer}>
-                        <Text style={[styles.footerText, { color: mutedColor }]}>Already have an account?</Text>
-                        <TouchableOpacity onPress={onNavigateToSignIn}>
-                            <Text style={[styles.link, { color: primaryColor }]}>Sign In</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={[styles.footer, { marginTop: 12 }]}>
-                        <Text style={[styles.footerText, { color: mutedColor }]}>Joining a company?</Text>
-                        <TouchableOpacity onPress={() => (navigation as any).navigate('JoinTeam')}>
-                            <Text style={[styles.link, { color: primaryColor }]}>Enter Invite Code</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <View style={styles.footer}><Text style={[styles.footerText, { color: palette.muted }]}>Already have an account?</Text><TouchableOpacity onPress={onNavigateToSignIn}><Text style={[styles.link, { color: primaryColor }]}>Sign in</Text></TouchableOpacity></View>
+                    <View style={styles.footer}><Text style={[styles.footerText, { color: palette.muted }]}>Joining a company?</Text><TouchableOpacity onPress={() => navigation?.navigate('JoinTeam')}><Text style={[styles.link, { color: primaryColor }]}>Enter invite code</Text></TouchableOpacity></View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
+function Field({ label, palette, ...props }: { label: string; palette: ReturnType<typeof getPalette> } & React.ComponentProps<typeof TextInput>) {
+    return (
+        <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: palette.textSecondary }]}>{label}</Text>
+            <TextInput {...props} style={[styles.input, { backgroundColor: palette.surface, borderColor: palette.border, color: palette.text }, props.style]} placeholderTextColor={palette.muted} />
+        </View>
+    );
+}
+
+function ErrorMessage({ message }: { message: string }) {
+    return <View style={styles.errorBox}><Text style={styles.errorText}>{message}</Text></View>;
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'center',
-        padding: 24,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 48,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-    },
-    form: {
-        borderRadius: 16,
-        padding: 24,
-    },
-    errorBox: {
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        borderWidth: 1,
-        borderColor: '#ef4444',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 16,
-    },
-    errorText: {
-        color: '#ef4444',
-        textAlign: 'center',
-    },
-    successBox: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    successTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#10b981',
-        marginBottom: 12,
-    },
-    successText: {
-        textAlign: 'center',
-        marginBottom: 24,
-        lineHeight: 24,
-    },
-    inputGroup: {
-        marginBottom: 16,
-    },
-    label: {
-        marginBottom: 8,
-        fontWeight: '500',
-    },
-    input: {
-        borderWidth: 1,
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-    },
-    button: {
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    buttonDisabled: {
-        opacity: 0.7,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 24,
-        gap: 4,
-    },
-    footerText: {
-    },
-    link: {
-        fontWeight: '600',
-    },
+    container: { flex: 1 },
+    scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+    successScroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    header: { alignItems: 'center', marginBottom: 32 },
+    title: { fontSize: 25, lineHeight: 32, fontFamily: brand.fonts.semibold, marginTop: 24 },
+    subtitle: { fontSize: 14, fontFamily: brand.fonts.regular, marginTop: 6 },
+    form: { borderRadius: brand.radius.panel, borderWidth: 1, padding: 22, ...brand.shadow.card },
+    successCard: { width: '100%', borderRadius: brand.radius.panel, padding: 24, marginTop: 28, ...brand.shadow.card },
+    successTitle: { fontSize: 23, fontFamily: brand.fonts.semibold, textAlign: 'center' },
+    successText: { fontSize: 13, fontFamily: brand.fonts.regular, textAlign: 'center', lineHeight: 20, marginTop: 8, marginBottom: 22 },
+    errorBox: { backgroundColor: brand.colors.errorSoft, borderWidth: 1, borderColor: brand.colors.error, borderRadius: 12, padding: 12, marginBottom: 16 },
+    errorText: { color: brand.colors.error, textAlign: 'center', fontFamily: brand.fonts.medium, fontSize: 12 },
+    inputGroup: { marginBottom: 14 },
+    label: { marginBottom: 7, fontFamily: brand.fonts.medium, fontSize: 12 },
+    input: { borderWidth: 1, borderRadius: brand.radius.control, paddingHorizontal: 15, minHeight: 52, fontSize: 15, fontFamily: brand.fonts.regular },
+    codeInput: { textAlign: 'center', fontSize: 23, letterSpacing: 5 },
+    button: { minHeight: 54, borderRadius: brand.radius.control, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, marginTop: 6, ...brand.shadow.floating },
+    buttonDisabled: { opacity: 0.7 },
+    buttonText: { color: '#fff', fontSize: 15, fontFamily: brand.fonts.semibold },
+    footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20, gap: 4 },
+    footerText: { fontSize: 12, fontFamily: brand.fonts.regular },
+    link: { fontSize: 12, fontFamily: brand.fonts.semibold },
+    secondaryAction: { alignItems: 'center', marginTop: 18 },
 });
-
-
-
-
-

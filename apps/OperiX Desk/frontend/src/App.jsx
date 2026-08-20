@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
+import { LocaleProvider } from './context/LocaleContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AdminRoute, ManagerRoute, ProtectedRoute } from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -23,9 +25,25 @@ import AiAssistant from './pages/AiAssistant';
 import Profile from './pages/Profile';
 import EmergencyStaffing from './pages/EmergencyStaffing';
 
+function DeskToastContainer() {
+  const { theme } = useTheme();
+  return (
+    <ToastContainer
+      position="top-right"
+      autoClose={3500}
+      newestOnTop
+      closeOnClick
+      pauseOnFocusLoss={false}
+      theme={theme}
+    />
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
+      <LocaleProvider>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -41,6 +59,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="assistant" element={<AiAssistant />} />
             <Route path="reservations" element={<Reservations />} />
+            <Route path="reserve" element={<FloorPlan />} />
             <Route path="floor-plan" element={<FloorPlan />} />
             <Route path="profile" element={<Profile />} />
             <Route path="team" element={<TeamSettings />} />
@@ -119,15 +138,10 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        <ToastContainer
-          position="top-right"
-          autoClose={3500}
-          newestOnTop
-          closeOnClick
-          pauseOnFocusLoss={false}
-          theme="light"
-        />
+        <DeskToastContainer />
       </AuthProvider>
+      </LocaleProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from typing import ClassVar
 
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,6 +41,14 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
+    # `company_id` is the shared OperiX organization identifier.  The Desk
+    # database keeps its legacy integer primary keys, while this bridge lets
+    # shared Supabase Auth users own the same records without a destructive
+    # rewrite.
+    supabase_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        "company_id", String(64), nullable=True, index=True
+    )
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.employee)
     full_name: Mapped[str] = mapped_column(String(255))
     job_title: Mapped[str | None] = mapped_column(String(150), nullable=True)
@@ -60,6 +69,24 @@ class User(Base):
     password_reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     must_change_password: Mapped[bool] = mapped_column(default=False)
+
+    # Populated by the shared-auth resolver for the lifetime of a request.
+    # It is intentionally not persisted on the legacy Desk users table.
+    _desk_permissions: ClassVar[set[str]] = set()
+    _desk_role: ClassVar[str | None] = None
+    _organization_name: ClassVar[str | None] = None
+
+    @property
+    def permissions(self) -> list[str]:
+        return sorted(self._desk_permissions)
+
+    @property
+    def desk_role(self) -> str | None:
+        return self._desk_role
+
+    @property
+    def organization_name(self) -> str | None:
+        return self._organization_name
 
     reservations = relationship("Reservation", back_populates="user")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")

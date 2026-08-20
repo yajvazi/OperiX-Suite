@@ -1,0 +1,33 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: login.yaml
+- tapOn:
+    id: nav-pos-tab
+- extendedWaitUntil:
+    visible:
+      id: pos-screen
+    timeout: 15000
+- tapOn:
+    id: pos-customer-selector
+- tapOn:
+    id: pos-customer-${E2E_CUSTOMER_ID}-button
+- tapOn:
+    id: pos-product-${E2E_PRODUCT_ID}
+- tapOn:
+    id: pos-cart-button
+- extendedWaitUntil:
+    visible:
+      id: pos-cart-modal
+    timeout: 15000
+- tapOn:
+    id: pos-choose-payment-button
+- extendedWaitUntil:
+    visible:
+      id: pos-payment-modal
+    timeout: 15000
+- tapOn:
+    id: pos-payment-cash-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-form-screen
+    timeout: 15000

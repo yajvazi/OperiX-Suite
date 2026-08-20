@@ -10,10 +10,10 @@ def build_team(
     db: Session,
     current_user: User,
 ) -> TeamBuilderResponse:
-    _ = current_user
     return build_project_team(
         db,
         prompt=data.prompt,
         required_skills=data.required_skills,
         team_size=data.team_size,
+        current_user=current_user,
     )

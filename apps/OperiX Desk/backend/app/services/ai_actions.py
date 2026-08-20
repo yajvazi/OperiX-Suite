@@ -19,6 +19,7 @@ from app.services.ai_colleagues import (
 
 from app.services.ai_intent_fallback import desk_preferences_label
 from app.services.ai_dates import parse_flexible_date
+from app.services.workspace import scope_query
 
 INTENT_DATE_REQUIRED = {
     "book_meeting_room",
@@ -265,9 +266,10 @@ def _list_resources(
     equipment: list[str] | None = None,
     limit: int = 8,
 ) -> list[ResourceOut]:
-    query = db.query(Resource).filter(
+    query = scope_query(db.query(Resource), Resource, user).filter(
         Resource.is_active.is_(True),
         Resource.type == resource_type,
+        Resource.organization_id == user.organization_id,
     )
     if people is not None and resource_type == ResourceType.room:
         query = query.filter(Resource.capacity >= people)
@@ -650,10 +652,11 @@ def _handle_search_desks(db: Session, user: User, parsed: ChatResponse) -> ChatR
 def _handle_cancel_reservation(db: Session, user: User, parsed: ChatResponse) -> ChatResponse:
     booking_date = _parse_booking_date(parsed.date)
     query = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, user)
         .filter(
             Reservation.user_id == user.id,
             Reservation.status == ReservationStatus.active,
+            Reservation.organization_id == user.organization_id,
         )
         .order_by(Reservation.date.asc())
     )
@@ -673,7 +676,9 @@ def _handle_cancel_reservation(db: Session, user: User, parsed: ChatResponse) ->
             parsed.confirmation = "You don't have any upcoming reservations to cancel."
         return parsed
 
-    resource = db.get(Resource, reservation.resource_id)
+    resource = scope_query(
+        db.query(Resource).filter(Resource.id == reservation.resource_id), Resource, user
+    ).first()
     try:
         cancel_reservation(db, reservation, user, is_admin=False)
     except HTTPException:
@@ -715,7 +720,9 @@ def _format_colleague_confirmation(colleagues) -> str:
 
 def _handle_find_colleague(db: Session, user: User, parsed: ChatResponse) -> ChatResponse:
     if is_schedule_colleague_lookup(parsed.date):
-        colleagues, error, resolved_name = lookup_colleague_schedule(db, parsed.coworker)
+        colleagues, error, resolved_name = lookup_colleague_schedule(
+            db, parsed.coworker, user
+        )
         if error:
             parsed.action = "find_colleague_needs_info"
             parsed.confirmation = error

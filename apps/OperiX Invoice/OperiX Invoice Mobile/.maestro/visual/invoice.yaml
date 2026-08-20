@@ -1,0 +1,69 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: prepare-language.yaml
+- tapOn:
+    id: global-create-button
+- tapOn:
+    id: global-create-invoice-action
+- extendedWaitUntil:
+    visible:
+      id: invoice-form-screen
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/create-invoice.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: invoice-customer-selector
+- extendedWaitUntil:
+    visible:
+      id: invoice-customer-option-${E2E_CUSTOMER_ID}
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/customer-selector.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: invoice-customer-option-${E2E_CUSTOMER_ID}
+- tapOn:
+    id: invoice-add-item-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-product-option-${E2E_PRODUCT_ID}
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/product-selector.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: invoice-product-option-${E2E_PRODUCT_ID}
+- tapOn:
+    id: invoice-item-quantity-0
+- eraseText
+- inputText: "2"
+- tapOn:
+    id: invoice-notes-input
+- inputText: "Visual regression fixture"
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/create-invoice-with-items.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: invoice-save-button
+- extendedWaitUntil:
+    visible:
+      id: invoice-detail-screen
+    timeout: 30000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/invoice-details.png"
+    thresholdPercentage: 98
+- tapOn:
+    id: invoice-more-actions-button
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/invoice-actions-modal.png"
+    thresholdPercentage: 98
+- tapOn:
+    text: Preview
+- extendedWaitUntil:
+    visible:
+      id: invoice-preview-webview
+    timeout: 30000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/invoice-document-preview.png"
+    thresholdPercentage: 98

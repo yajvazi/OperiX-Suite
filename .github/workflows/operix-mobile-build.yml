@@ -1,0 +1,69 @@
+name: OperiX Mobile Build
+
+on:
+  workflow_call:
+    inputs:
+      apps_json:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # Expo config/export must be deterministic without production credentials.
+  EXPO_PUBLIC_SUPABASE_URL: https://ci.invalid
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: operix-ci-placeholder
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: operix-ci-placeholder
+  NEXT_PUBLIC_SUPABASE_URL: https://ci.invalid
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: operix-ci-placeholder
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: operix-ci-placeholder
+
+jobs:
+  mobile:
+    name: ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.apps_json) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate Expo configuration
+        env:
+          APP_PATH: ${{ matrix.app.path }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/operix-mobile-${{ matrix.app.id }}"
+          cd "$APP_PATH"
+          npx --no-install expo config --json > "$RUNNER_TEMP/operix-mobile-${{ matrix.app.id }}/expo-config.json"
+          node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));' "$RUNNER_TEMP/operix-mobile-${{ matrix.app.id }}/expo-config.json"
+      - name: Lint
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' lint
+      - name: Typecheck
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' typecheck --required
+      - name: Deterministic application tests
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' test
+      - name: Expo export/build validation
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' build --required
+      - name: Upload mobile build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-mobile-${{ matrix.app.id }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/operix-mobile-${{ matrix.app.id }}/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/coverage/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/.maestro/**
+            ${{ github.workspace }}/${{ matrix.app.path }}/test-results/**
+          if-no-files-found: ignore
+          retention-days: 14

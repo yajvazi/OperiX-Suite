@@ -5,25 +5,30 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.auth import user_has_permission
 from app.models.reservation import Reservation, ReservationStatus
-from app.models.resource import Resource
+from app.models.resource import Resource, ResourceType
 from app.models.user import User, UserRole
+from app.services.workspace import require_organization, scope_query
 
 
 def active_reservation_for_resource(
     db: Session,
     resource_id: int,
     booking_date: date,
+    user: User | None = None,
 ) -> Reservation | None:
-    return (
+    query = (
         db.query(Reservation)
         .filter(
             Reservation.resource_id == resource_id,
             Reservation.date == booking_date,
             Reservation.status == ReservationStatus.active,
         )
-        .first()
     )
+    if user:
+        query = scope_query(query, Reservation, user)
+    return query.first()
 
 
 def conflicting_reservation_for_resource(
@@ -39,6 +44,8 @@ def conflicting_reservation_for_resource(
         Reservation.date == booking_date,
         Reservation.status == ReservationStatus.active,
     )
+    if resource.organization_id:
+        query = query.filter(Reservation.organization_id == resource.organization_id)
     if exclude_reservation_id is not None:
         query = query.filter(Reservation.id != exclude_reservation_id)
 
@@ -70,8 +77,11 @@ def validate_booking_rules(
     end_time: time | None = None,
     exclude_reservation_id: int | None = None,
     actor: User | None = None,
+    resource: Resource | None = None,
 ):
     actor = actor or user
+    if not user_has_permission(actor, "desk.reserve"):
+        raise HTTPException(status_code=403, detail="You do not have permission to reserve workspace resources")
     today = date.today()
     max_date = today + timedelta(days=settings.max_booking_days_ahead)
 
@@ -83,9 +93,17 @@ def validate_booking_rules(
             detail=f"Cannot book more than {settings.max_booking_days_ahead} days ahead",
         )
 
-    resource = db.get(Resource, resource_id)
+    if resource is None:
+        resource_query = scope_query(
+            db.query(Resource).filter(Resource.id == resource_id),
+            Resource,
+            actor,
+        )
+        resource = resource_query.first()
     if not resource or not resource.is_active:
         raise HTTPException(status_code=404, detail="Resource not found or inactive")
+    if not resource.organization_id and not settings.allow_legacy_unscoped_data:
+        require_organization(actor)
 
     if resource.type not in ("desk", "room"):
         raise HTTPException(
@@ -134,6 +152,8 @@ def validate_booking_rules(
         detail = (
             "This room is already booked during the selected time"
             if resource.type == "room" and start_time and end_time
+            else "This desk was just reserved by another user. Choose another available desk."
+            if resource.type == ResourceType.desk
             else "This resource is already booked for the selected date"
         )
         raise HTTPException(status_code=409, detail=detail)
@@ -148,6 +168,9 @@ def validate_booking_rules(
             Resource.type == "desk",
         )
     )
+    same_day_query = scope_query(same_day_query, Reservation, user)
+    if user.organization_id:
+        same_day_query = same_day_query.filter(Resource.organization_id == user.organization_id)
     if exclude_reservation_id is not None:
         same_day_query = same_day_query.filter(Reservation.id != exclude_reservation_id)
 
@@ -163,6 +186,7 @@ def validate_booking_rules(
         Reservation.status == ReservationStatus.active,
         Reservation.date >= today,
     )
+    active_query = scope_query(active_query, Reservation, user)
     if exclude_reservation_id is not None:
         active_query = active_query.filter(Reservation.id != exclude_reservation_id)
 
@@ -179,15 +203,15 @@ def validate_booking_rules(
 
 def get_booking_limits(db: Session, user: User) -> dict:
     today = date.today()
-    active_count = (
+    active_query = (
         db.query(Reservation)
         .filter(
             Reservation.user_id == user.id,
             Reservation.status == ReservationStatus.active,
             Reservation.date >= today,
         )
-        .count()
     )
+    active_count = scope_query(active_query, Reservation, user).count()
     return {
         "max_active_reservations": settings.max_active_reservations,
         "max_booking_days_ahead": settings.max_booking_days_ahead,
@@ -205,10 +229,30 @@ def create_reservation(
     end_time: time | None = None,
     actor: User | None = None,
 ) -> Reservation:
-    validate_booking_rules(db, user, resource_id, booking_date, start_time, end_time, actor=actor)
+    effective_actor = actor or user
+    resource_query = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id),
+        Resource,
+        effective_actor,
+    )
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        resource_query = resource_query.with_for_update()
+    resource = resource_query.first()
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found or inactive")
+    validate_booking_rules(
+        db,
+        user,
+        resource_id,
+        booking_date,
+        start_time,
+        end_time,
+        actor=effective_actor,
+        resource=resource,
+    )
 
     existing = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, effective_actor)
         .join(Resource)
         .filter(
             Reservation.resource_id == resource_id,
@@ -216,6 +260,7 @@ def create_reservation(
             Reservation.status != ReservationStatus.active,
             Resource.type != "room",
         )
+        .filter(Resource.organization_id == resource.organization_id)
         .first()
     )
     if existing:
@@ -230,6 +275,7 @@ def create_reservation(
     reservation = Reservation(
         user_id=user.id,
         resource_id=resource_id,
+        organization_id=resource.organization_id or effective_actor.organization_id,
         date=booking_date,
         start_time=start_time,
         end_time=end_time,
@@ -241,7 +287,7 @@ def create_reservation(
     except IntegrityError:
         db.rollback()
         existing = (
-            db.query(Reservation)
+            scope_query(db.query(Reservation), Reservation, effective_actor)
             .join(Resource)
             .filter(
                 Reservation.resource_id == resource_id,
@@ -249,11 +295,17 @@ def create_reservation(
                 Reservation.status == ReservationStatus.active,
                 Resource.type != "room",
             )
+            .filter(Resource.organization_id == resource.organization_id)
             .first()
         )
         if existing and existing.user_id == user.id:
             return existing
-        raise HTTPException(status_code=409, detail="This resource is already booked for the selected date")
+        detail = (
+            "This desk was just reserved by another user. Choose another available desk."
+            if resource.type == ResourceType.desk
+            else "This resource is already booked for the selected date"
+        )
+        raise HTTPException(status_code=409, detail=detail)
     db.refresh(reservation)
     return reservation
 
@@ -293,6 +345,16 @@ def update_reservation(
     start_time: time | None = None,
     end_time: time | None = None,
 ):
+    resource_query = scope_query(
+        db.query(Resource).filter(Resource.id == resource_id),
+        Resource,
+        reservation.user,
+    )
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        resource_query = resource_query.with_for_update()
+    target_resource = resource_query.first()
+    if not target_resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
     validate_booking_rules(
         db,
         reservation.user,
@@ -301,6 +363,7 @@ def update_reservation(
         start_time,
         end_time,
         exclude_reservation_id=reservation.id,
+        resource=target_resource,
     )
 
     reservation.resource_id = resource_id
@@ -313,7 +376,13 @@ def update_reservation(
 
 
 def cancel_reservation(db: Session, reservation: Reservation, user: User, is_admin: bool):
-    if reservation.user_id != user.id and not is_admin:
+    if reservation.user_id == user.id and not user_has_permission(user, "desk.cancel_own"):
+        raise HTTPException(status_code=403, detail="You do not have permission to cancel reservations")
+    if (
+        reservation.user_id != user.id
+        and not is_admin
+        and not user_has_permission(user, "reservation.manage")
+    ):
         raise HTTPException(status_code=403, detail="Not allowed to cancel this reservation")
     if reservation.status != ReservationStatus.active:
         raise HTTPException(status_code=400, detail="Reservation is not active")

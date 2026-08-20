@@ -1,183 +1,64 @@
-import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowRight,
-  BarChart3,
-  FileText,
-  Layers3,
-  LogOut,
-  PlugZap,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Check, ExternalLink, LockKeyhole, ShieldCheck } from "lucide-react";
 import { FAQList } from "@/components/faq";
-import { Float, Reveal } from "@/components/motion";
-import { DashboardMockup, PhoneMockup } from "@/components/product-mockup";
-import { ProductCarousel } from "@/components/product-carousel";
-import { PricingGrid } from "@/components/pricing";
-import { benefits, resources, trustItems } from "@/content/site";
+import { AppLauncherVisual, BrowserFrame, MobileAvailability, PlatformComposition, PlatformInterface, ProductIcon, ProductInterface } from "@/components/product-interface";
+import { DemoAction } from "@/components/demo-action";
+import { getProduct, getStartedUrl, helpCenterUrl, products, solutionRegistry } from "@/content/products";
+import { faqs, integrations, mobileProducts, platformPrinciples, productCardCopy, securityItems } from "@/content/site";
 
 export function FullHomePage() {
-  return (
-    <>
-      <div className="preview-mode-bar">
-        <span><i /> Private preview mode</span>
-        <form action="/api/preview-logout" method="post"><button type="submit"><LogOut /> Sign out</button></form>
+  return <>
+    <section className="home-hero">
+      <div className="container hero-grid">
+        <div className="hero-copy">
+          <h1>Run your business from one connected platform.</h1>
+          <p>Finance. People. Bookings. Workplaces. One account. One OperiX.</p>
+          <div className="button-row"><a className="button" href={getStartedUrl} data-analytics="get_started_clicked">Get started <ArrowRight size={16} /></a><Link className="button button-ghost" href="/demo" data-analytics="demo_clicked">Explore demo <ArrowRight size={16} /></Link></div>
+          <div className="hero-proof"><span><Check size={14} />One organization</span><span><Check size={14} />Specialized apps</span><span><Check size={14} />Web + mobile</span></div>
+        </div>
+        <div className="hero-visual"><PlatformComposition /></div>
       </div>
+    </section>
 
-      <section className="home-hero">
-        <div className="container hero-grid">
-          <div className="hero-copy">
-            <Reveal>
-              <h1>One Suite.<br />Complete Control.</h1>
-              <p>Bring invoicing, people operations, reporting, and everyday business management into one connected workspace.</p>
-              <div className="button-row">
-                <Link href="#products" className="button">Explore Products <ArrowRight /></Link>
-                <Link href="/book-demo" className="button button-secondary">Book Demo</Link>
-              </div>
-            </Reveal>
-          </div>
-          <div className="hero-visual">
-            <Reveal className="hero-dashboard" delay={0.08}><DashboardMockup /></Reveal>
-            <Float className="hero-phone"><PhoneMockup /></Float>
-            <Float className="floating-card floating-top" reverse><strong>Clear reporting</strong><span>Decision-ready insights</span></Float>
-            <Float className="floating-card floating-bottom"><strong>One connected view</strong><span>Finance and people operations</span></Float>
-          </div>
-        </div>
-      </section>
+    <section className="platform-strip"><div className="container platform-strip-inner"><span className="platform-strip-label"><i />One platform for</span><div className="platform-strip-viewport" aria-label="OperiX platform areas"><div className="platform-strip-track">{[0, 1].map((copy) => <div className="platform-strip-group" key={copy} aria-hidden={copy === 1}>{([{ key: "invoice", label: "Finance" }, { key: "hr", label: "People" }, { key: "booking", label: "Bookings" }, { key: "desk", label: "Workplaces" }, { key: "control", label: "Administration" }] as const).map((item) => <span className="platform-strip-item" key={`${copy}-${item.key}`}><span className="platform-strip-icon"><ProductIcon product={item.key} size={15} /></span>{item.label}</span>)}</div>)}</div></div></div></section>
 
-      <section className="trust-section" aria-labelledby="trust-heading">
-        <div className="container">
-          <h2 id="trust-heading" className="trust-title">Trusted foundations for growing businesses</h2>
-          <div className="trust-grid">
-            {trustItems.map((item) => {
-              const Icon = item.icon;
-              return <div className="trust-item" key={item.title}><Icon aria-hidden="true" /><div><strong>{item.title}</strong><span>{item.text}</span></div></div>;
-            })}
-          </div>
-        </div>
-      </section>
+    <section className="section products-section" id="products"><div className="container"><div className="section-heading center-heading"><span className="section-label">The OperiX platform</span><h2>Everything your business needs. Connected.</h2><p>Focused applications for the work that keeps your organization moving, built around one account and one organization context.</p></div><div className="product-card-grid">{products.map((product) => <ProductCard key={product.key} product={product.key} />)}</div></div></section>
 
-      <section className="section" id="products">
-        <div className="container">
-          <Reveal className="section-heading centered">
-            <span className="eyebrow">OperiX products</span>
-            <h2>Five focused products.<br />One clear experience.</h2>
-            <p>Choose the workspace your business needs today, with a product family designed to work together.</p>
-          </Reveal>
-          <ProductCarousel />
-        </div>
-      </section>
+    <section className="section connected-section" id="solutions"><div className="container connected-grid"><div className="connected-copy"><span className="section-label">One connected platform</span><h2>Separate workflows.<br /><em>Shared foundations.</em></h2><p>OperiX does not flatten every product into one tool. It connects the account, organization, access, navigation, and platform services that help the products work together.</p><div className="principle-list">{platformPrinciples.map((principle) => { const Icon = principle.icon; return <div key={principle.title}><span><Icon size={16} /></span><p><strong>{principle.title}</strong>{principle.text}</p></div>; })}</div></div><div className="connected-visual"><PlatformInterface /></div></div></section>
 
-      <section className="section suite-connection-section" aria-labelledby="suite-connection-title">
-        <div className="container suite-connection-grid">
-          <Reveal className="suite-connection-copy">
-            <span className="eyebrow">OperiX Control</span>
-            <h2 id="suite-connection-title">One command center for your entire suite.</h2>
-            <p>OperiX Control brings every OperiX product into one clear view, giving leaders the context, controls, and insight to run the whole operation from one place.</p>
-            <div className="suite-connection-points">
-              <div><div className="icon-box"><Layers3 /></div><span><strong>Unified command center</strong>See revenue, people, bookings, and workspace activity together.</span></div>
-              <div><div className="icon-box"><RefreshCw /></div><span><strong>Live operational insight</strong>Updates flow into Control as work happens across the suite.</span></div>
-              <div><div className="icon-box"><ShieldCheck /></div><span><strong>Centralized governance</strong>Manage access, settings, and shared context from one secure place.</span></div>
-            </div>
-          </Reveal>
-          <Reveal className="suite-connection-map" delay={0.08}>
-            <div className="control-preview-topline"><span><i /> Live suite sync</span><small>5 products connected</small></div>
-            <div className="control-preview-dashboard"><DashboardMockup variant="control" /></div>
-            <div className="control-preview-float control-preview-float-one"><RefreshCw /> Updated just now</div>
-            <div className="control-preview-float control-preview-float-two"><ShieldCheck /> One secure account</div>
-          </Reveal>
-        </div>
-      </section>
+    <section className="section account-section"><div className="container account-grid"><div className="account-visual"><AppLauncherVisual /></div><div className="account-copy"><span className="section-label">One account</span><h2>One account.<br />Every OperiX app.</h2><p>Sign in once. Access the applications your organization uses. Switch between Suite, Invoice, HR, Booking, Desk, and Control through the App Launcher.</p><ul className="check-list">{["Shared identity and organization context", "Application access managed for your organization", "Consistent navigation across the ecosystem", "Control stays available to authorized administrators"].map((item) => <li key={item}><Check size={16} />{item}</li>)}</ul><Link href="/products/suite" className="text-link">Explore OperiX Suite <ArrowRight size={15} /></Link></div></div></section>
 
-      <section className="benefits-section">
-        <div className="container">
-          <Reveal className="section-heading centered">
-            <h2>Everything You Need to Run Your Business</h2>
-            <p>A connected operational foundation—clear enough for today and ready for what comes next.</p>
-          </Reveal>
-          <div className="benefits-grid">
-            {benefits.map((benefit, index) => {
-              const Icon = benefit.icon;
-              return <Reveal className="benefit-item" key={benefit.title} delay={(index % 3) * 0.05}><Icon aria-hidden="true" /><h3>{benefit.title}</h3><p>{benefit.text}</p></Reveal>;
-            })}
-          </div>
-        </div>
-      </section>
+    <section className="section control-section"><div className="container control-grid"><div className="control-visual"><div className="control-visual-label"><span className="status-dot" />Web-only administration</div><div className="control-visual-frame"><PlatformControlCard /></div></div><div className="control-copy"><span className="section-label">OperiX Control</span><h2>Control your entire OperiX environment.</h2><p>Manage organizations, users, roles, permissions, application access, security, integrations, audit logs, and system settings from the platform’s administration layer.</p><div className="control-capability-grid">{["Organizations", "Users & roles", "Permissions", "Applications", "Security", "Integrations", "Audit logs", "System settings"].map((item) => <span key={item}><Check size={14} />{item}</span>)}</div><div className="control-launcher-note"><LockKeyhole size={16} /><span><strong>App Launcher always available.</strong> Authorized administrators can move between every OperiX app without leaving the ecosystem.</span></div><Link href="/products/control" className="button button-ghost">Explore Control <ArrowRight size={15} /></Link></div></div></section>
 
-      <section className="section">
-        <div className="container editorial-grid">
-          <Reveal>
-            <span className="eyebrow">Built for modern teams</span>
-            <h2>Less switching.<br />More clarity.</h2>
-            <p>OperiX brings the work that keeps your business moving into focused, consistent products your team can understand.</p>
-            <div className="editorial-list">
-              {[
-                [Layers3, "Unified workspace", "A consistent system across financial and people operations."],
-                [Sparkles, "Intentional design", "Clear interfaces built around everyday work."],
-                [PlugZap, "Connected foundations", "Shared operational context wherever it adds value."],
-              ].map(([Icon, title, text]) => {
-                const Component = Icon as typeof Layers3;
-                return <div className="editorial-item" key={String(title)}><div className="icon-box"><Component /></div><div><h3>{String(title)}</h3><p>{String(text)}</p></div></div>;
-              })}
-            </div>
-            <Link href="/features" className="text-link">Explore all features <ArrowRight /></Link>
-          </Reveal>
-          <Reveal className="integration-panel" delay={0.08}>
-            <div className="integration-core"><Image src="/brand/operix-x-mark.svg" width={72} height={72} alt="OperiX connected suite" /></div>
-            <div className="integration-node node-1"><FileText /> Invoicing</div>
-            <div className="integration-node node-2"><Users /> People</div>
-            <div className="integration-node node-3"><BarChart3 /> Reports</div>
-            <div className="integration-node node-4"><PlugZap /> Workflows</div>
-          </Reveal>
-        </div>
-      </section>
+    <section className="section use-cases-section"><div className="container"><div className="section-heading"><span className="section-label">Solutions</span><h2>Start with the work in front of you.</h2><p>Bring the applications that solve a business problem together without creating six unrelated systems.</p></div><div className="carousel-viewport" aria-label="OperiX solutions"><div className="carousel-track solutions-carousel-track">{[0, 1].map((copy) => <div className="carousel-group solution-card-grid" key={copy} aria-hidden={copy === 1}>{solutionRegistry.map((solution) => { const Icon = solution.icon; return <Link href={solution.path} className="solution-card" key={`${copy}-${solution.key}`} tabIndex={copy === 1 ? -1 : undefined}><span className="solution-icon"><Icon size={19} /></span><span className="solution-card-content"><strong>{solution.name}</strong><p>{solution.description}</p><span className="text-link">Explore solution <ArrowRight size={14} /></span></span></Link>; })}</div>)}</div></div></div></section>
 
-      <section className="section testimonials-section">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Customer stories</span><h2>Built to support real work</h2><p>Verified customer stories will appear here as the OperiX community grows.</p></Reveal>
-          <div className="testimonial-grid">
-            {["A clearer view of financial work.", "People operations without the busywork.", "One product family our team can grow into."].map((quote, index) => (
-              <Reveal key={quote} delay={index * 0.06}><article className="testimonial-card"><blockquote>“{quote}”</blockquote><footer><strong>Customer story</strong>Reserved for a verified OperiX customer</footer></article></Reveal>
-            ))}
-          </div>
-          <p className="placeholder-note">Placeholder testimonials are intentionally labeled and do not represent customer endorsements.</p>
-        </div>
-      </section>
+    <section className="section demo-section"><div className="container demo-grid"><div className="demo-copy"><span className="section-label">Interactive demo</span><h2>Don’t just watch. Try OperiX.</h2><p>Explore the existing OperiX Invoice interface with realistic fictional sample data. No account or payment details are required for the public demo.</p><div className="button-row"><Link href="/demo" className="button" data-analytics="demo_clicked">Explore interactive demo <ArrowRight size={16} /></Link><a href={helpCenterUrl} className="button button-ghost" target="_blank" rel="noreferrer">Read the Help Center <ExternalLink size={15} /></a></div><p className="demo-disclaimer"><ShieldCheck size={14} /> Demo changes are temporary. Live payments, external messages, production integrations, and customer data are not part of the public demo.</p></div><div className="demo-visual"><BrowserFrame className="demo-browser-frame" address="demo.invoice.operixsuite.com"><ProductInterface variant="invoice" compact /></BrowserFrame><span className="demo-visual-caption">Fictional sample data</span></div></div></section>
 
-      <section className="section" id="pricing">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Pricing</span><h2>Start with what your business needs</h2><p>Final pricing is being prepared. Talk with us about the right product and rollout for your team.</p></Reveal>
-          <PricingGrid />
-        </div>
-      </section>
+    <section className="section mobile-platform-section"><div className="container mobile-platform-grid"><div><span className="section-label">Web + mobile</span><h2>Work anywhere.</h2><p>Use the OperiX products that support mobile workflows on the devices your team already carries. Control remains web-only as the platform administration layer.</p><MobileAvailability /><div className="mobile-product-list">{mobileProducts.map((product) => <Link href={product.marketingPath} key={product.key}><span className="mobile-product-icon" style={{ ["--product-accent" as string]: product.accent }}><ProductIcon product={product.key} size={16} /></span><span className="mobile-product-name">{product.name}</span><ArrowRight size={14} /></Link>)}</div></div><div className="mobile-platform-visual"><div className="laptop-frame"><BrowserFrame className="laptop-browser-frame" address="suite.operixsuite.com"><ProductInterface variant="suite" compact /></BrowserFrame><span className="laptop-base" /></div></div></div></section>
 
-      <section className="section section-compact">
-        <div className="container"><Reveal className="section-heading centered"><span className="eyebrow">FAQ</span><h2>Questions, answered</h2></Reveal><FAQList limit={5} /></div>
-      </section>
+    <section className="section security-section"><div className="container"><div className="section-heading center-heading"><span className="section-label">Security and access</span><h2>Keep access clear and accountable.</h2><p>Credible platform controls for the work OperiX supports today. No certification claims, no invented promises.</p></div><div className="carousel-viewport" aria-label="OperiX security and access controls"><div className="carousel-track security-carousel-track">{[0, 1].map((copy) => <div className="carousel-group security-grid" key={copy} aria-hidden={copy === 1}>{securityItems.map((item) => { const Icon = item.icon; return <div className="security-card" key={`${copy}-${item.title}`}><Icon size={20} /><strong>{item.title}</strong><p>{item.text}</p></div>; })}</div>)}</div></div></div></section>
 
-      <section className="section section-compact">
-        <div className="container">
-          <Reveal className="section-heading centered"><span className="eyebrow">Resources</span><h2>Explore OperiX at your pace</h2><p>Product references, guides, and support material will live in one focused resource center.</p></Reveal>
-          <div className="resource-grid">
-            {resources.slice(0, 3).map((resource, index) => {
-              const Icon = resource.icon;
-              return <Reveal key={resource.title} delay={index * 0.06}><article className="resource-card"><div className="icon-box"><Icon /></div><div><h2>{resource.title}</h2><p>{resource.description}</p><span>{resource.status}</span></div></article></Reveal>;
-            })}
-          </div>
-        </div>
-      </section>
+    <section className="section integrations-section"><div className="container integrations-grid"><div><span className="section-label">Integrations</span><h2>Connect the services your rollout actually uses.</h2><p>Integration availability depends on the product and deployment. OperiX marketing only names service categories that are represented in the current application configuration.</p></div><div className="integration-list">{integrations.map((integration) => { const Icon = integration.icon; return <div key={integration.name}><span><Icon size={17} /></span><strong>{integration.name}</strong><small>{integration.note}</small></div>; })}</div></div></section>
 
-      <section className="section section-compact">
-        <div className="container">
-          <Reveal className="cta-band">
-            <div><h2>Ready to bring your operation into focus?</h2><p>Explore OperiX Invoice and OperiX HR Office with a guided walkthrough.</p></div>
-            <div className="button-row"><Link href="/book-demo" className="button">Book a Demo</Link><Link href="/contact" className="button button-secondary">Contact Us</Link></div>
-          </Reveal>
-        </div>
-      </section>
-    </>
-  );
+    <section className="section enterprise-section"><div className="container enterprise-grid"><div><span className="section-label">OperiX Enterprise</span><h2>Your business platform, built around your organization.</h2><p>Talk with us about multi-company needs, security requirements, custom permissions, deployment, integrations, data migration, onboarding, and support. Availability depends on the engagement.</p><div className="enterprise-tags"><span>Available to discuss</span><span>Contact Sales</span><span>Rollout planning</span></div><Link href="/enterprise" className="button">Explore Enterprise <ArrowRight size={16} /></Link></div><div className="enterprise-side"><div><strong>Platform rollout</strong><span>Shape the right starting point</span></div><div><strong>Access model</strong><span>Align people, roles, and applications</span></div><div><strong>Support plan</strong><span>Plan onboarding and ongoing help</span></div></div></div></section>
+
+    <section className="section pricing-cta-section"><div className="container pricing-cta-grid"><div><span className="section-label">Pricing</span><h2>Choose the starting point that fits your business.</h2><p>Current pricing is available on request. We’ll help you understand the right application mix, rollout, and enterprise path without inventing a plan here.</p></div><div className="pricing-cta-actions"><Link href="/pricing" className="button">View pricing approach <ArrowRight size={16} /></Link><Link href="/contact" className="button button-ghost">Contact sales</Link></div></div></section>
+
+    <section className="section faq-section"><div className="container narrow-container"><div className="section-heading"><span className="section-label">FAQ</span><h2>Questions, answered clearly.</h2><p>What OperiX is, how the apps connect, and what the public demo does.</p></div><FAQList limit={faqs.length} /></div></section>
+
+    <section className="section final-cta-section"><div className="container final-cta"><div><span className="section-label">One OperiX</span><h2>Bring the work together.</h2><p>Start with one application or explore the platform as a whole.</p></div><div className="button-row"><a href={getStartedUrl} className="button" data-analytics="get_started_clicked">Get started <ArrowRight size={16} /></a><Link href="/demo" className="button button-ghost" data-analytics="demo_clicked">Explore demo</Link></div></div></section>
+  </>;
 }
+
+function ProductCard({ product }: { product: (typeof products)[number]["key"] }) {
+  const definition = getProduct(product);
+  const copy = productCardCopy[product];
+  const Icon = definition.icon;
+  return <article className={`platform-product-card product-card-${product}`}><div className="product-card-icon" style={{ ["--product-accent" as string]: definition.accent }}><Icon size={19} /></div><div className="product-card-heading"><h3>{definition.name}</h3><span>{definition.hasMobile ? "Web + mobile" : "Web"}</span></div><strong>{copy.title}</strong><p>{copy.body}</p><div className="product-card-links"><Link href={definition.marketingPath}>Learn more <ArrowRight size={14} /></Link>{definition.demoEnabled ? <DemoAction product={definition.key} secondary /> : <Link href={`/demo?product=${definition.key}`} className="product-demo-status">Demo status</Link>}</div></article>;
+}
+
+function PlatformControlCard() {
+  return <div className="control-card-ui"><aside><div className="control-card-brand"><span>O</span><strong>OperiX</strong><small>Control</small></div>{["Organizations", "Users", "Roles", "Permissions", "Apps", "Security", "Integrations", "Audit logs"].map((item, index) => <span key={item} className={index === 3 ? "is-active" : ""}><LockKeyhole size={12} />{item}</span>)}<div className="control-card-apps"><GridGlyph /><span>OperiX Apps</span><small>Suite · Invoice · HR<br />Booking · Desk · Control</small></div></aside><div className="control-card-main"><div className="control-card-header"><span>Roles / <strong>People Manager</strong></span><span className="interface-avatar">A</span></div><div className="control-card-tabs"><span className="is-active">Permissions</span><span>Users</span><span>Apps</span><span>Security</span><span>Audit logs</span></div><div className="control-card-rows">{[["View employee profiles", "Allow"], ["Edit employment details", "Allow"], ["Manage compensation", "Deny"], ["View time off requests", "Allow"], ["View HR reports", "Allow"]].map(([label, value]) => <div key={label}><span>{label}</span><strong className={value === "Deny" ? "deny" : ""}>{value}</strong></div>)}</div><div className="control-card-footer"><ShieldCheck size={13} /><span>Changes are recorded in the audit log.</span></div></div></div>;
+}
+
+function GridGlyph() { return <span className="grid-glyph"><i /><i /><i /><i /></span>; }

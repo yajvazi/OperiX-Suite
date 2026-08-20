@@ -1,104 +1,460 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell, BookOpenCheck, Boxes, Building2, ChevronDown, ChevronLeft, CircleHelp, CreditCard, FileBarChart,
-  FileText, HandCoins, LayoutDashboard, Menu, PackageOpen, Plus, Search, Settings,
-  ShoppingBag, ShoppingCart, Store, Users, WalletCards, X, Download, LogOut, ScrollText,
+  Armchair,
+  Bell,
+  CalendarDays,
+  FileCheck2,
+  FileText,
+  Grid2X2,
+  HandCoins,
+  LogOut,
+  MoreHorizontal,
+  Moon,
+  Package,
+  Plus,
+  ReceiptText,
+  Search,
+  ShieldCheck,
+  Settings2,
+  Sun,
+  UserRound,
+  UsersRound,
+  WalletCards,
+  X,
 } from "lucide-react";
-import { Brand } from "./brand";
+import { OperixMobileNavigation, OperixSidebar, OperixTopBar, type OperixSidebarLinkProps } from "@invoice-monorepo/app-shell";
+import { InvoiceLogo } from "./product-logo";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useBusinessData } from "@/hooks/use-business-data";
 import type { InvoiceRow } from "@/lib/models";
-
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pos", label: "POS", icon: ShoppingCart },
-  { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/payments", label: "Payments", icon: CreditCard, children: [{ href: "/reminders", label: "Payment Reminders", icon: Bell }, { href: "/payment-links", label: "Online Payments", icon: CreditCard }, { href: "/income", label: "Income", icon: HandCoins }, { href: "/expenses", label: "Expenses", icon: WalletCards }] },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/accounting", label: "Accounting", icon: BookOpenCheck },
-  { href: "/payroll", label: "Payroll", icon: WalletCards, children: [
-    { href: "/payroll/employees", label: "Employees", icon: Users },
-    { href: "/payroll/runs", label: "Payroll Runs", icon: ScrollText },
-    { href: "/payroll/payslips", label: "Payslips", icon: FileText },
-    { href: "/payroll/payment-batches", label: "Payment Batches", icon: CreditCard },
-    { href: "/payroll/configuration", label: "Configuration", icon: Settings },
-    { href: "/payroll/reports", label: "Payroll Reports", icon: FileBarChart },
-  ] },
-  { href: "/reports", label: "Reports", icon: FileBarChart },
-  { href: "/vendors", label: "Vendors", icon: Store },
-  { href: "/products", label: "Products & Services", icon: Boxes },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/help", label: "Help desk", icon: CircleHelp },
-];
+import { useTheme } from "./theme-provider";
+import {
+  mobileNavigation,
+  navigationSections,
+  primaryNavigation,
+  isNavigationItemActive,
+  type NavigationItem,
+} from "@/lib/navigation";
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+type SearchGroup = { label: string; items: SearchResult[] };
+type SearchResult = { id: string; label: string; meta: string; href: string; icon: NavigationItem["icon"] };
+
+function externalUrl(key: string, fallback: string) {
+  return process.env[key] || fallback;
+}
+
+const createActions: Array<{ label: string; description: string; href: string; icon: NavigationItem["icon"] }> = [
+  { label: "Invoice", description: "Create and send an invoice", href: "/invoices/new", icon: FileText },
+  { label: "Quote", description: "Prepare a proposal", href: "/invoices/new?type=offer", icon: FileCheck2 },
+  { label: "Customer", description: "Add a customer record", href: "/customers?create=1", icon: UserRound },
+  { label: "Product", description: "Add a product or service", href: "/products?create=1", icon: Package },
+  { label: "Expense", description: "Record an operating cost", href: "/expenses?create=1", icon: WalletCards },
+  { label: "Payment", description: "Record money received", href: "/payments?create=1", icon: HandCoins },
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const path = usePathname(); const router = useRouter();
-  const workspace=useWorkspace();
-  const [mobileOpen, setMobileOpen] = useState(false); const [collapsed, setCollapsed] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(""); const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const workspace = useWorkspace();
+  const { theme, toggleTheme } = useTheme();
+  const invoicesQuery = useBusinessData<InvoiceRow>("invoices", "id,invoice_number,total_amount,status,due_date,client:clients(name)");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [controlAccess, setControlAccess] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchGroups, setSearchGroups] = useState<SearchGroup[]>([]);
+  const [searchIndex, setSearchIndex] = useState(0);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
-  const [companies,setCompanies]=useState<Array<{id:string;name:string}>>([]); const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ invoices:false, payments:false, customers:false, reports:false, payroll:false });
-  const [searchedInvoices,setSearchedInvoices]=useState<InvoiceRow[]>([]);
-  const invoicesQuery=useBusinessData<InvoiceRow>("invoices","id,invoice_number,client_id,total_amount,status,due_date,client:clients(name)");
-  const invoices=invoicesQuery.data;
+  const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
+  const [companySwitching, setCompanySwitching] = useState(false);
+  const [companySwitchError, setCompanySwitchError] = useState("");
+  const mobileCreateMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (event: Event) => { event.preventDefault(); setInstallEvent(event as InstallEvent); };
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallEvent(event as InstallEvent);
+    };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
-  useEffect(()=>{if(!workspace.user)return;const supabase=createClient();if(!supabase)return;void supabase.from("memberships").select("company_id, company:companies(id,company_name,name)").eq("user_id",workspace.user.id).then(({data})=>{setCompanies((data||[]).flatMap(row=>{const value=Array.isArray(row.company)?row.company[0]:row.company;return value?[{id:String(value.id),name:String(value.company_name||value.name||"Company")}]:[]}));});},[workspace.user]);
 
-  const results = useMemo(() => query ? nav.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())) : nav.slice(0, 6), [query]);
-  useEffect(()=>{const normalized=query.trim();if(normalized.length<2){queueMicrotask(()=>setSearchedInvoices([]));return;}const supabase=createClient();if(!supabase)return;let active=true;void supabase.from("invoices").select("id,invoice_number,total_amount,status,due_date,client:clients(name)").ilike("invoice_number",`%${normalized}%`).limit(8).then(({data})=>{if(active)setSearchedInvoices((data||[]) as unknown as InvoiceRow[]);});return()=>{active=false;};},[query]);
-  const matchingInvoices=useMemo(()=>{const normalized=query.trim().toLowerCase();if(!normalized)return [];const byId=new Map([...invoices,...searchedInvoices].map(invoice=>[invoice.id,invoice]));return [...byId.values()].filter(invoice=>invoice.invoice_number.toLowerCase().includes(normalized)||(invoice.client?.name||"").toLowerCase().includes(normalized)).slice(0,8);},[invoices,searchedInvoices,query]);
-  const notifications=useMemo(()=>{const now=new Date();const end=new Date(now);end.setDate(end.getDate()+7);return invoices.filter(invoice=>{if(dismissedNotificationIds.has(invoice.id)||["paid","cancelled"].includes(invoice.status)||!invoice.due_date)return false;const due=new Date(invoice.due_date);return due<now||due<=end;}).map(invoice=>({id:invoice.id,invoice,overdue:new Date(invoice.due_date||"")<now}));},[invoices,dismissedNotificationIds]);
-  async function signOut() { const supabase = createClient(); if (supabase) await supabase.auth.signOut(); router.push("/login"); router.refresh(); }
-  async function switchCompany(companyId:string){const supabase=createClient();if(!supabase||!workspace.user)return;const {error}=await supabase.from("profiles").update({active_company_id:companyId,company_id:companyId}).eq("id",workspace.user.id);if(!error){await workspace.refresh();router.refresh();}}
-  async function install() { if (installEvent) { await installEvent.prompt(); await installEvent.userChoice; setInstallEvent(null); } }
+  useEffect(() => {
+    const handler = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+        setCreateOpen(false);
+        setNotificationsOpen(false);
+        setCompanyOpen(false);
+        setProfileOpen(false);
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setCreateOpen(false);
+        setNotificationsOpen(false);
+        setCompanyOpen(false);
+        setProfileOpen(false);
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
-  return <div className={`min-h-screen ${collapsed ? "lg:[--sidebar-width:76px]" : ""}`}>
-    {mobileOpen && <button className="fixed inset-0 z-30 bg-[#061a38]/50 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation"/>}
-    <aside className={`fixed z-40 inset-y-0 left-0 w-[224px] lg:w-[var(--sidebar-width)] bg-white text-[#344054] border-r border-[#e4e9f0] transition-[width,transform] duration-200 overflow-hidden ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-      <div className="h-16 px-3 flex items-center justify-between border-b border-[#e4e9f0]"><Brand dark compact={collapsed}/><button className="lg:hidden text-[#667085]" onClick={() => setMobileOpen(false)}><X size={20}/></button></div>
-      <nav className="sidebar-nav-scroll px-3 py-5 grid gap-1 overflow-y-auto overflow-x-hidden h-[calc(100vh-144px)]" aria-label="Main navigation">
-        {nav.map((item) => { const active = path === item.href || path.startsWith(item.href + "/"); const Icon = item.icon; const menuKey=item.href.slice(1); const expanded=expandedMenus[menuKey] ?? false; return <div key={item.href} className="grid gap-1"><div className="relative"><Link onClick={() => setMobileOpen(false)} href={item.href} title={collapsed ? item.label : undefined} className={`h-[43px] rounded-[7px] flex items-center whitespace-nowrap transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "active-nav bg-[#004ffe] !text-white shadow-[0_8px_20px_rgba(0,79,254,.22)]" : "text-[#344054] hover:text-[#004ffe] hover:bg-[#f7f9fc]"}`}><Icon size={19} strokeWidth={1.8}/>{!collapsed && <span className="text-[13px] font-medium">{item.label}</span>}</Link>{!collapsed && item.children?.length ? <button type="button" aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label}`} onClick={()=>setExpandedMenus(current=>({...current,[menuKey]:!expanded}))} className={`absolute right-2 top-0 grid h-[43px] w-8 place-items-center rounded hover:bg-[#f7f9fc] hover:text-[#004ffe] ${active ? "!text-white" : "text-[#98a2b3]"}`}><ChevronDown size={14} className={`transition-transform ${expanded ? "rotate-180" : ""}`}/></button> : null}</div>{!collapsed && expanded && item.children?.map(child=>{const ChildIcon=child.icon;const childActive=path === child.href || path.startsWith(child.href + "/");return <Link onClick={() => setMobileOpen(false)} key={child.href} href={child.href} className={`ml-5 h-8 rounded-md px-3 flex items-center gap-2 text-[11px] whitespace-nowrap ${childActive ? "active-nav bg-[#004ffe] !text-white" : "text-[#667085] hover:bg-[#f7f9fc] hover:text-[#004ffe]"}`}><ChildIcon size={14} strokeWidth={1.8}/>{child.label}</Link>})}</div>; })}
-      </nav>
-      <button className="absolute bottom-4 left-3 right-3 h-10 px-3 flex items-center gap-3 text-[#667085] hover:text-[#004ffe]" onClick={() => { if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileOpen(false); else setCollapsed((value) => !value); }} aria-label="Close or collapse navigation"><X size={19} className="lg:hidden"/><ChevronLeft size={19} className={`hidden transition-transform lg:block ${collapsed ? "rotate-180" : ""}`}/><span className="text-xs lg:hidden">Close</span>{!collapsed && <span className="hidden text-xs lg:inline">Collapse</span>}</button>
-    </aside>
+  useEffect(() => {
+    if (!createOpen && !notificationsOpen && !companyOpen && !profileOpen) return;
 
-    <div className="lg:ml-[var(--sidebar-width)] transition-[margin] duration-200 min-h-screen">
-      <header className="no-print sticky top-0 z-20 h-16 bg-white border-b border-[#e4e9f0] px-4 lg:px-6 flex items-center gap-3">
-        <button className="mobile-menu-button w-8 h-10 grid place-items-center border-0 bg-transparent p-0 shadow-none text-[#344054]" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>
-        <button className="h-10 w-full max-w-[500px] min-w-0 border border-[#e4e9f0] rounded-[7px] bg-white text-[#98a2b3] px-3 flex items-center gap-2 text-[12px]" onClick={() => setSearchOpen(true)}><Search size={18} className="shrink-0"/><span className="min-w-0 truncate whitespace-nowrap">Search anything…</span><kbd className="ml-auto hidden shrink-0 rounded border px-1.5 py-0.5 text-[10px] sm:block">⌘ K</kbd></button>
-        <div className="ml-auto flex items-center gap-2">
-          <Link href="/invoices/new" className="icon-btn bg-[#004ffe] border-[#004ffe] text-white" aria-label="Create invoice"><Plus size={20}/></Link>
-          {installEvent && <button className="icon-btn hidden sm:grid" onClick={install} title="Install OperiX"><Download size={18}/></button>}
-          <Link href="/help" className="icon-btn hidden sm:grid" aria-label="Help"><CircleHelp size={18}/></Link>
-          <div className="relative"><button className="icon-btn relative" aria-label="Notifications" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(value => !value)}><Bell size={18}/>{notifications.length>0?<span className="absolute -right-1 -top-1 min-w-4 h-4 px-1 rounded-full bg-[#004ffe] text-white text-[9px] grid place-items-center">{notifications.length>9?"9+":notifications.length}</span>:null}</button>{notificationsOpen?<div className="notification-popover absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] card p-3 shadow-xl" role="dialog" aria-label="Notifications"><div className="mb-1 flex items-center justify-between border-b pb-2"><strong className="text-sm">Notifications</strong><div className="flex items-center gap-2"><span className="muted text-[10px]">Next 7 days</span>{notifications.length>0?<button type="button" onClick={()=>setDismissedNotificationIds(new Set(notifications.map(item=>item.id)))} className="text-[10px] font-medium text-[#004ffe] hover:underline">Clear</button>:null}</div></div>{invoicesQuery.loading?<p className="muted p-5 text-center text-xs">Loading notifications…</p>:invoicesQuery.error?<p className="p-5 text-center text-xs text-[#d92d20]">Unable to load notifications.</p>:notifications.length?<> {notifications.map(item=><Link href={`/invoices/${item.invoice.id}`} key={item.id} onClick={()=>setNotificationsOpen(false)} className="block rounded-md p-3 hover:bg-[#f7f9fc]"><strong className="block text-xs">{item.overdue?"Overdue invoice":"Invoice due soon"}</strong><span className="mt-1 block text-[11px]">{item.invoice.invoice_number} · {item.invoice.client?.name||"Customer"}</span><span className={`mt-1 block text-[10px] ${item.overdue?"text-[#d92d20]":"muted"}`}>{item.overdue?"Payment is overdue":`Due ${item.invoice.due_date}`}</span></Link>)}<Link href="/invoices" onClick={()=>setNotificationsOpen(false)} className="mt-1 block border-t px-3 pt-3 text-center text-xs font-medium text-[#004ffe]">View all invoices</Link></>:<p className="muted p-5 text-center text-xs">You’re all caught up.</p>}</div>:null}</div>
-          <details className="relative group"><summary className="list-none h-10 border border-[#e4e9f0] rounded-[7px] flex items-center gap-2 px-3 cursor-pointer"><Building2 size={17}/><span className="hidden md:block text-xs font-medium max-w-36 truncate">{workspace.company?.company_name||workspace.company?.name||workspace.profile?.company_name||"Company"}</span><ChevronDown size={14}/></summary><div className="absolute right-0 top-12 w-56 card p-1.5 shadow-xl">{companies.length>1?<div className="border-b pb-1 mb-1">{companies.map(item=><button key={item.id} onClick={()=>switchCompany(item.id)} className={`w-full text-left p-2 rounded text-xs ${workspace.companyId===item.id?"bg-[#edf4ff] text-[#004ffe]":"hover:bg-[#f7f9fc]"}`}>{item.name}</button>)}</div>:null}<Link href="/settings" className="flex items-center gap-2 p-2.5 rounded hover:bg-[#f7f9fc] text-xs"><Building2 size={16}/>Company settings</Link><button onClick={signOut} className="w-full flex items-center gap-2 p-2.5 rounded hover:bg-[#fff3f2] text-xs text-[#d92d20]"><LogOut size={16}/>Sign out</button></div></details>
-        </div>
-      </header>
-      <main className="min-h-[calc(100vh-64px)]">{children}</main>
+    const handleOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (mobileCreateMenuRef.current?.contains(target)) return;
+      setCreateOpen(false);
+      setNotificationsOpen(false);
+      setCompanyOpen(false);
+      setProfileOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointer);
+  }, [companyOpen, createOpen, notificationsOpen, profileOpen]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase || !workspace.companyId) {
+      return;
+    }
+    let active = true;
+    void supabase.rpc("control_has_permission", { p_company_id: workspace.companyId, p_permission: "control.access" }).then(({ data }) => {
+      if (active) setControlAccess(data === true);
+    });
+    return () => { active = false; };
+  }, [workspace.companyId]);
+
+  useEffect(() => {
+    const normalized = query.trim();
+    if (normalized.length < 2 || workspace.loading || !workspace.user || !workspace.companyIds.length) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const supabase = createClient();
+      if (!supabase) return;
+      const scope = `and(user_id.eq.${workspace.user!.id},company_id.is.null),company_id.in.(${workspace.companyIds.join(",")})`;
+      void Promise.all([
+        supabase.from("invoices").select("id,invoice_number,total_amount,status,client:clients(name)").or(scope).ilike("invoice_number", `%${normalized}%`).limit(6),
+        supabase.from("clients").select("id,name,email").or(scope).ilike("name", `%${normalized}%`).limit(6),
+        supabase.from("products").select("id,name,sku,unit_price").or(scope).or(`name.ilike.%${normalized}%,sku.ilike.%${normalized}%`).limit(6),
+        supabase.from("payments").select("id,payment_number,amount,payment_date,client:clients(name)").or(scope).ilike("payment_number", `%${normalized}%`).limit(6),
+        supabase.from("vendors").select("id,name,email").or(scope).ilike("name", `%${normalized}%`).limit(6),
+      ]).then(([invoices, clients, products, payments, vendors]) => {
+        if (!active) return;
+        const groups: SearchGroup[] = [];
+        const invoiceItems = (invoices.data || []).map((row) => ({
+          id: String(row.id),
+          label: String(row.invoice_number),
+          meta: `${relationName(row.client)} · ${moneyValue(row.total_amount)}`,
+          href: `/invoices/${row.id}`,
+          icon: FileText,
+        }));
+        const clientItems = (clients.data || []).map((row) => ({
+          id: String(row.id),
+          label: String(row.name),
+          meta: String(row.email || "Customer"),
+          href: "/customers",
+          icon: UserRound,
+        }));
+        const productItems = (products.data || []).map((row) => ({
+          id: String(row.id),
+          label: String(row.name),
+          meta: `${row.sku ? `${row.sku} · ` : ""}${moneyValue(row.unit_price)}`,
+          href: "/products",
+          icon: Package,
+        }));
+        const paymentItems = (payments.data || []).map((row) => ({
+          id: String(row.id),
+          label: String(row.payment_number),
+          meta: `${relationName(row.client)} · ${moneyValue(row.amount)}`,
+          href: "/payments",
+          icon: HandCoins,
+        }));
+        const vendorItems = (vendors.data || []).map((row) => ({
+          id: String(row.id),
+          label: String(row.name),
+          meta: String(row.email || "Vendor"),
+          href: "/vendors",
+          icon: UserRound,
+        }));
+        if (invoiceItems.length) groups.push({ label: "Invoices", items: invoiceItems });
+        if (clientItems.length) groups.push({ label: "Customers", items: clientItems });
+        if (productItems.length) groups.push({ label: "Products", items: productItems });
+        if (paymentItems.length) groups.push({ label: "Payments", items: paymentItems });
+        if (vendorItems.length) groups.push({ label: "Vendors", items: vendorItems });
+        setSearchGroups(groups);
+        setSearchIndex(0);
+      });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [query, workspace.companyIds, workspace.loading, workspace.user]);
+
+  const searchItems = useMemo(() => searchGroups.flatMap((group) => group.items), [searchGroups]);
+  const notifications = useMemo(() => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setDate(end.getDate() + 7);
+    return invoicesQuery.data
+      .filter((invoice) => {
+        if (dismissedNotificationIds.has(invoice.id) || ["paid", "cancelled"].includes(invoice.status) || !invoice.due_date) return false;
+        const due = new Date(invoice.due_date);
+        return due < now || due <= end;
+      })
+      .map((invoice) => ({ invoice, overdue: new Date(invoice.due_date || "") < now }));
+  }, [dismissedNotificationIds, invoicesQuery.data]);
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery("");
+    setSearchGroups([]);
+    setSearchIndex(0);
+  }
+
+  function handleSearchChange(value: string) {
+    setQuery(value);
+    if (value.trim().length < 2) {
+      setSearchGroups([]);
+      setSearchIndex(0);
+    }
+  }
+
+  function handleSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSearchIndex((current) => Math.min(current + 1, Math.max(searchItems.length - 1, 0)));
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSearchIndex((current) => Math.max(current - 1, 0));
+    }
+    if (event.key === "Enter" && searchItems[searchIndex]) {
+      event.preventDefault();
+      router.push(searchItems[searchIndex].href);
+      closeSearch();
+    }
+  }
+
+  async function signOut() {
+    const supabase = createClient();
+    if (supabase) await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    router.push("/login");
+    router.refresh();
+  }
+
+  async function switchCompany(companyId: string) {
+    setCompanyOpen(false);
+    setCompanySwitchError("");
+    if (companyId === workspace.companyId) return;
+
+    const supabase = createClient();
+    if (!supabase || !workspace.user) {
+      setCompanySwitchError("Your workspace is not ready. Please try again.");
+      return;
+    }
+
+    setCompanySwitching(true);
+    try {
+      const { error } = await supabase.rpc("set_active_company", { p_company_id: companyId });
+      if (error) {
+        setCompanySwitchError(companySwitchErrorMessage(error.message));
+        return;
+      }
+
+      // Every data hook owns its workspace state. A full reload guarantees that
+      // all lists move to the new tenant scope together, not just the shell.
+      window.location.reload();
+    } catch {
+      setCompanySwitchError("We could not switch companies. Please try again.");
+    } finally {
+      setCompanySwitching(false);
+    }
+  }
+
+  function toggleCreateMenu() {
+    const next = !createOpen;
+    setCreateOpen(next);
+    if (next) {
+      setNotificationsOpen(false);
+      setCompanyOpen(false);
+        setProfileOpen(false);
+    }
+  }
+
+  function toggleNotifications() {
+    const next = !notificationsOpen;
+    setNotificationsOpen(next);
+    if (next) {
+      setCreateOpen(false);
+      setCompanyOpen(false);
+      setProfileOpen(false);
+    }
+  }
+
+  function toggleCompany() {
+    const next = !companyOpen;
+    setCompanyOpen(next);
+    setCompanySwitchError("");
+    if (next) {
+      setCreateOpen(false);
+      setNotificationsOpen(false);
+      setProfileOpen(false);
+    }
+  }
+
+  function toggleProfile() {
+    const next = !profileOpen;
+    setProfileOpen(next);
+    if (next) {
+      setCreateOpen(false);
+      setNotificationsOpen(false);
+      setCompanyOpen(false);
+    }
+  }
+
+  const companies = useMemo(() => workspace.companies.map((company) => ({
+    id: company.id,
+    name: String(company.company_name || company.name || "Company"),
+    parentId: company.parent_company_id || null,
+  })), [workspace.companies]);
+
+  const appLinks = useMemo(() => [
+    ...(controlAccess ? [{ label: "OperiX Control", href: externalUrl("NEXT_PUBLIC_OPERIX_CONTROL_URL", "https://control.operixsuite.com"), tone: "control", icon: ShieldCheck }] : []),
+    { label: "OperiX Suite", href: externalUrl("NEXT_PUBLIC_OPERIX_SUITE_URL", "https://suite.operixsuite.com"), tone: "suite", icon: Grid2X2 },
+    { label: "OperiX Invoice", href: "/dashboard", current: true, tone: "invoice", icon: ReceiptText },
+    { label: "OperiX HR", href: externalUrl("NEXT_PUBLIC_OPERIX_HR_URL", "https://hr.operixsuite.com"), tone: "hr", icon: UsersRound },
+    { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays },
+    { label: "OperiX Desk", href: externalUrl("NEXT_PUBLIC_OPERIX_DESK_URL", "https://desk.operixsuite.com"), tone: "desk", icon: Armchair },
+  ], [controlAccess]);
+
+  const companyName = workspace.company?.company_name || workspace.company?.name || workspace.profile?.company_name || "OperiX workspace";
+  const firstName = workspace.profile?.first_name || workspace.user?.email?.split("@")[0] || "there";
+  const invoiceSidebarItems = [...primaryNavigation, ...navigationSections.flatMap((section) => section.items).filter((item) => item.href !== "/settings" && item.href !== "/help")];
+  const renderSidebarLink = ({ href, className, children, onClick, "aria-current": ariaCurrent }: OperixSidebarLinkProps) => <Link href={href} className={className} onClick={onClick} aria-current={ariaCurrent}>{children}</Link>;
+  const renderTopbarLink = ({ href, className, children, onClick, "aria-label": ariaLabel }: { href: string; className: string; children: React.ReactNode; onClick?: () => void; "aria-label"?: string }) => <Link href={href} className={className} onClick={onClick} aria-label={ariaLabel}>{children}</Link>;
+  const topbarApps = appLinks.map((app) => { const Icon = app.icon; return { id: app.tone, label: app.label, href: app.href, current: app.current, icon: <Icon size={14} strokeWidth={2.1} /> }; });
+
+  async function install() {
+    if (!installEvent) return;
+    await installEvent.prompt();
+    await installEvent.userChoice;
+    setInstallEvent(null);
+  }
+
+  return (
+    <div className="app-shell">
+      <OperixSidebar
+        logo={<InvoiceLogo href="/dashboard" />}
+        ariaLabel="Invoice navigation"
+        navSections={[
+          { label: "Workspace", items: primaryNavigation.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
+          { label: "Manage", items: invoiceSidebarItems.slice(primaryNavigation.length).map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
+        ]}
+        settingsItem={{ label: "Settings", href: "/settings", icon: Settings2, active: isNavigationItemActive(pathname, "/settings") }}
+        workspaceName={companyName}
+        workspaces={companies.map((company) => ({ id: company.id, name: company.name, initials: initials(company.name) }))}
+        activeWorkspaceId={workspace.companyId}
+        workspaceOpen={companyOpen}
+        workspaceLoading={companySwitching}
+        onWorkspaceToggle={toggleCompany}
+        onWorkspaceSelect={(id) => void switchCompany(id)}
+        user={{ initials: initials(firstName), name: firstName, role: "Invoice admin" }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onSignOut={() => void signOut()}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+        renderLink={renderSidebarLink}
+      />
+
+      <div className="app-content">
+        <OperixTopBar
+          apps={topbarApps}
+          search={{ value: query, onChange: handleSearchChange, onClick: () => setSearchOpen(true), onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKeyDown, placeholder: "Search invoices, customers, products…", ariaLabel: "Open global search" }}
+          help={{ href: "/help", label: "Help" }}
+          notifications={{ count: notifications.length, onClick: toggleNotifications, label: "Notifications", slot: notificationsOpen ? <NotificationPopover notifications={notifications} loading={invoicesQuery.loading} onClose={() => setNotificationsOpen(false)} onClear={() => { setDismissedNotificationIds(new Set(notifications.map((item) => item.invoice.id))); setNotificationsOpen(false); }} /> : null }}
+          extraActions={<>{installEvent ? <button type="button" className="operix-icon-button app-install-action" onClick={() => void install()} aria-label="Install OperiX"><Package size={17} /></button> : null}<div className="app-create-desktop" style={{ position: "relative" }}><button type="button" className="operix-button operix-button-primary operix-button-md app-topbar-primary" onClick={toggleCreateMenu} aria-expanded={createOpen} aria-haspopup="dialog"><Plus size={16} /><span>Create</span></button>{createOpen ? <CreateMenu onClose={() => setCreateOpen(false)} /> : null}</div></>}
+          user={{ initials: initials(workspace.user?.email || "You"), onClick: toggleProfile, label: "Open profile menu", slot: profileOpen ? <ProfilePopover email={workspace.user?.email || "Account"} theme={theme} onToggleTheme={toggleTheme} onClose={() => setProfileOpen(false)} onSignOut={() => void signOut()} /> : null }}
+          onMobileMenu={() => setMobileOpen(true)}
+          renderLink={renderTopbarLink}
+        />
+        <main className="app-main">{children}</main>
+      </div>
+
+      <OperixMobileNavigation items={mobileNavigation.slice(0, 4).map((item) => ({ href: item.href, label: item.label, icon: <item.icon size={19} />, active: isNavigationItemActive(pathname, item.href) }))} primaryAction={pathname === "/pos" ? undefined : { href: "/invoices/new", label: "Create invoice", icon: <Plus size={22} /> }} moreAction={{ label: "More", icon: <MoreHorizontal size={19} />, onClick: () => router.push("/more") }} renderLink={renderTopbarLink} />
+      {createOpen && <div className="app-mobile-create-menu" ref={mobileCreateMenuRef}><CreateMenu onClose={() => setCreateOpen(false)} /></div>}
+
+      {companySwitchError ? <div className="app-shell-alert" role="alert" aria-live="polite"><span>{companySwitchError}</span><button type="button" onClick={() => setCompanySwitchError("")} aria-label="Dismiss company switch error"><X size={15} /></button></div> : null}
+
+      {searchOpen ? <div className="app-search-overlay" onMouseDown={closeSearch}>
+        <section className="app-search-dialog" role="dialog" aria-modal="true" aria-label="Global search" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="app-search-dialog-input"><Search size={18} aria-hidden="true" /><input autoFocus value={query} onChange={(event) => handleSearchChange(event.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search invoices, customers, products…" /><button type="button" className="app-topbar-icon" onClick={closeSearch} aria-label="Close search"><X size={17} /></button></div>
+          <div className="app-search-dialog-body">
+            {!query.trim() ? <div className="app-search-empty">Type at least two characters to search your workspace.</div> : null}
+            {query.trim() && !searchGroups.length ? <div className="app-search-empty">No invoices, customers, products, payments, or vendors found.</div> : null}
+            {searchGroups.map((group) => <div key={group.label}><div className="app-search-group-label">{group.label}</div>{group.items.map((item) => { const Icon = item.icon; const flatIndex = searchItems.findIndex((entry) => entry.id === item.id && entry.label === item.label); return <Link key={`${group.label}-${item.id}`} href={item.href} className={`app-search-result ${flatIndex === searchIndex ? "is-selected" : ""}`} onClick={closeSearch}><span className="app-search-result-icon"><Icon size={16} /></span><span><strong>{item.label}</strong><small>{item.meta}</small></span></Link>; })}</div>)}
+          </div>
+        </section>
+      </div> : null}
     </div>
+  );
+}
 
-    {searchOpen && <div className="fixed inset-0 z-50 bg-[#061a38]/45 p-4 flex justify-center items-start pt-[12vh]" onMouseDown={() => {setSearchOpen(false);setQuery("")}}><section className="w-full max-w-xl card shadow-2xl overflow-hidden" onMouseDown={(e) => e.stopPropagation()}><div className="flex items-center gap-3 border-b p-4"><Search size={20} className="text-[#004ffe]"/><input autoFocus className="w-full outline-none" placeholder="Search modules, invoice numbers and customers…" value={query} onChange={(e) => setQuery(e.target.value)}/><button onClick={() => {setSearchOpen(false);setQuery("")}} aria-label="Close search"><X size={19}/></button></div><div className="p-2">{matchingInvoices.length?<><p className="px-3 pt-2 pb-1 muted text-[10px] uppercase tracking-wide">Invoices</p>{matchingInvoices.map(invoice=><Link onClick={() => {setSearchOpen(false);setQuery("")}} key={invoice.id} href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`} className="flex items-center gap-3 p-3 rounded-md hover:bg-[#f4f7fb]"><FileText size={18} className="text-[#004ffe]"/><span><strong className="block text-xs">{invoice.invoice_number}</strong><small className="muted">{invoice.client?.name||"Customer"} · {moneyValue(invoice.total_amount)}</small></span></Link>)}</>:null}{results.map((item) => { const Icon = item.icon; return <Link onClick={() => {setSearchOpen(false);setQuery("")}} key={item.href} href={item.href} className="flex items-center gap-3 p-3 rounded-md hover:bg-[#f4f7fb]"><Icon size={18} className="text-[#004ffe]"/><span>{item.label}</span></Link>; })}{query&&!matchingInvoices.length&&!results.length?<p className="muted text-xs p-5 text-center">No invoices or modules found.</p>:null}</div></section></div>}
+function CreateMenu({ onClose }: { onClose: () => void }) {
+  return <div className="app-create-menu" role="dialog" aria-label="Create new">
+    <div className="app-create-menu-header"><strong>Create new</strong><span>Start a common business task.</span></div>
+    {createActions.map((action) => { const Icon = action.icon; return <Link key={action.label} href={action.href} className="app-create-option" onClick={onClose}><span className="app-create-option-icon"><Icon size={17} /></span><span><strong>{action.label}</strong><small>{action.description}</small></span></Link>; })}
   </div>;
 }
 
-function moneyValue(value:number){return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(Number(value)||0);}
+function NotificationPopover({ notifications, loading, onClose, onClear }: { notifications: Array<{ invoice: InvoiceRow; overdue: boolean }>; loading: boolean; onClose: () => void; onClear: () => void }) {
+  return <div className="app-popover" role="dialog" aria-label="Notifications">
+    <div className="app-popover-title"><strong>Needs attention</strong><span className="app-popover-subtle">Next 7 days</span></div>
+    {loading ? <div className="app-search-empty">Loading notifications…</div> : notifications.length ? <>{notifications.map(({ invoice, overdue }) => <Link key={invoice.id} href={`/invoices/${invoice.id}`} onClick={onClose} className="app-popover-link"><Bell size={15} /><span><strong>{overdue ? "Overdue invoice" : "Invoice due soon"}</strong><small>{invoice.invoice_number} · {invoice.client?.name || "Customer"}</small></span></Link>)}<button type="button" className="app-popover-button" onClick={onClear}><X size={15} /> Clear notifications</button></> : <div className="app-search-empty">You’re all caught up.</div>}
+  </div>;
+}
+
+function ProfilePopover({ email, theme, onToggleTheme, onClose, onSignOut }: { email: string; theme: "light" | "dark"; onToggleTheme: () => void; onClose: () => void; onSignOut: () => void }) {
+  return <div className="app-popover" role="dialog" aria-label="Profile menu"><div className="app-popover-title"><strong>Your account</strong><span className="app-popover-subtle">{email}</span></div><Link className="app-popover-link" href="/settings?tab=general" onClick={onClose}><UserRound size={15} /> Profile and preferences</Link><button type="button" className="app-popover-button" onClick={onToggleTheme}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />} {theme === "dark" ? "Use light mode" : "Use dark mode"}</button><button type="button" className="app-popover-button is-danger" onClick={onSignOut}><LogOutIcon /> Sign out</button></div>;
+}
+
+function LogOutIcon() { return <LogOut size={15} aria-hidden="true" />; }
+function relationName(value: unknown) { const relation = Array.isArray(value) ? value[0] : value; return relation && typeof relation === "object" ? String((relation as Record<string, unknown>).name || "Customer") : "Customer"; }
+function moneyValue(value: unknown) { return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(Number(value) || 0); }
+function initials(value: string) { return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "O"; }
+function companySwitchErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("not a member") || normalized.includes("permission") || normalized.includes("access")) {
+    return "You do not have access to that company.";
+  }
+  if (normalized.includes("authentication") || normalized.includes("session")) {
+    return "Your session has expired. Please sign in again.";
+  }
+  return "We could not switch companies. Please try again.";
+}
 
 export const secondaryModules = [
-  { href: "/supplier-bills", label: "Supplier Bills", icon: ShoppingBag },
-  { href: "/contracts", label: "Contracts", icon: ScrollText },
-  { href: "/management", label: "Management", icon: Building2 },
-  { href: "/inventory", label: "Inventory", icon: PackageOpen },
+  { href: "/supplier-bills", label: "Supplier Bills", icon: FileText },
+  { href: "/contracts", label: "Contracts", icon: FileCheck2 },
+  { href: "/management", label: "Management", icon: MoreHorizontal },
+  { href: "/inventory", label: "Inventory", icon: Package },
 ];

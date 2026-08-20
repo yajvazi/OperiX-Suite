@@ -41,7 +41,7 @@ def build_reset_link(token: str) -> str:
 def _send_resend_email(to_email: str, subject: str, body: str) -> None:
     payload = json.dumps(
         {
-            "from": settings.resend_from_email or settings.smtp_from_email or "DeskDibs <onboarding@resend.dev>",
+            "from": settings.resend_from_email or settings.smtp_from_email or "OperiX Desk <onboarding@resend.dev>",
             "to": [to_email],
             "subject": subject,
             "text": body,
@@ -106,7 +106,7 @@ def build_account_created_email(full_name: str, email: str, temporary_password: 
         [
             f"Hello {full_name},",
             "",
-            "Your DeskDibs account has been created.",
+            "Your OperiX Desk access has been created through your shared OperiX account.",
             f"Email: {email}",
             f"Temporary password: {temporary_password}",
             "",
@@ -123,7 +123,7 @@ def build_password_reset_email(full_name: str, reset_link: str) -> str:
         [
             f"Hello {full_name},",
             "",
-            "We received a request to reset your DeskDibs password.",
+            "We received a request to reset your shared OperiX account password.",
             "Use this link to choose a new password:",
             reset_link,
             "",
@@ -138,12 +138,12 @@ def build_reservation_cancelled_email(reservation) -> str:
         [
             f"Hello {reservation.user.full_name},",
             "",
-            "Your DeskDibs reservation has been cancelled by an admin.",
+            "Your OperiX Desk reservation has been cancelled by an admin.",
             f"Resource: {resource_name}",
             f"Date: {reservation.date.isoformat()}",
             f"Time: {reservation_time_label(reservation.start_time, reservation.end_time)}",
             "",
-            "Please open DeskDibs to choose another workspace if needed.",
+            "Please open OperiX Desk to choose another workspace if needed.",
         ]
     )
 
@@ -154,7 +154,7 @@ def build_admin_reservation_created_email(reservation) -> str:
     user_email = reservation.user.email if reservation.user else "Unknown email"
     return "\n".join(
         [
-            "A new DeskDibs reservation was created.",
+            "A new OperiX Desk reservation was created.",
             "",
             f"Employee: {user_name}",
             f"Email: {user_email}",

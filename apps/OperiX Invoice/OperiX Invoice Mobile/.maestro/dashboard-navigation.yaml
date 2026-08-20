@@ -1,0 +1,33 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: login.yaml
+- tapOn:
+    id: nav-sales-tab
+- extendedWaitUntil:
+    visible:
+      id: sales-screen
+    timeout: 15000
+- tapOn:
+    id: nav-home-tab
+- extendedWaitUntil:
+    visible:
+      id: home-screen
+    timeout: 15000
+- tapOn:
+    id: nav-business-tab
+- extendedWaitUntil:
+    visible:
+      id: business-screen
+    timeout: 15000
+- tapOn:
+    id: nav-more-tab
+- extendedWaitUntil:
+    visible:
+      id: more-screen
+    timeout: 15000
+- tapOn:
+    id: nav-home-tab
+- extendedWaitUntil:
+    visible:
+      id: home-screen
+    timeout: 15000

@@ -1,4 +1,9 @@
 import axios from 'axios';
+import {
+  clearLocalSupabaseSession,
+  isStaleSupabaseSessionError,
+  supabase,
+} from '../utils/supabase';
 
 function resolveApiBaseUrl() {
   const fromEnv = import.meta.env.VITE_API_URL?.trim();
@@ -9,10 +14,26 @@ function resolveApiBaseUrl() {
 const apiBaseURL = resolveApiBaseUrl();
 const api = axios.create({ baseURL: apiBaseURL });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  let accessToken = token;
+  if (supabase) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error && isStaleSupabaseSessionError(error)) {
+      await clearLocalSupabaseSession();
+      return Promise.reject(error);
+    }
+    accessToken = data.session?.access_token || null;
+  }
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
+});
+
+api.interceptors.response.use(undefined, async (error) => {
+  if (supabase && error?.response?.status === 401) {
+    await clearLocalSupabaseSession();
+  }
+  return Promise.reject(error);
 });
 
 export async function login(email, password) {
@@ -35,6 +56,11 @@ export async function updateMe(body) {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
+}
+
+export async function getProfileImage() {
+  const { data } = await api.get('/auth/profile-image', { responseType: 'blob' });
+  return URL.createObjectURL(data);
 }
 
 export async function getResources(params) {
@@ -131,6 +157,13 @@ export async function getFloorPlans() {
   return data;
 }
 
+export async function getFloorPlanImage(planId) {
+  const { data } = await api.get(`/floor-plans/${planId}/image`, {
+    responseType: 'blob',
+  });
+  return URL.createObjectURL(data);
+}
+
 export async function uploadFloorPlan(floor, file, building = 'HQ', name = '') {
   const form = new FormData();
   form.append('floor', floor);
@@ -192,6 +225,11 @@ export async function downloadUsersCsv() {
 
 export async function getRecentActivity() {
   const { data } = await api.get('/analytics/recent-activity');
+  return data;
+}
+
+export async function getWhoIsInToday(params = {}) {
+  const { data } = await api.get('/users/today', { params });
   return data;
 }
 

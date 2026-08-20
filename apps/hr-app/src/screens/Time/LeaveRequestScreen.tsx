@@ -1,402 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, RefreshControl, Platform } from 'react-native';
-import { useTheme } from '@invoice-monorepo/hooks';
-import { Card, Button } from '@invoice-monorepo/ui';
-import { Calendar as CalendarIcon, CheckCircle2, XCircle, Clock, Plus, ArrowLeft, RefreshCw, User, Users } from 'lucide-react-native';
-import { supabase } from '@invoice-monorepo/api';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ArrowLeft, CalendarDays, Check, Clock3, FileText, X } from 'lucide-react-native';
+import { useTheme } from '@invoice-monorepo/hooks';
+import { resolveWorkspace, supabase } from '@invoice-monorepo/api';
+import { cancelLeaveRequest, employeeDisplayName, getEmployeeForUser, leaveRequestDays, listLeaveBalances, listLeaveRequests, listLeaveTypes, reviewLeaveRequest, submitLeaveRequest, subscribeToHrChanges, type HrEmployee, type HrLeaveBalance, type HrLeaveRequest, type HrLeaveType } from '@invoice-monorepo/hr';
+
+const BLUE = '#004FFE';
+const iso = (date: Date) => date.toISOString().slice(0, 10);
 
 export function LeaveRequestScreen({ navigation }: any) {
-    const { isDark, primaryColor } = useTheme();
-    const [activeTab, setActiveTab] = useState<'request' | 'history' | 'team'>('request');
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
+  const { isDark } = useTheme();
+  const [employee, setEmployee] = useState<HrEmployee | null>(null);
+  const [types, setTypes] = useState<HrLeaveType[]>([]);
+  const [balances, setBalances] = useState<HrLeaveBalance[]>([]);
+  const [requests, setRequests] = useState<HrLeaveRequest[]>([]);
+  const [tab, setTab] = useState<'request' | 'mine' | 'team'>('request');
+  const [selectedType, setSelectedType] = useState('vacation');
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [showStart, setShowStart] = useState(false);
+  const [showEnd, setShowEnd] = useState(false);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const colors = { bg: isDark ? '#0f172a' : '#f7f9fc', card: isDark ? '#1e293b' : '#fff', text: isDark ? '#fff' : '#12213f', muted: isDark ? '#94a3b8' : '#6f7d96', border: isDark ? '#334155' : '#e4e9f0' };
 
-    // Form State
-    const [selectedType, setSelectedType] = useState('vacation');
-    const [startDate, setStartDate] = useState(new Date());
-    const [endDate, setEndDate] = useState(new Date());
-    const [reason, setReason] = useState('');
-    const [showStartPicker, setShowStartPicker] = useState(false);
-    const [showEndPicker, setShowEndPicker] = useState(false);
-
-    // Data State
-    const [myRequests, setMyRequests] = useState<any[]>([]);
-    const [teamRequests, setTeamRequests] = useState<any[]>([]);
-    const [userEmployee, setUserEmployee] = useState<any>(null);
-
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
-
-    const requestTypes = [
-        { id: 'vacation', label: 'Vacation' },
-        { id: 'sick', label: 'Sick Leave' },
-        { id: 'personal', label: 'Personal' },
-        { id: 'unpaid', label: 'Unpaid' }
-    ];
-
-    useEffect(() => {
-        fetchInitialData();
-    }, []);
-
-    const fetchInitialData = async () => {
-        setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data: emp } = await supabase
-                .from('employees')
-                .select('id, company_id, role')
-                .eq('user_id', user.id)
-                .single();
-
-            if (emp) {
-                setUserEmployee(emp);
-                await Promise.all([
-                    fetchMyRequests(emp.id),
-                    emp.role !== 'employee' ? fetchTeamRequests(emp.company_id) : Promise.resolve()
-                ]);
-            }
-        }
-        setLoading(false);
-    };
-
-    const fetchMyRequests = async (empId: string) => {
-        const { data, error } = await supabase
-            .from('leave_requests')
-            .select('*')
-            .eq('employee_id', empId)
-            .order('created_at', { ascending: false });
-
-        if (!error) setMyRequests(data || []);
-    };
-
-    const fetchTeamRequests = async (companyId: string) => {
-        const { data, error } = await supabase
-            .from('leave_requests')
-            .select(`
-                *,
-                employees (first_name, last_name, avatar_url)
-            `)
-            .eq('company_id', companyId)
-            .order('created_at', { ascending: false });
-
-        if (!error) setTeamRequests(data || []);
-    };
-
-    const handleSubmit = async () => {
-        if (!userEmployee) return;
-        if (endDate < startDate) {
-            Alert.alert("Invalid Dates", "End date cannot be before start date.");
-            return;
-        }
-
-        setSubmitting(true);
-        try {
-            const { error } = await supabase
-                .from('leave_requests')
-                .insert({
-                    employee_id: userEmployee.id,
-                    company_id: userEmployee.company_id,
-                    leave_type: selectedType,
-                    start_date: startDate.toISOString().split('T')[0],
-                    end_date: endDate.toISOString().split('T')[0],
-                    reason: reason,
-                    status: 'pending'
-                });
-
-            if (error) throw error;
-
-            Alert.alert("Success", "Leave request submitted successfully!");
-            setReason('');
-            setActiveTab('history');
-            fetchMyRequests(userEmployee.id);
-        } catch (error: any) {
-            Alert.alert("Error", error.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const handleUpdateStatus = async (requestId: string, newStatus: 'approved' | 'rejected') => {
-        try {
-            const { error } = await supabase
-                .from('leave_requests')
-                .update({
-                    status: newStatus,
-                    approved_by: (await supabase.auth.getUser()).data.user?.id
-                })
-                .eq('id', requestId);
-
-            if (error) throw error;
-
-            fetchTeamRequests(userEmployee.company_id);
-            fetchMyRequests(userEmployee.id);
-        } catch (error: any) {
-            Alert.alert("Error", error.message);
-        }
-    };
-
-    const onRefresh = async () => {
-        setRefreshing(true);
-        if (userEmployee) {
-            await Promise.all([
-                fetchMyRequests(userEmployee.id),
-                userEmployee.role !== 'employee' ? fetchTeamRequests(userEmployee.company_id) : Promise.resolve()
-            ]);
-        }
-        setRefreshing(false);
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'approved': return '#10b981';
-            case 'rejected': return '#ef4444';
-            default: return '#f59e0b';
-        }
-    };
-
-    const renderRequestItem = (item: any, isTeam: boolean) => (
-        <Card key={item.id} style={[styles.historyCard, { backgroundColor: cardBg }]}>
-            <View style={{ flex: 1 }}>
-                {isTeam && (
-                    <Text style={[styles.employeeName, { color: textColor }]}>
-                        {item.employees?.first_name} {item.employees?.last_name}
-                    </Text>
-                )}
-                <Text style={[styles.historyType, { color: textColor, textTransform: 'capitalize' }]}>{item.leave_type}</Text>
-                <Text style={[styles.historyDate, { color: mutedColor }]}>
-                    {item.start_date} to {item.end_date}
-                </Text>
-                {item.reason ? (
-                    <Text style={[styles.reasonText, { color: mutedColor }]} numberOfLines={1}>"{item.reason}"</Text>
-                ) : null}
-            </View>
-
-            <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                    <Text style={[styles.statusTabText, { color: getStatusColor(item.status) }]}>
-                        {item.status.toUpperCase()}
-                    </Text>
-                </View>
-
-                {isTeam && item.status === 'pending' && (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item.id, 'rejected')}
-                            style={[styles.smallActionBtn, { backgroundColor: '#ef4444' }]}
-                        >
-                            <XCircle color="#fff" size={16} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item.id, 'approved')}
-                            style={[styles.smallActionBtn, { backgroundColor: '#10b981' }]}
-                        >
-                            <CheckCircle2 color="#fff" size={16} />
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </View>
-        </Card>
-    );
-
-    if (loading) {
-        return (
-            <View style={[styles.container, { backgroundColor: bgColor, justifyContent: 'center' }]}>
-                <ActivityIndicator color={primaryColor} size="large" />
-            </View>
-        );
-    }
-
-    return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Leave Requests</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            {/* Tab Switcher */}
-            <View style={[styles.tabContainer, { backgroundColor: cardBg }]}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'request' && { backgroundColor: primaryColor }]}
-                    onPress={() => setActiveTab('request')}
-                >
-                    <Plus size={16} color={activeTab === 'request' ? '#fff' : mutedColor} style={{ marginRight: 4 }} />
-                    <Text style={[styles.tabText, { color: activeTab === 'request' ? '#fff' : mutedColor }]}>New</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'history' && { backgroundColor: primaryColor }]}
-                    onPress={() => setActiveTab('history')}
-                >
-                    <Clock size={16} color={activeTab === 'history' ? '#fff' : mutedColor} style={{ marginRight: 4 }} />
-                    <Text style={[styles.tabText, { color: activeTab === 'history' ? '#fff' : mutedColor }]}>Mine</Text>
-                </TouchableOpacity>
-                {userEmployee?.role !== 'employee' && (
-                    <TouchableOpacity
-                        style={[styles.tab, activeTab === 'team' && { backgroundColor: primaryColor }]}
-                        onPress={() => setActiveTab('team')}
-                    >
-                        <Users size={16} color={activeTab === 'team' ? '#fff' : mutedColor} style={{ marginRight: 4 }} />
-                        <Text style={[styles.tabText, { color: activeTab === 'team' ? '#fff' : mutedColor }]}>Team</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            <ScrollView
-                contentContainerStyle={styles.content}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />
-                }
-            >
-                {activeTab === 'request' ? (
-                    <View style={{ gap: 20 }}>
-                        <View>
-                            <Text style={[styles.label, { color: mutedColor }]}>Leave Type</Text>
-                            <View style={styles.typeGrid}>
-                                {requestTypes.map(type => (
-                                    <TouchableOpacity
-                                        key={type.id}
-                                        style={[
-                                            styles.typeButton,
-                                            {
-                                                backgroundColor: selectedType === type.id ? primaryColor + '20' : cardBg,
-                                                borderColor: selectedType === type.id ? primaryColor : 'transparent',
-                                                borderWidth: 1
-                                            }
-                                        ]}
-                                        onPress={() => setSelectedType(type.id)}
-                                    >
-                                        <Text style={{ color: selectedType === type.id ? primaryColor : mutedColor, fontWeight: '600' }}>{type.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        <View style={{ flexDirection: 'row', gap: 16 }}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.label, { color: mutedColor }]}>Start Date</Text>
-                                <TouchableOpacity
-                                    style={[styles.dateCard, { backgroundColor: cardBg }]}
-                                    onPress={() => setShowStartPicker(true)}
-                                >
-                                    <CalendarIcon color={primaryColor} size={20} />
-                                    <Text style={{ color: textColor }}>{startDate.toLocaleDateString()}</Text>
-                                </TouchableOpacity>
-                                {showStartPicker && Platform.OS !== 'web' && (
-                                    <DateTimePicker
-                                        value={startDate}
-                                        mode="date"
-                                        onChange={(e, date) => {
-                                            setShowStartPicker(false);
-                                            if (date) setStartDate(date);
-                                        }}
-                                    />
-                                )}
-                                {showStartPicker && Platform.OS === 'web' && (
-                                    <View style={{ padding: 10, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 8 }}>
-                                        <Text style={{ color: '#ef4444', fontSize: 12 }}>Picker not available on Web</Text>
-                                    </View>
-                                )}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.label, { color: mutedColor }]}>End Date</Text>
-                                <TouchableOpacity
-                                    style={[styles.dateCard, { backgroundColor: cardBg }]}
-                                    onPress={() => setShowEndPicker(true)}
-                                >
-                                    <CalendarIcon color={primaryColor} size={20} />
-                                    <Text style={{ color: textColor }}>{endDate.toLocaleDateString()}</Text>
-                                </TouchableOpacity>
-                                {showEndPicker && Platform.OS !== 'web' && (
-                                    <DateTimePicker
-                                        value={endDate}
-                                        mode="date"
-                                        onChange={(e, date) => {
-                                            setShowEndPicker(false);
-                                            if (date) setEndDate(date);
-                                        }}
-                                    />
-                                )}
-                                {showEndPicker && Platform.OS === 'web' && (
-                                    <View style={{ padding: 10, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 8 }}>
-                                        <Text style={{ color: '#ef4444', fontSize: 12 }}>Picker not available on Web</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-
-                        <View>
-                            <Text style={[styles.label, { color: mutedColor }]}>Reason (Optional)</Text>
-                            <TextInput
-                                style={[styles.input, { backgroundColor: cardBg, color: textColor }]}
-                                placeholder="e.g. Family trip to Albania"
-                                placeholderTextColor={mutedColor}
-                                multiline
-                                value={reason}
-                                onChangeText={setReason}
-                            />
-                        </View>
-
-                        <Button
-                            title="Submit Request"
-                            onPress={handleSubmit}
-                            loading={submitting}
-                        />
-                    </View>
-                ) : activeTab === 'history' ? (
-                    <View style={{ gap: 12 }}>
-                        {myRequests.length === 0 ? (
-                            <Text style={{ color: mutedColor, textAlign: 'center', marginTop: 20 }}>No history found.</Text>
-                        ) : (
-                            myRequests.map(item => renderRequestItem(item, false))
-                        )}
-                    </View>
-                ) : (
-                    <View style={{ gap: 12 }}>
-                        {teamRequests.length === 0 ? (
-                            <Text style={{ color: mutedColor, textAlign: 'center', marginTop: 20 }}>No pending requests.</Text>
-                        ) : (
-                            teamRequests.map(item => renderRequestItem(item, true))
-                        )}
-                    </View>
-                )}
-            </ScrollView>
-        </View>
-    );
+  const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser(); if (!user) return;
+    setRefreshing(true);
+    try {
+      const workspace = await resolveWorkspace(supabase, user.id);
+      const own = await getEmployeeForUser(supabase, user.id, workspace.companyId); setEmployee(own);
+      const [leaveTypes, leaveRequests] = await Promise.all([listLeaveTypes(supabase, workspace.companyId), listLeaveRequests(supabase, [workspace.companyId])]);
+      setTypes(leaveTypes); setRequests(leaveRequests); if (leaveTypes.length && !leaveTypes.some((type) => type.code === selectedType)) setSelectedType(leaveTypes[0].code);
+      if (own) setBalances(await listLeaveBalances(supabase, workspace.companyId, own.id));
+    } catch (error) { console.warn('Unable to load leave', error); }
+    setLoading(false); setRefreshing(false);
+  }, []);
+  useFocusEffect(useCallback(() => { void load(); const subscription = supabase.auth.getUser().then(async ({ data: { user } }) => { if (!user) return undefined; try { const workspace = await resolveWorkspace(supabase, user.id); return subscribeToHrChanges(supabase, workspace.companyId, () => { void load(); }); } catch { return undefined; } }); return () => { void subscription.then((remove) => remove?.()); }; }, [load]));
+  async function submit() { if (!employee) { Alert.alert('Employee profile missing', 'Ask HR to link your account to an employee record.'); return; } if (endDate < startDate) { Alert.alert('Invalid dates', 'End date cannot be before start date.'); return; } setBusy(true); try { await submitLeaveRequest(supabase, { companyId: employee.company_id, employeeId: employee.id, leaveType: selectedType, startDate: iso(startDate), endDate: iso(endDate), reason }); setReason(''); setTab('mine'); Alert.alert('Submitted', 'Your request is waiting for approval.'); await load(); } catch (error: any) { Alert.alert('Unable to submit leave', error.message); } setBusy(false); }
+  async function review(request: HrLeaveRequest, status: 'approved' | 'rejected') { setBusy(true); try { await reviewLeaveRequest(supabase, request.id, status); await load(); } catch (error: any) { Alert.alert('Unable to review leave', error.message); } setBusy(false); }
+  async function cancel(request: HrLeaveRequest) { setBusy(true); try { await cancelLeaveRequest(supabase, request.id); await load(); } catch (error: any) { Alert.alert('Unable to cancel leave', error.message); } setBusy(false); }
+  if (loading) return <View style={[styles.center, { backgroundColor: colors.bg }]}><ActivityIndicator color={BLUE} size="large" /></View>;
+  const ownRequests = requests.filter((request) => request.employee_id === employee?.id);
+  const teamRequests = requests.filter((request) => request.employee_id !== employee?.id);
+  return <View style={[styles.container, { backgroundColor: colors.bg }]}><View style={styles.header}><TouchableOpacity onPress={() => navigation.navigate('Dashboard')} style={styles.back}><ArrowLeft color={colors.text} size={22} /></TouchableOpacity><View><Text style={[styles.kicker, { color: BLUE }]}>TIME OFF</Text><Text style={[styles.title, { color: colors.text }]}>Leave requests</Text></View><View style={{ width: 38 }} /></View><View style={[styles.tabs, { backgroundColor: colors.card }]}><Tab label="New" active={tab === 'request'} onPress={() => setTab('request')} colors={colors} /><Tab label="Mine" active={tab === 'mine'} onPress={() => setTab('mine')} colors={colors} />{employee?.role !== 'employee' ? <Tab label="Team" active={tab === 'team'} onPress={() => setTab('team')} colors={colors} /> : null}</View><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} tintColor={BLUE} />}>{tab === 'request' ? <><Text style={[styles.sectionTitle, { color: colors.text }]}>Leave balance</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.balanceRow}>{balances.length ? balances.map((balance) => <View key={balance.id} style={[styles.balanceCard, { backgroundColor: colors.card }]}><Text style={[styles.balanceName, { color: colors.muted }]}>{balance.leave_type?.name || 'Leave'}</Text><Text style={[styles.balanceValue, { color: colors.text }]}>{balance.remaining.toFixed(1)}<Text style={styles.balanceUnit}> d</Text></Text><Text style={[styles.balanceMeta, { color: colors.muted }]}>{balance.used.toFixed(1)} used · {balance.pending.toFixed(1)} pending</Text></View>) : <View style={[styles.balanceEmpty, { backgroundColor: colors.card }]}><Text style={{ color: colors.muted, fontSize: 11 }}>Balances are created with your first request.</Text></View>}</ScrollView><Text style={[styles.sectionTitle, { color: colors.text }]}>Choose leave type</Text><View style={styles.typeGrid}>{types.map((type) => <TouchableOpacity key={type.id} onPress={() => setSelectedType(type.code)} style={[styles.typeButton, { backgroundColor: colors.card, borderColor: selectedType === type.code ? BLUE : 'transparent' }]}><Text style={{ color: selectedType === type.code ? BLUE : colors.muted, fontSize: 11, fontWeight: '700' }}>{type.name}</Text></TouchableOpacity>)}</View><Text style={[styles.sectionTitle, { color: colors.text }]}>Dates</Text><View style={styles.dateRow}><DateButton label="Start" date={startDate} onPress={() => setShowStart(true)} colors={colors} /><DateButton label="End" date={endDate} onPress={() => setShowEnd(true)} colors={colors} /></View>{showStart && Platform.OS !== 'web' ? <DateTimePicker value={startDate} mode="date" onChange={(_, date) => { setShowStart(false); if (date) setStartDate(date); }} /> : null}{showEnd && Platform.OS !== 'web' ? <DateTimePicker value={endDate} mode="date" onChange={(_, date) => { setShowEnd(false); if (date) setEndDate(date); }} /> : null}<Text style={[styles.sectionTitle, { color: colors.text }]}>Reason <Text style={{ color: colors.muted, fontSize: 10, fontWeight: '400' }}>(optional)</Text></Text><View style={[styles.reasonBox, { backgroundColor: colors.card }]}><TextInputCompat value={reason} onChangeText={setReason} placeholder="Add context for your manager" placeholderTextColor={colors.muted} color={colors.text} /></View><TouchableOpacity disabled={busy} onPress={() => void submit()} style={[styles.submit, { backgroundColor: BLUE, opacity: busy ? .65 : 1 }]}>{busy ? <ActivityIndicator color="#fff" /> : <><Text style={styles.submitText}>Submit request</Text><CalendarDays color="#fff" size={17} /></>}</TouchableOpacity></> : <>{(tab === 'mine' ? ownRequests : teamRequests).length ? (tab === 'mine' ? ownRequests : teamRequests).map((request) => <RequestRow key={request.id} request={request} isTeam={tab === 'team'} colors={colors} onApprove={() => void review(request, 'approved')} onReject={() => void review(request, 'rejected')} onCancel={() => void cancel(request)} />) : <Text style={[styles.empty, { color: colors.muted }]}>{tab === 'team' ? 'No team requests are awaiting review.' : 'No leave history yet.'}</Text>}</>}</ScrollView></View>;
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    backButton: { padding: 8 },
-    title: { fontSize: 24, fontWeight: '800' },
-    tabContainer: { flexDirection: 'row', marginHorizontal: 20, borderRadius: 12, padding: 4, marginBottom: 20, gap: 4 },
-    tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10 },
-    tabText: { fontWeight: '700', fontSize: 13 },
-    content: { paddingHorizontal: 20, paddingBottom: 40 },
-    label: { fontSize: 13, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-    typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    typeButton: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, minWidth: '45%', alignItems: 'center' },
-    dateCard: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12, borderRadius: 12 },
-    input: { height: 100, borderRadius: 12, padding: 16, textAlignVertical: 'top', fontSize: 15 },
-    historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 16, gap: 12 },
-    employeeName: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
-    historyType: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-    historyDate: { fontSize: 13, marginBottom: 4 },
-    reasonText: { fontSize: 12, fontStyle: 'italic' },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    statusTabText: { fontSize: 11, fontWeight: '800' },
-    smallActionBtn: { padding: 8, borderRadius: 10 },
-    submitButton: { padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 10 },
-    submitText: { color: '#fff', fontWeight: '700', fontSize: 16 }
-});
-
-
-
-
-
+function Tab({ label, active, onPress, colors }: { label: string; active: boolean; onPress: () => void; colors: { card: string; muted: string } }) { return <TouchableOpacity onPress={onPress} style={[styles.tab, active && { backgroundColor: BLUE }]}><Text style={{ color: active ? '#fff' : colors.muted, fontSize: 11, fontWeight: '800' }}>{label}</Text></TouchableOpacity>; }
+function DateButton({ label, date, onPress, colors }: { label: string; date: Date; onPress: () => void; colors: { card: string; muted: string; text: string } }) { return <TouchableOpacity onPress={onPress} style={[styles.dateButton, { backgroundColor: colors.card }]}><Text style={[styles.dateLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.dateValue, { color: colors.text }]}>{date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</Text></TouchableOpacity>; }
+function RequestRow({ request, isTeam, colors, onApprove, onReject, onCancel }: { request: HrLeaveRequest; isTeam: boolean; colors: { card: string; text: string; muted: string; border: string }; onApprove: () => void; onReject: () => void; onCancel: () => void }) { return <View style={[styles.requestRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}><View style={styles.requestIcon}><FileText size={15} color={BLUE} /></View><View style={{ flex: 1 }}><Text style={[styles.requestTitle, { color: colors.text }]}>{isTeam && request.employee ? employeeDisplayName(request.employee) : request.leave_type}</Text><Text style={[styles.requestMeta, { color: colors.muted }]}>{isTeam ? request.leave_type : `${request.start_date} – ${request.end_date}`} · {leaveRequestDays(request)}d</Text><Text style={[styles.requestStatus, { color: request.status === 'approved' ? '#138a62' : request.status === 'rejected' ? '#c43d53' : '#b97709' }]}>{request.status}</Text></View>{isTeam && request.status === 'pending' ? <View style={styles.requestActions}><TouchableOpacity onPress={onReject} style={[styles.action, { backgroundColor: '#fff0f2' }]}><X size={15} color="#c43d53" /></TouchableOpacity><TouchableOpacity onPress={onApprove} style={[styles.action, { backgroundColor: '#eaf8f2' }]}><Check size={15} color="#138a62" /></TouchableOpacity></View> : !isTeam && request.status === 'pending' ? <TouchableOpacity onPress={onCancel} style={[styles.action, { backgroundColor: '#f0f3f7' }]}><X size={15} color={colors.muted} /></TouchableOpacity> : null}</View>; }
+function TextInputCompat({ value, onChangeText, placeholder, placeholderTextColor, color }: { value: string; onChangeText: (value: string) => void; placeholder: string; placeholderTextColor: string; color: string }) { return <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={placeholderTextColor} style={{ color, fontSize: 12, minHeight: 75, textAlignVertical: 'top' }} multiline />; }
+const styles = StyleSheet.create({ container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 56, paddingBottom: 12 }, back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center' }, title: { marginTop: 3, fontSize: 19, fontWeight: '800' }, tabs: { flexDirection: 'row', gap: 5, marginHorizontal: 18, padding: 4, borderRadius: 11 }, tab: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, content: { padding: 15, paddingBottom: 36 }, sectionTitle: { marginTop: 16, marginBottom: 9, fontSize: 14, fontWeight: '800' }, balanceRow: { gap: 9 }, balanceCard: { minWidth: 140, padding: 13, borderRadius: 12 }, balanceEmpty: { minWidth: 250, padding: 17, borderRadius: 12 }, balanceName: { fontSize: 10 }, balanceValue: { marginTop: 8, fontSize: 21, fontWeight: '800' }, balanceUnit: { fontSize: 11, fontWeight: '500' }, balanceMeta: { marginTop: 3, fontSize: 9 }, typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, typeButton: { width: '48%', minHeight: 39, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderWidth: 1, borderRadius: 9 }, dateRow: { flexDirection: 'row', gap: 8 }, dateButton: { flex: 1, padding: 12, borderRadius: 11 }, dateLabel: { fontSize: 10 }, dateValue: { marginTop: 5, fontSize: 12, fontWeight: '700' }, reasonBox: { minHeight: 85, padding: 12, borderRadius: 11 }, submit: { minHeight: 45, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16, borderRadius: 11 }, submitText: { color: '#fff', fontSize: 13, fontWeight: '800' }, empty: { paddingVertical: 35, textAlign: 'center', fontSize: 12 }, requestRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 13, paddingHorizontal: 9, borderBottomWidth: StyleSheet.hairlineWidth }, requestIcon: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#edf3ff' }, requestTitle: { fontSize: 12, fontWeight: '700' }, requestMeta: { marginTop: 3, fontSize: 10 }, requestStatus: { marginTop: 3, fontSize: 10, fontWeight: '700', textTransform: 'capitalize' }, requestActions: { flexDirection: 'row', gap: 6 }, action: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8 } });

@@ -1,32 +1,21 @@
 import type { Metadata } from "next";
-import { BarChart3, CreditCard, FileChartColumn, FileText, PackageOpen, ReceiptText, ScanLine, Users } from "lucide-react";
 import { ProductPage } from "@/components/product-page";
 
 export const metadata: Metadata = {
-  title: "OperiX Invoice",
-  description: "Create invoices, manage expenses and payments, and understand financial performance with OperiX Invoice.",
+  title: "OperiX Invoice — Invoicing & Business Finance",
+  description: "Create invoices, manage customers, follow payments, and organize everyday financial operations with OperiX Invoice.",
   alternates: { canonical: "/products/invoice" },
+  openGraph: { title: "OperiX Invoice — Invoicing & Business Finance", description: "Create invoices and manage day-to-day financial operations from one connected OperiX account." },
 };
 
 export default function InvoicePage() {
-  return <ProductPage
-    product="OperiX Invoice"
-    headline="Financial operations, without the friction."
-    description="Create professional invoices, manage customers and vendors, follow payments, and turn daily activity into clear reports."
-    variant="invoice"
-    overviewTitle="A clearer way to manage business finances"
-    overviewText="OperiX Invoice connects the documents, transactions, and relationships behind your financial operation so your team can act with confidence."
-    overviewPoints={["Create and manage multiple invoice types", "Track expenses, supplier bills, and payments", "Keep customer, vendor, and product records connected", "Generate reports and ledgers from current data"]}
-    featureTitle="Everything around the invoice"
-    features={[
-      { title: "Professional invoices", description: "Create structured invoices and reusable document templates.", icon: ReceiptText },
-      { title: "Expenses", description: "Record business costs and keep expense activity organized.", icon: CreditCard },
-      { title: "Payments", description: "Follow customer and vendor payment records.", icon: FileText },
-      { title: "Reports", description: "Review financial activity through focused reports and ledgers.", icon: FileChartColumn },
-      { title: "Customers", description: "Keep customer information close to each transaction.", icon: Users },
-      { title: "Products", description: "Maintain the products and services used across documents.", icon: PackageOpen },
-      { title: "Document capture", description: "Support faster data entry with scanning workflows.", icon: ScanLine },
-      { title: "Analytics", description: "Understand trends across revenue, expenses, and activity.", icon: BarChart3 },
-    ]}
-  />;
+  return <ProductPage content={{
+    product: "invoice",
+    headline: "Simple invoicing. Powerful business operations.",
+    description: "Create invoices, manage customers, track payments, and run your business finances from anywhere.",
+    overview: "Keep the documents and activity behind your finances in one focused workspace.",
+    workflow: ["Create invoices, quotes, proforma invoices, delivery notes, and orders", "Keep customers, products, services, and vendors connected", "Track payments, expenses, inventory, POS, and reports", "Use the same OperiX account across web and mobile access"],
+    useCases: ["Recurring business invoicing", "Customer and payment follow-up", "Expenses and inventory workflows", "Reports for day-to-day financial visibility"],
+    mobileCopy: "Create and review financial work on the web or in the Invoice mobile app using the same OperiX account. Mobile availability is product-specific and does not create a separate account.",
+  }} />;
 }

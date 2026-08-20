@@ -16,12 +16,13 @@ import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button } from '@invoice-monorepo/ui';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate as formatLocalizedDate, getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { stripeService, StripeTransaction, StripePayout } from '../../services/stripeService';
+import { getWorkspaceScope } from '../../services/workspace';
 
 export function StripeDashboardScreen({ navigation }: any) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -34,6 +35,9 @@ export function StripeDashboardScreen({ navigation }: any) {
         pendingPayouts: 0,
         recentTransactions: [] as StripeTransaction[],
         recentPayouts: [] as StripePayout[],
+        stores: [],
+        balances: [],
+        onlineInvoices: [],
     });
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
@@ -48,7 +52,7 @@ export function StripeDashboardScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             loadData();
-        }, [user])
+        }, [user?.id])
     );
 
     const loadData = async () => {
@@ -56,24 +60,16 @@ export function StripeDashboardScreen({ navigation }: any) {
         setLoading(true);
 
         try {
-            // Get profile with Stripe credentials
+            // Only non-secret status fields are read by the mobile client.
             const { data: profileData } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('stripe_account_id,stripe_last_synced')
                 .eq('id', user.id)
                 .single();
-
-            if (profileData) {
-                setProfile(profileData);
-
-                // Check if connected via OAuth OR Developer Mode (API key)
-                if (profileData.stripe_access_token || profileData.stripe_api_key) {
-                    // Get dashboard data from local DB
-                    const companyId = profileData.active_company_id || profileData.company_id;
-                    const dashboardData = await stripeService.getDashboardSummary(user.id, companyId);
-                    setSummary(dashboardData);
-                }
-            }
+            setProfile(profileData || {});
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const dashboardData = await stripeService.getDashboardSummary(user.id, companyIds);
+            setSummary(dashboardData);
         } catch (error) {
             console.error('Error loading Stripe data:', error);
         } finally {
@@ -82,40 +78,37 @@ export function StripeDashboardScreen({ navigation }: any) {
     };
 
     const handleSync = async (force: boolean = false) => {
-        // Check if connected via OAuth OR API Key
-        const status = await stripeService.checkConnectionStatus(user!.id);
+        const { companyIds } = await getWorkspaceScope(user!.id);
+        const status = await stripeService.checkConnectionStatus(user!.id, companyIds);
         if (!status.connected) {
-            Alert.alert('Not Connected', 'Please connect your Stripe account first in Payment Integrations.');
+            Alert.alert(t('notConnectedAlert', language), t('connectStripeFirst', language));
             return;
         }
 
         setSyncing(true);
         try {
-            let result;
-            if (status.method === 'apikey') {
-                const { data: profileData } = await supabase
-                    .from('profiles')
-                    .select('stripe_api_key, active_company_id, company_id')
-                    .eq('id', user!.id)
-                    .single();
-
-                if (!profileData?.stripe_api_key) throw new Error('API key not found');
-
-                const companyId = profileData.active_company_id || profileData.company_id;
-                result = await stripeService.syncDirectWithApiKey(user!.id, profileData.stripe_api_key, companyId, force);
-            } else {
-                result = await stripeService.syncViaEdgeFunction();
-            }
+            const stores = status.stores.filter((store) => store.status === 'connected');
+            const results = await Promise.all(stores.map((store) => stripeService.syncViaEdgeFunction(store.id, force)));
+            const result = results.reduce((total, current) => ({
+                transactionsCount: total.transactionsCount + current.transactionsCount,
+                payoutsCount: total.payoutsCount + current.payoutsCount,
+                invoicesCreated: total.invoicesCreated + current.invoicesCreated,
+                totalSales: total.totalSales + current.totalSales,
+                totalPayouts: total.totalPayouts + current.totalPayouts,
+                totalFees: total.totalFees + current.totalFees,
+            }), { transactionsCount: 0, payoutsCount: 0, invoicesCreated: 0, totalSales: 0, totalPayouts: 0, totalFees: 0 });
 
             Alert.alert(
-                force ? 'Deep Sync Complete' : 'Sync Complete',
-                `Synced ${result.transactionsCount} transactions and ${result.payoutsCount} payouts.`
+                force ? t('deepSyncComplete', language) : t('syncComplete', language),
+                t('syncedTransactionsPayouts', language)
+                    .replace('{transactions}', String(result.transactionsCount))
+                    .replace('{payouts}', String(result.payoutsCount)),
             );
 
             // Reload data
             await loadData();
         } catch (error: any) {
-            Alert.alert('Sync Failed', error.message || 'Could not sync with Stripe');
+            Alert.alert(t('syncFailed', language), getLocalizedErrorMessage(error, language, 'couldNotSwitchCompany'));
         } finally {
             setSyncing(false);
         }
@@ -129,7 +122,7 @@ export function StripeDashboardScreen({ navigation }: any) {
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        return formatLocalizedDate(date.toISOString(), language);
     };
 
     // Payout to income conversion
@@ -176,24 +169,24 @@ export function StripeDashboardScreen({ navigation }: any) {
         );
     }
 
-    if (!profile?.stripe_access_token && !profile?.stripe_api_key) {
+    if (!summary.stores.some((store) => store.status === 'connected')) {
         return (
             <View style={[styles.container, { backgroundColor: bgColor }]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
                         <ArrowLeft color={textColor} size={20} />
                     </TouchableOpacity>
-                    <Text style={[styles.title, { color: textColor }]}>Stripe Dashboard</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('stripeDashboard', language)}</Text>
                     <View style={{ width: 44 }} />
                 </View>
                 <View style={[styles.centered, { flex: 1 }]}>
                     <CreditCard color={mutedColor} size={64} />
-                    <Text style={[styles.emptyTitle, { color: textColor }]}>Stripe Not Connected</Text>
+                    <Text style={[styles.emptyTitle, { color: textColor }]}>{t('stripeNotConnected', language)}</Text>
                     <Text style={[styles.emptyText, { color: mutedColor }]}>
-                        Connect your Stripe account to view sales and payouts.
+                        {t('connectStripeAccountDescription', language)}
                     </Text>
                     <Button
-                        title="Connect Stripe"
+                        title={t('connectStripe', language)}
                         onPress={() => navigation.navigate('PaymentIntegrations')}
                         style={{ marginTop: 20 }}
                     />
@@ -210,20 +203,18 @@ export function StripeDashboardScreen({ navigation }: any) {
                     <ArrowLeft color={textColor} size={20} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={[styles.title, { color: textColor }]}>Stripe Dashboard</Text>
-                    {profile.stripe_account_id && (
-                        <Text style={[styles.subtitle, { color: mutedColor }]}>{profile.stripe_account_id}</Text>
-                    )}
+                    <Text style={[styles.title, { color: textColor }]}>{t('stripeDashboard', language)}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{`${summary.stores.length} store${summary.stores.length === 1 ? '' : 's'}`}</Text>
                 </View>
                 <TouchableOpacity
                     onPress={() => handleSync(false)}
                     onLongPress={() => {
                         Alert.alert(
-                            'Deep Sync',
-                            'This will re-fetch and update the last 300 transactions to ensure all information (emails, descriptions) is up to date. Continue?',
+                            t('deepSyncComplete', language),
+                            t('deepSyncDescription', language),
                             [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Sync All', onPress: () => handleSync(true) }
+                                { text: t('cancel', language), style: 'cancel' },
+                                { text: t('syncAll', language), onPress: () => handleSync(true) }
                             ]
                         );
                     }}
@@ -247,10 +238,10 @@ export function StripeDashboardScreen({ navigation }: any) {
                 <Card style={[styles.mainNetCard, { backgroundColor: primaryColor }]}>
                     <View style={styles.mainNetHeader}>
                         <TrendingUp color="#fff" size={20} />
-                        <Text style={styles.mainNetLabel}>Net Volume</Text>
+                        <Text style={styles.mainNetLabel}>{t('netVolume', language)}</Text>
                     </View>
                     <Text style={styles.mainNetValue}>{formatCurrency(summary.totalNet)}</Text>
-                    <Text style={styles.mainNetSublabel}>Sales minus fees and refunds</Text>
+                    <Text style={styles.mainNetSublabel}>{t('salesMinusFeesRefunds', language)}</Text>
                 </Card>
 
                 {/* Summary Grid 1 */}
@@ -258,12 +249,12 @@ export function StripeDashboardScreen({ navigation }: any) {
                     <Card style={[styles.summaryCard, { backgroundColor: '#12B76A' }]}>
                         <DollarSign color="#fff" size={20} />
                         <Text style={styles.summaryValue}>{formatCurrency(summary.totalSales)}</Text>
-                        <Text style={styles.summaryLabel}>Gross Sales</Text>
+                        <Text style={styles.summaryLabel}>{t('grossSales', language)}</Text>
                     </Card>
                     <Card style={[styles.summaryCard, { backgroundColor: '#004FFE' }]}>
                         <Wallet color="#fff" size={20} />
                         <Text style={styles.summaryValue}>{formatCurrency(summary.totalPayouts)}</Text>
-                        <Text style={styles.summaryLabel}>Received</Text>
+                        <Text style={styles.summaryLabel}>{t('received', language)}</Text>
                     </Card>
                 </View>
 
@@ -272,28 +263,47 @@ export function StripeDashboardScreen({ navigation }: any) {
                     <Card style={[styles.summaryCard, { backgroundColor: '#ef4444' }]}>
                         <TrendingDown color="#fff" size={20} />
                         <Text style={styles.summaryValue}>{formatCurrency(summary.totalFees)}</Text>
-                        <Text style={styles.summaryLabel}>Stripe Fees</Text>
+                        <Text style={styles.summaryLabel}>{t('stripeFees', language)}</Text>
                     </Card>
                     <Card style={[styles.summaryCard, { backgroundColor: '#f59e0b' }]}>
                         <Clock color="#fff" size={20} />
                         <Text style={styles.summaryValue}>{formatCurrency(summary.pendingPayouts)}</Text>
-                        <Text style={styles.summaryLabel}>On the way</Text>
+                        <Text style={styles.summaryLabel}>{t('onTheWay', language)}</Text>
                     </Card>
                 </View>
 
                 {/* Last Synced */}
                 {profile.stripe_last_synced && (
                     <Text style={[styles.lastSynced, { color: mutedColor }]}>
-                        Last synced: {formatDate(profile.stripe_last_synced)}
+                        {t('lastSynced', language)}: {formatDate(profile.stripe_last_synced)}
                     </Text>
                 )}
 
+                {summary.balances.length > 0 ? (
+                    <Card style={[styles.emptyCard, { marginBottom: 18 }]}>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 8 }]}>Stripe balances</Text>
+                        {summary.balances.map((balance) => (
+                            <View key={`${balance.stripe_store_id}-${balance.currency}`} style={styles.transactionRow}>
+                                <View style={styles.transactionInfo}>
+                                    <Text style={[styles.transactionType, { color: textColor }]}>{summary.stores.find((store) => store.id === balance.stripe_store_id)?.store_name || 'Stripe'} · {balance.currency}</Text>
+                                    <Text style={[styles.transactionDesc, { color: mutedColor }]}>Available · Pending</Text>
+                                </View>
+                                <Text style={[styles.transactionAmount, { color: '#12B76A' }]}>
+                                    {formatCurrency(balance.available_balance, balance.currency)}
+                                    {' · '}
+                                    {formatCurrency(balance.pending_balance, balance.currency)}
+                                </Text>
+                            </View>
+                        ))}
+                    </Card>
+                ) : null}
+
                 {/* Recent Transactions */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Transactions</Text>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('recentTransactions', language)}</Text>
                 {summary.recentTransactions.length === 0 ? (
                     <Card style={styles.emptyCard}>
                         <Text style={{ color: mutedColor, textAlign: 'center' }}>
-                            No transactions yet. Sync to fetch.
+                            {t('noTransactionsSync', language)}
                         </Text>
                     </Card>
                 ) : (
@@ -313,7 +323,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                             {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)}
                                         </Text>
                                         <Text style={[styles.transactionDesc, { color: mutedColor }]} numberOfLines={1}>
-                                            {tx.description || tx.customer_email || tx.stripe_id}
+                                            {[tx.store_name, tx.description || tx.customer_email || tx.stripe_id].filter(Boolean).join(' · ')}
                                         </Text>
                                     </View>
                                     <View style={styles.transactionAmounts}>
@@ -325,7 +335,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                         </Text>
                                         {(tx.fee || 0) > 0 && (
                                             <Text style={[styles.transactionFee, { color: mutedColor }]}>
-                                                Fee: {formatCurrency(tx.fee || 0)}
+                                                {t('fee', language)}: {formatCurrency(tx.fee || 0)}
                                             </Text>
                                         )}
                                         <Text style={[styles.transactionDate, { color: mutedColor }]}>
@@ -339,12 +349,31 @@ export function StripeDashboardScreen({ navigation }: any) {
                     ))
                 )}
 
+                {summary.onlineInvoices.length > 0 ? (
+                    <>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>Online sale invoices</Text>
+                        {summary.onlineInvoices.map((invoice) => (
+                            <TouchableOpacity key={invoice.id} onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: invoice.id })}>
+                                <Card style={styles.transactionCard}>
+                                    <View style={styles.transactionRow}>
+                                        <View style={styles.transactionInfo}>
+                                            <Text style={[styles.transactionType, { color: textColor }]}>{invoice.invoice_number}</Text>
+                                            <Text style={[styles.transactionDesc, { color: mutedColor }]}>{[invoice.store_name, invoice.client_name || 'Stripe customer', formatDate(invoice.issue_date), invoice.status].filter(Boolean).join(' · ')}</Text>
+                                        </View>
+                                        <Text style={[styles.transactionAmount, { color: '#12B76A' }]}>{formatCurrency(invoice.total_amount, invoice.currency)}</Text>
+                                    </View>
+                                </Card>
+                            </TouchableOpacity>
+                        ))}
+                    </>
+                ) : null}
+
                 {/* Recent Payouts */}
-                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>Recent Payouts</Text>
+                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>{t('recentPayouts', language)}</Text>
                 {summary.recentPayouts.length === 0 ? (
                     <Card style={styles.emptyCard}>
                         <Text style={{ color: mutedColor, textAlign: 'center' }}>
-                            No payouts yet.
+                            {t('noPayoutsYet', language)}
                         </Text>
                     </Card>
                 ) : (
@@ -361,7 +390,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                     </View>
                                     <View style={styles.transactionInfo}>
                                         <Text style={[styles.transactionType, { color: textColor }]}>
-                                            Bank Transfer
+                                            {t('bankTransfer', language)}
                                         </Text>
                                         <View style={[styles.statusBadge, {
                                             backgroundColor: payout.status === 'paid' ? '#12B76A20' : '#f59e0b20'
@@ -402,7 +431,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: textColor }]}>Transaction Details</Text>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>{t('transactionDetails', language)}</Text>
                             <TouchableOpacity onPress={() => setSelectedTransaction(null)}>
                                 <X color={mutedColor} size={24} />
                             </TouchableOpacity>
@@ -411,20 +440,20 @@ export function StripeDashboardScreen({ navigation }: any) {
                         {selectedTransaction && (
                             <ScrollView style={styles.modalBody}>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Type</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('type', language)}</Text>
                                     <Text style={[styles.modalValue, { color: textColor }]}>
                                         {selectedTransaction.type.charAt(0).toUpperCase() + selectedTransaction.type.slice(1)}
                                     </Text>
                                 </View>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Amount</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('amount', language)}</Text>
                                     <Text style={[styles.modalValue, { color: '#12B76A', fontWeight: '600', fontSize: 18 }]}>
                                         {formatCurrency(selectedTransaction.amount)}
                                     </Text>
                                 </View>
                                 {selectedTransaction.fee !== undefined && selectedTransaction.fee > 0 && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Stripe Fee</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('stripeFee', language)}</Text>
                                         <Text style={[styles.modalValue, { color: '#ef4444' }]}>
                                             -{formatCurrency(selectedTransaction.fee)}
                                         </Text>
@@ -432,7 +461,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                 )}
                                 {selectedTransaction.net !== undefined && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Net Amount</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('netAmount', language)}</Text>
                                         <Text style={[styles.modalValue, { color: textColor, fontWeight: '600' }]}>
                                             {formatCurrency(selectedTransaction.net)}
                                         </Text>
@@ -440,7 +469,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                 )}
                                 {selectedTransaction.description && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Description</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('description', language)}</Text>
                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                             {selectedTransaction.description}
                                         </Text>
@@ -448,26 +477,26 @@ export function StripeDashboardScreen({ navigation }: any) {
                                 )}
                                 {selectedTransaction.customer_email && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Customer</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('customer', language)}</Text>
                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                             {selectedTransaction.customer_email}
                                         </Text>
                                     </View>
                                 )}
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Date</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('date', language)}</Text>
                                     <Text style={[styles.modalValue, { color: textColor }]}>
                                         {formatDate(selectedTransaction.created_at)}
                                     </Text>
                                 </View>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Status</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('status', language)}</Text>
                                     <Text style={[styles.modalValue, { color: '#12B76A' }]}>
-                                        {selectedTransaction.status || 'Completed'}
+                                        {selectedTransaction.status || t('completed', language)}
                                     </Text>
                                 </View>
                                 <View style={styles.modalDetailRow}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Stripe ID</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('stripeId', language)}</Text>
                                     <Text style={[styles.modalValue, { color: mutedColor, fontSize: 11 }]}>
                                         {selectedTransaction.stripe_id}
                                     </Text>
@@ -491,28 +520,28 @@ export function StripeDashboardScreen({ navigation }: any) {
                                         pd.source?.owner ||
                                         {};
 
-                                    const countryMap: Record<string, string> = {
-                                        'XK': 'Kosovo',
-                                        'SR': 'Suriname',
-                                        'US': 'United States',
-                                        'GB': 'United Kingdom',
-                                        'AL': 'Albania',
-                                        'DE': 'Germany',
-                                        'FR': 'France',
-                                        'IT': 'Italy',
-                                        // Add more as needed, or use a library
+                                    const countryMap: Record<string, TranslationKey> = {
+                                        'XK': 'kosovo',
+                                        'SR': 'suriname',
+                                        'US': 'unitedStates',
+                                        'GB': 'unitedKingdom',
+                                        'AL': 'albania',
+                                        'DE': 'germany',
+                                        'FR': 'france',
+                                        'IT': 'italy',
                                     };
 
                                     const getCountryName = (code: string) => {
-                                        if (!code) return 'N/A';
-                                        return countryMap[code.toUpperCase()] || code.toUpperCase();
+                                        if (!code) return t('notAvailable', language);
+                                        const key = countryMap[code.toUpperCase()];
+                                        return key ? t(key, language) : code.toUpperCase();
                                     };
 
                                     return (
                                         <>
-                                            <Text style={styles.modalSectionTitle}>Payment Method</Text>
+                                            <Text style={styles.modalSectionTitle}>{t('paymentMethodDetails', language)}</Text>
                                             <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>ID</Text>
+                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('id', language)}</Text>
                                                 <Text style={[styles.modalValue, { color: textColor, fontSize: 11 }]}>
                                                     {pd.payment_method?.id || pd.payment_method || pd.id}
                                                 </Text>
@@ -521,72 +550,72 @@ export function StripeDashboardScreen({ navigation }: any) {
                                             {card ? (
                                                 <>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Number</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('number', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                                             •••• {card.last4}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Fingerprint</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('fingerprint', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                                             {card.fingerprint || 'N/A'}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Expires</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('expires', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                                             {card.exp_month} / {card.exp_year}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Type</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('type', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
-                                                            {card.brand?.charAt(0).toUpperCase() + card.brand?.slice(1)} {card.funding || ''} card
+                                                            {card.brand?.charAt(0).toUpperCase() + card.brand?.slice(1)} {card.funding || ''} {t('card', language)}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Issuer</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('issuer', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                                             {card.issuer || card.network?.toUpperCase() || card.brand?.toUpperCase() || 'N/A'}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Origin</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('origin', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                                             {getCountryName(card.country)}
                                                         </Text>
                                                     </View>
                                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>CVC check</Text>
+                                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('cvcCheck', language)}</Text>
                                                         <Text style={[styles.modalValue, { color: '#12B76A' }]}>
-                                                            {card.checks?.cvc_check?.toUpperCase() || pd.cvc_check?.toUpperCase() || 'PASSED'}
+                                                            {card.checks?.cvc_check?.toUpperCase() || pd.cvc_check?.toUpperCase() || t('passed', language)}
                                                         </Text>
                                                     </View>
                                                 </>
                                             ) : (
                                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Method Type</Text>
+                                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('methodType', language)}</Text>
                                                     <Text style={[styles.modalValue, { color: textColor }]}>
-                                                        {pd.object || 'Payment'}
+                                                        {pd.object || t('payment', language)}
                                                     </Text>
                                                 </View>
                                             )}
 
-                                            <Text style={styles.modalSectionTitle}>Owner Details</Text>
+                                            <Text style={styles.modalSectionTitle}>{t('ownerDetails', language)}</Text>
                                             <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>Owner</Text>
+                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('owner', language)}</Text>
                                                 <Text style={[styles.modalValue, { color: textColor }]}>
                                                     {billing.name || 'N/A'}
                                                 </Text>
                                             </View>
                                             <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>Owner email</Text>
+                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('ownerEmail', language)}</Text>
                                                 <Text style={[styles.modalValue, { color: textColor }]}>
                                                     {billing.email || selectedTransaction.customer_email || 'N/A'}
                                                 </Text>
                                             </View>
                                             <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>Address</Text>
+                                                <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('address', language)}</Text>
                                                 <Text style={[styles.modalValue, { color: textColor }]}>
                                                     {getCountryName(billing.address?.country)}
                                                 </Text>
@@ -610,7 +639,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: textColor }]}>Payout Details</Text>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>{t('payoutDetails', language)}</Text>
                             <TouchableOpacity onPress={() => setSelectedPayout(null)}>
                                 <X color={mutedColor} size={24} />
                             </TouchableOpacity>
@@ -619,19 +648,19 @@ export function StripeDashboardScreen({ navigation }: any) {
                         {selectedPayout && (
                             <ScrollView style={styles.modalBody}>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Amount</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('amount', language)}</Text>
                                     <Text style={[styles.modalValue, { color: '#004FFE', fontWeight: '600', fontSize: 18 }]}>
                                         {formatCurrency(selectedPayout.amount)}
                                     </Text>
                                 </View>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Arrival Date</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('arrivalDate', language)}</Text>
                                     <Text style={[styles.modalValue, { color: textColor }]}>
                                         {formatDate(selectedPayout.arrival_date)}
                                     </Text>
                                 </View>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Status</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('status', language)}</Text>
                                     <Text style={[styles.modalValue, {
                                         color: selectedPayout.status === 'paid' ? '#12B76A' : '#f59e0b'
                                     }]}>
@@ -640,7 +669,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                 </View>
                                 {selectedPayout.method && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Method</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('method', language)}</Text>
                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                             {selectedPayout.method.toUpperCase()}
                                         </Text>
@@ -648,14 +677,14 @@ export function StripeDashboardScreen({ navigation }: any) {
                                 )}
                                 {selectedPayout.description && (
                                     <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
-                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>Description</Text>
+                                        <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('description', language)}</Text>
                                         <Text style={[styles.modalValue, { color: textColor }]}>
                                             {selectedPayout.description}
                                         </Text>
                                     </View>
                                 )}
                                 <View style={styles.modalDetailRow}>
-                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>Stripe ID</Text>
+                                    <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('stripeId', language)}</Text>
                                     <Text style={[styles.modalValue, { color: mutedColor, fontSize: 11 }]}>
                                         {selectedPayout.stripe_id}
                                     </Text>
@@ -667,7 +696,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                                         onPress={() => handleRecordIncome(selectedPayout)}
                                     >
                                         <Receipt color="#fff" size={18} />
-                                        <Text style={styles.modalActionButtonText}>Record as Income (Pagesë Hyrëse)</Text>
+                                        <Text style={styles.modalActionButtonText}>{t('recordAsIncome', language)}</Text>
                                     </TouchableOpacity>
                                 </View>
                             </ScrollView>
@@ -880,8 +909,3 @@ const styles = StyleSheet.create({
         color: '#004FFE',
     },
 });
-
-
-
-
-

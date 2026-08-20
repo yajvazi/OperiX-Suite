@@ -43,9 +43,11 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, StatusBadge } from '@invoice-monorepo/ui';
 import { Profile } from '@invoice-monorepo/types';
-import { t } from '@invoice-monorepo/i18n';
+import { t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 const { width } = Dimensions.get('window');
 
@@ -57,37 +59,37 @@ interface DocumentType {
     color: string;
     type: string;
     subtype?: string;
-    description?: string;
+    descriptionKey?: TranslationKey;
 }
 
 // Tab 1: Financat documents
 const financeDocuments: DocumentType[] = [
     // Pre-sale documents
-    { key: 'offer', labelKey: 'offer', pluralKey: 'offers', icon: Tag, color: '#06B6D4', type: 'offer', subtype: 'offer', description: 'Not binding until accepted by client' },
-    { key: 'order', labelKey: 'order', pluralKey: 'orders', icon: ShoppingCart, color: '#3388FF', type: 'offer', subtype: 'order', description: 'Confirms intent to buy - reserves stock' },
-    { key: 'proInvoice', labelKey: 'proInvoice', pluralKey: 'proInvoices', icon: FileCheck, color: '#004FFE', type: 'proforma', subtype: 'pro_invoice', description: 'NON-FISCAL: Pre-payment draft invoice' },
+    { key: 'offer', labelKey: 'offer', pluralKey: 'offers', icon: Tag, color: '#06B6D4', type: 'offer', subtype: 'offer', descriptionKey: 'offerDocumentDescription' },
+    { key: 'order', labelKey: 'order', pluralKey: 'orders', icon: ShoppingCart, color: '#3388FF', type: 'offer', subtype: 'order', descriptionKey: 'orderDocumentDescription' },
+    { key: 'proInvoice', labelKey: 'proInvoice', pluralKey: 'proInvoices', icon: FileCheck, color: '#004FFE', type: 'proforma', subtype: 'pro_invoice', descriptionKey: 'proformaDocumentDescription' },
     // Delivery & Fiscal
-    { key: 'deliveryNote', labelKey: 'deliveryNote', pluralKey: 'deliveryNotes', icon: Truck, color: '#3388FF', type: 'invoice', subtype: 'delivery_note', description: 'Dispatch document - customer signs on receipt' },
-    { key: 'regularInvoice', labelKey: 'regularInvoice', pluralKey: 'regularInvoices', icon: Receipt, color: '#004FFE', type: 'fiscal_invoice', subtype: 'regular', description: 'FISCAL: Official tax invoice' },
+    { key: 'deliveryNote', labelKey: 'deliveryNote', pluralKey: 'deliveryNotes', icon: Truck, color: '#3388FF', type: 'invoice', subtype: 'delivery_note', descriptionKey: 'deliveryNoteDocumentDescription' },
+    { key: 'regularInvoice', labelKey: 'regularInvoice', pluralKey: 'regularInvoices', icon: Receipt, color: '#004FFE', type: 'fiscal_invoice', subtype: 'regular', descriptionKey: 'regularInvoiceDocumentDescription' },
     // Financial transactions
-    { key: 'incomePayment', labelKey: 'incomePayment', pluralKey: 'incomePayments', icon: ArrowDownCircle, color: '#12B76A', type: 'payment_receipt', subtype: 'income', description: 'Record payment received from client' },
-    { key: 'expense', labelKey: 'expense', pluralKey: 'expenses', icon: ArrowUpCircle, color: '#ef4444', type: 'vendor_payment', subtype: 'expense', description: 'Record payment made to a vendor' },
-    { key: 'supplier_bill', labelKey: 'supplierBill', pluralKey: 'supplierBills', icon: Building2, color: '#0ea5e9', type: 'supplier_bill', subtype: 'regular', description: 'Record bills received from suppliers' },
+    { key: 'incomePayment', labelKey: 'incomePayment', pluralKey: 'incomePayments', icon: ArrowDownCircle, color: '#12B76A', type: 'payment_receipt', subtype: 'income', descriptionKey: 'incomePaymentDocumentDescription' },
+    { key: 'expense', labelKey: 'expense', pluralKey: 'expenses', icon: ArrowUpCircle, color: '#ef4444', type: 'vendor_payment', subtype: 'expense', descriptionKey: 'vendorPaymentDocumentDescription' },
+    { key: 'supplier_bill', labelKey: 'supplierBill', pluralKey: 'supplierBills', icon: Building2, color: '#0ea5e9', type: 'supplier_bill', subtype: 'regular', descriptionKey: 'supplierBillDocumentDescription' },
 ];
 
 // Tab 2: Legal documents
 const legalDocuments: DocumentType[] = [
-    { key: 'employmentContract', labelKey: 'employmentContract', pluralKey: 'employmentContracts', icon: FileSignature, color: '#0891b2', type: 'contract', subtype: 'employment', description: 'Hire employees' },
-    { key: 'collaborationContract', labelKey: 'collaborationContract', pluralKey: 'collaborationContracts', icon: Handshake, color: '#0d9488', type: 'contract', subtype: 'collaboration', description: 'Business partnerships' },
-    { key: 'nda', labelKey: 'nda', pluralKey: 'ndas', icon: ShieldCheck, color: '#004FFE', type: 'contract', subtype: 'nda', description: 'Confidentiality agreement' },
+    { key: 'employmentContract', labelKey: 'employmentContract', pluralKey: 'employmentContracts', icon: FileSignature, color: '#0891b2', type: 'contract', subtype: 'employment', descriptionKey: 'employmentContractDescription' },
+    { key: 'collaborationContract', labelKey: 'collaborationContract', pluralKey: 'collaborationContracts', icon: Handshake, color: '#0d9488', type: 'contract', subtype: 'collaboration', descriptionKey: 'collaborationContractDescription' },
+    { key: 'nda', labelKey: 'nda', pluralKey: 'ndas', icon: ShieldCheck, color: '#004FFE', type: 'contract', subtype: 'nda', descriptionKey: 'ndaDocumentDescription' },
 ];
 
 // Tab 3: Reports & Ledger Cards
 const reportDocuments: DocumentType[] = [
-    { key: 'salesBook', labelKey: 'salesBook', pluralKey: 'salesBooks', icon: BookOpen, color: '#f59e0b', type: 'report', subtype: 'sales_book', description: 'Sales ledger' },
-    { key: 'dailyReport', labelKey: 'dailyReport', pluralKey: 'dailyReports', icon: Calendar, color: '#06b6d4', type: 'report', subtype: 'daily', description: 'Daily summary' },
-    { key: 'customerCard', labelKey: 'customerCard', pluralKey: 'customerCards', icon: Users, color: '#3388FF', type: 'report', subtype: 'customer_ledger', description: 'Customer transaction history' },
-    { key: 'supplierCard', labelKey: 'supplierCard', pluralKey: 'supplierCards', icon: Building2, color: '#0891b2', type: 'report', subtype: 'supplier_ledger', description: 'Supplier transaction history' },
+    { key: 'salesBook', labelKey: 'salesBook', pluralKey: 'salesBooks', icon: BookOpen, color: '#f59e0b', type: 'report', subtype: 'sales_book', descriptionKey: 'salesLedgerDescription' },
+    { key: 'dailyReport', labelKey: 'dailyReport', pluralKey: 'dailyReports', icon: Calendar, color: '#06b6d4', type: 'report', subtype: 'daily', descriptionKey: 'dailyReportDescription' },
+    { key: 'customerCard', labelKey: 'customerCard', pluralKey: 'customerCards', icon: Users, color: '#3388FF', type: 'report', subtype: 'customer_ledger', descriptionKey: 'customerLedgerDescription' },
+    { key: 'supplierCard', labelKey: 'supplierCard', pluralKey: 'supplierCards', icon: Building2, color: '#0891b2', type: 'report', subtype: 'supplier_ledger', descriptionKey: 'supplierLedgerDescription' },
 ];
 
 type TabType = 'finances' | 'legal' | 'reports';
@@ -123,16 +125,27 @@ export function FaturatScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchData = async () => {
         if (!user) return;
         try {
-            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            if (profileData) {
-                setProfile(profileData);
-                const companyId = profileData.active_company_id || profileData.company_id || user.id;
+            const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+            if (workspaceProfile) {
+                setProfile(workspaceProfile);
+                const scope = scopedResource(user.id, companyIds);
+                const cacheKey = mobileCacheKey('invoice-dashboard', user.id, companyIds);
+                const cached = await readMobileCache<{
+                    counts: Record<string, number>;
+                    stats: typeof stats;
+                    recentActivity: any[];
+                }>(cacheKey);
+                if (cached) {
+                    setCounts(cached.counts);
+                    setStats(cached.stats);
+                    setRecentActivity(cached.recentActivity);
+                }
 
                 // Fetch invoice counts by subtype
                 const newCounts: Record<string, number> = {};
@@ -141,7 +154,7 @@ export function FaturatScreen({ navigation }: any) {
                 const { count: regularCount } = await supabase
                     .from('invoices')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'invoice')
                     .eq('subtype', 'regular');
                 newCounts['regularInvoice'] = regularCount || 0;
@@ -150,7 +163,7 @@ export function FaturatScreen({ navigation }: any) {
                 const { count: deliveryCount } = await supabase
                     .from('invoices')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'invoice')
                     .eq('subtype', 'delivery_note');
                 newCounts['deliveryNote'] = deliveryCount || 0;
@@ -159,25 +172,26 @@ export function FaturatScreen({ navigation }: any) {
                 const { data: allInvoices } = await supabase
                     .from('invoices')
                     .select('*')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'invoice');
 
                 const totalAmount = allInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
                 const paidAmount = allInvoices?.filter(inv => inv.status === 'paid')
                     .reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
 
-                setStats({
+                const nextStats = {
                     totalInvoices: allInvoices?.length || 0,
                     totalAmount,
                     paidAmount,
                     pendingAmount: totalAmount - paidAmount,
-                });
+                };
+                setStats(nextStats);
 
                 // Offers
                 const { count: offerCount } = await supabase
                     .from('invoices')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'offer')
                     .eq('subtype', 'offer');
                 newCounts['offer'] = offerCount || 0;
@@ -186,7 +200,7 @@ export function FaturatScreen({ navigation }: any) {
                 const { count: orderCount } = await supabase
                     .from('invoices')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'offer')
                     .eq('subtype', 'order');
                 newCounts['order'] = orderCount || 0;
@@ -195,7 +209,7 @@ export function FaturatScreen({ navigation }: any) {
                 const { count: proCount } = await supabase
                     .from('invoices')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .eq('type', 'offer')
                     .eq('subtype', 'pro_invoice');
                 newCounts['proInvoice'] = proCount || 0;
@@ -204,14 +218,14 @@ export function FaturatScreen({ navigation }: any) {
                 const { count: vendorPaymentsCount } = await supabase
                     .from('vendor_payments')
                     .select('*', { count: 'exact', head: true })
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                    .or(scope);
                 newCounts['expense'] = vendorPaymentsCount || 0;
 
                 // Contracts
                 const { data: allContracts } = await supabase
                     .from('contracts')
                     .select('type')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                    .or(scope);
 
                 if (allContracts) {
                     newCounts['employmentContract'] = allContracts.filter(c => c.type === 'employment').length;
@@ -225,14 +239,14 @@ export function FaturatScreen({ navigation }: any) {
                 const { data: recentInvoices } = await supabase
                     .from('invoices')
                     .select('id, invoice_number, status, total_amount, client:clients(name), items:invoice_items(id), type, subtype, created_at')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .order('created_at', { ascending: false })
                     .limit(10);
 
                 const { data: recentPayments } = await supabase
                     .from('payments')
                     .select('id, amount, client:clients(name), type, created_at')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                    .or(scope)
                     .order('created_at', { ascending: false })
                     .limit(10);
 
@@ -243,6 +257,7 @@ export function FaturatScreen({ navigation }: any) {
                     .slice(0, 10);
 
                 setRecentActivity(activities);
+                writeMobileCache(cacheKey, { counts: newCounts, stats: nextStats, recentActivity: activities });
             }
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -280,7 +295,8 @@ export function FaturatScreen({ navigation }: any) {
         } else if (docType.type === 'payment_receipt') {
             navigation.navigate('PaymentForm');
         } else if (docType.type === 'report') {
-            navigation.navigate('ReportPreview', { subtype: docType.subtype });
+            if (docType.subtype === 'sales_book') navigation.navigate('SalesBook');
+            else navigation.navigate('ReportPreview', { subtype: docType.subtype });
         } else if (docType.subtype === 'customer_ledger') {
             navigation.navigate('CustomerLedger');
         } else if (docType.subtype === 'supplier_ledger') {
@@ -300,7 +316,8 @@ export function FaturatScreen({ navigation }: any) {
         } else if (docType.type === 'contract') {
             navigation.navigate('InvoicesList', { tab: 'contract', subtype: docType.subtype });
         } else if (docType.type === 'report' && docType.subtype !== 'customer_ledger' && docType.subtype !== 'supplier_ledger') {
-            navigation.navigate('ReportPreview', { subtype: docType.subtype });
+            if (docType.subtype === 'sales_book') navigation.navigate('SalesBook');
+            else navigation.navigate('ReportPreview', { subtype: docType.subtype });
         } else if (docType.subtype === 'customer_ledger') {
             navigation.navigate('CustomerLedger');
         } else if (docType.subtype === 'supplier_ledger') {
@@ -331,7 +348,7 @@ export function FaturatScreen({ navigation }: any) {
                     <View style={styles.actionInfo}>
                         <Text style={[styles.actionTitle, { color: textColor }]}>{label}</Text>
                         <Text style={[styles.actionSubtitle, { color: mutedColor }]}>
-                            {docType.description || 'View details'}
+                            {docType.descriptionKey ? t(docType.descriptionKey, language) : t('viewDetails', language)}
                         </Text>
                     </View>
                     {count > 0 && (
@@ -362,9 +379,9 @@ export function FaturatScreen({ navigation }: any) {
         <>
             {/* Stats Row */}
             <View style={styles.statsRow}>
-                {renderStatCard('Total Sales', formatCurrency(stats.totalAmount), TrendingUp, '#004FFE')}
-                {renderStatCard('Received', formatCurrency(stats.paidAmount), ArrowDownCircle, '#12B76A')}
-                {renderStatCard('Outstanding', formatCurrency(stats.pendingAmount), ArrowUpCircle, '#ef4444')}
+                {renderStatCard(t('totalSales', language), formatCurrency(stats.totalAmount), TrendingUp, '#004FFE')}
+                {renderStatCard(t('received', language), formatCurrency(stats.paidAmount), ArrowDownCircle, '#12B76A')}
+                {renderStatCard(t('outstanding', language), formatCurrency(stats.pendingAmount), ArrowUpCircle, '#ef4444')}
             </View>
 
             {/* Quick Actions */}
@@ -399,7 +416,7 @@ export function FaturatScreen({ navigation }: any) {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.quickActionCard, { backgroundColor: cardBg, borderColor }]}
-                        onPress={() => navigation.navigate('ManagementTab', { screen: 'ClientForm' })}
+                        onPress={() => navigation.navigate('ClientForm')}
                     >
                         <View style={[styles.quickActionIcon, { backgroundColor: '#3388FF15' }]}>
                             <Users color="#3388FF" size={18} />
@@ -442,7 +459,7 @@ export function FaturatScreen({ navigation }: any) {
                                 ]}
                                 onPress={() => {
                                     if (activity.activityType === 'document') {
-                                        navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { invoiceId: activity.id } });
+                                        navigation.navigate('InvoiceDetail', { invoiceId: activity.id });
                                     } else {
                                         // For payments, maybe navigate to payment detail if available, or just nothing for now
                                         // navigation.navigate('PaymentDetail', { id: activity.id });
@@ -451,7 +468,7 @@ export function FaturatScreen({ navigation }: any) {
                             >
                                 <View style={styles.invoiceInfo}>
                                     <Text style={[styles.invoiceNumber, { color: textColor }]}>
-                                        {activity.activityType === 'document' ? (activity.invoice_number || t('draft', language)) : t('payment', language)}
+                                        {activity.activityType === 'document' ? (activity.invoice_number || t('draft', language)) : t('incomePayment', language)}
                                     </Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                         <Text style={[styles.clientName, { color: mutedColor }]}>
@@ -663,7 +680,3 @@ const styles = StyleSheet.create({
     invoiceAmount: { fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
     emptyText: { textAlign: 'center', padding: 20, opacity: 0.5 },
 });
-
-
-
-

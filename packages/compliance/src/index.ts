@@ -18,6 +18,8 @@ export const complianceConfigTypes = [
 export type ComplianceConfigType = (typeof complianceConfigTypes)[number];
 export type ComplianceConfigStatus = "draft" | "active" | "retired";
 
+export * from "./sales-book.ts";
+
 export interface VatRateDefinition {
   code: string;
   name: string;

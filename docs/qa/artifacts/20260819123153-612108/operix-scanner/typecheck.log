@@ -1,0 +1,7 @@
+command: "npm" "run" "typecheck" "--workspace=operix-scanner"
+cwd: .
+exitCode: 0
+durationMs: 3944
+
+> operix-scanner@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.json

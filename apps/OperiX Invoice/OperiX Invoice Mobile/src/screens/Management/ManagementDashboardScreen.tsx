@@ -26,7 +26,8 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card } from '@invoice-monorepo/ui';
 import { Profile } from '@invoice-monorepo/types';
-import { t } from '@invoice-monorepo/i18n';
+import { t, type TranslationKey } from '@invoice-monorepo/i18n';
+import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
 
 const { width } = Dimensions.get('window');
 
@@ -36,22 +37,22 @@ interface ActionItem {
     icon: any;
     color: string;
     action: string;
-    description?: string; // Added description
+    descriptionKey?: TranslationKey;
     params?: any;
 }
 
 // Products section items
 const productActions: ActionItem[] = [
-    { key: 'productsDashboard', labelKey: 'productsDashboard', icon: LayoutDashboard, color: '#004FFE', action: 'dashboard', description: 'View and manage inventory' },
-    { key: 'addProduct', labelKey: 'addProduct', icon: Plus, color: '#12B76A', action: 'add', description: 'Add new item to stock' },
-    { key: 'inventory', labelKey: 'inventory', icon: Archive, color: '#f59e0b', action: 'inventory', description: 'Check low stock items' },
+    { key: 'productsDashboard', labelKey: 'productsDashboard', icon: LayoutDashboard, color: '#004FFE', action: 'dashboard', descriptionKey: 'viewManageInventory' },
+    { key: 'addProduct', labelKey: 'addProduct', icon: Plus, color: '#12B76A', action: 'add', descriptionKey: 'addNewItemStock' },
+    { key: 'inventory', labelKey: 'inventory', icon: Archive, color: '#f59e0b', action: 'inventory', descriptionKey: 'checkLowStock' },
 ];
 
 // Clients section items
 const clientActions: ActionItem[] = [
-    { key: 'clientsDashboard', labelKey: 'clientsDashboard', icon: LayoutDashboard, color: '#3388FF', action: 'dashboard', description: 'View client database' },
-    { key: 'addCustomer', labelKey: 'addCustomer', icon: UserPlus, color: '#12B76A', action: 'add', description: 'Register new client' },
-    { key: 'customerCard', labelKey: 'customerCard', icon: CreditCard, color: '#06B6D4', action: 'card', description: 'View client details' },
+    { key: 'clientsDashboard', labelKey: 'clientsDashboard', icon: LayoutDashboard, color: '#3388FF', action: 'dashboard', descriptionKey: 'viewClientDatabase' },
+    { key: 'addCustomer', labelKey: 'addCustomer', icon: UserPlus, color: '#12B76A', action: 'add', descriptionKey: 'registerNewClient' },
+    { key: 'customerCard', labelKey: 'customerCard', icon: CreditCard, color: '#06B6D4', action: 'card', descriptionKey: 'viewClientDetails' },
 ];
 
 export function ManagementDashboardScreen({ navigation }: any) {
@@ -74,34 +75,36 @@ export function ManagementDashboardScreen({ navigation }: any) {
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) {
-            setProfile(profileData);
-            const companyId = profileData.company_id || user.id;
+        const workspaceScope = await getWorkspaceScope(user.id);
+        const { profile: workspaceProfile, companyIds } = workspaceScope;
+        if (workspaceProfile) {
+            setProfile(workspaceProfile);
+            const scope = scopedResource(user.id, companyIds);
+            const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
 
             // Fetch products count
             const { count: productCount } = await supabase
                 .from('products')
                 .select('*', { count: 'exact', head: true })
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(productScope);
 
             // Fetch clients count
             const { count: clientCount } = await supabase
                 .from('clients')
                 .select('*', { count: 'exact', head: true })
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(scope);
 
             // Fetch low stock products
             const { data: products } = await supabase
                 .from('products')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .or(productScope);
 
             const lowStockCount = products?.filter((p: any) =>
                 p.track_stock && (p.stock_quantity || 0) <= (p.low_stock_threshold || 5)
@@ -165,7 +168,7 @@ export function ManagementDashboardScreen({ navigation }: any) {
                     </View>
                     <View style={styles.actionInfo}>
                         <Text style={[styles.actionTitle, { color: textColor }]}>{label}</Text>
-                        <Text style={[styles.actionSubtitle, { color: mutedColor }]}>{item.description || 'Manage item'}</Text>
+                        <Text style={[styles.actionSubtitle, { color: mutedColor }]}>{item.descriptionKey ? t(item.descriptionKey, language) : t('manageItem', language)}</Text>
                     </View>
                     {count !== undefined && count > 0 && (
                         <View style={[styles.badge, { backgroundColor: '#ef4444' }]}>
@@ -183,7 +186,7 @@ export function ManagementDashboardScreen({ navigation }: any) {
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>Administration</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('administration', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('management', language)}</Text>
                 </View>
             </View>
@@ -325,8 +328,4 @@ const styles = StyleSheet.create({
     },
     badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 });
-
-
-
-
 

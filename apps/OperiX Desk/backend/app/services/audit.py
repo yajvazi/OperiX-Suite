@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from app.services.workspace import stamp_organization
 
 
 def record_audit(
@@ -13,11 +14,11 @@ def record_audit(
     details: str | None = None,
 ) -> None:
     db.add(
-        AuditLog(
+        stamp_organization(AuditLog(
             actor_id=actor.id,
             action=action,
             entity_type=entity_type,
             entity_id=entity_id,
             details=details,
-        )
+        ), actor)
     )

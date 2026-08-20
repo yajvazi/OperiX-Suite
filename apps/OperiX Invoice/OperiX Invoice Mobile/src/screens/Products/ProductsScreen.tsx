@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
+    Image,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
@@ -10,6 +11,7 @@ import {
     TextInput,
 } from 'react-native';
 import { Trash2, Search, X, Percent, Box, AlertTriangle, DollarSign, Scan } from 'lucide-react-native';
+import { SvgXml } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
@@ -19,6 +21,10 @@ import { Card, FAB, BarcodeScannerModal } from '@invoice-monorepo/ui';
 import { Product } from '@invoice-monorepo/types';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { t } from '@invoice-monorepo/i18n';
+import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
+import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
+import { deleteProduct, listProducts } from '@invoice-monorepo/api/repositories';
+import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface ProductsScreenProps {
     navigation: any;
@@ -35,6 +41,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock'>('name');
     const [showScanner, setShowScanner] = useState(false);
+    const [canManageProducts, setCanManageProducts] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -55,17 +62,26 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     useFocusEffect(
         useCallback(() => {
             fetchProducts();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchProducts = async () => {
         if (!user) return;
         try {
-            const { data, error } = await supabase.from('products').select('*').eq('user_id', user.id);
-            if (data) {
-                setProducts(data);
-                applyFiltersAndSort(data, searchQuery, selectedCategory, sortBy);
+            const workspaceScope = await getWorkspaceScope(user.id);
+            setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+            const companyIds = getActiveProductCompanyIds(workspaceScope);
+            const cacheKey = mobileCacheKey('products', user.id, companyIds);
+            const cachedProducts = await readMobileCache<Product[]>(cacheKey);
+            if (cachedProducts) {
+                setProducts(cachedProducts);
+                applyFiltersAndSort(cachedProducts, searchQuery, selectedCategory, sortBy);
             }
+            const data = await listProducts(supabase, { userId: user.id, companyIds });
+            const productRows = data as unknown as Product[];
+            setProducts(productRows);
+            applyFiltersAndSort(productRows, searchQuery, selectedCategory, sortBy);
+            writeMobileCache(cacheKey, productRows);
         } catch (err) {
             console.error(err);
         }
@@ -117,14 +133,17 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     };
 
     const handleDelete = (id: string) => {
-        Alert.alert(t('delete', language), t('areYouSure', language) || 'Are you sure?', [
+        if (!canManageProducts) return;
+        Alert.alert(t('delete', language), t('areYouSure', language), [
             { text: t('cancel', language), style: 'cancel' },
             {
                 text: t('delete', language),
                 style: 'destructive',
                 onPress: async () => {
-                    await supabase.from('products').delete().eq('id', id);
-                    fetchProducts();
+                    const { companyId } = await getWorkspaceScope(user!.id);
+                    await deleteProduct(supabase, id, companyId, user!.id);
+                    await fetchProducts();
+                    Alert.alert(t('success', language), t('productDeletedSuccessfully', language));
                 },
             },
         ]);
@@ -146,15 +165,18 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     const renderProduct = (item: Product) => {
         const isLowStock = item.track_stock && (item.stock_quantity || 0) <= (item.low_stock_threshold || 5);
         const outOfStock = item.track_stock && (item.stock_quantity || 0) <= 0;
+        const serviceIcon = serviceIconNameFromValue(item.image_url);
 
         return (
             <TouchableOpacity
                 key={item.id}
+                testID={`product-row-${item.id}`}
                 activeOpacity={0.7}
-                onPress={() => navigation.navigate('ProductForm', { productId: item.id })}
+                onPress={() => navigation.navigate(canManageProducts ? 'ProductForm' : 'ProductDetail', { productId: item.id })}
             >
                 <View style={[styles.productCard, { backgroundColor: cardBg }]}>
                     <View style={styles.productHeader}>
+                        {serviceIcon ? <View style={[styles.productImage, styles.productImagePlaceholder, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}><SvgXml xml={serviceIconSvg(serviceIcon, primaryColor)} width="30" height="30" /></View> : item.image_url ? <Image accessibilityLabel={`${item.name} ${t('productPhoto', language)}`} source={{ uri: item.image_url }} style={styles.productImage} resizeMode="cover" /> : <View style={[styles.productImage, styles.productImagePlaceholder, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}><Box color={primaryColor} size={23} /></View>}
                         <View style={styles.productInfo}>
                             <View style={styles.nameRow}>
                                 <Text style={[styles.productName, { color: textColor }]}>{item.name}</Text>
@@ -179,18 +201,21 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                                 </View>
                             )}
                         </View>
-                        <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+                        {canManageProducts ? <TouchableOpacity testID={`product-delete-${item.id}`} onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
                             <Trash2 color="#ef4444" size={20} />
-                        </TouchableOpacity>
+                        </TouchableOpacity> : null}
                     </View>
                     <View style={styles.productFooter}>
                         <View style={styles.priceRow}>
                             <Text style={styles.productPrice}>
-                                {formatCurrency(Number(item.unit_price) * (1 + (item.tax_rate || 0) / 100))}
+                                {formatCurrency(item.tax_included
+                                    ? Number(item.unit_price || 0)
+                                    : Number(item.unit_price || 0) * (1 + (item.tax_rate || 0) / 100)
+                                )}
                             </Text>
                             <Text style={[styles.unitText, { color: mutedColor }]}>/{item.unit}</Text>
                         </View>
-                        {item.tax_rate && item.tax_rate > 0 && (
+                        {Number(item.tax_rate || 0) > 0 && (
                             <View style={styles.taxBadge}>
                                 <Percent color="#004FFE" size={12} />
                                 <Text style={styles.taxText}>{item.tax_rate}% {t('tax', language)}</Text>
@@ -203,27 +228,29 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
+        <View testID="products-screen" style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('products', language)}</Text>
                 </View>
-                <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ProductForm')}>
+                {canManageProducts ? <TouchableOpacity testID="product-create-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ProductForm')}>
                     <Box color={primaryColor} size={20} />
-                </TouchableOpacity>
+                </TouchableOpacity> : null}
             </View>
             <ScrollView
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
+                refreshControl={<RefreshControl testID="products-refresh-control" refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
             >
                 {/* Inventory HUD */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('products', language), stats.totalProducts, Box, '#004FFE')}
-                        {renderStatCard('Vlera Totale', formatCurrency(stats.totalValue), DollarSign, '#12B76A')}
-                        {renderStatCard('Pak Stok', stats.lowStockItems, AlertTriangle, '#f59e0b')}
-                        {renderStatCard('Pa Stok', stats.outOfStockItems, X, '#ef4444')}
+                        {renderStatCard(t('totalValue', language), formatCurrency(stats.totalValue), DollarSign, '#12B76A')}
+                        {renderStatCard(t('lowStock', language), stats.lowStockItems, AlertTriangle, '#f59e0b')}
+                        {renderStatCard(t('outOfStock', language), stats.outOfStockItems, X, '#ef4444')}
                     </ScrollView>
                 </View>
 
@@ -232,13 +259,14 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                     <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
+                            testID="products-search-input"
                             style={[styles.searchInput, { color: textColor }]}
                             placeholder={t('search', language)}
                             placeholderTextColor={mutedColor}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
-                        <TouchableOpacity onPress={() => setShowScanner(true)}>
+                        <TouchableOpacity testID="products-scan-button" onPress={() => setShowScanner(true)}>
                             <Scan color={primaryColor} size={20} />
                         </TouchableOpacity>
                     </View>
@@ -263,7 +291,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                     </ScrollView>
 
                     <View style={styles.sortContainer}>
-                        <Text style={[styles.tinyLabel, { color: mutedColor }]}>RENDIT SIPAS:</Text>
+                        <Text style={[styles.tinyLabel, { color: mutedColor }]}>{t('sortBy', language).toUpperCase()}:</Text>
                         <View style={styles.sortButtons}>
                             {(['name', 'price', 'stock'] as const).map(s => (
                                 <TouchableOpacity
@@ -277,7 +305,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                                     <Text style={[
                                         styles.sortBtnText,
                                         { color: sortBy === s ? primaryColor : mutedColor }
-                                    ]}>{s.toUpperCase()}</Text>
+                                    ]}>{s === 'name' ? t('name', language) : s === 'price' ? t('unitPrice', language) : t('inventory', language)}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -288,7 +316,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                     <View style={styles.emptyContainer}>
                         <Box color={mutedColor} size={48} opacity={0.2} />
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {searchQuery ? 'Asnjë produkt nuk u gjet' : 'Asnjë produkt në inventar'}
+                            {searchQuery ? t('noProductsFound', language) : t('noProductsInInventory', language)}
                         </Text>
                     </View>
                 ) : (
@@ -304,7 +332,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                 onScanned={handleBarcodeScanned}
             />
 
-            <FAB onPress={() => navigation.navigate('ProductForm')} />
+            <FAB testID="product-fab" onPress={() => navigation.navigate('ProductForm')} />
         </View>
     );
 }
@@ -355,7 +383,9 @@ const styles = StyleSheet.create({
     productList: { paddingHorizontal: 20, gap: 12 },
     productCard: { padding: 16, borderRadius: 16 },
     productHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-    productInfo: { flex: 1 },
+    productImage: { width: 58, height: 58, borderRadius: 14, marginRight: 12 },
+    productImagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
+    productInfo: { flex: 1, minWidth: 0 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
     productName: { fontSize: 16, fontWeight: '700' },
     categoryBadge: { backgroundColor: 'rgba(0, 79, 254, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
@@ -375,7 +405,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 14, fontWeight: '500' },
 });
-
-
-
-

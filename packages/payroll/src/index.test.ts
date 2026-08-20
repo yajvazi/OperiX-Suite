@@ -152,6 +152,20 @@ test("pension and tax exemptions are explicit and deterministic", () => {
   assert.equal(result.netSalary, "800.00");
 });
 
+test("secondary-employer tax uses the separate 10 percent rule", () => {
+  const result = calculatePayroll(
+    {
+      employeeId: "employee-secondary",
+      salaryBasis: "gross-monthly",
+      contractedAmount: "1000.00",
+    },
+    { ...rules, taxpayerType: "secondary", secondaryTaxRatePercent: "10" },
+  );
+  assert.equal(result.employeePension, "50.00");
+  assert.equal(result.personalIncomeTax, "95.00");
+  assert.equal(result.netSalary, "855.00");
+});
+
 test("pension contribution bases respect effective configuration limits", () => {
   const result = calculatePayroll(
     {

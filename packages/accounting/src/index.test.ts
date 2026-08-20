@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { journalTotals, validateJournalDraft } from "./index.ts";
+import {
+  journalTotals,
+  validateJournalDraft,
+  type AccountingAccount,
+  type PeriodStatus,
+} from "./index.ts";
 
 test("journal totals use exact decimal arithmetic", () => {
   const totals = journalTotals([
@@ -27,4 +32,21 @@ test("journal validation rejects unbalanced and dual-sided lines", () => {
     ]) ?? "",
     /either/,
   );
+});
+
+test("accounting types cover Kosovo contra accounts and soft-close state", () => {
+  const accumulatedDepreciation: AccountingAccount = {
+    id: "accumulated-depreciation",
+    company_id: "company",
+    code: "1590",
+    name: "Accumulated depreciation",
+    account_type: "contra_asset",
+    normal_balance: "credit",
+    posting_allowed: true,
+    active: true,
+    currency: "EUR",
+  };
+  const period: PeriodStatus = "soft_closed";
+  assert.equal(accumulatedDepreciation.account_type, "contra_asset");
+  assert.equal(period, "soft_closed");
 });

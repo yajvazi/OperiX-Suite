@@ -8,11 +8,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth import get_current_user, require_manager_or_admin
+from app.auth import get_current_user, require_manager_or_admin, user_has_permission
 from app.database import get_db
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.resource import Resource, ResourceType
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.schemas.analytics import (
     AnalyticsDashboard,
     DailyOccupancy,
@@ -20,6 +20,7 @@ from app.schemas.analytics import (
     DeskUsage,
     FloorUtilization,
 )
+from app.services.workspace import scope_query
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -28,11 +29,11 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 
 def _recent_activity_for_user(db: Session, current_user: User) -> list[str]:
     query = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .options(joinedload(Reservation.resource), joinedload(Reservation.user))
         .order_by(Reservation.id.desc())
     )
-    if current_user.role not in (UserRole.admin, UserRole.manager):
+    if not user_has_permission(current_user, "reservation.read_all"):
         query = query.filter(Reservation.user_id == current_user.id)
     recent = query.limit(8).all()
     return [
@@ -49,18 +50,18 @@ def dashboard(
 ):
 
     total_desks = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk)
         .count()
     )
     total_rooms = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(Resource.is_active.is_(True), Resource.type == ResourceType.room)
         .count()
     )
     today = date.today()
     active_reservations = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .filter(
             Reservation.status == ReservationStatus.active,
             Reservation.date >= today,
@@ -72,13 +73,15 @@ def dashboard(
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)
         booked = (
-            db.query(Reservation)
+            scope_query(db.query(Reservation), Reservation, current_user)
             .join(Resource)
             .filter(
                 Reservation.date == d,
                 Reservation.status == ReservationStatus.active,
                 Resource.type == ResourceType.desk,
                 Resource.is_active.is_(True),
+                Reservation.organization_id == current_user.organization_id,
+                Resource.organization_id == current_user.organization_id,
             )
             .count()
         )
@@ -97,7 +100,7 @@ def dashboard(
     day_counts: dict[int, int] = defaultdict(int)
     range_start = today - timedelta(days=days)
     reservations_range = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .filter(
             Reservation.date >= range_start,
             Reservation.status == ReservationStatus.active,
@@ -112,7 +115,7 @@ def dashboard(
 
     floor_stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     desks = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk)
         .all()
     )
@@ -120,12 +123,14 @@ def dashboard(
         floor_stats[desk.floor][1] += 1
 
     desk_bookings = (
-        db.query(Resource.name, func.count(Reservation.id))
+        scope_query(db.query(Resource.name, func.count(Reservation.id)), Resource, current_user)
         .join(Reservation, Reservation.resource_id == Resource.id)
         .filter(
             Reservation.date >= range_start,
             Reservation.status == ReservationStatus.active,
             Resource.type == ResourceType.desk,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .group_by(Resource.id, Resource.name)
         .all()
@@ -199,7 +204,7 @@ def export_analytics_csv(
     return StreamingResponse(
         iter([buffer.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=deskdibs-analytics-{days}d.csv"},
+        headers={"Content-Disposition": f"attachment; filename=operix-desk-analytics-{days}d.csv"},
     )
 
 
@@ -218,26 +223,28 @@ def employee_summary(
 ):
     today = date.today()
     total_desks = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(Resource.is_active.is_(True), Resource.type == ResourceType.desk)
         .count()
     )
     total_rooms = (
-        db.query(Resource)
+        scope_query(db.query(Resource), Resource, current_user)
         .filter(Resource.is_active.is_(True), Resource.type == ResourceType.room)
         .count()
     )
     booked_today = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .join(Resource)
         .filter(
             Reservation.date == today,
             Reservation.status == ReservationStatus.active,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .count()
     )
     my_count = (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .filter(
             Reservation.user_id == current_user.id,
             Reservation.status == ReservationStatus.active,
@@ -246,22 +253,26 @@ def employee_summary(
         .count()
     )
     available_desks = total_desks - (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .join(Resource)
         .filter(
             Reservation.date == today,
             Reservation.status == ReservationStatus.active,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
             Resource.type == ResourceType.desk,
         )
         .count()
     )
     available_rooms = total_rooms - (
-        db.query(Reservation)
+        scope_query(db.query(Reservation), Reservation, current_user)
         .join(Resource)
         .filter(
             Reservation.date == today,
             Reservation.status == ReservationStatus.active,
             Resource.type == ResourceType.room,
+            Reservation.organization_id == current_user.organization_id,
+            Resource.organization_id == current_user.organization_id,
         )
         .count()
     )
@@ -271,8 +282,8 @@ def employee_summary(
     for i in range(6, -1, -1):
         d = today - timedelta(days=i)
         booked = (
-            db.query(Reservation)
-            .filter(
+            scope_query(db.query(Reservation), Reservation, current_user)
+        .filter(
                 Reservation.date == d,
                 Reservation.status == ReservationStatus.active,
             )
@@ -281,25 +292,28 @@ def employee_summary(
         trend.append({"date": d.isoformat(), "booked": booked})
 
     floor_overview = []
-    floors = db.query(Resource.floor).distinct().all()
+    floors = scope_query(db.query(Resource.floor), Resource, current_user).distinct().all()
     for (floor,) in floors:
         floor_desks = (
-            db.query(Resource)
+            scope_query(db.query(Resource), Resource, current_user)
             .filter(
                 Resource.floor == floor,
                 Resource.is_active.is_(True),
                 Resource.type == ResourceType.desk,
+                Resource.organization_id == current_user.organization_id,
             )
             .count()
         )
         floor_booked = (
-            db.query(Reservation)
+            scope_query(db.query(Reservation), Reservation, current_user)
             .join(Resource)
             .filter(
                 Resource.floor == floor,
                 Reservation.date == today,
                 Reservation.status == ReservationStatus.active,
                 Resource.type == ResourceType.desk,
+                Reservation.organization_id == current_user.organization_id,
+                Resource.organization_id == current_user.organization_id,
             )
             .count()
         )

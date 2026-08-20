@@ -56,6 +56,7 @@ export function ProductImportDialog({onClose,onImported}:{onClose:()=>void;onImp
     try{
       if(!supabase)throw new Error("Supabase is not configured.");
       if(!workspace.user)throw new Error("Your session has expired.");
+      if(!workspace.companyId)throw new Error("No active company workspace is configured.");
       if(!validRows.length)throw new Error("No valid products are ready to import.");
       const batchPayload={...mappedBatch(),currency:String(mappedBatch().currency||"EUR"),exchange_rate:parseImportNumber(mappedBatch().exchange_rate)||1,user_id:workspace.user.id,company_id:workspace.companyId};
       const batchResult=await supabase.from("product_import_batches").insert(batchPayload).select().single();
@@ -81,7 +82,7 @@ export function ProductImportDialog({onClose,onImported}:{onClose:()=>void;onImp
           stock_quantity:Number(existing.data?.stock_quantity||0)+row.quantity,track_stock:true,
         };
         const productResult=existing.data?.id
-          ?await supabase.from("products").update(baseProductPayload).eq("id",existing.data.id).select("id").single()
+          ?await supabase.from("products").update(baseProductPayload).eq("id",existing.data.id).eq("company_id",workspace.companyId).select("id").single()
           :await supabase.from("products").insert({...baseProductPayload,unit_price:row.unit_price_with_vat||row.landed_unit_price,tax_included:true}).select("id").single();
         if(productResult.error)throw productResult.error;
         if(existing.data?.id)updated+=1;else created+=1;

@@ -29,6 +29,10 @@ begin
   if not (select private.has_company_permission(invoice_row.company_id, 'sales_invoice.post')) then
     raise exception 'Insufficient permission to post sales invoices' using errcode = '42501';
   end if;
+  if public.get_my_company_role(invoice_row.company_id) = 'employee'
+     and invoice_row.user_id is distinct from (select auth.uid()) then
+    raise exception 'Employees can only post invoices they created' using errcode = '42501';
+  end if;
 
   if invoice_row.accounting_state = 'posted' then
     if p_idempotency_key is not null and invoice_row.idempotency_key = p_idempotency_key then

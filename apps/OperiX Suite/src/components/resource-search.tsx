@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { resources } from "@/content/site";
@@ -25,12 +26,12 @@ export function ResourceDirectory() {
         {results.map((resource) => {
           const Icon = resource.icon;
           return (
-            <article className="resource-card" key={resource.title}>
+            <article className={`resource-card ${resource.title === "Contact support" ? "resource-card-contact-support" : ""}`} key={resource.title} id={resource.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}>
               <div className="icon-box"><Icon aria-hidden="true" /></div>
               <div>
                 <h2>{resource.title}</h2>
                 <p>{resource.description}</p>
-                <span>{resource.status}</span>
+                {resource.external ? <a className="text-link" href={resource.href} target="_blank" rel="noreferrer">{resource.status} ↗</a> : <Link className="text-link" href={resource.href}>{resource.status} <span aria-hidden="true">→</span></Link>}
               </div>
             </article>
           );

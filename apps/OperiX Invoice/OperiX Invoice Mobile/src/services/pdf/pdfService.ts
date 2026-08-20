@@ -3,11 +3,15 @@ import * as Sharing from 'expo-sharing';
 import { InvoiceData, TemplateType } from '@invoice-monorepo/types';
 import { generateInvoiceHtml } from './TemplateFactory';
 import { getThermalPageHeight } from './templates/receipt';
+import { t } from '@invoice-monorepo/i18n';
+import { namePdfFile } from './fileNaming';
 
 // A4 dimensions at 72 PPI, which is the coordinate system used by PDF/print.
 const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
 const NO_MARGINS = { top: 0, right: 0, bottom: 0, left: 0 };
+const PRINT_BUSY_ERROR = 'PRINT_BUSY';
+let nativePrintBusy = false;
 
 export interface PdfResult {
     uri: string;
@@ -18,9 +22,10 @@ export interface PdfResult {
 /**
  * Generate a PDF from invoice data using the specified template
  */
-export async function generatePdf(
+async function generatePdfInternal(
     data: InvoiceData,
-    template: TemplateType = 'corporate'
+    template: TemplateType = 'corporate',
+    fileName?: string,
 ): Promise<PdfResult> {
     try {
         const html = generateInvoiceHtml(data, template);
@@ -34,13 +39,28 @@ export async function generatePdf(
             margins: NO_MARGINS,
         });
 
-        return { uri, success: true };
+        return { uri: await namePdfFile(uri, fileName), success: true };
     } catch (error) {
+        const printBusy = error instanceof Error && /another print request is already in progress/i.test(error.message);
         return {
             uri: '',
             success: false,
-            error: error instanceof Error ? error.message : 'Failed to generate PDF',
+            error: printBusy ? PRINT_BUSY_ERROR : t('failedToGeneratePdf', data.details.language || 'en'),
         };
+    }
+}
+
+export async function generatePdf(
+    data: InvoiceData,
+    template: TemplateType = 'corporate',
+    fileName?: string,
+): Promise<PdfResult> {
+    if (nativePrintBusy) return { uri: '', success: false, error: PRINT_BUSY_ERROR };
+    nativePrintBusy = true;
+    try {
+        return await generatePdfInternal(data, template, fileName);
+    } finally {
+        nativePrintBusy = false;
     }
 }
 
@@ -73,15 +93,19 @@ export async function sharePdf(uri: string): Promise<boolean> {
  */
 export async function printPdf(
     data: InvoiceData,
-    template: TemplateType = 'corporate'
+    template: TemplateType = 'corporate',
+    fileName?: string,
 ): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
+    if (nativePrintBusy) return { success: false, canceled: true };
+    nativePrintBusy = true;
     try {
         // Print the generated PDF rather than the HTML. iOS otherwise lays the
         // HTML out again using printer-specific margins, which can split a
         // footer that fits correctly in the invoice preview.
-        const pdf = await generatePdf(data, template);
+        const pdf = await generatePdfInternal(data, template, fileName);
         if (!pdf.success || !pdf.uri) {
-            throw new Error(pdf.error || 'Failed to generate PDF for printing');
+            if (pdf.error === PRINT_BUSY_ERROR) return { success: false, canceled: true };
+            throw new Error(pdf.error || t('failedToGeneratePdf', data.details.language || 'en'));
         }
 
         await Print.printAsync({
@@ -94,8 +118,13 @@ export async function printPdf(
         if (error.message?.includes('Printing did not complete') || error.message?.includes('cancelled')) {
             return { success: false, canceled: true };
         }
+        if (error.message?.includes('Another print request is already in progress')) {
+            return { success: false, canceled: true };
+        }
         console.error('Print error:', error);
-        return { success: false, error: error.message };
+        return { success: false, error: t('failedToPrint', data.details.language || 'en') };
+    } finally {
+        nativePrintBusy = false;
     }
 }
 
@@ -113,5 +142,3 @@ export async function previewPdf(
 
     // In production, this would open a webview or browser
 }
-
-

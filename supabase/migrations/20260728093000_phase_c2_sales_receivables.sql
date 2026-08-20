@@ -295,6 +295,10 @@ begin
   if not (select private.has_company_permission(invoice_row.company_id, 'sales_invoice.create')) then
     raise exception 'Insufficient permission to prepare sales invoices' using errcode = '42501';
   end if;
+  if public.get_my_company_role(invoice_row.company_id) = 'employee'
+     and invoice_row.user_id is distinct from (select auth.uid()) then
+    raise exception 'Employees can only post invoices they created' using errcode = '42501';
+  end if;
   if invoice_row.status not in ('draft', 'approved') then
     raise exception 'Only draft or approved invoices can be prepared for posting' using errcode = '55000';
   end if;
@@ -340,7 +344,7 @@ begin
   if not found then
     raise exception 'Invoice not found' using errcode = 'P0002';
   end if;
-  if not (select private.has_company_permission(invoice_row.company_id, 'sales_invoice.create')) then
+  if not (select private.has_company_permission(invoice_row.company_id, 'sales_invoice.edit')) then
     raise exception 'Insufficient permission to request invoice approval' using errcode = '42501';
   end if;
   if invoice_row.status <> 'draft' or invoice_row.accounting_state not in ('legacy', 'ready_for_posting') then

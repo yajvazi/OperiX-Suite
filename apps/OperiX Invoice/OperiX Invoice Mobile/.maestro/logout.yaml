@@ -1,0 +1,17 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: login.yaml
+- tapOn:
+    text: More
+- extendedWaitUntil:
+    visible:
+      id: more-screen
+    timeout: 15000
+- tapOn:
+    id: more-logout-button
+- tapOn:
+    text: Sign Out
+- extendedWaitUntil:
+    visible:
+      id: auth-email-input
+    timeout: 30000

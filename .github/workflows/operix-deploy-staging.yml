@@ -1,0 +1,173 @@
+name: OperiX Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App id"
+        required: true
+      release_run_id:
+        description: "Successful OperiX Immutable Release Artifacts run id"
+        required: true
+      staging_url:
+        description: "Staging HTTPS URL to verify"
+        required: true
+      confirmation:
+        description: "Type STAGING to continue"
+        required: true
+      artifact_name:
+        description: "Optional artifact name; defaults to operix-release-<app>"
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+      release_run_id:
+        required: true
+        type: string
+      staging_url:
+        required: true
+        type: string
+      confirmation:
+        required: true
+        type: string
+      artifact_name:
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: operix-staging-${{ inputs.app }}
+  # Do not interrupt an active SSH/PM2/Docker transition. Obsolete PR/build
+  # validation runs are cancelled by operix-ci; deployments remain serialized.
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Staging preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require explicit staging confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RUN_ID: ${{ inputs.release_run_id }}
+          URL: ${{ inputs.staging_url }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == STAGING ]] || { echo "Staging deployment requires confirmation=STAGING"; exit 1; }
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "release_run_id must be numeric"; exit 1; }
+          [[ "$URL" == https://* ]] || { echo "Staging URL must use HTTPS"; exit 1; }
+
+  deploy:
+    name: Deploy immutable artifact to staging
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ inputs.staging_url }}
+    steps:
+      - name: Checkout deployment contract
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download validated release metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name || format('operix-release-{0}', inputs.app) }}
+          path: ${{ runner.temp }}/operix-release
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+      - name: Deploy through restricted VPS command
+        env:
+          APP_ID: ${{ inputs.app }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_DEPLOY_USER: ${{ secrets.VPS_DEPLOY_USER }}
+          VPS_DEPLOY_SSH_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$VPS_HOST" && -n "$VPS_PORT" && -n "$VPS_DEPLOY_USER" && -n "$VPS_DEPLOY_SSH_KEY" && -n "$VPS_KNOWN_HOSTS" ]] || { echo "Staging deployment secrets are not configured"; exit 1; }
+          [[ "$VPS_DEPLOY_USER" != root ]] || { echo "Root SSH is not permitted"; exit 1; }
+          artifact=$(jq -r '.artifact' "$RUNNER_TEMP/operix-release/release.json")
+          artifact_kind=$(jq -r '.artifactKind // "ghcr-image"' "$RUNNER_TEMP/operix-release/release.json")
+          artifact_digest=$(jq -r '.artifactDigest // empty' "$RUNNER_TEMP/operix-release/release.json")
+          commit=$(jq -r '.commit' "$RUNNER_TEMP/operix-release/release.json")
+          app_from_metadata=$(jq -r '.app' "$RUNNER_TEMP/operix-release/release.json")
+          [[ "$APP_ID" =~ ^[a-z0-9][a-z0-9-]{1,63}$ ]] || { echo "Invalid app id"; exit 1; }
+          [[ "$app_from_metadata" == "$APP_ID" ]] || { echo "Release metadata app mismatch"; exit 1; }
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "Release metadata commit is not a full SHA"; exit 1; }
+          key="$RUNNER_TEMP/operix-deploy-key"
+          known_hosts="$RUNNER_TEMP/operix-known-hosts"
+          printf '%s\n' "$VPS_DEPLOY_SSH_KEY" > "$key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$known_hosts"
+          chmod 600 "$key" "$known_hosts"
+          ssh_opts=(-i "$key" -p "$VPS_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts")
+          deploy_artifact="$artifact"
+          if [[ "$artifact_kind" == ghcr-image ]]; then
+            [[ "$artifact" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || { echo "Release metadata is not an immutable GHCR digest"; exit 1; }
+          elif [[ "$artifact_kind" == pm2-archive ]]; then
+            [[ "$artifact" =~ ^pm2://$APP_ID/(sha-[0-9a-f]{40})$ ]] || { echo "Release metadata is not an allowed PM2 artifact reference"; exit 1; }
+            deploy_artifact="${BASH_REMATCH[1]}"
+            archive="$RUNNER_TEMP/operix-release/$deploy_artifact.tar.gz"
+            [[ -f "$archive" ]] || { echo "PM2 release archive is missing"; exit 1; }
+            [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "PM2 release digest is missing"; exit 1; }
+            [[ "sha256:$(sha256sum "$archive" | awk '{print $1}')" == "$artifact_digest" ]] || { echo "PM2 release archive digest mismatch"; exit 1; }
+            ssh "${ssh_opts[@]}" "$VPS_DEPLOY_USER@$VPS_HOST" "mkdir -p /opt/operix/incoming/$APP_ID"
+            scp "${ssh_opts[@]}" "$archive" "$VPS_DEPLOY_USER@$VPS_HOST:/opt/operix/incoming/$APP_ID/$deploy_artifact.tar.gz"
+          else
+            echo "Unsupported artifact kind: $artifact_kind"
+            exit 1
+          fi
+          ssh "${ssh_opts[@]}" "$VPS_DEPLOY_USER@$VPS_HOST" "/opt/operix/deploy/dispatch deploy $APP_ID staging $deploy_artifact $commit"
+          echo "STAGING_DEPLOYING -> STAGING_READY (remote health is part of the wrapper)" >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    name: Verify staging
+    needs: deploy
+    if: needs.deploy.result == 'success'
+    uses: ./.github/workflows/operix-smoke-test.yml
+    with:
+      url: ${{ inputs.staging_url }}
+
+  rollback:
+    name: Automatic staging rollback
+    needs: [deploy, smoke]
+    if: always() && needs.deploy.result == 'success' && needs.smoke.result == 'failure'
+    uses: ./.github/workflows/operix-rollback.yml
+    with:
+      app: ${{ inputs.app }}
+      environment: staging
+      target: auto
+      confirmation: ROLLBACK
+    secrets: inherit
+
+  rollback-smoke:
+    name: Verify staging rollback
+    needs: [rollback]
+    if: always() && needs.rollback.result == 'success'
+    uses: ./.github/workflows/operix-smoke-test.yml
+    with:
+      url: ${{ inputs.staging_url }}
+
+  result:
+    name: Staging release result
+    needs: [deploy, smoke, rollback, rollback-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report staging state
+        env:
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SMOKE_RESULT: ${{ needs.smoke.result }}
+          ROLLBACK_RESULT: ${{ needs.rollback.result }}
+          ROLLBACK_SMOKE_RESULT: ${{ needs.rollback-smoke.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$DEPLOY_RESULT" == success && "$SMOKE_RESULT" == success ]]; then echo STAGING_READY; exit 0; fi
+          if [[ "$ROLLBACK_RESULT" == success && "$ROLLBACK_SMOKE_RESULT" == success ]]; then echo DEPLOYMENT_FAILED_ROLLED_BACK; exit 1; fi
+          echo DEPLOYMENT_FAILED_ROLLBACK_FAILED; exit 1

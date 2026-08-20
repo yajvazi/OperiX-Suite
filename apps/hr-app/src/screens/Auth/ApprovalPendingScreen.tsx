@@ -1,82 +1,48 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Clock3, RefreshCw } from 'lucide-react-native';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { Button } from '@invoice-monorepo/ui';
-import { Clock, RefreshCw } from 'lucide-react-native';
+import { OperixLogo } from '../../components/OperixLogo';
+import { brand, getPalette } from '../../theme/brand';
 
 export function ApprovalPendingScreen() {
-    const { isDark, primaryColor } = useTheme();
+    const { isDark } = useTheme();
     const { user, signOut } = useAuth();
+    const palette = getPalette(isDark);
     const [checking, setChecking] = useState(false);
-
-    const bgColor = isDark ? '#0f172a' : '#f8fafc';
-    const textColor = isDark ? '#fff' : '#1e293b';
-    const mutedColor = isDark ? '#94a3b8' : '#64748b';
 
     const checkStatus = async () => {
         if (!user) return;
         setChecking(true);
         try {
-            // Check if status in employees is still pending
-            const { data } = await supabase
-                .from('employees')
-                .select('status')
-                .eq('user_id', user.id)
-                .single();
-
-            if (data?.status === 'active') {
-                // How to trigger re-render in navigator?
-                // Usually changing user metadata or context reload.
-                // Or simply reload app / updates state in AuthContext.
-                // For now, we'll assume AppNavigator might re-check if triggered.
-                // But AppNavigator uses `useAuth` which only tracks session.
-
-                // We need a mechanism to tell AppNavigator "Status Updated".
-                // Maybe updates context? But useAuth might not expose status update.
-                // Workaround: Alert user to restart app or we force reload?
-                // Or maybe the Parent Component handles this.
-            } else {
-                // Remain here
-            }
-        } catch (e) { console.error(e); }
-        finally { setChecking(false); }
+            await supabase.from('employees').select('status').eq('user_id', user.id).single();
+        } finally {
+            setChecking(false);
+        }
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.iconContainer}>
-                <Clock size={64} color={primaryColor} />
-            </View>
-            <Text style={[styles.title, { color: textColor }]}>Approval Pending</Text>
-            <Text style={[styles.text, { color: mutedColor }]}>
-                Your request to join the company is pending approval from an administrator.
-                You cannot access the application until your request is approved.
-            </Text>
-
-            <Button
-                title={checking ? "Checking..." : "Check Status"}
-                onPress={checkStatus}
-                icon={RefreshCw}
-                style={{ marginTop: 24, width: '80%' }}
-                variant="outline"
-            />
-
-            <TouchableOpacity onPress={() => signOut()} style={{ marginTop: 24 }}>
-                <Text style={{ color: mutedColor }}>Sign Out</Text>
+        <View style={[styles.container, { backgroundColor: palette.background }]}>
+            <OperixLogo width={190} reversed={isDark} />
+            <View style={[styles.iconContainer, { backgroundColor: palette.iconSurface }]}><Clock3 color={brand.colors.primary} size={34} /></View>
+            <Text style={[styles.title, { color: palette.text }]}>Approval pending</Text>
+            <Text style={[styles.text, { color: palette.muted }]}>Your request to join the company is waiting for administrator approval.</Text>
+            <TouchableOpacity style={[styles.button, { borderColor: brand.colors.primary }]} onPress={() => void checkStatus()} disabled={checking}>
+                {checking ? <ActivityIndicator color={brand.colors.primary} /> : <><RefreshCw color={brand.colors.primary} size={17} /><Text style={[styles.buttonText, { color: brand.colors.primary }]}>Check status</Text></>}
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => void signOut()} style={styles.signOut}><Text style={[styles.signOutText, { color: palette.muted }]}>Sign out</Text></TouchableOpacity>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-    iconContainer: { marginBottom: 24, padding: 20, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: 50 },
-    title: { fontSize: 24, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
-    text: { fontSize: 16, textAlign: 'center', lineHeight: 24 }
+    iconContainer: { width: 72, height: 72, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginTop: 34, marginBottom: 22 },
+    title: { fontSize: 24, fontFamily: brand.fonts.semibold, marginBottom: 10, textAlign: 'center' },
+    text: { maxWidth: 300, fontSize: 14, fontFamily: brand.fonts.regular, lineHeight: 22, textAlign: 'center' },
+    button: { minHeight: 52, minWidth: 175, borderWidth: 1, borderRadius: brand.radius.control, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 28 },
+    buttonText: { fontSize: 14, fontFamily: brand.fonts.semibold },
+    signOut: { marginTop: 22 },
+    signOutText: { fontSize: 13, fontFamily: brand.fonts.medium },
 });
-
-
-
-
-

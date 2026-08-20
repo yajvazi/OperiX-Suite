@@ -1,0 +1,53 @@
+name: OperiX Security
+
+on:
+  workflow_call:
+    inputs:
+      apps_json:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Secret, dependency, and policy scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Validate CI/CD application registry
+        run: node scripts/cicd/validate-cicd-config.mjs
+      - name: Check whitespace errors
+        run: git diff --check
+      - name: Detect committed env files and high-confidence secrets
+        run: node scripts/cicd/security-scan.mjs
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Dependency vulnerability audit
+        id: audit
+        run: |
+          set +e
+          npm audit --audit-level=high --json > "$RUNNER_TEMP/operix-npm-audit.json"
+          status=$?
+          jq '{metadata, vulnerabilities: (.vulnerabilities | with_entries(select(.value.severity == "high" or .value.severity == "critical")))}' "$RUNNER_TEMP/operix-npm-audit.json" > "$RUNNER_TEMP/operix-npm-audit-summary.json" || cp "$RUNNER_TEMP/operix-npm-audit.json" "$RUNNER_TEMP/operix-npm-audit-summary.json"
+          cat "$RUNNER_TEMP/operix-npm-audit-summary.json"
+          exit "$status"
+      - name: Upload security evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operix-security-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/operix-npm-audit*.json
+          if-no-files-found: ignore
+          retention-days: 14

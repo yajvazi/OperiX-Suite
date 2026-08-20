@@ -8,17 +8,23 @@ import {
     View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Banknote, CalendarDays, CircleAlert, FileText, ShieldCheck } from 'lucide-react-native';
+import { Banknote, CalendarDays, CircleAlert, FileText, Settings2, ShieldCheck } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { getPalette } from '../../theme/brand';
+import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { ShortcutRow } from '../../components/mobile/MobileUI';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { RootStackParamList } from '../../navigation/types';
 
 type Row = Record<string, any>;
 
 export function PayrollScreen() {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const palette = getPalette(isDark);
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
@@ -36,7 +42,7 @@ export function PayrollScreen() {
             .single();
         const companyId = profile?.active_company_id || profile?.company_id;
         if (!companyId) {
-            setError('No active OperiX company is selected.');
+            setError(t('noActiveCompany', language));
             setLoading(false);
             return;
         }
@@ -46,40 +52,40 @@ export function PayrollScreen() {
             supabase.from('payroll_liabilities').select('id,liability_type,amount,paid_amount,status').eq('company_id', companyId).order('created_at', { ascending: false }).limit(50),
         ]);
         const firstError = runResult.error || payslipResult.error || liabilityResult.error;
-        if (firstError && !payslipResult.data?.length) setError(firstError.message);
+        if (firstError && !payslipResult.data?.length) setError(getLocalizedErrorMessage(firstError, language));
         setRuns((runResult.data || []) as Row[]);
         setPayslips((payslipResult.data || []) as Row[]);
         setLiabilities((liabilityResult.data || []) as Row[]);
         setLoading(false);
-    }, [user]);
+    }, [language, user]);
 
     useFocusEffect(useCallback(() => { void load(); }, [load]));
     const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
-    const format = (value: unknown) => new Intl.NumberFormat('en-XK', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+    const format = (value: unknown) => formatCurrency(Number(value || 0), 'EUR', language);
     const latest = runs[0];
     const openLiability = liabilities.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid_amount || 0), 0);
 
     if (loading) return <View style={[styles.center, { backgroundColor: palette.background }]}><ActivityIndicator color="#004FFE" /></View>;
     return <ScrollView style={{ backgroundColor: palette.background }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
         <Text style={[styles.eyebrow, { color: '#004FFE' }]}>OPERIX INVOICE</Text>
-        <Text style={[styles.title, { color: palette.text }]}>Payroll</Text>
-        <Text style={[styles.subtitle, { color: palette.muted }]}>Secure payroll status, approvals, liabilities and your immutable payslips.</Text>
+        <Text style={[styles.title, { color: palette.text }]}>{t('payroll', language)}</Text>
+        <Text style={[styles.subtitle, { color: palette.muted }]}>{t('securePayrollSubtitle', language)}</Text>
+        <ShortcutRow icon={Settings2} title="Payroll setup" description="Manage authorized payroll access, employee pay details, periods and rules." onPress={() => navigation.navigate('PayrollSetup')} trailing={null} />
         {error ? <View style={[styles.warning, { borderColor: '#fecdca' }]}><CircleAlert color="#d92d20" size={18}/><Text style={{ color: '#d92d20', flex: 1 }}>{error}</Text></View> : null}
         <View style={styles.grid}>
-            <Metric icon={Banknote} label="Latest net payroll" value={format(latest?.total_net)} palette={palette}/>
-            <Metric icon={CalendarDays} label="Latest run status" value={String(latest?.status || 'No run')} palette={palette}/>
-            <Metric icon={ShieldCheck} label="Open liabilities" value={format(openLiability)} palette={palette}/>
-            <Metric icon={FileText} label="Accessible payslips" value={String(payslips.length)} palette={palette}/>
+            <Metric icon={Banknote} label={t('latestNetPayroll', language)} value={format(latest?.total_net)} palette={palette}/>
+            <Metric icon={CalendarDays} label={t('latestRunStatus', language)} value={String(latest?.status || t('noRun', language))} palette={palette}/>
+            <Metric icon={ShieldCheck} label={t('openLiabilities', language)} value={format(openLiability)} palette={palette}/>
+            <Metric icon={FileText} label={t('accessiblePayslips', language)} value={String(payslips.length)} palette={palette}/>
         </View>
-        <Text style={[styles.sectionTitle, { color: palette.text }]}>Payslips</Text>
-        {payslips.length === 0 ? <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}><Text style={{ color: palette.muted }}>No payroll-owned payslip is available for this account.</Text></View> : payslips.map((row) => {
+        <Text style={[styles.sectionTitle, { color: palette.text }]}>{t('payslips', language)}</Text>
+        {payslips.length === 0 ? <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}><Text style={{ color: palette.muted }}>{t('noPayslipAvailable', language)}</Text></View> : payslips.map((row) => {
             const snapshot = row.snapshot || {};
             return <View key={row.id} style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-                <View style={styles.row}><View><Text style={[styles.cardTitle, { color: palette.text }]}>{snapshot.runNumber || 'Payslip'}</Text><Text style={{ color: palette.muted, fontSize: 12 }}>{snapshot.period?.name || row.generated_at}</Text></View><Text style={[styles.net, { color: '#004FFE' }]}>{format(snapshot.netSalary)}</Text></View>
-                <Text style={{ color: palette.muted, fontSize: 11, marginTop: 10 }}>Generated by OperiX Invoice · immutable snapshot</Text>
+                <View style={styles.row}><View><Text style={[styles.cardTitle, { color: palette.text }]}>{snapshot.runNumber || t('payslip', language)}</Text><Text style={{ color: palette.muted, fontSize: 12 }}>{snapshot.period?.name || row.generated_at}</Text></View><Text style={[styles.net, { color: '#004FFE' }]}>{format(snapshot.netSalary)}</Text></View>
+                <Text style={{ color: palette.muted, fontSize: 11, marginTop: 10 }}>{t('generatedImmutablePayslip', language)}</Text>
             </View>;
         })}
-        <View style={[styles.warning, { borderColor: palette.border }]}><ShieldCheck color="#004FFE" size={18}/><Text style={{ color: palette.muted, flex: 1 }}>Sensitive setup, calculation, finalization and bank exports remain available only to explicitly authorized payroll roles on desktop.</Text></View>
     </ScrollView>;
 }
 

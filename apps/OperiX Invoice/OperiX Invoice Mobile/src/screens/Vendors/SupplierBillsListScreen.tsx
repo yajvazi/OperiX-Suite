@@ -8,14 +8,26 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
-import { ArrowLeft, Plus, Building, Calendar, FileText, Search, MoreVertical, Trash2, Edit2 } from 'lucide-react-native';
+import { Plus, Building, Calendar, FileText, Trash2, Edit2 } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
-import { Card, Input, Button } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
-import { formatCurrency } from '@invoice-monorepo/i18n';
+import { Card, Button } from '@invoice-monorepo/ui';
+import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { SupplierBill } from '@invoice-monorepo/types';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { MobileHeader, MobileScreen, SearchField } from '../../components/mobile/MobileUI';
+
+function supplierBillStatusLabel(status: string, language: string): string {
+    const labels: Record<string, string> = {
+        paid: t('paid', language),
+        partial: t('partiallyPaid', language),
+        pending: t('pending', language),
+        overdue: t('overdue', language),
+        draft: t('draft', language),
+    };
+    return labels[status] || status;
+}
 
 export function SupplierBillsListScreen({ navigation }: any) {
     const { user } = useAuth();
@@ -25,7 +37,6 @@ export function SupplierBillsListScreen({ navigation }: any) {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
@@ -39,20 +50,20 @@ export function SupplierBillsListScreen({ navigation }: any) {
         if (!user) return;
         setLoading(true);
         try {
-            const { data: profile } = await supabase.from('profiles').select('active_company_id, company_id').eq('id', user.id).single();
-            const companyId = profile?.active_company_id || profile?.company_id || user.id;
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const scope = scopedResource(user.id, companyIds);
 
             const { data, error } = await supabase
                 .from('supplier_bills')
                 .select('*, vendor:vendors(name)')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .or(scope)
                 .order('issue_date', { ascending: false });
 
             if (error) throw error;
             setBills(data || []);
         } catch (error: any) {
             console.error('Error fetching bills:', error);
-            Alert.alert('Error', error.message);
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -61,12 +72,12 @@ export function SupplierBillsListScreen({ navigation }: any) {
 
     const handleDelete = async (id: string) => {
         Alert.alert(
-            'Confirm Delete',
-            'Are you sure you want to delete this bill?',
+            t('confirmDelete', language),
+            t('deleteSupplierBillConfirmation', language),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel', language), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
                         try {
@@ -74,7 +85,7 @@ export function SupplierBillsListScreen({ navigation }: any) {
                             if (error) throw error;
                             setBills(bills.filter(b => b.id !== id));
                         } catch (error: any) {
-                            Alert.alert('Error', error.message);
+                            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                         }
                     }
                 }
@@ -94,14 +105,14 @@ export function SupplierBillsListScreen({ navigation }: any) {
                     <Building color={primaryColor} size={20} />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={[styles.vendorName, { color: textColor }]}>{item.vendor?.name || 'Unknown Vendor'}</Text>
+                    <Text style={[styles.vendorName, { color: textColor }]}>{item.vendor?.name || t('unknownVendor', language)}</Text>
                     <Text style={[styles.billNumber, { color: mutedColor }]}>#{item.bill_number}</Text>
                 </View>
                 <View style={styles.amountContainer}>
                     <Text style={[styles.amount, { color: textColor }]}>{formatCurrency(item.total_amount)}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: item.status === 'paid' ? '#12B76A' : (item.status === 'partial' ? '#f59e0b' : '#ef4444') + '20' }]}>
                         <Text style={[styles.statusText, { color: item.status === 'paid' ? '#12B76A' : (item.status === 'partial' ? '#f59e0b' : '#ef4444') }]}>
-                            {item.status.toUpperCase()}
+                            {supplierBillStatusLabel(item.status, language)}
                         </Text>
                     </View>
                 </View>
@@ -125,28 +136,29 @@ export function SupplierBillsListScreen({ navigation }: any) {
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <View>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>{t('supplierBills', language)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => navigation.navigate('SupplierBillForm')} style={[styles.addButton, { backgroundColor: cardBg }]}>
-                    <Plus color={primaryColor} size={24} />
-                </TouchableOpacity>
-            </View>
+        <MobileScreen>
+            <MobileHeader
+                title={t('supplierBills', language)}
+                subtitle={t('management', language)}
+                onBack={() => navigation.goBack()}
+                right={(
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={t('addSupplierBill', language)}
+                        onPress={() => navigation.navigate('SupplierBillForm')}
+                        style={[styles.addButton, { backgroundColor: cardBg }]}
+                    >
+                        <Plus color={primaryColor} size={24} />
+                    </TouchableOpacity>
+                )}
+            />
 
             <View style={styles.content}>
-                <View style={[styles.searchBar, { backgroundColor: cardBg, borderColor }]}>
-                    <Search color={mutedColor} size={20} />
-                    <Input
-                        placeholder={t('search', language)}
+                <View style={styles.searchBar}>
+                    <SearchField
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        style={{ borderBottomWidth: 0, marginBottom: 0, flex: 1 }}
+                        placeholder={t('search', language)}
                     />
                 </View>
 
@@ -163,7 +175,7 @@ export function SupplierBillsListScreen({ navigation }: any) {
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <FileText color={mutedColor} size={48} />
-                                <Text style={{ color: mutedColor, marginTop: 12 }}>No bills found.</Text>
+                                <Text style={{ color: mutedColor, marginTop: 12 }}>{t('noSupplierBillsFound', language)}</Text>
                                 <Button
                                     title={t('newSupplierBill', language)}
                                     onPress={() => navigation.navigate('SupplierBillForm')}
@@ -174,19 +186,14 @@ export function SupplierBillsListScreen({ navigation }: any) {
                     />
                 )}
             </View>
-        </View>
+        </MobileScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
-    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
-    title: { fontSize: 28, fontWeight: '800' },
     addButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     content: { flex: 1, paddingHorizontal: 16 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16, gap: 8 },
+    searchBar: { marginBottom: 16 },
     listContent: { paddingBottom: 100 },
     billCard: { padding: 16, marginBottom: 16 },
     billHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -204,8 +211,3 @@ const styles = StyleSheet.create({
     actionBtn: { padding: 4 },
     emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
 });
-
-
-
-
-

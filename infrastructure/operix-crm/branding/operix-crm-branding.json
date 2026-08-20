@@ -1,0 +1,13 @@
+{
+  "productName": "OperiX CRM",
+  "suiteName": "OperiX",
+  "logoSource": "apps/OperiX Suite/public/brand/operix-logo-blue.svg",
+  "iconSource": "apps/OperiX Suite/public/brand/operix-icon-blue.svg",
+  "faviconSource": "apps/OperiX Suite/public/brand/operix-icon-blue.svg",
+  "primaryColor": "#004FFE",
+  "primaryHoverColor": "#0044D9",
+  "surfaceColor": "#FFFFFF",
+  "neutralSurfaceColor": "#F7F9FC",
+  "upstreamVersion": "v2.8.5",
+  "customizationBoundary": "operix/main"
+}

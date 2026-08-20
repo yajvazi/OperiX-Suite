@@ -1,0 +1,20 @@
+command: "npm" "run" "test:integration" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 1157
+
+> operix-invoice@1.0.0 test:integration
+> jest --config jest.config.cjs --runInBand test/integration
+
+
+PASS test/integration/api-boundaries.test.ts
+  mobile API integration boundaries
+    ✓ executes a tenant-scoped invoice read against a PostgREST-shaped client (3 ms)
+    ✓ uses the atomic invoice command pipeline and never falls back to direct invoice inserts (3 ms)
+    ✓ keeps payment settlement tenant-bound and propagates a payment RPC failure (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        0.574 s, estimated 1 s
+Ran all test suites matching /test\/integration/i.

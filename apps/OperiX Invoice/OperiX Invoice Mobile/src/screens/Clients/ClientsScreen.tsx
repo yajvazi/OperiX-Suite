@@ -5,11 +5,10 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    Alert,
     StyleSheet,
     TextInput,
 } from 'react-native';
-import { Trash2, Search, Users, DollarSign, TrendingUp, MapPin, Mail, Phone, FileText, Star, X } from 'lucide-react-native';
+import { Search, Users, DollarSign, TrendingUp, MapPin, Mail, Phone, FileText, Star, X } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
@@ -19,6 +18,9 @@ import { Card, FAB } from '@invoice-monorepo/ui';
 import { Client } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { listCustomers } from '@invoice-monorepo/api/repositories';
+import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface ClientsScreenProps {
     navigation: any;
@@ -44,7 +46,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
     const borderColor = isDark ? '#263A55' : '#E4E9F0';
 
     // Derive cities for filtering
-    const cities = ['Të gjitha', ...Array.from(new Set(clients.map(c => c.city).filter((c): c is string => !!c)))];
+    const cities = ['__all__', ...Array.from(new Set(clients.map(c => c.city).filter((c): c is string => !!c)))];
 
     // Stats calculation
     const stats = {
@@ -57,22 +59,32 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
     useFocusEffect(
         useCallback(() => {
             fetchClients();
-        }, [user])
+        }, [user?.id])
     );
 
     const fetchClients = async () => {
         if (!user) return;
         try {
-            const { data } = await supabase.from('clients').select('*').eq('user_id', user.id).order('name');
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const scope = scopedResource(user.id, companyIds);
+            const cacheKey = mobileCacheKey('customers', user.id, companyIds);
+            const cachedClients = await readMobileCache<Client[]>(cacheKey);
+            if (cachedClients) {
+                setClients(cachedClients);
+                applyFiltersAndSort(cachedClients, searchQuery, selectedFilter, sortBy);
+            }
+            const data = await listCustomers(supabase, { userId: user.id, companyIds });
             if (data) {
-                setClients(data);
-                applyFiltersAndSort(data, searchQuery, selectedFilter, sortBy);
+                const clientRows = data as unknown as Client[];
+                setClients(clientRows);
+                applyFiltersAndSort(clientRows, searchQuery, selectedFilter, sortBy);
+                writeMobileCache(cacheKey, clientRows);
 
                 // Fetch revenue per client
                 const { data: invoices } = await supabase
                     .from('invoices')
                     .select('client_id, total_amount')
-                    .eq('user_id', user.id)
+                    .or(scope)
                     .eq('status', 'paid');
 
                 if (invoices) {
@@ -105,7 +117,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
         }
 
         // City filter
-        if (city && city !== 'Të gjitha') {
+        if (city && city !== '__all__') {
             filtered = filtered.filter(c => c.city === city);
         }
 
@@ -127,20 +139,6 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
         setRefreshing(true);
         await fetchClients();
         setRefreshing(false);
-    };
-
-    const handleDelete = (id: string) => {
-        Alert.alert(t('delete', language), t('areYouSure', language) || 'Are you sure?', [
-            { text: t('cancel', language), style: 'cancel' },
-            {
-                text: t('delete', language),
-                style: 'destructive',
-                onPress: async () => {
-                    await supabase.from('clients').delete().eq('id', id);
-                    fetchClients();
-                },
-            },
-        ]);
     };
 
     const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
@@ -165,6 +163,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
         return (
             <TouchableOpacity
                 key={item.id}
+                testID={`customer-row-${item.id}`}
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('ClientForm', { clientId: item.id })}
             >
@@ -183,7 +182,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 
                             <View style={styles.contactRow}>
                                 <Mail size={12} color={mutedColor} />
-                                <Text style={[styles.contactText, { color: mutedColor }]}>{item.email || 'No email'}</Text>
+                                <Text style={[styles.contactText, { color: mutedColor }]}>{item.email || t('noEmail', language)}</Text>
                             </View>
 
                             {item.phone && (
@@ -195,20 +194,18 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                         </View>
                         <View style={styles.clientActions}>
                             <TouchableOpacity
+                                testID={`customer-ledger-${item.id}`}
                                 onPress={() => navigation.navigate('CustomerLedger', { clientId: item.id })}
                                 style={styles.actionButton}
                             >
                                 <FileText color={primaryColor} size={18} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.actionButton}>
-                                <Trash2 color="#ef4444" size={18} />
                             </TouchableOpacity>
                         </View>
                     </View>
                     <View style={styles.clientFooter}>
                         <View style={styles.revenueRow}>
                             <Text style={[styles.revenueValue, { color: primaryColor }]}>{formatCurrency(revenue)}</Text>
-                            <Text style={[styles.revenueLabel, { color: mutedColor }]}>të ardhura</Text>
+                            <Text style={[styles.revenueLabel, { color: mutedColor }]}>{t('revenue', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}</Text>
                         </View>
                         {item.city && (
                             <View style={[styles.cityBadge, { backgroundColor: `${primaryColor}15` }]}>
@@ -223,26 +220,28 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
+        <View testID="customers-screen" style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('clients', language)}</Text>
                 </View>
-                <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ClientForm')}>
+                <TouchableOpacity testID="customer-create-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ClientForm')}>
                     <Users color={primaryColor} size={20} />
                 </TouchableOpacity>
             </View>
             <ScrollView
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
+                refreshControl={<RefreshControl testID="customers-refresh-control" refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
             >
                 {/* Stats */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('clients', language), stats.totalClients, Users, '#004FFE')}
-                        {renderStatCard('Të ardhura', formatCurrency(stats.totalRevenue), DollarSign, '#12B76A')}
-                        {renderStatCard('Aktivë', stats.activeClients, TrendingUp, '#0ea5e9')}
+                        {renderStatCard(t('revenue', language), formatCurrency(stats.totalRevenue), DollarSign, '#12B76A')}
+                        {renderStatCard(t('active', language), stats.activeClients, TrendingUp, '#0ea5e9')}
                     </ScrollView>
                 </View>
 
@@ -251,6 +250,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                     <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
+                            testID="customers-search-input"
                             style={[styles.searchInput, { color: textColor }]}
                             placeholder={t('search', language)}
                             placeholderTextColor={mutedColor}
@@ -268,23 +268,23 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                         {cities.map((city, idx) => (
                             <TouchableOpacity
                                 key={idx}
-                                onPress={() => setSelectedFilter(city === 'Të gjitha' ? null : city)}
+                                onPress={() => setSelectedFilter(city === '__all__' ? null : city)}
                                 style={[
                                     styles.filterChip,
                                     { backgroundColor: cardBg },
-                                    ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: primaryColor }
+                                    ((selectedFilter === null && city === '__all__') || selectedFilter === city) && { backgroundColor: primaryColor }
                                 ]}
                             >
                                 <Text style={[
                                     styles.filterText,
-                                    { color: ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) ? '#fff' : mutedColor }
-                                ]}>{city}</Text>
+                                    { color: ((selectedFilter === null && city === '__all__') || selectedFilter === city) ? '#fff' : mutedColor }
+                                ]}>{city === '__all__' ? t('all', language) : city}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
 
                     <View style={styles.sortContainer}>
-                        <Text style={[styles.tinyLabel, { color: mutedColor }]}>RENDIT SIPAS:</Text>
+                        <Text style={[styles.tinyLabel, { color: mutedColor }]}>{t('sortByUpper', language)}</Text>
                         <View style={styles.sortButtons}>
                             {(['name', 'value'] as const).map(s => (
                                 <TouchableOpacity
@@ -298,7 +298,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                                     <Text style={[
                                         styles.sortBtnText,
                                         { color: sortBy === s ? primaryColor : mutedColor }
-                                    ]}>{s === 'name' ? 'EMRI' : 'VLERA'}</Text>
+                                    ]}>{s === 'name' ? t('nameSort', language) : t('valueSort', language)}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -309,7 +309,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                     <View style={styles.emptyContainer}>
                         <Users color={mutedColor} size={48} opacity={0.2} />
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {searchQuery ? 'Asnjë klient nuk u gjet' : 'Asnjë klient ende'}
+                            {searchQuery ? t('noClientsFound', language) : t('noClientsYet', language)}
                         </Text>
                     </View>
                 ) : (
@@ -319,7 +319,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                 )}
             </ScrollView>
 
-            <FAB onPress={() => navigation.navigate('ClientForm')} />
+            <FAB testID="customer-fab" onPress={() => navigation.navigate('ClientForm')} />
         </View>
     );
 }
@@ -393,7 +393,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 14, fontWeight: '500' },
 });
-
-
-
-

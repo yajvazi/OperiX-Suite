@@ -10,7 +10,7 @@ export function classicTemplate(data: InvoiceData): string {
     showLogo: true,
     showSignature: true,
     showStamp: true,
-    visibleColumns: { sku: false, unit: true, tax: false, quantity: true, price: true },
+    visibleColumns: { rowNumber: false, sku: false, description: true, quantity: true, unit: true, unitPrice: true, discount: false, taxRate: false, lineTotal: true, grossPrice: false },
     labels: {},
     pageSize: 'A4'
   };
@@ -37,7 +37,7 @@ export function classicTemplate(data: InvoiceData): string {
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity} ${config.visibleColumns.unit ? (item.unit || '') : ''}</td>
-        ${config.visibleColumns.price ? `<td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
+        ${config.visibleColumns.unitPrice ? `<td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.total)}</td>
       </tr>
     `
@@ -239,7 +239,7 @@ export function classicTemplate(data: InvoiceData): string {
       <tr>
         <th>${getLabel('item', t.description)}</th>
         <th style="text-align: center;">${getLabel('quantity', t.qty)}</th>
-        ${config.visibleColumns.price ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
+        ${config.visibleColumns.unitPrice ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
         <th style="text-align: right;">${getLabel('total', t.total)}</th>
       </tr>
     </thead>
@@ -325,7 +325,6 @@ export function classicTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
 
 
 

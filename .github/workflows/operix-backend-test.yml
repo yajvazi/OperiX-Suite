@@ -1,0 +1,104 @@
+name: OperiX Backend and Database Tests
+
+on:
+  workflow_call:
+    inputs:
+      apps_json:
+        required: true
+        type: string
+      run_local_supabase:
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(inputs.apps_json) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: apps/OperiX Desk/backend/requirements.txt
+      - name: Normalize backend requirements in the runner only
+        if: matrix.app.runner == 'python'
+        env:
+          REQUIREMENTS: ${{ matrix.app.path }}/requirements.txt
+        run: |
+          set -euo pipefail
+          python - "$REQUIREMENTS" "$RUNNER_TEMP/operix-requirements.txt" <<'PY'
+          from pathlib import Path
+          import sys
+          source = Path(sys.argv[1]).read_bytes()
+          for encoding in ("utf-8", "utf-16"):
+              try:
+                  text = source.decode(encoding)
+                  break
+              except UnicodeDecodeError:
+                  continue
+          else:
+              raise SystemExit("requirements file is not valid UTF-8 or UTF-16")
+          Path(sys.argv[2]).write_text(text, encoding="utf-8")
+          PY
+          python -m pip install --upgrade pip
+          python -m pip install -r "$RUNNER_TEMP/operix-requirements.txt"
+      - name: Compile backend sources
+        run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' compile --required
+      - name: Run backend tests when declared
+        env:
+          APP_PATH: ${{ matrix.app.path }}
+        run: |
+          set -euo pipefail
+          if find "$APP_PATH" -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
+            python -m pip install pytest
+            python -m pytest "$APP_PATH"
+          else
+            echo "No Python test files discovered for $APP_PATH; compile gate remains required."
+          fi
+      - name: Validate backend Docker image
+        if: matrix.app.dockerfile != ''
+        env:
+          DOCKERFILE: ${{ matrix.app.dockerfile }}
+          APP_PATH: ${{ matrix.app.path }}
+          APP_ID: ${{ matrix.app.id }}
+        run: docker build --file "$DOCKERFILE" --tag "operix-ci:${APP_ID}-${GITHUB_SHA}" "$APP_PATH"
+
+  supabase:
+    name: Fresh Supabase migration and SQL test database
+    if: inputs.run_local_supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate migration names, duplicates, and destructive SQL
+        run: node scripts/cicd/validate-migrations.mjs
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+      - name: Apply all migrations to an isolated local database
+        run: |
+          set -euo pipefail
+          supabase start
+          trap 'supabase stop --no-backup || true' EXIT
+          supabase db reset --local
+      - name: Run SQL security and constraint tests
+        run: |
+          set -euo pipefail
+          if supabase test db --help 2>&1 | grep -q -- '--local'; then
+            supabase test db --local
+          else
+            supabase test db
+          fi

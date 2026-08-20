@@ -9,6 +9,10 @@ export const templateInfo: Record<TemplateType, { name: string; description: str
         name: 'Corporate',
         description: 'Professional corporate invoice template with comprehensive field mapping',
     },
+    thermal: {
+        name: 'Thermal',
+        description: 'Compact receipt-style invoice template for thermal printers',
+    },
 };
 
 export const generateInvoiceHtml = (
@@ -18,7 +22,6 @@ export const generateInvoiceHtml = (
     // Only support corporate
     return corporateTemplate(data);
 };
-
 
 
 

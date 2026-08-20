@@ -1,4 +1,4 @@
-import { InvoiceData } from '@invoice-monorepo/types';
+import { InvoiceData, TemplateConfig } from '@invoice-monorepo/types';
 import { pdfTranslations } from '../translations';
 
 export function classicTemplate(data: InvoiceData): string {
@@ -6,13 +6,20 @@ export function classicTemplate(data: InvoiceData): string {
   const isGrayscale = data.company.isGrayscale;
   const lang = data.details.language || 'en';
   const t = pdfTranslations[lang] || pdfTranslations.en;
-  const config = data.config || {
-    showLogo: true,
-    showSignature: true,
-    showStamp: true,
-    visibleColumns: { sku: false, unit: true, tax: false, quantity: true, price: true },
-    labels: {},
-    pageSize: 'A4'
+  const config: TemplateConfig = {
+    ...data.config,
+    showLogo: data.config?.showLogo ?? true,
+    showSignature: data.config?.showSignature ?? true,
+    showBuyerSignature: data.config?.showBuyerSignature ?? true,
+    showStamp: data.config?.showStamp ?? true,
+    showQrCode: data.config?.showQrCode ?? true,
+    showNotes: data.config?.showNotes ?? true,
+    showDiscount: data.config?.showDiscount ?? true,
+    showTax: data.config?.showTax ?? true,
+    showBankDetails: data.config?.showBankDetails ?? true,
+    visibleColumns: { rowNumber: true, sku: false, description: true, quantity: true, unit: true, unitPrice: true, discount: true, taxRate: true, lineTotal: true, grossPrice: true, ...(data.config?.visibleColumns || {}) },
+    labels: data.config?.labels || {},
+    pageSize: data.config?.pageSize || 'A4',
   };
 
   const pageSize = config.pageSize || 'A4';
@@ -37,16 +44,17 @@ export function classicTemplate(data: InvoiceData): string {
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity} ${config.visibleColumns.unit ? (item.unit || '') : ''}</td>
-        ${config.visibleColumns.price ? `<td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
+        ${config.visibleColumns.unitPrice ? `<td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.price)}</td>` : ''}
         <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.total)}</td>
       </tr>
     `
     )
     .join('');
 
-  const qrData = encodeURIComponent(`INVOICE:${data.details.number}`);
+  const qrData = data.details.qrReference ? encodeURIComponent(`https://invoice.operixsuite.com/qr/${data.details.qrReference}`) : '';
   const qrColor = isGrayscale ? '000000' : primaryColor.replace('#', '');
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}&color=${qrColor}`;
+  const qrCodeUrl = qrData ? `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}&color=${qrColor}` : '';
+  const qrCodeMarkup = qrCodeUrl ? `<img src="${qrCodeUrl}" alt="QR Code">` : '';
 
   return `
 <!DOCTYPE html>
@@ -205,8 +213,7 @@ export function classicTemplate(data: InvoiceData): string {
 <body>
   <div class="header">
     <div class="company-info">
-      ${(config.showLogo && data.company.logoUrl) ? `<img src="${data.company.logoUrl}" alt="Logo" style="max-height: ${isA5 ? '35px' : '50px'}; margin-bottom: 6px;">` : ''}
-      <h1>${data.company.name}</h1>
+      ${(config.showLogo && data.company.logoUrl) ? `<img src="${data.company.logoUrl}" alt="Logo" style="max-height: ${isA5 ? '35px' : '50px'}; max-width: 180px; object-fit: contain; margin-bottom: 6px;">` : `<h1>${data.company.name}</h1>`}
       <p>${data.company.address}</p>
       ${data.company.phone ? `<p>Tel: ${data.company.phone}</p>` : ''}
       ${data.company.email ? `<p>Email: ${data.company.email}</p>` : ''}
@@ -215,7 +222,7 @@ export function classicTemplate(data: InvoiceData): string {
       <h2>${getLabel('invoice', t.invoice)}</h2>
       <div class="invoice-number">${data.details.number}</div>
       <div class="qr-code">
-        <img src="${qrCodeUrl}" alt="QR Code">
+        ${qrCodeMarkup}
       </div>
     </div>
   </div>
@@ -239,7 +246,7 @@ export function classicTemplate(data: InvoiceData): string {
       <tr>
         <th>${getLabel('item', t.description)}</th>
         <th style="text-align: center;">${getLabel('quantity', t.qty)}</th>
-        ${config.visibleColumns.price ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
+        ${config.visibleColumns.unitPrice ? `<th style="text-align: right;">${getLabel('price', t.price)}</th>` : ''}
         <th style="text-align: right;">${getLabel('total', t.total)}</th>
       </tr>
     </thead>
@@ -325,7 +332,3 @@ export function classicTemplate(data: InvoiceData): string {
 </html>
   `;
 }
-
-
-
-

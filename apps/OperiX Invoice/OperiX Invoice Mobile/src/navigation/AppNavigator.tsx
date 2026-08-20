@@ -1,80 +1,82 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-native';
 import {
-    LayoutDashboard,
-    FileText,
-    Settings,
-    Briefcase,
-    WalletCards,
-    ShieldAlert,
+    BriefcaseBusiness,
     Fingerprint,
+    FileText,
+    House,
+    MoreHorizontal,
+    ReceiptText,
+    ShieldAlert,
 } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { Button } from '@invoice-monorepo/ui';
 import { t } from '@invoice-monorepo/i18n';
+import { Button, getOperixBottomNavigationOptions, getOperixNavigationTheme, OperixBottomNavigation } from '@invoice-monorepo/ui';
 import { OperixLogo } from '../components/OperixLogo';
+import { brand } from '../theme/brand';
+import type {
+    AuthStackParamList,
+    LegacyExpensesStackParamList,
+    LegacyInvoicesStackParamList,
+    LegacyManagementStackParamList,
+    MainTabParamList,
+    RootStackParamList,
+    SettingsStackParamList,
+} from './types';
 
-// Auth Screens
 import { SignInScreen } from '../screens/Auth/SignInScreen';
 import { SignUpScreen } from '../screens/Auth/SignUpScreen';
 import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
 
-// Dashboard
+import { HomeScreen } from '../screens/Home/HomeScreen';
+import { SalesScreen } from '../screens/Sales/SalesScreen';
+import { POSScreen } from '../screens/POS/POSScreen';
+import { BusinessScreen } from '../screens/Business/BusinessScreen';
+import { MoreScreen } from '../screens/More/MoreScreen';
+import { GlobalSearchScreen } from '../screens/Search/GlobalSearchScreen';
+import { AccountingScreen } from '../screens/Accounting/AccountingScreen';
+import { AccountantReportScreen } from '../screens/Accounting/AccountantReportScreen';
+import { CustomerDetailScreen } from '../screens/Customers/CustomerDetailScreen';
+import { ProductDetailScreen } from '../screens/Products/ProductDetailScreen';
+
 import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
 import { PayrollScreen } from '../screens/Payroll/PayrollScreen';
-
-// Invoice Screens
+import { PayrollSetupScreen } from '../screens/Payroll/PayrollSetupScreen';
 import { InvoicesScreen } from '../screens/Invoices/InvoicesScreen';
 import { InvoiceFormScreen } from '../screens/Invoices/InvoiceFormScreen';
 import { InvoiceDetailScreen } from '../screens/Invoices/InvoiceDetailScreen';
 import { QRScannerScreen } from '../screens/Invoices/QRScannerScreen';
 import { FaturatScreen } from '../screens/Invoices/FaturatScreen';
 import { AllInvoicesScreen } from '../screens/Invoices/AllInvoicesScreen';
-
-// Management Screens
 import { ManagementScreen } from '../screens/Management/ManagementScreen';
 import { ManagementDashboardScreen } from '../screens/Management/ManagementDashboardScreen';
-
-// Client Screens
 import { ClientsScreen } from '../screens/Clients/ClientsScreen';
 import { ClientFormScreen } from '../screens/Clients/ClientFormScreen';
-
-// Product Screens
 import { ProductsScreen } from '../screens/Products/ProductsScreen';
 import { ProductFormScreen } from '../screens/Products/ProductFormScreen';
-
-// Vendor Screens
 import { VendorFormScreen, VendorsScreen, SupplierBillFormScreen, SupplierBillsListScreen, ScanBillScreen } from '../screens/Vendors';
-
-// Vendor Payment Screens
 import { VendorPaymentFormScreen, VendorPaymentsListScreen } from '../screens/VendorPayments';
-
-// Payment Screens
 import { PaymentFormScreen, PaymentsListScreen } from '../screens/Payments';
-
-// Report Screens
 import { CustomerLedgerScreen } from '../screens/Reports/CustomerLedgerScreen';
 import { VendorLedgerScreen } from '../screens/Reports/VendorLedgerScreen';
 import { ReportPreviewScreen } from '../screens/Reports/ReportPreviewScreen';
-
-// Contract Screens
+import { SalesBookScreen } from '../screens/Reports/SalesBookScreen';
+import { ReportsHubScreen } from '../screens/Reports/ReportsHubScreen';
+import { CashBalancesScreen } from '../screens/Reports/CashBalancesScreen';
+import { AgentActivityScreen } from '../screens/Reports/AgentActivityScreen';
+import { TaxCenterScreen } from '../screens/TaxCenter/TaxCenterScreen';
 import { ContractFormScreen } from '../screens/Contracts/ContractFormScreen';
 import { ContractDetailScreen } from '../screens/Contracts/ContractDetailScreen';
-
-// Expense Screens
 import { ExpensesScreen } from '../screens/Expenses/ExpensesScreen';
 import { ExpenseFormScreen } from '../screens/Expenses/ExpenseFormScreen';
 import { ExpensesDashboardScreen } from '../screens/Expenses/ExpensesDashboardScreen';
 import { ExpensesListScreen } from '../screens/Expenses/ExpensesListScreen';
-
-// Settings Screens
 import { SettingsScreen } from '../screens/Settings/SettingsScreen';
 import { TemplateEditorScreen } from '../screens/Settings/TemplateEditorScreen';
 import { ContractTemplatesScreen } from '../screens/Settings/Contracts/ContractTemplatesScreen';
@@ -84,304 +86,241 @@ import { PaymentIntegrationsScreen } from '../screens/Settings/PaymentIntegratio
 import { StripeDashboardScreen } from '../screens/Settings/StripeDashboardScreen';
 import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
 import { AdvancedSettingsScreen } from '../screens/Settings/AdvancedSettingsScreen';
-
-// Profile Screen
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
+import { HelpSupportScreen } from '../screens/Support/HelpSupportScreen';
+import { HelpCategoryScreen } from '../screens/Support/HelpCategoryScreen';
+import { HelpArticleScreen } from '../screens/Support/HelpArticleScreen';
+import { AboutScreen } from '../screens/About/AboutScreen';
+import { OperixAIScreen } from '../screens/AI/OperixAIScreen';
+import { NotificationsScreen } from '../screens/Notifications/NotificationsScreen';
 
-const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+const InvoicesStack = createNativeStackNavigator<LegacyInvoicesStackParamList>();
+const ManagementStack = createNativeStackNavigator<LegacyManagementStackParamList>();
+const ExpensesStack = createNativeStackNavigator<LegacyExpensesStackParamList>();
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
-const CustomDarkTheme = {
-    ...DarkTheme,
-    colors: {
-        ...DarkTheme.colors,
-        primary: '#004FFE',
-        background: '#0D1B2A',
-        card: '#1e293b',
-        text: '#ffffff',
-        border: '#334155',
-        notification: '#004FFE',
-    },
-};
-
-const CustomLightTheme = {
-    ...DefaultTheme,
-    colors: {
-        ...DefaultTheme.colors,
-        primary: '#004FFE',
-        background: '#F7F9FC',
-        card: '#ffffff',
-        text: '#1e293b',
-        border: '#E6EBF1',
-        notification: '#004FFE',
-    },
-};
+const CustomDarkTheme = getOperixNavigationTheme(true);
+const CustomLightTheme = getOperixNavigationTheme(false);
 
 function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) {
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const [authenticating, setAuthenticating] = useState(false);
 
     const authenticate = async () => {
         setAuthenticating(true);
         const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Unlock OperiX Invoice',
-            fallbackLabel: 'Use Passcode',
+            promptMessage: t('unlockOperixInvoice', language),
+            fallbackLabel: t('usePasscode', language),
         });
         setAuthenticating(false);
         if (result.success) onAuthenticated();
     };
 
-    useEffect(() => {
-        authenticate();
-    }, []);
+    useEffect(() => { void authenticate(); }, []);
 
     return (
-        <View style={[styles.lockContainer, { backgroundColor: isDark ? '#0D1B2A' : '#F7F9FC' }]}>
-            <View style={styles.lockIconContainer}>
-                <ShieldAlert color="#004FFE" size={64} />
-            </View>
-            <Text style={[styles.lockTitle, { color: isDark ? '#fff' : '#1e293b' }]}>App Locked</Text>
-            <Text style={[styles.lockText, { color: isDark ? '#94a3b8' : '#64748b' }]}>
-                Please verify your identity to continue.
-            </Text>
-            <Button
-                title={authenticating ? "Authenticating..." : "Unlock with Biometrics"}
-                onPress={authenticate}
-                icon={Fingerprint}
-                style={{ width: '80%', marginTop: 24 }}
-            />
+        <View style={[styles.lockContainer, { backgroundColor: isDark ? brand.colors.navySoft : brand.colors.background }]}>
+            <View style={styles.lockIconContainer}><ShieldAlert color={brand.colors.primary} size={58} /></View>
+            <Text style={[styles.lockTitle, { color: isDark ? '#fff' : brand.colors.text }]}>{t('appLocked', language)}</Text>
+            <Text style={[styles.lockText, { color: isDark ? '#94a3b8' : brand.colors.muted }]}>{t('verifyIdentity', language)}</Text>
+            <Button title={authenticating ? t('authenticating', language) : t('unlockWithBiometrics', language)} onPress={() => void authenticate()} icon={Fingerprint} style={{ width: '80%', marginTop: 24 }} />
         </View>
     );
 }
 
-function InvoicesStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="FaturatMain" component={FaturatScreen} />
-            <Stack.Screen name="InvoicesList" component={InvoicesScreen} />
-            <Stack.Screen name="AllInvoices" component={AllInvoicesScreen} />
-            <Stack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
-            <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
-            <Stack.Screen name="ContractForm" component={ContractFormScreen} />
-            <Stack.Screen name="ContractDetail" component={ContractDetailScreen} />
-            <Stack.Screen name="ReportPreview" component={ReportPreviewScreen} />
-            <Stack.Screen name="PaymentForm" component={PaymentFormScreen} />
-            <Stack.Screen name="PaymentsList" component={PaymentsListScreen} />
-            <Stack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
-            <Stack.Screen name="VendorLedger" component={VendorLedgerScreen} />
-            <Stack.Screen name="VendorForm" component={VendorFormScreen} />
-            <Stack.Screen name="VendorsList" component={VendorsScreen} />
-            <Stack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
-            <Stack.Screen name="VendorPaymentsList" component={VendorPaymentsListScreen} />
-            <Stack.Screen name="SupplierBillForm" component={SupplierBillFormScreen} />
-            <Stack.Screen name="SupplierBillsList" component={SupplierBillsListScreen} />
-            <Stack.Screen name="ScanBill" component={ScanBillScreen} />
-            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
-        </Stack.Navigator>
-    );
+function LegacyInvoicesNavigator() {
+    return <InvoicesStack.Navigator id="legacy-invoices" screenOptions={{ headerShown: false }}>
+        <InvoicesStack.Screen name="FaturatMain" component={FaturatScreen} />
+        <InvoicesStack.Screen name="InvoicesList" component={InvoicesScreen} />
+        <InvoicesStack.Screen name="AllInvoices" component={AllInvoicesScreen} />
+        <InvoicesStack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
+        <InvoicesStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+        <InvoicesStack.Screen name="ContractForm" component={ContractFormScreen} />
+        <InvoicesStack.Screen name="ContractDetail" component={ContractDetailScreen} />
+        <InvoicesStack.Screen name="ReportPreview" component={ReportPreviewScreen} />
+        <InvoicesStack.Screen name="SalesBook" component={SalesBookScreen} />
+        <InvoicesStack.Screen name="PaymentForm" component={PaymentFormScreen} />
+        <InvoicesStack.Screen name="PaymentsList" component={PaymentsListScreen} />
+        <InvoicesStack.Screen name="ClientForm" component={ClientFormScreen} />
+        <InvoicesStack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
+        <InvoicesStack.Screen name="VendorLedger" component={VendorLedgerScreen} />
+        <InvoicesStack.Screen name="VendorForm" component={VendorFormScreen} />
+        <InvoicesStack.Screen name="VendorsList" component={VendorsScreen} />
+        <InvoicesStack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
+        <InvoicesStack.Screen name="VendorPaymentsList" component={VendorPaymentsListScreen} />
+        <InvoicesStack.Screen name="SupplierBillForm" component={SupplierBillFormScreen} />
+        <InvoicesStack.Screen name="SupplierBillsList" component={SupplierBillsListScreen} />
+        <InvoicesStack.Screen name="ScanBill" component={ScanBillScreen} />
+        <InvoicesStack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+    </InvoicesStack.Navigator>;
 }
 
-function ManagementStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="ManagementTabs" component={ManagementScreen} />
-            <Stack.Screen name="ManagementDashboard" component={ManagementDashboardScreen} />
-
-            {/* Operations */}
-            <Stack.Screen name="ClientsList" component={ClientsScreen} />
-            <Stack.Screen name="ProductsList" component={ProductsScreen} />
-            <Stack.Screen name="VendorsList" component={VendorsScreen} />
-            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
-            <Stack.Screen name="ExpensesList" component={ExpensesScreen} />
-
-            {/* Forms */}
-            <Stack.Screen name="ClientForm" component={ClientFormScreen} />
-            <Stack.Screen name="ProductForm" component={ProductFormScreen} />
-            <Stack.Screen name="VendorForm" component={VendorFormScreen} />
-            <Stack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
-
-            {/* Ledgers */}
-            <Stack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
-            <Stack.Screen name="VendorLedger" component={VendorLedgerScreen} />
-        </Stack.Navigator>
-    );
+function LegacyManagementNavigator() {
+    return <ManagementStack.Navigator id="legacy-management" screenOptions={{ headerShown: false }}>
+        <ManagementStack.Screen name="ManagementTabs" component={ManagementScreen} />
+        <ManagementStack.Screen name="ManagementDashboard" component={ManagementDashboardScreen} />
+        <ManagementStack.Screen name="ClientsList" component={ClientsScreen} />
+        <ManagementStack.Screen name="ProductsList" component={ProductsScreen} />
+        <ManagementStack.Screen name="VendorsList" component={VendorsScreen} />
+        <ManagementStack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+        <ManagementStack.Screen name="ExpensesList" component={ExpensesScreen} />
+        <ManagementStack.Screen name="ClientForm" component={ClientFormScreen} />
+        <ManagementStack.Screen name="ProductForm" component={ProductFormScreen} />
+        <ManagementStack.Screen name="VendorForm" component={VendorFormScreen} />
+        <ManagementStack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
+        <ManagementStack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
+        <ManagementStack.Screen name="VendorLedger" component={VendorLedgerScreen} />
+    </ManagementStack.Navigator>;
 }
 
-function ExpensesStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="ExpensesDashboard" component={ExpensesDashboardScreen} />
-            <Stack.Screen name="ExpensesList" component={ExpensesListScreen} />
-            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
-        </Stack.Navigator>
-    );
+function LegacyExpensesNavigator() {
+    return <ExpensesStack.Navigator id="legacy-expenses" screenOptions={{ headerShown: false }}>
+        <ExpensesStack.Screen name="ExpensesDashboard" component={ExpensesDashboardScreen} />
+        <ExpensesStack.Screen name="ExpensesList" component={ExpensesListScreen} />
+        <ExpensesStack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+    </ExpensesStack.Navigator>;
+}
+
+function SettingsNavigator() {
+    return <SettingsStack.Navigator id="settings-stack" screenOptions={{ headerShown: false }}>
+        <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
+        <SettingsStack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
+        <SettingsStack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
+        <SettingsStack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
+        <SettingsStack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
+        <SettingsStack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
+        <SettingsStack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
+        <SettingsStack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
+        <SettingsStack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
+    </SettingsStack.Navigator>;
 }
 
 function MainTabs() {
-    const { isDark, language, primaryColor } = useTheme();
-
-    return (
-        <Tab.Navigator
-            screenOptions={{
-                headerShown: false,
-                tabBarStyle: {
-                    backgroundColor: isDark ? '#14243A' : '#ffffff',
-                    borderTopColor: isDark ? '#263A55' : '#E4E9F0',
-                    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-                    paddingTop: 8,
-                    height: Platform.OS === 'ios' ? 88 : 70,
-                    paddingHorizontal: 8,
-                },
-                tabBarActiveTintColor: primaryColor,
-                tabBarInactiveTintColor: isDark ? '#667085' : '#98A2B3',
-                tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-                tabBarIconStyle: { marginTop: 4 },
-            }}
-        >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={22} />, tabBarLabel: t('dashboard', language) }} />
-            <Tab.Screen name="InvoicesTab" component={InvoicesStack} options={{ tabBarIcon: ({ color }) => <FileText color={color} size={22} />, tabBarLabel: t('invoices', language) }} />
-            <Tab.Screen name="Management" component={ManagementStack} options={{ tabBarIcon: ({ color }) => <Briefcase color={color} size={22} />, tabBarLabel: t('management', language) }} />
-            <Tab.Screen name="Payroll" component={PayrollScreen} options={{ tabBarIcon: ({ color }) => <WalletCards color={color} size={22} />, tabBarLabel: language === 'sq' ? 'Pagat' : 'Payroll' }} />
-        </Tab.Navigator>
-    );
+    const { isDark, primaryColor, language } = useTheme();
+    return <Tab.Navigator id="main-tabs" initialRouteName="Home" tabBar={OperixBottomNavigation} screenOptions={{
+        ...getOperixBottomNavigationOptions(isDark, primaryColor),
+    }}>
+        <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('homeTab', language), tabBarAccessibilityLabel: t('homeTab', language), tabBarButtonTestID: 'nav-home-tab', tabBarIcon: ({ color }) => <House color={color} size={21} /> }} />
+        <Tab.Screen name="Sales" component={SalesScreen} options={{ tabBarLabel: t('sales', language), tabBarAccessibilityLabel: t('sales', language), tabBarButtonTestID: 'nav-sales-tab', tabBarIcon: ({ color }) => <ReceiptText color={color} size={21} /> }} />
+        <Tab.Screen name="POS" component={POSScreen} options={{ tabBarLabel: t('posTab', language), tabBarAccessibilityLabel: t('posTab', language), tabBarButtonTestID: 'nav-pos-tab', tabBarIcon: ({ color }) => <FileText color={color} size={21} /> }} />
+        <Tab.Screen name="Business" component={BusinessScreen} options={{ tabBarLabel: t('business', language), tabBarAccessibilityLabel: t('business', language), tabBarButtonTestID: 'nav-business-tab', tabBarIcon: ({ color }) => <BriefcaseBusiness color={color} size={21} /> }} />
+        <Tab.Screen name="More" component={MoreScreen} options={{ tabBarLabel: t('more', language), tabBarAccessibilityLabel: t('more', language), tabBarButtonTestID: 'nav-more-tab', tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={22} /> }} />
+    </Tab.Navigator>;
 }
 
-function RootStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="QRScanner" component={QRScannerScreen} />
-            <Stack.Screen name="Settings" component={SettingsStack} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-        </Stack.Navigator>
-    );
+function RootNavigator() {
+    return <RootStack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="MainTabs" component={MainTabs} />
+        <RootStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ presentation: 'modal' }} />
+        <RootStack.Screen name="OperixAI" component={OperixAIScreen} />
+        <RootStack.Screen name="Notifications" component={NotificationsScreen} />
+        <RootStack.Screen name="Accounting" component={AccountingScreen} />
+        <RootStack.Screen name="AccountantReport" component={AccountantReportScreen} />
+        <RootStack.Screen name="Payroll" component={PayrollScreen} />
+        <RootStack.Screen name="PayrollSetup" component={PayrollSetupScreen} />
+        <RootStack.Screen name="ReportsHub" component={ReportsHubScreen} />
+        <RootStack.Screen name="CashBalances" component={CashBalancesScreen} />
+        <RootStack.Screen name="AgentActivity" component={AgentActivityScreen} />
+        <RootStack.Screen name="TaxCenter" component={TaxCenterScreen} />
+        <RootStack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'modal' }} />
+        <RootStack.Screen name="Settings" component={SettingsNavigator} />
+        <RootStack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
+        <RootStack.Screen name="Profile" component={ProfileScreen} />
+        <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
+        <RootStack.Screen name="HelpCategory" component={HelpCategoryScreen} />
+        <RootStack.Screen name="HelpArticle" component={HelpArticleScreen} />
+        <RootStack.Screen name="About" component={AboutScreen} />
+
+        <RootStack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
+        <RootStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+        <RootStack.Screen name="InvoicesList" component={InvoicesScreen} />
+        <RootStack.Screen name="AllInvoices" component={AllInvoicesScreen} />
+        <RootStack.Screen name="PaymentsList" component={PaymentsListScreen} />
+        <RootStack.Screen name="PaymentForm" component={PaymentFormScreen} />
+        <RootStack.Screen name="ClientForm" component={ClientFormScreen} />
+        <RootStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
+        <RootStack.Screen name="ProductsList" component={ProductsScreen} />
+        <RootStack.Screen name="ProductForm" component={ProductFormScreen} />
+        <RootStack.Screen name="ProductDetail" component={ProductDetailScreen} />
+        <RootStack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+        <RootStack.Screen name="ExpensesList" component={ExpensesScreen} />
+        <RootStack.Screen name="VendorsList" component={VendorsScreen} />
+        <RootStack.Screen name="VendorForm" component={VendorFormScreen} />
+        <RootStack.Screen name="VendorLedger" component={VendorLedgerScreen} />
+        <RootStack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
+        <RootStack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
+        <RootStack.Screen name="VendorPaymentsList" component={VendorPaymentsListScreen} />
+        <RootStack.Screen name="SupplierBillForm" component={SupplierBillFormScreen} />
+        <RootStack.Screen name="SupplierBillsList" component={SupplierBillsListScreen} />
+        <RootStack.Screen name="ScanBill" component={ScanBillScreen} />
+        <RootStack.Screen name="ContractForm" component={ContractFormScreen} />
+        <RootStack.Screen name="ContractDetail" component={ContractDetailScreen} />
+        <RootStack.Screen name="ReportPreview" component={ReportPreviewScreen} />
+        <RootStack.Screen name="SalesBook" component={SalesBookScreen} />
+
+        {/* Compatibility navigators; these are no longer bottom-navigation destinations. */}
+        <RootStack.Screen name="InvoicesTab" component={LegacyInvoicesNavigator} />
+        <RootStack.Screen name="Management" component={LegacyManagementNavigator} />
+    </RootStack.Navigator>;
 }
 
-function SettingsStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="SettingsMain" component={SettingsScreen} />
-            <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
-            <Stack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
-            <Stack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
-            <Stack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
-            <Stack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
-            <Stack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
-            <Stack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
-            <Stack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
-        </Stack.Navigator>
-    );
-}
-
-function AuthStack() {
-    return (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="SignIn">
-                {(props: any) => (
-                    <SignInScreen
-                        onNavigateToSignUp={() => props.navigation.navigate('SignUp')}
-                    />
-                )}
-            </Stack.Screen>
-            <Stack.Screen name="SignUp">
-                {(props: any) => (
-                    <SignUpScreen
-                        onNavigateToSignIn={() => props.navigation.navigate('SignIn')}
-                        navigation={props.navigation}
-                    />
-                )}
-            </Stack.Screen>
-            <Stack.Screen name="JoinTeam" component={JoinTeamScreen} />
-        </Stack.Navigator>
-    );
+function AuthNavigator() {
+    return <AuthStack.Navigator id="auth-stack" screenOptions={{ headerShown: false }}>
+        <AuthStack.Screen name="SignIn">{(props) => <SignInScreen onNavigateToSignUp={() => props.navigation.navigate('SignUp')} />}</AuthStack.Screen>
+        <AuthStack.Screen name="SignUp">{(props) => <SignUpScreen onNavigateToSignIn={() => props.navigation.navigate('SignIn')} navigation={props.navigation} />}</AuthStack.Screen>
+        <AuthStack.Screen name="JoinTeam" component={JoinTeamScreen} />
+    </AuthStack.Navigator>;
 }
 
 export function AppNavigator() {
     const { user, loading: authLoading } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const [isLocked, setIsLocked] = useState(false);
     const [checkingLock, setCheckingLock] = useState(true);
     const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (user) {
-            checkUserStatus();
+            void checkUserStatus();
         } else {
             setIsLocked(false);
             setIsPending(false);
             setCheckingLock(false);
         }
-    }, [user]);
+    }, [user?.id]);
 
     const checkUserStatus = async () => {
         try {
-            // Check Biometrics
             const [{ data: profile }, { data: employeeData }] = await Promise.all([
-                supabase.from('profiles').select('biometric_enabled').eq('id', user?.id).single(),
-                supabase
-                    .from('employees')
-                    .select('status')
-                    .eq('user_id', user?.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle(),
+                supabase.from('profiles').select('biometric_enabled').eq('id', user?.id).maybeSingle(),
+                supabase.from('employees').select('status').eq('user_id', user?.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
             ]);
-            if (profile?.biometric_enabled) {
-                setIsLocked(true);
-            }
-
-            if (employeeData && employeeData.status === 'pending') {
-                setIsPending(true);
-            } else {
-                setIsPending(false);
-            }
-
+            setIsLocked(Boolean(profile?.biometric_enabled));
+            setIsPending(employeeData?.status === 'pending');
         } catch (error) {
-            console.error('Error checking status:', error);
+            console.error('Error checking account status:', error);
         } finally {
             setCheckingLock(false);
         }
     };
 
     if (authLoading || checkingLock) {
-        return (
-            <View style={[styles.loading, { backgroundColor: isDark ? '#0D1B2A' : '#F7F9FC' }]}>
-                <OperixLogo width={180} reversed={isDark} />
-                <ActivityIndicator size="small" color={isDark ? '#8CC2FF' : '#004FFE'} style={styles.loadingIndicator} />
-                <Text style={[styles.loadingText, { color: isDark ? '#94a3b8' : '#64748b' }]}>Opening your workspace…</Text>
-            </View>
-        );
+        return <View style={[styles.loading, { backgroundColor: isDark ? brand.colors.navySoft : brand.colors.background }]}><OperixLogo width={180} reversed={isDark} /><ActivityIndicator size="small" color={brand.colors.primary} style={styles.loadingIndicator} /><Text style={[styles.loadingText, { color: isDark ? '#94a3b8' : brand.colors.muted }]}>{t('openingWorkspace', language)}</Text></View>;
     }
-
-    if (user && isPending) {
-        return (
-            <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>
-                <ApprovalPendingScreen />
-            </NavigationContainer>
-        );
-    }
-
-    if (user && isLocked) {
-        return (
-            <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>
-                <BiometricOverlay onAuthenticated={() => setIsLocked(false)} />
-            </NavigationContainer>
-        );
-    }
-
-    return (
-        <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>
-            {user ? <RootStack /> : <AuthStack />}
-        </NavigationContainer>
-    );
+    if (user && isPending) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><ApprovalPendingScreen /></NavigationContainer>;
+    if (user && isLocked) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><BiometricOverlay onAuthenticated={() => setIsLocked(false)} /></NavigationContainer>;
+    return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>{user ? <RootNavigator /> : <AuthNavigator />}</NavigationContainer>;
 }
 
 const styles = StyleSheet.create({
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
     loadingIndicator: { marginTop: 28 },
-    loadingText: { marginTop: 10, fontSize: 13, fontWeight: '500' },
+    loadingText: { marginTop: 10, fontSize: 13, fontFamily: brand.fonts.medium },
     lockContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-    lockIconContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(0, 79, 254, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    lockTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-    lockText: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
+    lockIconContainer: { width: 116, height: 116, borderRadius: 58, backgroundColor: 'rgba(0,79,254,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
+    lockTitle: { fontSize: 24, fontFamily: brand.fonts.semibold, marginBottom: 10 },
+    lockText: { fontSize: 15, fontFamily: brand.fonts.regular, textAlign: 'center', lineHeight: 22 },
 });

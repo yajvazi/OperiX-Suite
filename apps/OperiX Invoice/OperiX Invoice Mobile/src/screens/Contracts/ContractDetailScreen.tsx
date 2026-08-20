@@ -21,6 +21,9 @@ import { WebView } from 'react-native-webview';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateContractHTML } from '../../services/pdf/contractTemplates';
+import { documentPdfFileName, namePdfFile } from '../../services/pdf/fileNaming';
+import { formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope } from '../../services/workspace';
 
 interface ContractDetailScreenProps {
     navigation: any;
@@ -30,7 +33,7 @@ interface ContractDetailScreenProps {
 export function ContractDetailScreen({ navigation, route }: ContractDetailScreenProps) {
     const { contractId } = route.params;
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const [contract, setContract] = useState<Contract | null>(null);
     const [client, setClient] = useState<Client | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
@@ -50,8 +53,14 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
 
     const fetchProfile = async () => {
         if (!user) return;
+        const { profile: workspaceProfile, company } = await getWorkspaceScope(user.id);
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (data) setProfile(data);
+        if (data) {
+            setProfile({
+                ...data,
+                company_name: (company as any)?.company_name || (company as any)?.name || workspaceProfile.company_name || data.company_name,
+            });
+        }
     };
 
     const fetchContract = async () => {
@@ -63,7 +72,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
             .single();
 
         if (error) {
-            Alert.alert('Error', error.message);
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
         } else if (data) {
             setContract(data);
             setClient(data.client);
@@ -73,16 +82,16 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
 
     const handleDelete = () => {
         Alert.alert(
-            'Delete Contract',
-            'Are you sure you want to delete this contract? This action cannot be undone.',
+            t('deleteContract', language),
+            t('deleteContractConfirmation', language),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancel', language), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
                         const { error } = await supabase.from('contracts').delete().eq('id', contractId);
-                        if (error) Alert.alert('Error', error.message);
+                        if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                         else navigation.goBack();
                     },
                 },
@@ -92,7 +101,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
 
     const generateHTML = () => {
         if (!contract || !profile) return '';
-        return generateContractHTML({ contract, client, profile });
+        return generateContractHTML({ contract, client, profile, language: language === 'sq' ? 'sq' : 'en' });
     };
 
     const handlePreview = () => {
@@ -104,13 +113,15 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
     const handlePrint = async () => {
         const html = generateHTML();
         try {
-            await Print.printAsync({ html });
+            const { uri } = await Print.printToFileAsync({ html, base64: false });
+            const namedUri = await namePdfFile(uri, documentPdfFileName(profile?.company_name || t('company', language), contract?.contract_number || contract?.id || t('contract', language), client?.name || t('client', language)));
+            await Print.printAsync({ uri: namedUri });
         } catch (error: any) {
             // Ignore cancellation errors
             if (error.message?.includes('Printing did not complete') || error.message?.includes('cancelled')) {
                 return;
             }
-            Alert.alert('Error', 'Failed to print contract');
+            Alert.alert(t('error', language), t('failedToPrintContract', language));
         }
     };
 
@@ -118,9 +129,10 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
         const html = generateHTML();
         try {
             const { uri } = await Print.printToFileAsync({ html });
-            await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Contract' });
+            const namedUri = await namePdfFile(uri, documentPdfFileName(profile?.company_name || t('company', language), contract?.contract_number || contract?.id || t('contract', language), client?.name || t('client', language)));
+            await Sharing.shareAsync(namedUri, { mimeType: 'application/pdf', dialogTitle: t('shareContract', language) });
         } catch (error) {
-            Alert.alert('Error', 'Failed to share contract');
+            Alert.alert(t('error', language), t('failedToShareContract', language));
         }
     };
 
@@ -138,7 +150,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
             ) : (
                 <View style={[styles.signatureBox, styles.signatureMissing, { backgroundColor: isDark ? '#0D1B2A' : '#F4F7FB' }]}>
                     <XCircle color="#ef4444" size={24} />
-                    <Text style={{ color: '#ef4444', marginTop: 4 }}>Not Signed</Text>
+                    <Text style={{ color: '#ef4444', marginTop: 4 }}>{t('notSigned', language)}</Text>
                 </View>
             )}
         </View>
@@ -155,7 +167,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
     if (!contract) {
         return (
             <View style={[styles.container, styles.centered, { backgroundColor: bgColor }]}>
-                <Text style={{ color: textColor }}>Contract not found</Text>
+                <Text style={{ color: textColor }}>{t('contractNotFound', language)}</Text>
             </View>
         );
     }
@@ -168,7 +180,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Contract Details</Text>
+                <Text style={[styles.title, { color: textColor }]}>{t('contractDetails', language)}</Text>
                 <TouchableOpacity onPress={handleDelete}>
                     <Trash2 color="#ef4444" size={24} />
                 </TouchableOpacity>
@@ -183,27 +195,38 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                         </View>
                         <View style={{ flex: 1, marginLeft: 16 }}>
                             <Text style={[styles.contractTitle, { color: textColor }]}>{contract.title}</Text>
+                            {contract.contract_number ? <Text style={[styles.contractType, { color: primaryColor }]}>{contract.contract_number}</Text> : null}
                             <Text style={[styles.contractType, { color: mutedColor }]}>
-                                {contract.type?.replace('_', ' ').toUpperCase()}
+                                {contractTypeLabel(contract.type, language)}
                             </Text>
                         </View>
                         <StatusBadge status={contract.status} />
                     </View>
                 </Card>
 
+                {contract.parties?.length ? <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
+                    <View style={styles.sectionHeader}><User color={primaryColor} size={20} /><Text style={[styles.sectionTitle, { color: textColor }]}>{t('parties', language)}</Text></View>
+                    {contract.parties.map((party) => <View key={party.id} style={styles.detailRow}><Text style={[styles.detailLabel, { color: mutedColor }]}>{party.role}</Text><Text style={[styles.detailValue, { color: textColor }]}>{party.name || party.source}{party.email ? ` · ${party.email}` : ''}</Text></View>)}
+                </Card> : null}
+
+                {contract.financial_terms && Object.keys(contract.financial_terms).length ? <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
+                    <View style={styles.sectionHeader}><FileText color={primaryColor} size={20} /><Text style={[styles.sectionTitle, { color: textColor }]}>{t('financialTerms', language)}</Text></View>
+                    {Object.entries(contract.financial_terms).map(([key, value]) => <View key={key} style={styles.detailRow}><Text style={[styles.detailLabel, { color: mutedColor }]}>{key.replace(/_/g, ' ')}</Text><Text style={[styles.detailValue, { color: textColor }]}>{String(value)}</Text></View>)}
+                </Card> : null}
+
                 {/* Quick Actions */}
                 <View style={styles.quickActions}>
                     <TouchableOpacity style={[styles.actionBtn, { backgroundColor: primaryColor }]} onPress={handlePreview}>
                         <Eye color="#fff" size={20} />
-                        <Text style={styles.actionBtnText}>Preview</Text>
+                        <Text style={styles.actionBtnText}>{t('preview', language)}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#12B76A' }]} onPress={handlePrint}>
                         <Printer color="#fff" size={20} />
-                        <Text style={styles.actionBtnText}>Print</Text>
+                        <Text style={styles.actionBtnText}>{t('print', language)}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#f59e0b' }]} onPress={handleShare}>
                         <Share2 color="#fff" size={20} />
-                        <Text style={styles.actionBtnText}>Share</Text>
+                        <Text style={styles.actionBtnText}>{t('share', language)}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -211,7 +234,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <User color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Client</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('client', language)}</Text>
                     </View>
                     {client ? (
                         <View>
@@ -220,7 +243,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                             {client.address && <Text style={{ color: mutedColor }}>{client.address}</Text>}
                         </View>
                     ) : (
-                        <Text style={{ color: mutedColor }}>No client assigned</Text>
+                        <Text style={{ color: mutedColor }}>{t('noClientAssigned', language)}</Text>
                     )}
                 </Card>
 
@@ -228,20 +251,21 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <FileText color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Contract Details</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('contractDetails', language)}</Text>
                     </View>
 
                     {Object.entries(contractContent).map(([key, value]) => (
                         <View key={key} style={styles.detailRow}>
-                            <Text style={[styles.detailLabel, { color: mutedColor }]}>
-                                {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                        <Text style={[styles.detailLabel, { color: mutedColor }]}
+                        >
+                                {contractDetailLabel(key, language)}
                             </Text>
                             <Text style={[styles.detailValue, { color: textColor }]}>{String(value)}</Text>
                         </View>
                     ))}
 
                     {Object.keys(contractContent).length === 0 && (
-                        <Text style={{ color: mutedColor }}>No details provided</Text>
+                        <Text style={{ color: mutedColor }}>{t('noDetailsProvided', language)}</Text>
                     )}
                 </Card>
 
@@ -249,19 +273,19 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <Calendar color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Timeline</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('timeline', language)}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                        <Text style={[styles.detailLabel, { color: mutedColor }]}>Created</Text>
+                        <Text style={[styles.detailLabel, { color: mutedColor }]}>{t('created', language)}</Text>
                         <Text style={[styles.detailValue, { color: textColor }]}>
-                            {new Date(contract.created_at).toLocaleDateString()}
+                            {formatDate(contract.created_at, language)}
                         </Text>
                     </View>
                     {contract.updated_at && (
                         <View style={styles.detailRow}>
-                            <Text style={[styles.detailLabel, { color: mutedColor }]}>Last Updated</Text>
+                        <Text style={[styles.detailLabel, { color: mutedColor }]}>{t('lastUpdated', language)}</Text>
                             <Text style={[styles.detailValue, { color: textColor }]}>
-                                {new Date(contract.updated_at).toLocaleDateString()}
+                                {formatDate(contract.updated_at, language)}
                             </Text>
                         </View>
                     )}
@@ -271,18 +295,18 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <CheckCircle color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Signatures</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('signatures', language)}</Text>
                     </View>
 
                     <View style={styles.signaturesRow}>
-                        {renderSignature('Provider', contract.signature_url)}
-                        {renderSignature('Client', contract.counterparty_signature_url)}
+                        {renderSignature(t('providerSignature', language), contract.signature_url)}
+                        {renderSignature(t('clientSignatureCounterparty', language), contract.counterparty_signature_url)}
                     </View>
                 </Card>
 
                 {/* Actions */}
                 <Button
-                    title="Edit Contract"
+                    title={t('editContract', language)}
                     icon={Edit2}
                     onPress={() => navigation.navigate('ContractForm', { contractId: contract.id })}
                     style={{ marginBottom: 16 }}
@@ -296,7 +320,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                         <TouchableOpacity onPress={() => setShowPreview(false)}>
                             <X color={textColor} size={24} />
                         </TouchableOpacity>
-                        <Text style={[styles.previewTitle, { color: textColor }]}>Contract Preview</Text>
+                        <Text style={[styles.previewTitle, { color: textColor }]}>{t('contractPreview', language)}</Text>
                         <TouchableOpacity onPress={handlePrint}>
                             <Printer color={primaryColor} size={24} />
                         </TouchableOpacity>
@@ -310,6 +334,29 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
             </Modal>
         </View>
     );
+}
+
+function contractTypeLabel(type: string | undefined, language: string): string {
+    if (!type) return '';
+    const labels: Record<string, string> = {
+        service_agreement: t('serviceAgreement', language),
+        nda: t('nda', language),
+        employment: t('employmentContract', language),
+    };
+    return labels[type] || type.replace(/_/g, ' ').toUpperCase();
+}
+
+function contractDetailLabel(key: string, language: string): string {
+    const labels: Record<string, string> = {
+        scopeOfServices: t('scopeOfServices', language),
+        paymentTerms: t('paymentTerms', language),
+        timeline: t('timeline', language),
+        confidentialInfo: t('confidentialInformation', language),
+        durationConfidentiality: t('durationConfidentiality', language),
+        startDate: t('startDate', language),
+        endDate: t('endDate', language),
+    };
+    return labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 }
 
 const styles = StyleSheet.create({
@@ -342,8 +389,3 @@ const styles = StyleSheet.create({
     previewTitle: { fontSize: 18, fontWeight: 'bold' },
     webview: { flex: 1 },
 });
-
-
-
-
-

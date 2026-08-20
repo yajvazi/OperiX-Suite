@@ -1,0 +1,23 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { CalendarClock, FileSignature, FileText, ShieldCheck } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useHrWorkspace } from "@/lib/workspace";
+import { Card, EmptyState, ErrorState, LoadingBlock, PageHeader, StatCard, StatusBadge } from "./ui";
+
+type Contract = { id: string; employee_id: string; company_id: string; contract_number: string; contract_type: string; starts_on: string; ends_on?: string | null; position?: string | null; department?: string | null; standard_hours?: number | null; status: string; attachments?: unknown; employee?: { first_name: string; last_name: string; job_title?: string | null } | null };
+
+export function ContractsView() {
+  const { workspace } = useHrWorkspace();
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = useCallback(async () => { const client = createClient(); if (!client || !workspace?.companyId) return; setLoading(true); const { data, error: queryError } = await client.from("employment_contracts").select("id,employee_id,company_id,contract_number,contract_type,starts_on,ends_on,position,department,standard_hours,status,attachments,employee:employees(first_name,last_name,job_title)").eq("company_id", workspace.companyId).order("starts_on", { ascending: false }); if (queryError) setError(queryError.message); else setContracts((data || []) as unknown as Contract[]); setLoading(false); }, [workspace?.companyId]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const active = contracts.filter((contract) => contract.status === "active").length;
+  const expiring = contracts.filter((contract) => contract.status === "expiring_soon").length;
+  if (loading && !contracts.length) return <><PageHeader title="Contracts" description="Loading employment contracts…" /><Card><LoadingBlock lines={8} /></Card></>;
+  if (error && !contracts.length) return <><PageHeader title="Contracts" description="Employment agreements and expiry tracking." /><ErrorState message={error} onRetry={() => void refresh()} /></>;
+  return <><PageHeader title="Contracts" description="Track employment agreements securely; signature integrations can be connected later." /><div className="stat-grid"><StatCard label="Contracts" value={contracts.length} detail="Organization records" icon={<FileText size={16} />} tone="blue" /><StatCard label="Active" value={active} detail="Currently in force" icon={<ShieldCheck size={16} />} tone="green" /><StatCard label="Expiring soon" value={expiring} detail="Needs attention" icon={<CalendarClock size={16} />} tone="amber" /><StatCard label="Signature ready" value="Documenso" detail="Integration boundary prepared" icon={<FileSignature size={16} />} tone="purple" /><StatCard label="Private access" value="RLS" detail="Employee and HR scoped" icon={<ShieldCheck size={16} />} tone="blue" /></div><Card title="Employment contracts"><div className="data-table-wrap"><table className="data-table"><thead><tr><th>Employee</th><th>Contract</th><th>Position</th><th>Dates</th><th>Status</th></tr></thead><tbody>{contracts.map((contract) => <tr key={contract.id}><td><div className="employee-cell"><span className="employee-avatar">{contract.employee ? `${contract.employee.first_name[0]}${contract.employee.last_name[0]}`.toUpperCase() : "C"}</span><div><strong>{contract.employee ? `${contract.employee.first_name} ${contract.employee.last_name}` : "Employee"}</strong><span>{contract.employee?.job_title || contract.employee_id}</span></div></div></td><td>{contract.contract_number}<span className="muted-inline">{contract.contract_type}</span></td><td>{contract.position || contract.department || "—"}</td><td>{contract.starts_on}{contract.ends_on ? ` → ${contract.ends_on}` : " → Open ended"}</td><td><StatusBadge status={contract.status} /></td></tr>)}</tbody></table></div><div className="mobile-list">{contracts.map((contract) => <article className="mobile-list-card" key={contract.id}><div className="mobile-list-main"><strong>{contract.employee ? `${contract.employee.first_name} ${contract.employee.last_name}` : "Employee"}</strong><p>{contract.contract_number} · {contract.contract_type}</p><p>{contract.starts_on}{contract.ends_on ? ` → ${contract.ends_on}` : " → Open ended"}</p></div><div className="mobile-list-meta"><StatusBadge status={contract.status} /></div></article>)}</div>{!contracts.length ? <EmptyState icon={<FileText size={18} />} title="No contracts yet" description="Contracts created in the shared employment contract service will appear here." /> : null}</Card></>;
+}

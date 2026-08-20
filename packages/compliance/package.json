@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --test src/index.test.ts",
+    "test": "node --import tsx --test src/index.test.ts src/sales-book.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

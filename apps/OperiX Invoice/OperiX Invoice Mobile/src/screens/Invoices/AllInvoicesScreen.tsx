@@ -16,24 +16,31 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { StatusBadge } from '@invoice-monorepo/ui';
 import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
-import { formatCurrency } from '@invoice-monorepo/i18n';
-import { t } from '@invoice-monorepo/i18n';
+import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { listInvoices } from '@invoice-monorepo/api/repositories';
+import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface AllInvoicesScreenProps {
     navigation: any;
     route?: any;
 }
 
-const statuses: { key: InvoiceStatus | 'all'; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'draft', label: 'Draft' },
-    { key: 'sent', label: 'Sent' },
-    { key: 'paid', label: 'Paid' },
-    { key: 'overdue', label: 'Overdue' },
+const statuses: { key: InvoiceStatus | 'all' }[] = [
+    { key: 'all' },
+    { key: 'draft' },
+    { key: 'sent' },
+    { key: 'paid' },
+    { key: 'overdue' },
 ];
 
 type ListItem = Invoice | any;
+
+function statusFilterLabel(status: string, language: string): string {
+    if (status === 'all') return t('all', language);
+    return t(status as any, language);
+}
 
 export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps) {
     const { user } = useAuth();
@@ -74,28 +81,38 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
     const fetchData = async () => {
         if (!user) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) setProfile(profileData);
-        const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
-
-        let data = [];
-        let query = supabase
-            .from(selectedType === 'contract' ? 'contracts' : 'invoices')
-            .select(selectedType === 'contract' ? `*, client:clients(name)` : `*, client:clients(name), items:invoice_items(id)`)
-            .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-            .order('created_at', { ascending: sortOrder === 'asc' });
-
-        if (selectedType !== 'contract') {
-            query = query.eq('type', selectedType);
+        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        setProfile(workspaceProfile);
+        const scope = scopedResource(user.id, companyIds);
+        const cacheKey = mobileCacheKey('invoices', user.id, companyIds, `all:${selectedType}:${sortOrder}`);
+        const cachedData = await readMobileCache<ListItem[]>(cacheKey);
+        if (cachedData) {
+            setInvoices(cachedData);
+            filterInvoices(cachedData, selectedStatus, searchQuery);
+            calculateStats(cachedData);
         }
 
-        const { data: result, error } = await query;
-
-        if (result) {
-            setInvoices(result);
-            filterInvoices(result, selectedStatus, searchQuery);
-            calculateStats(result);
+        let data: ListItem[] = [];
+        if (selectedType === 'contract') {
+            const { data: result, error } = await supabase
+                .from('contracts')
+                .select(`*, client:clients(name)`)
+                .or(scope)
+                .order('created_at', { ascending: sortOrder === 'asc' });
+            if (error) throw error;
+            data = (result || []) as ListItem[];
+        } else {
+            data = await listInvoices(supabase, { userId: user.id, companyIds }, {
+                select: '*, client:clients(name), items:invoice_items(id)',
+                documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE',
+                legacyType: selectedType,
+            }) as unknown as ListItem[];
+            if (sortOrder === 'asc') data.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
         }
+        setInvoices(data);
+        filterInvoices(data, selectedStatus, searchQuery);
+        calculateStats(data);
+        writeMobileCache(cacheKey, data);
     };
 
     const calculateStats = (data: ListItem[]) => {
@@ -149,7 +166,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                         <View style={styles.invoiceInfo}>
                             <Text style={[styles.invoiceNumber, { color: textColor }]}>{isContract ? item.title : item.invoice_number}</Text>
                             <Text style={[styles.clientName, { color: mutedColor }]}>
-                                {item.client?.name || 'No client'}
+                                {item.client?.name || t('noClient', language)}
                             </Text>
                         </View>
                         <View style={styles.badgeRow}>
@@ -167,7 +184,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                     <View style={styles.invoiceFooter}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Text style={[styles.invoiceDate, { color: mutedColor }]}>
-                                {isContract ? new Date(item.created_at).toLocaleDateString() : item.issue_date}
+                                {isContract ? formatDate(item.created_at, language) : item.issue_date}
                             </Text>
                             {!isContract && (
                                 <Text style={[styles.invoiceDate, { color: mutedColor }]}>
@@ -188,9 +205,9 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
-                    <Text style={[styles.subtitle, { color: mutedColor }]}>All Documents</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('allDocuments', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>
-                        {selectedType === 'invoice' ? t('invoices', language) : selectedType === 'offer' ? t('offers', language) : 'Contracts'}
+                        {selectedType === 'invoice' ? t('invoices', language) : selectedType === 'offer' ? t('offers', language) : t('contracts', language)}
                     </Text>
                 </View>
                 <TouchableOpacity style={[styles.closeButton, { backgroundColor: cardBg }]} onPress={() => navigation.goBack()}>
@@ -210,7 +227,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                         onPress={() => setSelectedType(tValue)}
                     >
                         <Text style={[styles.typeText, { color: selectedType === tValue ? primaryColor : mutedColor }]}>
-                            {tValue.toUpperCase()}
+                            {t(tValue === 'invoice' ? 'invoice' : tValue === 'offer' ? 'offer' : 'contracts', language)}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -220,15 +237,15 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
             {selectedType !== 'contract' && (
                 <View style={styles.hudContainer}>
                     <View style={[styles.hudCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
-                        <Text style={[styles.hudLabel, { color: mutedColor }]}>Total</Text>
+                                <Text style={[styles.hudLabel, { color: mutedColor }]}>{t('total', language)}</Text>
                         <Text style={[styles.hudValue, { color: textColor }]}>{formatCurrency(stats.total)}</Text>
                     </View>
                     <View style={[styles.hudCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
-                        <Text style={[styles.hudLabel, { color: mutedColor }]}>Paid</Text>
+                        <Text style={[styles.hudLabel, { color: mutedColor }]}>{t('paid', language)}</Text>
                         <Text style={[styles.hudValue, { color: '#12B76A' }]}>{formatCurrency(stats.paid)}</Text>
                     </View>
                     <View style={[styles.hudCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
-                        <Text style={[styles.hudLabel, { color: mutedColor }]}>Pending</Text>
+                        <Text style={[styles.hudLabel, { color: mutedColor }]}>{t('pending', language)}</Text>
                         <Text style={[styles.hudValue, { color: '#f59e0b' }]}>{formatCurrency(stats.pending)}</Text>
                     </View>
                 </View>
@@ -240,7 +257,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                     <Search color={mutedColor} size={18} />
                     <TextInput
                         style={[styles.searchInput, { color: textColor }]}
-                        placeholder="Search..."
+                        placeholder={t('search', language)}
                         placeholderTextColor={mutedColor}
                         value={searchQuery}
                         onChangeText={handleSearch}
@@ -276,7 +293,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                             onPress={() => handleStatusFilter(item.key)}
                         >
                             <Text style={[styles.filterText, { color: selectedStatus === item.key ? '#fff' : mutedColor }]}>
-                                {item.label}
+                                {statusFilterLabel(item.key, language)}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -288,10 +305,12 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Text style={[styles.emptyText, { color: mutedColor }]}>No documents found</Text>
+                        <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noDocumentsFound', language)}</Text>
                     </View>
                 }
             />
@@ -339,6 +358,3 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { textAlign: 'center' },
 });
-
-
-

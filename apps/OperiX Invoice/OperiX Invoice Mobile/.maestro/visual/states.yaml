@@ -1,0 +1,14 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: prepare-language.yaml
+- toggleAirplaneMode
+- tapOn:
+    id: nav-sales-tab
+- extendedWaitUntil:
+    visible:
+      text: ${VISUAL_ERROR_TEXT}
+    timeout: 15000
+- assertScreenshot:
+    path: "baselines/${VISUAL_DEVICE}/${VISUAL_LANGUAGE}/error-state.png"
+    thresholdPercentage: 98
+- toggleAirplaneMode

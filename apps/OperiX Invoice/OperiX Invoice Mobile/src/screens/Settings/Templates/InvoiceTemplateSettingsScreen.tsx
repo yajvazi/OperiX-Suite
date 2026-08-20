@@ -14,6 +14,7 @@ import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
 import { Card, Input, Button } from '@invoice-monorepo/ui';
 import { normalizeBrandColor } from '../../../theme/brand';
+import { getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
 
 interface FieldConfig {
     id: string;
@@ -58,47 +59,98 @@ interface InvoiceTemplateSettings {
 // Invoice header and meta fields
 const defaultFields: FieldConfig[] = [
     // Header section
-    { id: '1', key: 'invoice_number', label: 'Invoice Number', type: 'text', required: true, enabled: true, placeholder: 'INV-001', category: 'header' },
-    { id: '2', key: 'issue_date', label: 'Issue Date', type: 'date', required: true, enabled: true, category: 'header' },
-    { id: '3', key: 'due_date', label: 'Due Date', type: 'date', required: false, enabled: true, category: 'header' },
-    { id: '4', key: 'document_type', label: 'Document Type', type: 'select', required: true, enabled: true, category: 'header' },
+    { id: '1', key: 'invoice_number', label: t('invoiceNumber', 'en'), type: 'text', required: true, enabled: true, placeholder: 'INV-001', category: 'header' },
+    { id: '2', key: 'issue_date', label: t('issueDate', 'en'), type: 'date', required: true, enabled: true, category: 'header' },
+    { id: '3', key: 'due_date', label: t('dueDate', 'en'), type: 'date', required: false, enabled: true, category: 'header' },
+    { id: '4', key: 'document_type', label: t('documentType', 'en'), type: 'select', required: true, enabled: true, category: 'header' },
     // Client section
-    { id: '5', key: 'client_name', label: 'Client Name', type: 'text', required: true, enabled: true, category: 'client' },
-    { id: '6', key: 'client_nui', label: 'Client NUI', type: 'text', required: false, enabled: true, category: 'client' },
-    { id: '7', key: 'client_fiscal_number', label: 'Client Fiscal Number', type: 'text', required: false, enabled: true, category: 'client' },
-    { id: '8', key: 'client_vat_number', label: 'Client VAT Number', type: 'text', required: false, enabled: true, category: 'client' },
-    { id: '9', key: 'client_address', label: 'Client Address', type: 'text', required: false, enabled: true, category: 'client' },
-    { id: '10', key: 'client_email', label: 'Client Email', type: 'text', required: false, enabled: true, category: 'client' },
-    { id: '11', key: 'client_phone', label: 'Client Phone', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '5', key: 'client_name', label: t('clientName', 'en'), type: 'text', required: true, enabled: true, category: 'client' },
+    { id: '6', key: 'client_nui', label: t('clientNui', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '7', key: 'client_fiscal_number', label: t('clientFiscalNumber', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '8', key: 'client_vat_number', label: t('clientVatNumber', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '9', key: 'client_address', label: t('clientAddress', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '10', key: 'client_email', label: t('clientEmail', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '11', key: 'client_phone', label: t('clientPhone', 'en'), type: 'text', required: false, enabled: true, category: 'client' },
     // Summary section
-    { id: '12', key: 'subtotal', label: 'Subtotal', type: 'number', required: true, enabled: true, category: 'summary' },
-    { id: '13', key: 'discount_amount', label: 'Discount Amount', type: 'number', required: false, enabled: true, category: 'summary' },
-    { id: '14', key: 'net_amount', label: 'Net Amount (Before Tax)', type: 'number', required: false, enabled: true, category: 'summary' },
-    { id: '15', key: 'tax_amount', label: 'Tax Amount', type: 'number', required: false, enabled: true, category: 'summary' },
-    { id: '16', key: 'total', label: 'Total Amount', type: 'number', required: true, enabled: true, category: 'summary' },
+    { id: '12', key: 'subtotal', label: t('subtotal', 'en'), type: 'number', required: true, enabled: true, category: 'summary' },
+    { id: '13', key: 'discount_amount', label: t('discountAmount', 'en'), type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '14', key: 'net_amount', label: t('netAmountBeforeTax', 'en'), type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '15', key: 'tax_amount', label: t('taxAmount', 'en'), type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '16', key: 'total', label: t('totalAmount', 'en'), type: 'number', required: true, enabled: true, category: 'summary' },
     // Footer section  
-    { id: '17', key: 'notes', label: 'Notes', type: 'textarea', required: false, enabled: true, placeholder: 'Payment terms, thank you message...', category: 'footer' },
-    { id: '18', key: 'bank_name', label: 'Bank Name', type: 'text', required: false, enabled: true, category: 'footer' },
-    { id: '19', key: 'bank_iban', label: 'Bank IBAN', type: 'text', required: false, enabled: true, category: 'footer' },
-    { id: '20', key: 'company_tax_id', label: 'Company Tax ID', type: 'text', required: false, enabled: true, category: 'footer' },
+    { id: '17', key: 'notes', label: t('notes', 'en'), type: 'textarea', required: false, placeholder: t('paymentTermsPlaceholder', 'en'), enabled: true, category: 'footer' },
+    { id: '18', key: 'bank_name', label: t('bankName', 'en'), type: 'text', required: false, enabled: true, category: 'footer' },
+    { id: '19', key: 'bank_iban', label: t('bankIban', 'en'), type: 'text', required: false, enabled: true, category: 'footer' },
+    { id: '20', key: 'company_tax_id', label: t('companyTaxId', 'en'), type: 'text', required: false, enabled: true, category: 'footer' },
 ];
 
 // Items table columns configuration
 const defaultColumns: ColumnConfig[] = [
-    { id: 'col_1', key: 'row_number', label: 'Nr', enabled: true, width: '5%' },
-    { id: 'col_2', key: 'sku', label: 'SKU/Code', enabled: true, width: '10%' },
-    { id: 'col_3', key: 'description', label: 'Description', enabled: true, width: '25%' },
-    { id: 'col_4', key: 'quantity', label: 'Quantity', enabled: true, width: '8%' },
-    { id: 'col_5', key: 'unit', label: 'Unit', enabled: true, width: '8%' },
-    { id: 'col_6', key: 'unit_price', label: 'Unit Price (excl. VAT)', enabled: true, width: '12%' },
-    { id: 'col_7', key: 'discount', label: 'Discount %', enabled: true, width: '8%' },
-    { id: 'col_8', key: 'tax_rate', label: 'VAT %', enabled: true, width: '8%' },
-    { id: 'col_9', key: 'line_total', label: 'Line Total', enabled: true, width: '10%' },
-    { id: 'col_10', key: 'gross_price', label: 'Price (incl. VAT)', enabled: true, width: '10%' },
+    { id: 'col_1', key: 'row_number', label: t('nr', 'en'), enabled: true, width: '5%' },
+    { id: 'col_2', key: 'sku', label: t('skuCode', 'en'), enabled: true, width: '10%' },
+    { id: 'col_3', key: 'description', label: t('description', 'en'), enabled: true, width: '25%' },
+    { id: 'col_4', key: 'quantity', label: t('quantity', 'en'), enabled: true, width: '8%' },
+    { id: 'col_5', key: 'unit', label: t('unit', 'en'), enabled: true, width: '8%' },
+    { id: 'col_6', key: 'unit_price', label: t('unitPriceExclVat', 'en'), enabled: true, width: '12%' },
+    { id: 'col_7', key: 'discount', label: t('discountPercent', 'en'), enabled: true, width: '8%' },
+    { id: 'col_8', key: 'tax_rate', label: t('vatPercent', 'en'), enabled: true, width: '8%' },
+    { id: 'col_9', key: 'line_total', label: t('lineTotal', 'en'), enabled: true, width: '10%' },
+    { id: 'col_10', key: 'gross_price', label: t('grossPriceLabel', 'en'), enabled: true, width: '10%' },
 ];
 
+const fieldLabelKeys: Record<string, TranslationKey> = {
+    invoice_number: 'invoiceNumber',
+    issue_date: 'issueDate',
+    due_date: 'dueDate',
+    document_type: 'documentType',
+    client_name: 'clientName',
+    client_nui: 'clientNui',
+    client_fiscal_number: 'clientFiscalNumber',
+    client_vat_number: 'clientVatNumber',
+    client_address: 'clientAddress',
+    client_email: 'clientEmail',
+    client_phone: 'clientPhone',
+    subtotal: 'subtotal',
+    discount_amount: 'discountAmount',
+    net_amount: 'netAmountBeforeTax',
+    tax_amount: 'taxAmount',
+    total: 'totalAmount',
+    notes: 'notes',
+    bank_name: 'bankName',
+    bank_iban: 'bankIban',
+    company_tax_id: 'companyTaxId',
+};
+
+const columnLabelKeys: Record<string, TranslationKey> = {
+    row_number: 'nr',
+    sku: 'skuCode',
+    description: 'description',
+    quantity: 'quantity',
+    unit: 'unit',
+    unit_price: 'unitPriceExclVat',
+    discount: 'discountPercent',
+    tax_rate: 'vatPercent',
+    line_total: 'lineTotal',
+    gross_price: 'grossPriceLabel',
+};
+
+const normalizedLabel = (value: string) => value.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ');
+
+function localizedFieldLabel(field: FieldConfig, language: string): string {
+    const key = fieldLabelKeys[field.key];
+    if (!key) return field.label;
+    const current = normalizedLabel(field.label || '');
+    const isDefault = !current || current === normalizedLabel(t(key, 'en')) || current === normalizedLabel(t(key, 'sq'));
+    return isDefault ? t(key, language) : field.label;
+}
+
+function localizedColumnLabel(column: ColumnConfig, language: string): string {
+    const key = columnLabelKeys[column.key];
+    return key ? t(key, language) : column.label;
+}
+
 const defaultTemplate: InvoiceTemplateSettings = {
-    name: 'Default Template',
+    name: t('defaultTemplate', 'en'),
     fields: defaultFields,
     columns: defaultColumns,
     showLogo: true,
@@ -113,13 +165,16 @@ const defaultTemplate: InvoiceTemplateSettings = {
     defaultDueDays: 30,
     defaultTaxRate: 18,
     primaryColor: '#004FFE',
-    footerText: 'Thank you for your business!',
+    footerText: '',
 };
 
 export function InvoiceTemplateSettingsScreen({ navigation }: any) {
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const { user } = useAuth();
-    const [template, setTemplate] = useState<InvoiceTemplateSettings>(defaultTemplate);
+    const [template, setTemplate] = useState<InvoiceTemplateSettings>(() => ({
+        ...defaultTemplate,
+        footerText: t('thankYouForBusiness', language),
+    }));
     const [loading, setLoading] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
@@ -197,10 +252,10 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 await supabase.from('invoice_templates').insert(templateData);
             }
 
-            Alert.alert('Success', 'Template settings saved!');
+            Alert.alert(t('success', language), t('templateSettingsSaved', language));
             setHasChanges(false);
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'saveError'));
         } finally {
             setLoading(false);
         }
@@ -226,9 +281,9 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                     <GripVertical color={mutedColor} size={16} />
                     <View style={{ marginLeft: 12, flex: 1 }}>
                         <Input
-                            value={field.label}
+                            value={localizedFieldLabel(field, language)}
                             onChangeText={(text) => updateField(field.id, { label: text })}
-                            placeholder="Field Label"
+                            placeholder={t('labels', language)}
                             containerStyle={{ marginBottom: 0 }}
                         />
                     </View>
@@ -243,7 +298,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
             {field.enabled && (
                 <View style={styles.fieldOptions}>
                     <View style={styles.optionRow}>
-                        <Text style={[styles.optionLabel, { color: mutedColor }]}>Required</Text>
+                    <Text style={[styles.optionLabel, { color: mutedColor }]}>{t('requiredField', language)}</Text>
                         <Switch
                             value={field.required}
                             onValueChange={(val) => updateField(field.id, { required: val })}
@@ -253,10 +308,10 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                     </View>
                     {field.type === 'text' && (
                         <Input
-                            label="Placeholder"
+                            label={t('placeholderLabel', language)}
                             value={field.placeholder || ''}
                             onChangeText={(text) => updateField(field.id, { placeholder: text })}
-                            placeholder="Enter placeholder text"
+                            placeholder={t('enterPlaceholderText', language)}
                         />
                     )}
                 </View>
@@ -282,40 +337,40 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>Invoice Template</Text>
+                <Text style={[styles.title, { color: textColor }]}>{t('invoiceTemplate', language)}</Text>
                 <TouchableOpacity onPress={handleSave} disabled={loading}>
                     <Save color={hasChanges ? primaryColor : mutedColor} size={24} />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {/* Template Name */}
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <FileText color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Template Info</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('templateInfo', language)}</Text>
                     </View>
                     <Input
-                        label="Template Name"
+                        label={t('templateName', language)}
                         value={template.name}
                         onChangeText={(text) => {
                             setTemplate(prev => ({ ...prev, name: text }));
                             setHasChanges(true);
                         }}
-                        placeholder="My Invoice Template"
+                        placeholder={t('templateName', language)}
                     />
                     <Input
-                        label="Footer Text"
+                        label={t('footerText', language)}
                         value={template.footerText}
                         onChangeText={(text) => {
                             setTemplate(prev => ({ ...prev, footerText: text }));
                             setHasChanges(true);
                         }}
-                        placeholder="Thank you for your business!"
+                        placeholder={t('thankYouForBusiness', language)}
                         multiline
                     />
                     <Button
-                        title="Change Design Style"
+                        title={t('changeDesignStyle', language)}
                         variant="outline"
                         icon={Layout}
                         onPress={() => navigation.navigate('TemplateEditor')}
@@ -327,32 +382,32 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <Type color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Display Options</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('displayOptions', language)}</Text>
                     </View>
-                    <SettingRow label="Show Company Logo" value={template.showLogo} onToggle={(v) => toggleSection('showLogo', v)} />
-                    <SettingRow label="Show Seller Signature" value={template.showSignature} onToggle={(v) => toggleSection('showSignature', v)} />
-                    <SettingRow label="Show Buyer Signature" value={template.showBuyerSignature} onToggle={(v) => toggleSection('showBuyerSignature', v)} />
-                    <SettingRow label="Show Company Stamp" value={template.showStamp} onToggle={(v) => toggleSection('showStamp', v)} />
-                    <SettingRow label="Show QR Code" value={template.showQrCode} onToggle={(v) => toggleSection('showQrCode', v)} />
-                    <SettingRow label="Show Notes Section" value={template.showNotes} onToggle={(v) => toggleSection('showNotes', v)} />
-                    <SettingRow label="Show Discount Field" value={template.showDiscount} onToggle={(v) => toggleSection('showDiscount', v)} />
-                    <SettingRow label="Show Tax Field" value={template.showTax} onToggle={(v) => toggleSection('showTax', v)} />
-                    <SettingRow label="Show Bank Details" value={template.showBankDetails} onToggle={(v) => toggleSection('showBankDetails', v)} />
+                    <SettingRow label={t('showCompanyLogo', language)} value={template.showLogo} onToggle={(v) => toggleSection('showLogo', v)} />
+                    <SettingRow label={t('showSellerSignature', language)} value={template.showSignature} onToggle={(v) => toggleSection('showSignature', v)} />
+                    <SettingRow label={t('showBuyerSignature', language)} value={template.showBuyerSignature} onToggle={(v) => toggleSection('showBuyerSignature', v)} />
+                    <SettingRow label={t('showCompanyStamp', language)} value={template.showStamp} onToggle={(v) => toggleSection('showStamp', v)} />
+                    <SettingRow label={t('showQrCode', language)} value={template.showQrCode} onToggle={(v) => toggleSection('showQrCode', v)} />
+                    <SettingRow label={t('showNotesSection', language)} value={template.showNotes} onToggle={(v) => toggleSection('showNotes', v)} />
+                    <SettingRow label={t('showDiscountField', language)} value={template.showDiscount} onToggle={(v) => toggleSection('showDiscount', v)} />
+                    <SettingRow label={t('showTaxField', language)} value={template.showTax} onToggle={(v) => toggleSection('showTax', v)} />
+                    <SettingRow label={t('showBankDetails', language)} value={template.showBankDetails} onToggle={(v) => toggleSection('showBankDetails', v)} />
                 </Card>
 
                 {/* Items Table Columns */}
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <Table color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Items Table Columns</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('itemsTableColumns', language)}</Text>
                     </View>
                     <Text style={[styles.helperText, { color: mutedColor }]}>
-                        Toggle which columns appear in the invoice items table.
+                        {t('itemsTableColumnsDescription', language)}
                     </Text>
                     {template.columns.map((col) => (
                         <View key={col.id} style={[styles.columnRow, { backgroundColor: inputBg }]}>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.columnLabel, { color: textColor }]}>{col.label}</Text>
+                                <Text style={[styles.columnLabel, { color: textColor }]}>{localizedColumnLabel(col, language)}</Text>
                                 <Text style={[styles.columnKey, { color: mutedColor }]}>{col.key}</Text>
                             </View>
                             <Switch
@@ -375,12 +430,12 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <Hash color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Default Values</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('defaultValues', language)}</Text>
                     </View>
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                             <Input
-                                label="Due Days"
+                                label={t('dueDays', language)}
                                 value={String(template.defaultDueDays)}
                                 onChangeText={(text) => {
                                     setTemplate(prev => ({ ...prev, defaultDueDays: Number(text) || 30 }));
@@ -392,7 +447,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Input
-                                label="Tax Rate %"
+                                label={t('taxRatePercent', language)}
                                 value={String(template.defaultTaxRate)}
                                 onChangeText={(text) => {
                                     setTemplate(prev => ({ ...prev, defaultTaxRate: Number(text) || 0 }));
@@ -409,17 +464,17 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.sectionHeader}>
                         <Package color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Invoice Fields</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('invoiceFields', language)}</Text>
                     </View>
                     <Text style={[styles.helperText, { color: mutedColor }]}>
-                        Customize field labels and toggle which fields appear on your invoices.
+                        {t('invoiceFieldsDescription', language)}
                     </Text>
                     {template.fields.map(renderFieldEditor)}
                 </Card>
 
                 {/* Save Button */}
                 <Button
-                    title="Save Template"
+                    title={t('saveTemplate', language)}
                     icon={Save}
                     onPress={handleSave}
                     loading={loading}
@@ -452,7 +507,3 @@ const styles = StyleSheet.create({
     columnLabel: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
     columnKey: { fontSize: 12 },
 });
-
-
-
-

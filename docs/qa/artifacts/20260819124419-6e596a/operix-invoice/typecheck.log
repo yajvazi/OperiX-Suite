@@ -1,0 +1,7 @@
+command: "npm" "run" "typecheck" "--workspace=operix-invoice"
+cwd: .
+exitCode: 0
+durationMs: 13830
+
+> operix-invoice@1.0.0 typecheck
+> tsc --noEmit -p tsconfig.json

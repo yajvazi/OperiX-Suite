@@ -14,7 +14,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { ArrowLeft, Camera, Image as ImageIcon, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useTheme } from '@invoice-monorepo/hooks';
-import { t } from '@invoice-monorepo/i18n';
+import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { Button, Card } from '@invoice-monorepo/ui';
 
 export function ScanBillScreen({ navigation }: any) {
@@ -44,7 +44,7 @@ export function ScanBillScreen({ navigation }: any) {
     const takePhoto = async () => {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (permissionResult.granted === false) {
-            Alert.alert(t('error', language), 'Permission to access camera is required!');
+            Alert.alert(t('error', language), t('cameraPermissionRequired', language));
             return;
         }
 
@@ -82,7 +82,7 @@ export function ScanBillScreen({ navigation }: any) {
                 }
                 setScanResult(data);
             } else {
-                throw new Error('No data returned from AI');
+                throw new Error(t('noScanDataReturned', language));
             }
 
         } catch (error: any) {
@@ -93,21 +93,21 @@ export function ScanBillScreen({ navigation }: any) {
             });
 
             let errorMessage = t('scanError', language);
-            if (error.status === 500) errorMessage = "Server Error (500). Please check logs.";
-            if (error.status === 413) errorMessage = "Image too large (413). Try a smaller photo.";
-            if (error.status === 401) errorMessage = "Unauthorized (401). Check API keys.";
+            if (error.status === 500) errorMessage = t('scanServerError', language);
+            if (error.status === 413) errorMessage = t('scanImageTooLarge', language);
+            if (error.status === 401) errorMessage = t('scanUnauthorized', language);
 
             // Try to extract more detail from Supabase error
             if (error.context && typeof error.context.json === 'function') {
                 try {
                     const errorDetails = await error.context.json();
-                    if (errorDetails.error) errorMessage = errorDetails.error;
+                    if (errorDetails.error) errorMessage = getLocalizedErrorMessage(errorDetails.error, language, 'scanError');
                 } catch (e) { }
             } else if (error.message) {
-                errorMessage = error.message;
+                errorMessage = getLocalizedErrorMessage(error, language, 'scanError');
             }
 
-            Alert.alert(t('error', language), `${errorMessage} (Status: ${error.status || 'N/A'})`);
+            Alert.alert(t('error', language), `${errorMessage} (${t('status', language)}: ${error.status || t('notAvailable', language)})`);
         } finally {
             setScanning(false);
         }
@@ -115,19 +115,19 @@ export function ScanBillScreen({ navigation }: any) {
 
     const confirmAndNavigate = () => {
         Alert.alert(
-            t('selectType', language) || 'Select Type',
-            t('selectTypeMsg', language) || 'Is this a Supplier Bill or a simple Receipt?',
+            t('selectType', language),
+            t('selectTypeMsg', language),
             [
                 {
-                    text: t('cancel', language) || 'Cancel',
+                    text: t('cancel', language),
                     style: 'cancel'
                 },
                 {
-                    text: t('expense', language) || 'Expense/Receipt',
+                    text: t('expense', language),
                     onPress: () => navigation.navigate('ExpenseForm', { scannedData: scanResult })
                 },
                 {
-                    text: t('supplierBill', language) || 'Supplier Bill',
+                    text: t('supplierBill', language),
                     onPress: () => navigation.navigate('SupplierBillForm', { scannedData: scanResult })
                 }
             ]
@@ -153,10 +153,10 @@ export function ScanBillScreen({ navigation }: any) {
                             <Camera color={primaryColor} size={48} />
                         </View>
                         <Text style={[styles.emptyText, { color: textColor }]}>
-                            Skanoni faturat tuaja fizike për t'i regjistruar automatikisht
+                            {t('scanPhysicalBillsDescription', language)}
                         </Text>
                         <Text style={[styles.emptySubtext, { color: mutedColor }]}>
-                            AI do të lexojë furnitorin, shumën dhe datën për ju.
+                            {t('scanBillAiDescription', language)}
                         </Text>
 
                         <View style={styles.buttonRow}>
@@ -184,7 +184,7 @@ export function ScanBillScreen({ navigation }: any) {
                                 style={styles.retakeBtn}
                                 onPress={() => setImage(null)}
                             >
-                                <Text style={styles.retakeText}>Ndrysho foton</Text>
+                                <Text style={styles.retakeText}>{t('changePhoto', language)}</Text>
                             </TouchableOpacity>
                         </Card>
 
@@ -207,15 +207,15 @@ export function ScanBillScreen({ navigation }: any) {
 
                                 <View style={styles.resultDetails}>
                                     <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>Furnitori</Text>
+                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>{t('vendor', language)}</Text>
                                         <Text style={[styles.detailValue, { color: textColor }]}>{scanResult.vendor_name}</Text>
                                     </View>
                                     <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>Shuma</Text>
-                                        <Text style={[styles.detailValue, { color: textColor, fontWeight: '600' }]}>€{scanResult.total_amount}</Text>
+                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>{t('amount', language)}</Text>
+                                        <Text style={[styles.detailValue, { color: textColor, fontWeight: '600' }]}>{formatCurrency(Number(scanResult.total_amount || 0), 'EUR', language)}</Text>
                                     </View>
                                     <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>Nr. Faturës</Text>
+                                        <Text style={[styles.detailLabel, { color: mutedColor }]}>{t('invoiceNumber', language)}</Text>
                                         <Text style={[styles.detailValue, { color: textColor }]}>{scanResult.bill_number}</Text>
                                     </View>
                                 </View>
@@ -228,7 +228,7 @@ export function ScanBillScreen({ navigation }: any) {
                             </Card>
                         ) : (
                             <Button
-                                title="Fillo Skanimin"
+                                title={t('startScan', language)}
                                 onPress={handleScan}
                                 icon={Sparkles}
                                 style={styles.scanBtn}
@@ -273,8 +273,6 @@ const styles = StyleSheet.create({
     detailValue: { fontSize: 16 },
     scanBtn: { marginTop: 20 },
 });
-
-
 
 
 

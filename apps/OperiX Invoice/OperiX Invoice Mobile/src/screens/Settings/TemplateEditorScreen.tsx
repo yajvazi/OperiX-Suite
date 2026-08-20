@@ -8,24 +8,25 @@ import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { supabase } from '@invoice-monorepo/api';
 import { TemplateConfig, Profile, TemplateType } from '@invoice-monorepo/types';
 import { templateInfo } from '../../services/pdf/TemplateFactory';
+import { t, type TranslationKey } from '@invoice-monorepo/i18n';
 
 
-const defaultLabels = {
-    invoice: 'INVOICE',
-    billTo: 'Bill To',
-    date: 'Date',
-    due: 'Due Date',
-    item: 'Description',
-    quantity: 'Qty',
-    price: 'Unit Price',
-    total: 'Amount',
-    subtotal: 'Subtotal',
-    tax: 'Tax',
-    discount: 'Discount',
-    totalDue: 'Total Due',
-    notes: 'Notes',
-    terms: 'Terms'
-};
+const defaultLabelsFor = (locale: string) => ({
+    invoice: t('invoice', locale).toUpperCase(),
+    billTo: t('buyer', locale),
+    date: t('invoiceDate', locale),
+    due: t('dueDate', locale),
+    item: t('description', locale),
+    quantity: t('quantity', locale),
+    price: t('unitPrice', locale),
+    total: t('amount', locale),
+    subtotal: t('subtotal', locale),
+    tax: t('tax', locale),
+    discount: t('discount', locale),
+    totalDue: t('amountDue', locale),
+    notes: t('notes', locale),
+    terms: t('terms', locale),
+});
 
 const defaultConfig: TemplateConfig = {
     showLogo: true,
@@ -49,15 +50,15 @@ const defaultConfig: TemplateConfig = {
         lineTotal: true,
         grossPrice: false,
     },
-    labels: defaultLabels,
+    labels: defaultLabelsFor('en'),
     style: 'corporate',
     pageSize: 'A4'
 };
 
 export function TemplateEditorScreen({ navigation }: any) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
-    const [config, setConfig] = useState<TemplateConfig>(defaultConfig);
+    const { isDark, language } = useTheme();
+    const [config, setConfig] = useState<TemplateConfig>(() => ({ ...defaultConfig, labels: defaultLabelsFor(language) }));
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'layout' | 'columns' | 'labels' | 'style'>('layout');
 
@@ -76,7 +77,8 @@ export function TemplateEditorScreen({ navigation }: any) {
         if (!user) return;
         const { data } = await supabase.from('profiles').select('template_config').eq('id', user.id).single();
         if (data?.template_config) {
-            setConfig(data.template_config as TemplateConfig);
+            const storedConfig = data.template_config as TemplateConfig;
+            setConfig({ ...storedConfig, labels: storedConfig.labels || defaultLabelsFor(language) });
         }
     };
 
@@ -84,9 +86,9 @@ export function TemplateEditorScreen({ navigation }: any) {
         setLoading(true);
         try {
             await supabase.from('profiles').update({ template_config: config }).eq('id', user?.id);
-            Alert.alert('Success', 'Settings saved successfully');
+            Alert.alert(t('success', language), t('settingsSaved', language));
         } catch (error) {
-            Alert.alert('Error', 'Failed to save settings');
+            Alert.alert(t('error', language), t('saveError', language));
         } finally {
             setLoading(false);
         }
@@ -94,11 +96,11 @@ export function TemplateEditorScreen({ navigation }: any) {
 
     const resetToDefault = () => {
         Alert.alert(
-            'Reset Settings',
-            'Are you sure you want to reset all template customizations to default?',
+            t('resetSettings', language),
+            t('resetSettingsConfirmation', language),
             [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Reset', style: 'destructive', onPress: () => setConfig(defaultConfig) }
+                { text: t('cancel', language), style: 'cancel' },
+                { text: t('resetSettings', language), style: 'destructive', onPress: () => setConfig({ ...defaultConfig, labels: defaultLabelsFor(language) }) }
             ]
         );
     };
@@ -123,7 +125,7 @@ export function TemplateEditorScreen({ navigation }: any) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>PDF Editor</Text>
+                <Text style={[styles.title, { color: textColor }]}>{t('pdfEditor', language)}</Text>
                 <TouchableOpacity onPress={handleSave} disabled={loading}>
                     <Save color={loading ? mutedColor : '#004FFE'} size={24} />
                 </TouchableOpacity>
@@ -131,10 +133,10 @@ export function TemplateEditorScreen({ navigation }: any) {
 
             <View style={styles.tabBar}>
                 {[
-                    { id: 'layout', label: 'Layout', icon: Layout },
-                    { id: 'style', label: 'Style', icon: Palette },
-                    { id: 'columns', label: 'Columns', icon: Columns },
-                    { id: 'labels', label: 'Labels', icon: Type },
+                    { id: 'layout', label: t('layout', language), icon: Layout },
+                    { id: 'style', label: t('style', language), icon: Palette },
+                    { id: 'columns', label: t('columns', language), icon: Columns },
+                    { id: 'labels', label: t('labels', language), icon: Type },
                 ].map(tab => (
 
                     <TouchableOpacity
@@ -148,26 +150,26 @@ export function TemplateEditorScreen({ navigation }: any) {
                 ))}
             </View>
 
-            <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {activeTab === 'layout' && (
                     <Card style={styles.card}>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Visibility Toggle</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('visibilityToggle', language)}</Text>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Show Logo</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('showLogo', language)}</Text>
                             <Switch value={config.showLogo} onValueChange={(v) => setConfig({ ...config, showLogo: v })} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Show Signature</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('showSignature', language)}</Text>
                             <Switch value={config.showSignature} onValueChange={(v) => setConfig({ ...config, showSignature: v })} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Show Official Stamp</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('showOfficialStamp', language)}</Text>
                             <Switch value={config.showStamp} onValueChange={(v) => setConfig({ ...config, showStamp: v })} />
                         </View>
 
                         <View style={styles.divider} />
 
-                        <Text style={[styles.sectionTitle, { color: textColor, marginTop: 8 }]}>Page Size</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginTop: 8 }]}>{t('pageSize', language)}</Text>
                         <View style={styles.pageSizeContainer}>
                             {['A4', 'A5', 'Receipt'].map((size) => (
                                 <TouchableOpacity
@@ -190,10 +192,10 @@ export function TemplateEditorScreen({ navigation }: any) {
 
                 {activeTab === 'style' && (
                     <Card style={styles.card}>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Invoice Style</Text>
-                        <Text style={[styles.hint, { color: mutedColor }]}>Select the overall look and feel of your invoice.</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('invoiceStyle', language)}</Text>
+                        <Text style={[styles.hint, { color: mutedColor }]}>{t('invoiceStyleDescription', language)}</Text>
 
-                        {(Object.entries(templateInfo) as [TemplateType, { name: string; description: string }][]).map(([key, info]) => (
+                        {(Object.entries(templateInfo) as [TemplateType, { nameKey: TranslationKey; descriptionKey: TranslationKey }][]).map(([key, info]) => (
                             <TouchableOpacity
                                 key={key}
                                 style={[
@@ -205,9 +207,9 @@ export function TemplateEditorScreen({ navigation }: any) {
                             >
                                 <View style={styles.styleContent}>
                                     <Text style={[styles.styleName, { color: config.style === key ? '#004FFE' : textColor }]}>
-                                        {info.name}
+                                        {t(info.nameKey, language)}
                                     </Text>
-                                    <Text style={styles.styleDesc}>{info.description}</Text>
+                                    <Text style={styles.styleDesc}>{t(info.descriptionKey, language)}</Text>
                                 </View>
                                 {config.style === key && (
                                     <View style={{ backgroundColor: '#004FFE', padding: 4, borderRadius: 10 }}>
@@ -221,47 +223,47 @@ export function TemplateEditorScreen({ navigation }: any) {
 
                 {activeTab === 'columns' && (
                     <Card style={styles.card}>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Table Columns</Text>
-                        <Text style={[styles.hint, { color: mutedColor }]}>Choose which columns appear in the items table.</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('tableColumns', language)}</Text>
+                        <Text style={[styles.hint, { color: mutedColor }]}>{t('tableColumnsDescription', language)}</Text>
 
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Row Number</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('rowNumber', language)}</Text>
                             <Switch value={config.visibleColumns.rowNumber} onValueChange={() => toggleColumn('rowNumber')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>SKU / Code</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('skuCode', language)}</Text>
                             <Switch value={config.visibleColumns.sku} onValueChange={() => toggleColumn('sku')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Description</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('description', language)}</Text>
                             <Switch value={config.visibleColumns.description} onValueChange={() => toggleColumn('description')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Quantity</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('quantity', language)}</Text>
                             <Switch value={config.visibleColumns.quantity} onValueChange={() => toggleColumn('quantity')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Unit (pcs, hrs, etc)</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('unitPcsHrs', language)}</Text>
                             <Switch value={config.visibleColumns.unit} onValueChange={() => toggleColumn('unit')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Unit Price</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('unitPrice', language)}</Text>
                             <Switch value={config.visibleColumns.unitPrice} onValueChange={() => toggleColumn('unitPrice')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Discount %</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('discountPercent', language)}</Text>
                             <Switch value={config.visibleColumns.discount} onValueChange={() => toggleColumn('discount')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>VAT / Tax Rate</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('vatTaxRate', language)}</Text>
                             <Switch value={config.visibleColumns.taxRate} onValueChange={() => toggleColumn('taxRate')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Line Total</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('lineTotal', language)}</Text>
                             <Switch value={config.visibleColumns.lineTotal} onValueChange={() => toggleColumn('lineTotal')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Price incl. VAT</Text>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>{t('priceIncludingVat', language)}</Text>
                             <Switch value={config.visibleColumns.grossPrice} onValueChange={() => toggleColumn('grossPrice')} />
                         </View>
                     </Card>
@@ -269,22 +271,22 @@ export function TemplateEditorScreen({ navigation }: any) {
 
                 {activeTab === 'labels' && (
                     <Card style={styles.card}>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Custom Labels</Text>
-                        <Text style={[styles.hint, { color: mutedColor }]}>Rename fields as they appear on the PDF.</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('customLabels', language)}</Text>
+                        <Text style={[styles.hint, { color: mutedColor }]}>{t('customLabelsDescription', language)}</Text>
 
                         <View style={styles.grid}>
-                            <Input label="Invoice Title" value={config.labels.invoice} onChangeText={(t) => updateLabel('invoice', t)} />
-                            <Input label="Recipient Label" value={config.labels.billTo} onChangeText={(t) => updateLabel('billTo', t)} />
-                            <Input label="Quantity Label" value={config.labels.quantity} onChangeText={(t) => updateLabel('quantity', t)} />
-                            <Input label="Price Label" value={config.labels.price} onChangeText={(t) => updateLabel('price', t)} />
-                            <Input label="Total Label" value={config.labels.total} onChangeText={(t) => updateLabel('total', t)} />
-                            <Input label="Note Section Header" value={config.labels.notes} onChangeText={(t) => updateLabel('notes', t)} />
+                            <Input label={t('invoice', language)} value={config.labels.invoice} onChangeText={(value) => updateLabel('invoice', value)} />
+                            <Input label={t('buyer', language)} value={config.labels.billTo} onChangeText={(value) => updateLabel('billTo', value)} />
+                            <Input label={t('quantity', language)} value={config.labels.quantity} onChangeText={(value) => updateLabel('quantity', value)} />
+                            <Input label={t('price', language)} value={config.labels.price} onChangeText={(value) => updateLabel('price', value)} />
+                            <Input label={t('total', language)} value={config.labels.total} onChangeText={(value) => updateLabel('total', value)} />
+                            <Input label={t('notes', language)} value={config.labels.notes} onChangeText={(value) => updateLabel('notes', value)} />
                         </View>
                     </Card>
                 )}
 
                 <Button
-                    title="Reset to Defaults"
+                    title={t('resetToDefaults', language)}
                     variant="outline"
                     icon={RotateCcw}
                     onPress={resetToDefault}
@@ -327,9 +329,4 @@ const styles = StyleSheet.create({
     styleName: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
     styleDesc: { fontSize: 12, color: '#667085' },
 });
-
-
-
-
-
 

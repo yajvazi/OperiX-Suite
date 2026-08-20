@@ -5,9 +5,10 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
 import { Button } from '@invoice-monorepo/ui';
 import { Clock, RefreshCw } from 'lucide-react-native';
+import { t } from '@invoice-monorepo/i18n';
 
 export function ApprovalPendingScreen() {
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const { user, signOut } = useAuth();
     const [checking, setChecking] = useState(false);
 
@@ -49,14 +50,11 @@ export function ApprovalPendingScreen() {
             <View style={styles.iconContainer}>
                 <Clock size={64} color={primaryColor} />
             </View>
-            <Text style={[styles.title, { color: textColor }]}>Approval Pending</Text>
-            <Text style={[styles.text, { color: mutedColor }]}>
-                Your request to join the company is pending approval from an administrator.
-                You cannot access the application until your request is approved.
-            </Text>
+            <Text style={[styles.title, { color: textColor }]}>{t('approvalPending', language)}</Text>
+            <Text style={[styles.text, { color: mutedColor }]}>{t('approvalPendingDescription', language)}</Text>
 
             <Button
-                title={checking ? "Checking..." : "Check Status"}
+                title={checking ? t('checking', language) : t('checkStatus', language)}
                 onPress={checkStatus}
                 icon={RefreshCw}
                 style={{ marginTop: 24, width: '80%' }}
@@ -64,7 +62,7 @@ export function ApprovalPendingScreen() {
             />
 
             <TouchableOpacity onPress={() => signOut()} style={{ marginTop: 24 }}>
-                <Text style={{ color: mutedColor }}>Sign Out</Text>
+                <Text style={{ color: mutedColor }}>{t('signOut', language)}</Text>
             </TouchableOpacity>
         </View>
     );
@@ -76,7 +74,6 @@ const styles = StyleSheet.create({
     title: { fontSize: 24, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
     text: { fontSize: 16, textAlign: 'center', lineHeight: 24 }
 });
-
 
 
 
