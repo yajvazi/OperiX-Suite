@@ -56,7 +56,7 @@ jobs:
           docker image inspect "operix-ci:${APP_ID}-${GITHUB_SHA}" > "$RUNNER_TEMP/operix-web-${APP_ID}/image.json"
       - name: Upload web build evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-web-${{ matrix.app.id }}-${{ github.run_id }}
           path: |

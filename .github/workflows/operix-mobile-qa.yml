@@ -28,7 +28,7 @@ jobs:
         run: node scripts/operix-mobile-qa.mjs "${{ inputs.app || 'all' }}" --no-install --no-e2e --no-visual --no-build --ci
       - name: Upload sanitized QA reports and logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-mobile-qa-${{ github.run_id }}
           path: |
@@ -68,7 +68,7 @@ jobs:
         run: node scripts/operix-mobile-qa.mjs "${{ inputs.app || 'all' }}"
       - name: Upload simulator QA evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-mobile-simulator-qa-${{ github.run_id }}
           path: docs/qa/**

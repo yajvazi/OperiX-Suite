@@ -76,7 +76,7 @@ jobs:
           echo "READY_FOR_MANUAL_QA" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload QA build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-mobile-qa-build-${{ inputs.app }}-${{ github.run_id }}
           path: ${{ runner.temp }}/operix-mobile-qa-build.log

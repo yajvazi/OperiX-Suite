@@ -60,7 +60,7 @@ jobs:
           jq -r '.changedFiles[]?' "$RUNNER_TEMP/operix-affected.json" | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
           echo "Affected applications: $(jq -r '.appIds | join(", ")' "$RUNNER_TEMP/operix-affected.json")" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload affected-app manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-affected-apps
           path: ${{ runner.temp }}/operix-affected.json
