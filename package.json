@@ -43,7 +43,7 @@
     "efs:certification-report": "node scripts/efs-certification-report.mjs"
   },
   "devDependencies": {
-    "pngjs": "^3.4.0",
+    "pngjs": "^7.0.0",
     "turbo": "^2.3.0",
     "typescript": "~5.9.2"
   }
