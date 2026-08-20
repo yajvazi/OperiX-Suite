@@ -85,7 +85,7 @@ jobs:
       - name: Validate migration names, duplicates, and destructive SQL
         run: node scripts/cicd/validate-migrations.mjs
       - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
           version: 2.115.0
       - name: Apply all migrations to an isolated local database
