@@ -153,7 +153,7 @@ jobs:
         run: npm run test:visual
       - name: Upload Maestro artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-invoice-mobile-visual-${{ matrix.device }}-${{ matrix.language }}
           path: |

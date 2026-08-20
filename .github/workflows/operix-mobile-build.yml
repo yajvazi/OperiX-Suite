@@ -57,7 +57,7 @@ jobs:
         run: node scripts/cicd/run-app-command.mjs '${{ matrix.app.id }}' build --required
       - name: Upload mobile build evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: operix-mobile-${{ matrix.app.id }}-${{ github.run_id }}
           path: |
