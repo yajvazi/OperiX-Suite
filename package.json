@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "pngjs": "^3.4.0",
-    "turbo": "^2.3.0",
+    "turbo": "^2.11.2",
     "typescript": "~5.9.2"
   }
 }
