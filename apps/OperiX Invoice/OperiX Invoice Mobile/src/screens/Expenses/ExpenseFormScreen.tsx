@@ -122,10 +122,10 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         Other: t('other', language),
     } as Record<string, string>)[category] || category;
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
 
     const [dynamicCategories, setDynamicCategories] = useState<string[]>([]);
 
@@ -594,8 +594,8 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                     />
 
                     {showVendorPicker ? (
-                        <View style={[styles.pickerList, styles.vendorPickerList, { backgroundColor: isDark ? '#14243A' : '#fff', borderColor }]}>
-                            <View style={[styles.vendorSearchRow, { backgroundColor: isDark ? '#0D1B2A' : '#F4F7FB' }]}>
+                        <View style={[styles.pickerList, styles.vendorPickerList, { backgroundColor: isDark ? '#151517' : '#fff', borderColor }]}>
+                            <View style={[styles.vendorSearchRow, { backgroundColor: isDark ? '#0A0A0B' : '#F4F7FB' }]}>
                                 <Search color={mutedColor} size={17} />
                                 <TextInput
                                     testID="expense-vendor-search-input"
@@ -665,7 +665,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                             <TouchableOpacity
                                 key={articleKey}
                                 testID={`expense-article-option-${articleKey}`}
-                                style={[styles.articleOption, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }, formData.article === t(articleKey, language) && styles.activeArticleOption]}
+                                style={[styles.articleOption, { backgroundColor: isDark ? '#262629' : '#F4F7FB' }, formData.article === t(articleKey, language) && styles.activeArticleOption]}
                                 onPress={() => setFormData({ ...formData, article: t(articleKey, language) })}
                             >
                                 <Text style={[styles.articleText, { color: mutedColor }, formData.article === t(articleKey, language) && styles.activeArticleText]}>{t(articleKey, language)}</Text>
@@ -714,7 +714,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                         keyboardType="decimal-pad"
                     />
 
-                    <View style={[styles.vatSummary, { backgroundColor: isDark ? '#102038' : '#F4F7FB', borderColor }]}>
+                    <View style={[styles.vatSummary, { backgroundColor: isDark ? '#101012' : '#F4F7FB', borderColor }]}>
                         <View style={styles.vatSummaryRow}>
                             <Text style={[styles.vatSummaryLabel, { color: mutedColor }]}>{t('priceWithoutVat', language)}</Text>
                             <Text style={[styles.vatSummaryValue, { color: textColor }]}>{formatCurrency(netAmount, 'EUR', language)}</Text>
@@ -742,7 +742,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                     testID={`expense-payment-${key}-button`}
                                     accessibilityRole="button"
                                     accessibilityState={{ selected }}
-                                    style={[styles.typeOption, { backgroundColor: selected ? color : (isDark ? '#263A55' : '#F4F7FB') }]}
+                                    style={[styles.typeOption, { backgroundColor: selected ? color : (isDark ? '#262629' : '#F4F7FB') }]}
                                     onPress={() => {
                                         const primaryBank = bankAccounts.find((account) => account.is_primary) || bankAccounts[0];
                                         setFormData(prev => ({
@@ -769,7 +769,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                 testID="expense-bank-account-selector"
                                 accessibilityRole="button"
                                 accessibilityState={{ expanded: showBankPicker }}
-                                style={[styles.pickerButton, { backgroundColor: isDark ? '#102038' : '#F4F7FB', borderColor }]}
+                                style={[styles.pickerButton, { backgroundColor: isDark ? '#101012' : '#F4F7FB', borderColor }]}
                                 onPress={() => setShowBankPicker(current => !current)}
                             >
                                 <Text style={[styles.pickerButtonText, { color: formData.company_bank_account_id ? textColor : mutedColor }]} numberOfLines={1}>
@@ -781,7 +781,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                 <ChevronDown color={mutedColor} size={18} />
                             </TouchableOpacity>
                             {showBankPicker ? (
-                                <View style={[styles.pickerList, { backgroundColor: isDark ? '#14243A' : '#fff', borderColor }]}>
+                                <View style={[styles.pickerList, { backgroundColor: isDark ? '#151517' : '#fff', borderColor }]}>
                                     {bankAccounts.length ? bankAccounts.map((account) => (
                                         <TouchableOpacity
                                             key={account.id}
@@ -876,7 +876,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                     key={cat}
                                     style={[
                                         styles.categoryOption,
-                                        { backgroundColor: isDark ? '#263A55' : '#F4F7FB' },
+                                        { backgroundColor: isDark ? '#262629' : '#F4F7FB' },
                                         formData.category === cat && styles.activeCategoryExpense
                                     ]}
                                     onPress={() => setFormData({ ...formData, category: cat })}
@@ -895,7 +895,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                             <TouchableOpacity
                                 key={category.id}
                                 testID={`expense-category-${category.id}`}
-                                style={[styles.categoryOption, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }, formData.category_code === category.id && styles.activeCategoryExpense]}
+                                style={[styles.categoryOption, { backgroundColor: isDark ? '#262629' : '#F4F7FB' }, formData.category_code === category.id && styles.activeCategoryExpense]}
                                 onPress={() => setFormData({ ...formData, category_code: category.id, category: language === 'sq' ? category.sq : category.en })}
                             >
                                 <Text style={[styles.categoryText, { color: isDark ? '#98A2B3' : '#667085' }, formData.category_code === category.id && styles.activeCategoryText]}>{language === 'sq' ? category.sq : category.en}</Text>
@@ -917,7 +917,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.receiptUpload, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }]}
+                        style={[styles.receiptUpload, { backgroundColor: isDark ? '#262629' : '#F4F7FB' }]}
                         onPress={pickImage}
                     >
                         {formData.receipt_url ? (
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create({
     activeCategoryIncome: { backgroundColor: '#12B76A' },
     categoryText: { fontSize: 13, fontWeight: '500' },
     activeCategoryText: { color: '#fff' },
-    receiptUpload: { height: 120, borderRadius: 12, borderStyle: 'dashed', borderWidth: 2, borderColor: '#263A55', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    receiptUpload: { height: 120, borderRadius: 12, borderStyle: 'dashed', borderWidth: 2, borderColor: '#262629', alignItems: 'center', justifyContent: 'center', gap: 8 },
     uploadText: { fontSize: 13 },
     saveButton: { marginTop: 8 },
     deleteButton: { marginTop: 12 },

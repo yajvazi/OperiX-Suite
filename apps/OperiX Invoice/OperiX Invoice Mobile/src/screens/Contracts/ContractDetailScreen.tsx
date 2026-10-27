@@ -42,9 +42,9 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
     const [htmlContent, setHtmlContent] = useState('');
     const [canManageContracts, setCanManageContracts] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
 
     useEffect(() => {
@@ -147,7 +147,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
         <View style={styles.signatureSection}>
             <Text style={[styles.signatureLabel, { color: textColor }]}>{label}</Text>
             {signatureUrl ? (
-                <View style={[styles.signatureBox, { backgroundColor: isDark ? '#0D1B2A' : '#F4F7FB' }]}>
+                <View style={[styles.signatureBox, { backgroundColor: isDark ? '#0A0A0B' : '#F4F7FB' }]}>
                     {signatureUrl.startsWith('data:image/svg+xml') ? (
                         <SvgXml xml={decodeURIComponent(signatureUrl.split(',')[1])} width="100%" height="100%" />
                     ) : (
@@ -155,7 +155,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                     )}
                 </View>
             ) : (
-                <View style={[styles.signatureBox, styles.signatureMissing, { backgroundColor: isDark ? '#0D1B2A' : '#F4F7FB' }]}>
+                <View style={[styles.signatureBox, styles.signatureMissing, { backgroundColor: isDark ? '#0A0A0B' : '#F4F7FB' }]}>
                     <XCircle color="#ef4444" size={24} />
                     <Text style={{ color: '#ef4444', marginTop: 4 }}>{t('notSigned', language)}</Text>
                 </View>

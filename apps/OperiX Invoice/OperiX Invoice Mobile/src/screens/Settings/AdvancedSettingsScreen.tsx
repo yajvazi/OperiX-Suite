@@ -41,11 +41,11 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
     const can = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
 
     useEffect(() => {
@@ -282,7 +282,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                 onPress={() => setActiveSection(isActive ? null : section)}
             >
                 <View style={styles.sectionHeaderLeft}>
-                    <View style={[styles.sectionIcon, { backgroundColor: isDark ? '#102E65' : '#EDF4FF' }]}>
+                    <View style={[styles.sectionIcon, { backgroundColor: isDark ? '#12203F' : '#EDF4FF' }]}>
                         <Icon color={color} size={20} />
                     </View>
                     <View style={styles.sectionHeaderCopy}>
@@ -352,7 +352,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                                     key={size}
                                     style={[
                                         styles.langOption,
-                                        { backgroundColor: isDark ? '#263A55' : '#F4F7FB', flex: 1, alignItems: 'center' },
+                                        { backgroundColor: isDark ? '#262629' : '#F4F7FB', flex: 1, alignItems: 'center' },
                                         profile.template_config?.pageSize === size && { backgroundColor: primaryColor }
                                     ]}
                                     onPress={() => updateField('template_config', {
@@ -515,7 +515,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                         <View style={styles.transferEntityGrid}>
                             {(Object.keys(dataTransferDefinitions) as DataTransferEntity[]).map((entity) => {
                                 const selected = transferEntity === entity;
-                                return <TouchableOpacity key={entity} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => setTransferEntity(entity)} style={[styles.transferEntity, { backgroundColor: selected ? primaryColor : (isDark ? '#0D1B2A' : '#F7F9FC'), borderColor: selected ? primaryColor : borderColor }]}><Text style={{ color: selected ? '#fff' : textColor, fontSize: 12, fontWeight: '600' }}>{dataTransferDefinitions[entity].label}</Text></TouchableOpacity>;
+                                return <TouchableOpacity key={entity} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => setTransferEntity(entity)} style={[styles.transferEntity, { backgroundColor: selected ? primaryColor : (isDark ? '#0A0A0B' : '#F7F9FC'), borderColor: selected ? primaryColor : borderColor }]}><Text style={{ color: selected ? '#fff' : textColor, fontSize: 12, fontWeight: '600' }}>{dataTransferDefinitions[entity].label}</Text></TouchableOpacity>;
                             })}
                         </View>
                         <View style={{ height: 12 }} />

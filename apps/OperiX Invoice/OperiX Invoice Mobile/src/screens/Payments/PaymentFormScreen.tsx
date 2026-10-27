@@ -100,11 +100,11 @@ export function PaymentFormScreen({ navigation, route }: any) {
     const [showPaymentSignature, setShowPaymentSignature] = useState(true);
     const [showPaymentStamp, setShowPaymentStamp] = useState(true);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
 
     useEffect(() => {
         fetchClients();
@@ -748,8 +748,8 @@ export function PaymentFormScreen({ navigation, route }: any) {
                                     style={[
                                         styles.methodOption,
                                         {
-                                            backgroundColor: isActive ? method.color : (isDark ? '#1B304B' : '#F4F7FB'),
-                                            borderColor: isActive ? method.color : (isDark ? '#304965' : '#D7E0EC'),
+                                            backgroundColor: isActive ? method.color : (isDark ? '#1F1F23' : '#F4F7FB'),
+                                            borderColor: isActive ? method.color : (isDark ? '#333338' : '#D7E0EC'),
                                             opacity: cashDisabled ? 0.4 : 1,
                                         },
                                     ]}

@@ -104,6 +104,7 @@ export type RootStackParamList = {
     QRScanner: { mode?: string; returnTo?: string; currentData?: unknown } | undefined;
     Settings: NavigatorScreenParams<SettingsStackParamList> | undefined;
     ContractTemplates: undefined;
+    ContractTemplateEditor: { templateId?: string } | undefined;
     Profile: undefined;
     Accounting: undefined;
     AccountantReport: undefined;

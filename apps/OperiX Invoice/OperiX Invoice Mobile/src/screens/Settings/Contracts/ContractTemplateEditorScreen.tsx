@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, ChevronRight, GripVertical, Plus, Save, Trash2 } from 'lucide-react-native';
+import { Check, GripVertical, Plus, Save, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
@@ -11,6 +10,8 @@ import type { ContractBlock, ContractParty, ContractSigner, ContractTemplate, Co
 import { getLocalizedErrorMessage } from '@invoice-monorepo/i18n';
 import { extractVariables, renderBlocks, validateTemplate, VARIABLE_GROUPS } from '../../../services/contracts/contractBuilder';
 import { getWorkspaceScope } from '../../../services/workspace';
+import { brand, getPalette } from '../../../theme/brand';
+import { IconButton, MobileHeader, MobileScreen } from '../../../components/mobile/MobileUI';
 const STEPS = ['details', 'parties', 'fields', 'contract', 'signatures', 'settings', 'preview'] as const;
 const CATEGORIES = ['service_agreement', 'employment', 'sales_agreement', 'rental_agreement', 'nda', 'partnership', 'freelance', 'supplier', 'purchase', 'maintenance', 'custom'];
 const FIELD_TYPES = ['text', 'textarea', 'number', 'currency', 'percentage', 'date', 'date_range', 'email', 'phone', 'address', 'yes_no', 'checkbox', 'dropdown', 'single_choice', 'multiple_choice', 'person', 'company', 'customer', 'employee', 'supplier', 'product', 'service', 'quantity', 'file'] as const;
@@ -36,7 +37,8 @@ const legacyBlocks = (template: any): ContractBlock[] => Array.isArray(template.
 export function ContractTemplateEditorScreen({ navigation, route }: any) {
     const { user } = useAuth();
     const { isDark, language, primaryColor } = useTheme();
-    const palette = isDark ? { bg: '#0D1B2A', card: '#14243A', text: '#fff', muted: '#98A2B3', border: '#263A55' } : { bg: '#F7F9FC', card: '#fff', text: '#111827', muted: '#667085', border: '#E4E9F0' };
+    const appPalette = getPalette(isDark);
+    const palette = { bg: appPalette.background, card: appPalette.surface, text: appPalette.text, muted: appPalette.muted, border: appPalette.border };
     const templateId = route.params?.templateId;
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(Boolean(templateId));
@@ -146,56 +148,59 @@ export function ContractTemplateEditorScreen({ navigation, route }: any) {
     };
     if (loading && templateId) return <View style={[styles.center, { backgroundColor: palette.bg }]}><Text style={{ color: palette.muted }}>{t('loading', language)}</Text></View>;
     return (
-        <SafeAreaView edges={['top', 'bottom']} style={[styles.safeArea, { backgroundColor: palette.bg }]}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { backgroundColor: palette.bg }]}>
-                <View style={[styles.header, { borderBottomColor: palette.border }]}>
-                    <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
-                        <ArrowLeft color={palette.text} size={22}/>
-                    </TouchableOpacity>
-                    <Text numberOfLines={1} style={[styles.headerTitle, { color: palette.text }]}>{t('contractBuilder', language)}</Text>
-                    <TouchableOpacity style={styles.headerButton} onPress={() => void save()} disabled={loading}>
-                        <Save color={primaryColor} size={22}/>
-                    </TouchableOpacity>
-                </View>
-                <View style={[styles.progressCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        <MobileScreen edges={['top', 'bottom']}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
+                <MobileHeader
+                    title={t('contractBuilder', language)}
+                    subtitle={stepLabels[step]}
+                    onBack={() => navigation.goBack()}
+                    right={<IconButton label={t('saveTemplate', language)} variant="primary" onPress={() => void save()} disabled={loading}><Save color="#fff" size={19} /></IconButton>}
+                />
+                <View style={styles.progressWrap}>
                     <View style={styles.progressRow}>
-                        <Text style={[styles.progressLabel, { color: palette.text }]}>{stepLabels[step]}</Text>
-                        <Text style={[styles.progressValue, { color: palette.muted }]}>{formatText('stepOf', { current: String(step + 1), total: String(STEPS.length) })}</Text>
+                        <Text style={[styles.progressLabel, { color: palette.text }]}>{formatText('stepOf', { current: String(step + 1), total: String(STEPS.length) })}</Text>
+                        <Text style={[styles.progressValue, { color: palette.muted }]}>{Math.round(((step + 1) / STEPS.length) * 100)}%</Text>
                     </View>
                     <View style={[styles.progressTrack, { backgroundColor: palette.border }]}>
                         <View style={[styles.progressFill, { backgroundColor: primaryColor, width: progressWidth }]} />
                     </View>
                 </View>
-                <ScrollView keyboardShouldPersistTaps="handled" style={styles.stepScroll} horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} alwaysBounceVertical={false} bounces={false} directionalLockEnabled contentContainerStyle={styles.stepBar}>
-                    {STEPS.map((key, index) => <TouchableOpacity key={key} onPress={() => setStep(index)} style={[styles.step, { borderColor: index === step ? primaryColor : palette.border, backgroundColor: index === step ? `${primaryColor}18` : palette.card }]}>
-                        <Text numberOfLines={1} style={{ color: index === step ? primaryColor : palette.muted, fontSize: 11 }}>{stepLabels[index]}</Text>
-                    </TouchableOpacity>)}
+                <ScrollView keyboardShouldPersistTaps="handled" style={styles.stepScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stepBar}>
+                    {STEPS.map((key, index) => {
+                        const active = index === step;
+                        const done = index < step;
+                        return <TouchableOpacity key={key} activeOpacity={0.8} onPress={() => setStep(index)} style={[styles.step, { borderColor: active ? primaryColor : palette.border, backgroundColor: active ? `${primaryColor}14` : palette.card }]}>
+                            <View style={[styles.stepNumber, { backgroundColor: active ? primaryColor : done ? `${primaryColor}22` : appPalette.surfaceMuted }]}>
+                                {done ? <Check color={primaryColor} size={12} /> : <Text style={[styles.stepNumberText, { color: active ? '#fff' : palette.muted }]}>{index + 1}</Text>}
+                            </View>
+                            <Text numberOfLines={1} style={[styles.stepText, { color: active ? primaryColor : palette.muted }]}>{stepLabels[index]}</Text>
+                        </TouchableOpacity>;
+                    })}
                 </ScrollView>
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
+                <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                     {renderStep()}
                 </ScrollView>
-                <View style={{ backgroundColor: palette.bg, borderTopColor: palette.border, borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 }}>
-                    <View style={[styles.footer, { marginTop: 0, paddingTop: 0 }]}>
-                        <TouchableOpacity disabled={step === 0} onPress={() => setStep((value) => value - 1)} style={[styles.outline, { borderColor: palette.border, opacity: step === 0 ? 0.4 : 1 }]}>
-                            <Text style={{ color: palette.text }}>{t('back', language)}</Text>
-                        </TouchableOpacity>
-                        {step < STEPS.length - 1 ? <TouchableOpacity onPress={() => setStep((value) => value + 1)} style={[styles.primary, { backgroundColor: primaryColor }]}>
-                            <Text style={styles.primaryText}>{t('continueText', language)}</Text>
-                            <ChevronRight color="#fff" size={18}/>
-                        </TouchableOpacity> : <TouchableOpacity onPress={() => void save()} style={[styles.primary, { backgroundColor: primaryColor }]}>
-                            <Save color="#fff" size={18}/>
-                            <Text style={styles.primaryText}>{t('saveTemplate', language)}</Text>
-                        </TouchableOpacity>}
-                    </View>
+                <View style={[styles.footerBar, { backgroundColor: palette.bg, borderTopColor: palette.border }]}>
+                    <Button title={t('back', language)} variant="outline" disabled={step === 0} onPress={() => setStep((value) => value - 1)} style={styles.footerBack} />
+                    {step < STEPS.length - 1
+                        ? <Button title={t('continueText', language)} chevron onPress={() => setStep((value) => value + 1)} style={styles.footerNext} />
+                        : <Button title={t('saveTemplate', language)} icon={Save} onPress={() => void save()} disabled={loading} style={styles.footerNext} />}
                 </View>
         <Modal visible={fieldModal} transparent animationType="slide" onRequestClose={() => setFieldModal(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.card }]}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><Text style={[styles.modalTitle, { color: palette.text }]}>{t('addField', language)}</Text><Input label={t('fieldLabel', language)} value={fieldDraft.label || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, label: value })}/><Input label={t('internalKey', language)} value={fieldDraft.key || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, key: value.replace(/\s+/g, '_').toLowerCase() })}/><Input label={t('variable', language)} value={fieldDraft.variable || ''} onChangeText={(value) => setFieldDraft({ ...fieldDraft, variable: value })} placeholder="custom.project_name"/><ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false}  contentContainerStyle={styles.chips}>{FIELD_TYPES.map((type) => <TouchableOpacity key={type} onPress={() => setFieldDraft({ ...fieldDraft, type })} style={[styles.chip, { borderColor: primaryColor, backgroundColor: fieldDraft.type === type ? primaryColor : palette.bg }]}><Text numberOfLines={1} style={{ color: fieldDraft.type === type ? '#fff' : palette.text }}>{fieldTypeLabel(type)}</Text></TouchableOpacity>)}</ScrollView><View style={styles.row}><Text style={{ color: palette.text }}>{t('required', language)}</Text><Switch value={fieldDraft.required !== false} onValueChange={(value) => setFieldDraft({ ...fieldDraft, required: value })} trackColor={{ true: primaryColor }}/></View><Button title={t('saveField', language)} onPress={addField}/></ScrollView></View></View></Modal>
         <Modal visible={blockModal} transparent animationType="slide" onRequestClose={() => setBlockModal(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.card }]}><ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled"><Text style={[styles.modalTitle, { color: palette.text }]}>{t('addBlock', language)}</Text><ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false}  contentContainerStyle={styles.chips}>{BLOCK_TYPES.map((type) => <TouchableOpacity key={type} onPress={() => setBlockDraft(blankBlock(type, blocks.length))} style={[styles.chip, { borderColor: primaryColor, backgroundColor: blockDraft.type === type ? primaryColor : palette.bg }]}><Text numberOfLines={1} style={{ color: blockDraft.type === type ? '#fff' : palette.text }}>{blockTypeLabel(type)}</Text></TouchableOpacity>)}</ScrollView>{blockDraft.type !== 'divider' && blockDraft.type !== 'page_break' ? <Input label={t('content', language)} value={blockDraft.type === 'variable' ? blockDraft.variable || '' : blockDraft.text || ''} onChangeText={(value) => setBlockDraft(blockDraft.type === 'variable' ? { ...blockDraft, variable: value } : { ...blockDraft, text: value })} multiline placeholder={t('writeClauseHint', language)}/> : null}<Button title={t('addBlock', language)} onPress={addBlock}/></ScrollView></View></View></Modal>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </MobileScreen>
     );
 }
 function inputTag(label: string, value: string, onChangeText: (value: string) => void, palette: any, _translate: any) { return <Input label={label} value={value} onChangeText={onChangeText}/>; }
 
 const styles = StyleSheet.create({
-    safeArea: { flex: 1 }, container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { minHeight: 68, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', borderBottomWidth: 1 }, headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, headerTitle: { flex: 1, minWidth: 0, marginLeft: 6, marginRight: 8, fontSize: 18, fontWeight: '700', textAlign: 'left' }, progressCard: { marginHorizontal: 20, marginTop: 10, padding: 12, borderRadius: 14, borderWidth: 1 }, progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, progressLabel: { fontSize: 13, fontWeight: '700' }, progressValue: { fontSize: 11, fontWeight: '600' }, progressTrack: { height: 4, borderRadius: 99, overflow: 'hidden', marginTop: 10 }, progressFill: { height: 4, borderRadius: 99 }, stepScroll: { flexGrow: 0, height: 64 }, stepBar: { alignItems: 'center', gap: 8, minHeight: 64, paddingHorizontal: 20 }, step: { height: 44, minWidth: 72, flexGrow: 0, flexShrink: 0, alignSelf: 'center', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 13, justifyContent: 'center' }, content: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 100 }, panel: { padding: 16, borderWidth: 1, borderRadius: 18 }, card: { padding: 14, borderWidth: 1, borderRadius: 16, marginBottom: 10 }, flex: { flex: 1 }, row: { flexDirection: 'row', alignItems: 'center', gap: 10 }, label: { fontSize: 12, fontWeight: '600', marginBottom: 8 }, meta: { fontSize: 11, lineHeight: 16, marginTop: 4 }, cardTitle: { fontSize: 15, fontWeight: '700' }, help: { fontSize: 12, lineHeight: 19, marginBottom: 14 }, chips: { gap: 8, paddingBottom: 10 }, chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 }, primary: { minHeight: 48, minWidth: 146, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }, primaryText: { color: '#fff', fontWeight: '700' }, outline: { minHeight: 48, minWidth: 108, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, moveRow: { flexDirection: 'row', gap: 18, marginTop: 10 }, footer: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, paddingTop: 2 }, stack: { gap: 12 }, sectionIntro: { marginTop: 4, marginBottom: 2 }, sectionHeading: { fontSize: 17, fontWeight: '700' }, sectionDescription: { fontSize: 12, lineHeight: 18, marginTop: 4 }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6, paddingTop: 14, borderTopWidth: 1 }, switchLabel: { fontSize: 14, fontWeight: '600' }, preview: { padding: 24, borderWidth: 1, minHeight: 500 }, previewTitle: { color: '#111827', fontSize: 24, fontWeight: '800' }, previewMeta: { color: '#667085', fontSize: 11, marginTop: 6 }, previewBody: { marginTop: 26, borderTopWidth: 1, borderTopColor: '#e4e9f0', paddingTop: 18 }, previewHtml: { color: '#111827', fontSize: 14, lineHeight: 24 }, previewStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }, warning: { color: '#b54708', backgroundColor: '#fffaeb', padding: 10, marginTop: 18, fontSize: 12 }, modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, modal: { maxHeight: '86%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }, modalScroll: { paddingBottom: 12 }, modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 }, form: { marginTop: 10 }, fieldLabel: { fontSize: 12, fontWeight: '600' }, listRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e4e9f0' },
+    stepNumber: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+    stepNumberText: { fontSize: 12, fontFamily: brand.fonts.semibold },
+    stepText: { fontSize: 13, fontFamily: brand.fonts.medium },
+    footerBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderTopWidth: 1 },
+    footerBack: { flex: 1 },
+    footerNext: { flex: 2 },
+
+    container: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, progressWrap: { marginHorizontal: 20, marginTop: 4 }, progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, progressLabel: { fontSize: 13, fontFamily: brand.fonts.semibold }, progressValue: { fontSize: 11, fontFamily: brand.fonts.semibold }, progressTrack: { height: 6, borderRadius: 99, overflow: 'hidden', marginTop: 8 }, progressFill: { height: 6, borderRadius: 99 }, stepScroll: { flexGrow: 0, marginTop: 14 }, stepBar: { alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingBottom: 4 }, step: { height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, borderWidth: 1, paddingLeft: 6, paddingRight: 14 }, content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }, panel: { padding: 16, borderWidth: 1, borderRadius: 18 }, card: { padding: 14, borderWidth: 1, borderRadius: 16, marginBottom: 10 }, flex: { flex: 1 }, row: { flexDirection: 'row', alignItems: 'center', gap: 10 }, label: { fontSize: 12, fontFamily: brand.fonts.semibold, marginBottom: 8 }, meta: { fontSize: 11, lineHeight: 16, marginTop: 4 }, cardTitle: { fontSize: 15, fontFamily: brand.fonts.semibold }, help: { fontSize: 12, lineHeight: 19, marginBottom: 14 }, chips: { gap: 8, paddingBottom: 10 }, chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 }, primary: { minHeight: 48, minWidth: 146, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }, primaryText: { color: '#fff', fontFamily: brand.fonts.semibold }, outline: { minHeight: 48, minWidth: 108, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, moveRow: { flexDirection: 'row', gap: 18, marginTop: 10 }, footer: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18, paddingTop: 2 }, stack: { gap: 12 }, sectionIntro: { marginTop: 4, marginBottom: 2 }, sectionHeading: { fontSize: 17, fontFamily: brand.fonts.semibold }, sectionDescription: { fontSize: 12, lineHeight: 18, marginTop: 4 }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 6, paddingTop: 14, borderTopWidth: 1 }, switchLabel: { fontSize: 14, fontFamily: brand.fonts.semibold }, preview: { padding: 24, borderWidth: 1, minHeight: 500 }, previewTitle: { color: '#111827', fontSize: 24, fontFamily: brand.fonts.semibold }, previewMeta: { color: '#667085', fontSize: 11, marginTop: 6 }, previewBody: { marginTop: 26, borderTopWidth: 1, borderTopColor: '#e4e9f0', paddingTop: 18 }, previewHtml: { color: '#111827', fontSize: 14, lineHeight: 24 }, previewStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }, warning: { color: '#b54708', backgroundColor: '#fffaeb', padding: 10, marginTop: 18, fontSize: 12 }, modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, modal: { maxHeight: '86%', borderTopLeftRadius: brand.radius.bottomSheet, borderTopRightRadius: brand.radius.bottomSheet, padding: 20 }, modalScroll: { paddingBottom: 12 }, modalTitle: { fontSize: 20, fontFamily: brand.fonts.semibold, marginBottom: 16 }, form: { marginTop: 10 }, fieldLabel: { fontSize: 12, fontFamily: brand.fonts.semibold }, listRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e4e9f0' },
 });

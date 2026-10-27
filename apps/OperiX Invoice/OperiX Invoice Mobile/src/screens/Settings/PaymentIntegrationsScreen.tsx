@@ -62,10 +62,10 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     const [permissions, setPermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
     const can = (permission: string) => platformAdmin || permissions.includes(permission);
 
     useEffect(() => {
@@ -294,7 +294,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                     <>
                         {/* Connected Account Info */}
                         {connection.account_email && (
-                            <View style={[styles.accountInfo, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }]}>
+                            <View style={[styles.accountInfo, { backgroundColor: isDark ? '#262629' : '#F4F7FB' }]}>
                                 <Text style={[styles.accountEmail, { color: textColor }]}>
                                 {connection.store_name ? `${connection.store_name}${connection.account_email ? ` · ${connection.account_email}` : ''}` : connection.account_email}
                                 </Text>
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         borderTopWidth: 1,
-        borderTopColor: '#263A5520',
+        borderTopColor: '#26262920',
         marginBottom: 16,
     },
     autoSyncLabel: { fontSize: 14, fontWeight: '600' },

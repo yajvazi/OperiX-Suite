@@ -247,6 +247,7 @@ function RootNavigator() {
         <RootStack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'modal' }} />
         <RootStack.Screen name="Settings" component={SettingsNavigator} />
         <RootStack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
+        <RootStack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
         <RootStack.Screen name="Profile" component={ProfileScreen} />
         <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <RootStack.Screen name="HelpCategory" component={HelpCategoryScreen} />

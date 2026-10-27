@@ -1008,13 +1008,13 @@ export function SettingsScreen({ navigation }: any) {
 
 
                 <View style={styles.footer}>
-                    <TouchableOpacity testID="settings-delete-account-button" accessibilityRole="button" onPress={confirmDeleteAccount} style={[styles.signOut, { borderColor: brand.colors.error }]}>
-                        <Trash2 color={brand.colors.error} size={18} />
-                        <Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('deleteAccount', language)}</Text>
+                    <TouchableOpacity testID="settings-logout-button" accessibilityRole="button" activeOpacity={0.8} onPress={confirmSignOut} style={[styles.footerButton, { backgroundColor: cardBg, borderColor }]}>
+                        <LogOut color={textColor} size={19} />
+                        <Text style={[styles.footerButtonText, { color: textColor }]}>{t('signOut', language)}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity testID="settings-logout-button" accessibilityRole="button" onPress={confirmSignOut} style={[styles.signOut, { borderColor }]}>
-                        <LogOut color={brand.colors.error} size={18} />
-                        <Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('signOut', language)}</Text>
+                    <TouchableOpacity testID="settings-delete-account-button" accessibilityRole="button" activeOpacity={0.8} onPress={confirmDeleteAccount} style={[styles.footerButton, styles.footerButtonSpaced, { backgroundColor: `${brand.colors.error}12`, borderColor: `${brand.colors.error}55` }]}>
+                        <Trash2 color={brand.colors.error} size={19} />
+                        <Text style={[styles.footerButtonText, { color: brand.colors.error }]}>{t('deleteAccount', language)}</Text>
                     </TouchableOpacity>
                     <Text style={[styles.version, { color: mutedColor }]}>{t('aboutOperixInvoice', language)} v{Constants.expoConfig?.version || '1.0.0'}</Text>
                 </View>
@@ -1041,8 +1041,8 @@ function AssetPicker({ label, hint, value, onPick, onClear, onDraw, icon, isDark
     const { language } = useTheme();
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
-    const placeholderBackground = isDark ? '#102038' : '#F4F7FB';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
+    const placeholderBackground = isDark ? '#101012' : '#F4F7FB';
 
     return (
         <View style={styles.assetContainer}>
@@ -1064,11 +1064,11 @@ function AssetPicker({ label, hint, value, onPick, onClear, onDraw, icon, isDark
             ) : (
                 onDraw ? (
                     <View style={[styles.assetPreview, { borderColor, backgroundColor: placeholderBackground, flexDirection: 'row', gap: 10, padding: 10 }]}>
-                        <TouchableOpacity style={[styles.uploadPlaceholder, { backgroundColor: isDark ? '#263A55' : '#FFFFFF', borderRadius: 10 }]} onPress={onDraw}>
+                        <TouchableOpacity style={[styles.uploadPlaceholder, { backgroundColor: isDark ? '#262629' : '#FFFFFF', borderRadius: 10 }]} onPress={onDraw}>
                             <PenTool color={mutedColor} size={20} />
                             <Text style={{ color: mutedColor, fontSize: 11, marginTop: 4, fontFamily: brand.fonts.medium }}>{t('draw', language)}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.uploadPlaceholder, { backgroundColor: isDark ? '#263A55' : '#FFFFFF', borderRadius: 10 }]} onPress={onPick}>
+                        <TouchableOpacity style={[styles.uploadPlaceholder, { backgroundColor: isDark ? '#262629' : '#FFFFFF', borderRadius: 10 }]} onPress={onPick}>
                             <Upload color={mutedColor} size={20} />
                             <Text style={{ color: mutedColor, fontSize: 11, marginTop: 4, fontFamily: brand.fonts.medium }}>{t('upload', language)}</Text>
                         </TouchableOpacity>
@@ -1122,8 +1122,9 @@ const styles = StyleSheet.create({
     divider: { height: 1, marginVertical: 16 },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 11, marginTop: 4, fontFamily: brand.fonts.regular, lineHeight: 17 },
-    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 4 },
-    colorOption: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'transparent' },
+    colorGrid: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+    // Swatches share one row and shrink to fit instead of wrapping.
+    colorOption: { flex: 1, aspectRatio: 1, maxWidth: 36, borderRadius: 18, borderWidth: 2, borderColor: 'transparent' },
     assetContainer: { marginBottom: 18 },
     assetLabel: { fontSize: 13, fontFamily: brand.fonts.medium, marginBottom: 8 },
     assetHint: { fontSize: 11, fontFamily: brand.fonts.regular, marginTop: -3, marginBottom: 8 },
@@ -1131,10 +1132,13 @@ const styles = StyleSheet.create({
     assetImage: { width: '100%', height: '100%' },
     clearBadge: { position: 'absolute', top: 6, right: 6, backgroundColor: '#ef4444', borderRadius: 10, padding: 4 },
     uploadPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    footer: { marginTop: 16, alignItems: 'center' },
+    footer: { marginTop: 24, marginBottom: 8, alignItems: 'center' },
+    footerButton: { width: '100%', minHeight: 54, borderWidth: 1, borderRadius: 16, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10 },
+    footerButtonSpaced: { marginTop: 12 },
+    footerButtonText: { fontSize: 15, fontFamily: brand.fonts.semibold },
     signOut: { width: '100%', minHeight: 50, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
     signOutText: { fontSize: 13, fontFamily: brand.fonts.semibold },
-    version: { fontSize: 11, fontFamily: brand.fonts.regular, marginTop: 12 },
+    version: { fontSize: 11, fontFamily: brand.fonts.regular, marginTop: 20 },
     badge: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     optionChip: { minHeight: 48, minWidth: 0, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

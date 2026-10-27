@@ -155,11 +155,11 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
     const primaryColor = normalizeBrandColor(profile?.primary_color);
 
     useFocusEffect(
@@ -948,7 +948,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             onPress={handlePrint}
                             icon={Printer}
                             variant="primary" // Changed to primary for visibility/differentiation logic or kept utility
-                            style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
+                            style={{ flex: 1, backgroundColor: isDark ? '#262629' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
                             disabled={!canExportInvoice}
                         />
@@ -957,7 +957,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             onPress={handleReceiptPrint}
                             icon={Receipt}
                             variant="primary"
-                            style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
+                            style={{ flex: 1, backgroundColor: isDark ? '#262629' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
                             disabled={!canExportInvoice}
                         />
@@ -969,7 +969,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             onPress={handleGeneratePdf}
                             icon={Download}
                             variant="primary"
-                            style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
+                            style={{ flex: 1, backgroundColor: isDark ? '#262629' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
                             disabled={!canExportInvoice}
                         />

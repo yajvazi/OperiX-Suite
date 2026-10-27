@@ -24,7 +24,7 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
     const [data, setData] = useState<any>({});
     const [loading, setLoading] = useState(false);
 
-    const bgColor = isDark ? '#14243A' : '#ffffff';
+    const bgColor = isDark ? '#151517' : '#ffffff';
     const textColor = isDark ? '#fff' : '#111827';
     const overlayColor = 'rgba(0,0,0,0.5)';
 

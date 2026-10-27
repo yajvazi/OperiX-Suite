@@ -50,11 +50,11 @@ export function ExpensesScreen({ navigation }: any) {
         ...Object.fromEntries(EXPENSE_CATEGORIES.map((category) => [category.id, language === 'sq' ? category.sq : category.en])),
     } as Record<string, string>)[category] || category;
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const inputBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const inputBg = isDark ? '#151517' : '#ffffff';
 
     useFocusEffect(
         useCallback(() => {

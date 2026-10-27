@@ -41,10 +41,10 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
     });
     const [loading, setLoading] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
 
     useEffect(() => {
         if (isEditing) fetchVendor();

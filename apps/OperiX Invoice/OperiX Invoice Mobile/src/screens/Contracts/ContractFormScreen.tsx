@@ -53,10 +53,10 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     const [showSignaturePad, setShowSignaturePad] = useState(false);
     const [signatureTarget, setSignatureTarget] = useState<'user' | 'counterparty'>('user');
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const inputBg = isDark ? '#0A0A0B' : '#F4F7FB';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
 
     useEffect(() => {
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     section: { borderRadius: 16, padding: 16 },
     label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
     clientOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 8 },
-    divider: { height: 1, backgroundColor: '#263A55', marginVertical: 20, opacity: 0.2 },
+    divider: { height: 1, backgroundColor: '#262629', marginVertical: 20, opacity: 0.2 },
     signatureBox: { marginBottom: 16 },
     signatureLabel: { fontSize: 14, fontWeight: '600', marginBottom: 12 },
     signaturePreview: { height: 120, borderRadius: 12, overflow: 'hidden', position: 'relative' },

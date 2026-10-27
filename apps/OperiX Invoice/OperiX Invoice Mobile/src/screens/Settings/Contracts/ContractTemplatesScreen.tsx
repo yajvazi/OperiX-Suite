@@ -12,11 +12,13 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Plus, FileText, ChevronRight, Trash2 } from 'lucide-react-native';
+import { Plus, FileText, ChevronRight, Trash2 } from 'lucide-react-native';
 import { FAB, Card } from '@invoice-monorepo/ui';
 import { ContractTemplate } from '@invoice-monorepo/types';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope } from '../../../services/workspace';
+import { brand, getPalette } from '../../../theme/brand';
+import { EmptyState, MobileHeader, MobileScreen, MobileStatusBadge } from '../../../components/mobile/MobileUI';
 
 interface ContractTemplatesScreenProps {
     navigation: any;
@@ -33,10 +35,9 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
     const [loading, setLoading] = useState(true);
     const [canManageContracts, setCanManageContracts] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
-    const textColor = isDark ? '#fff' : '#111827';
-    const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const palette = getPalette(isDark);
+    const textColor = palette.text;
+    const mutedColor = palette.muted;
 
     useFocusEffect(
         useCallback(() => {
@@ -88,28 +89,30 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
 
     const renderItem = ({ item }: { item: ContractTemplate }) => (
         <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('ContractTemplateEditor', { templateId: item.id })}
         >
             <Card style={styles.card}>
                 <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                        <FileText color={primaryColor} size={24} />
+                    <View style={[styles.iconContainer, { backgroundColor: palette.iconSurface }]}>
+                        <FileText color={primaryColor} size={22} />
                     </View>
                     <View style={styles.cardContent}>
-                        <Text style={[styles.cardTitle, { color: textColor }]}>{item.name}</Text>
-                        {item.description && (
-                            <Text style={[styles.cardDesc, { color: mutedColor }]}>{item.description}</Text>
-                        )}
-                        <Text style={[styles.fieldCount, { color: mutedColor }]}>
-                            {fieldCountLabel(item.fields?.length || 0, language)}
-                        </Text>
+                        <Text numberOfLines={1} style={[styles.cardTitle, { color: textColor }]}>{item.name}</Text>
+                        {item.description ? (
+                            <Text numberOfLines={2} style={[styles.cardDesc, { color: mutedColor }]}>{item.description}</Text>
+                        ) : null}
+                        <View style={styles.cardMeta}>
+                            <MobileStatusBadge tone="neutral" label={fieldCountLabel(item.fields?.length || 0, language)} compact />
+                        </View>
                     </View>
                     {canManageContracts ? <TouchableOpacity
-                        style={styles.deleteButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('delete', language)}
+                        style={[styles.deleteButton, { backgroundColor: palette.errorSoft }]}
                         onPress={() => handleDelete(item.id)}
                     >
-                        <Trash2 color="#ef4444" size={20} />
+                        <Trash2 color={palette.error} size={18} />
                     </TouchableOpacity> : null}
                     <ChevronRight color={mutedColor} size={20} />
                 </View>
@@ -118,14 +121,8 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ArrowLeft color={textColor} size={24} />
-                </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{t('contractTemplates', language)}</Text>
-                <View style={{ width: 24 }} />
-            </View>
+        <MobileScreen>
+            <MobileHeader title={t('contractTemplates', language)} onBack={() => navigation.goBack()} />
 
             {loading ? (
                 <View style={styles.loading}>
@@ -137,12 +134,9 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.list}
+                    showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Text style={[styles.emptyText, { color: mutedColor }]}>
-                                {t('noTemplatesCreateOne', language)}
-                            </Text>
-                        </View>
+                        <EmptyState title={t('contractTemplates', language)} description={t('noTemplatesCreateOne', language)} icon={FileText} />
                     }
                 />
             )}
@@ -152,26 +146,19 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                 icon={Plus}
                 color={primaryColor}
             /> : null}
-        </View>
+        </MobileScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: {},
-    title: { fontSize: 20, fontWeight: 'bold' },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    list: { padding: 16, paddingBottom: 100 },
+    list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 110 },
     card: { marginBottom: 12 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-    iconContainer: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0, 79, 254, 0.1)', alignItems: 'center', justifyContent: 'center' },
-    cardContent: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-    cardDesc: { fontSize: 13, marginBottom: 4 },
-    fieldCount: { fontSize: 12 },
-    deleteButton: { padding: 8 },
-    emptyContainer: { alignItems: 'center', marginTop: 48 },
-    emptyText: { fontSize: 16 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    iconContainer: { width: 48, height: 48, borderRadius: brand.radius.control, alignItems: 'center', justifyContent: 'center' },
+    cardContent: { flex: 1, minWidth: 0 },
+    cardTitle: { fontSize: 15, fontFamily: brand.fonts.semibold, marginBottom: 2 },
+    cardDesc: { fontSize: 13, fontFamily: brand.fonts.regular, marginBottom: 6 },
+    cardMeta: { flexDirection: 'row', marginTop: 4 },
+    deleteButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 });
-

@@ -190,11 +190,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     // Preview State
     const [showPreview, setShowPreview] = useState(false);
     const [previewHtml, setPreviewHtml] = useState('');
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
     const modalBackdropColor = isDark ? 'rgba(0,0,0,0.96)' : 'rgba(0,0,0,0.72)';
     const currency = profile?.currency || 'EUR';
     const canPermission = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
@@ -1611,7 +1611,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 </ScrollView>
             </KeyboardAvoidingView>}
             {/* Sticky Actions Footer */}
-            <View style={[styles.footer, { backgroundColor: isDark ? '#14243A' : '#fff', borderTopColor: borderColor }]}>
+            <View style={[styles.footer, { backgroundColor: isDark ? '#151517' : '#fff', borderTopColor: borderColor }]}>
                 <TouchableOpacity
                     testID="invoice-preview-button"
                     accessibilityRole="button"
@@ -1680,8 +1680,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             </Modal>
             {/* Client Picker Modal */}
             <Modal visible={showClientPicker} animationType="slide" transparent onRequestClose={closeClientPicker}>
-                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
-                                        <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                                        <View style={[styles.modalContent, styles.modalContentTall, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('selectCustomer', language)}</Text>
                             <TouchableOpacity testID="invoice-close-customer-picker-button" accessibilityRole="button" onPress={closeClientPicker}>
@@ -1690,7 +1690,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </View>
                         <ScrollView
                             style={{ flex: 1 }}
-                            contentContainerStyle={{ padding: 12 }}
+                            contentContainerStyle={{ padding: 12, paddingBottom: 64 }}
                             keyboardShouldPersistTaps="handled"
                         >
                             <View style={{ paddingBottom: 12 }}>
@@ -1761,12 +1761,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
             {/* Store pickup location picker */}
             <Modal visible={showPickupBranchPicker} animationType="slide" transparent onRequestClose={() => setShowPickupBranchPicker(false)}>
                 <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
-                    <View style={[styles.modalContent, styles.branchPickerContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+                    <View style={[styles.modalContent, styles.branchPickerContent, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                         <Text style={[styles.modalTitle, { color: textColor }]}>{language === 'sq' ? 'Zgjidhni degën' : 'Select branch'}</Text>
                             <TouchableOpacity testID="invoice-close-pickup-store-picker-button" accessibilityRole="button" onPress={() => setShowPickupBranchPicker(false)}>
@@ -1849,8 +1849,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             </Modal>
             {/* Product Picker Modal */}
             <Modal visible={showProductPicker} animationType="slide" transparent onRequestClose={closeProductPicker}>
-                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
-                                        <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                                        <View style={[styles.modalContent, styles.modalContentTall, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('addItem', language)}</Text>
                             <TouchableOpacity testID="invoice-close-product-picker-button" accessibilityRole="button" onPress={closeProductPicker}>
@@ -1859,7 +1859,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </View>
                         <ScrollView
                             style={{ flex: 1 }}
-                            contentContainerStyle={{ padding: 12 }}
+                            contentContainerStyle={{ padding: 12, paddingBottom: 64 }}
                             keyboardShouldPersistTaps="handled"
                         >
                             <View style={{ paddingBottom: 12 }}>
@@ -1904,7 +1904,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             ))}
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
             <SignaturePadModal
                 visible={showCustomerSignaturePad}
@@ -2063,6 +2063,11 @@ const styles = StyleSheet.create({
     transportHint: { fontSize: 12, marginTop: 6 },
     // Modals
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+    // Pickers with a search box need a real height (a flex ScrollView inside a
+    // content-sized sheet collapses to minHeight) so results stay visible.
+    // The sheet extends 24px past the keyboard edge so the keyboard's rounded top
+    // corners overlap the sheet color instead of exposing the dark backdrop.
+    modalContentTall: { height: '80%', paddingBottom: 0, marginBottom: -24 },
     modalContent: { width: '100%', alignSelf: 'stretch', borderTopLeftRadius: 24, borderTopRightRadius: 24, minHeight: 260, maxHeight: '80%', paddingBottom: 40, overflow: 'hidden' },
     branchPickerContent: { height: 'auto', minHeight: 250, maxHeight: '58%', paddingBottom: 20 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },

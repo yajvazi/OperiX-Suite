@@ -178,11 +178,11 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
     const [loading, setLoading] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
+    const inputBg = isDark ? '#0A0A0B' : '#F4F7FB';
 
     useEffect(() => {
         loadTemplate();
@@ -291,7 +291,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 <Switch
                     value={field.enabled}
                     onValueChange={(val) => updateField(field.id, { enabled: val })}
-                    trackColor={{ false: '#263A55', true: primaryColor + '50' }}
+                    trackColor={{ false: '#262629', true: primaryColor + '50' }}
                     thumbColor={field.enabled ? primaryColor : '#667085'}
                 />
             </View>
@@ -302,7 +302,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                         <Switch
                             value={field.required}
                             onValueChange={(val) => updateField(field.id, { required: val })}
-                            trackColor={{ false: '#263A55', true: '#12B76A50' }}
+                            trackColor={{ false: '#262629', true: '#12B76A50' }}
                             thumbColor={field.required ? '#12B76A' : '#667085'}
                         />
                     </View>
@@ -325,7 +325,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
             <Switch
                 value={value}
                 onValueChange={onToggle}
-                trackColor={{ false: '#263A55', true: primaryColor + '50' }}
+                trackColor={{ false: '#262629', true: primaryColor + '50' }}
                 thumbColor={value ? primaryColor : '#667085'}
             />
         </View>
@@ -419,7 +419,7 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                                     }));
                                     setHasChanges(true);
                                 }}
-                                trackColor={{ false: '#263A55', true: primaryColor + '50' }}
+                                trackColor={{ false: '#262629', true: primaryColor + '50' }}
                                 thumbColor={col.enabled ? primaryColor : '#667085'}
                             />
                         </View>

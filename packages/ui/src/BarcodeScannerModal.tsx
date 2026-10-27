@@ -21,7 +21,7 @@ export function BarcodeScannerModal({ visible, onClose, onScanned }: BarcodeScan
     if (!permission?.granted) {
         return (
             <Modal visible={visible} animationType="slide">
-                <View style={[styles.permissionContainer, { backgroundColor: isDark ? '#0D1B2A' : '#F7F9FC' }]}>
+                <View style={[styles.permissionContainer, { backgroundColor: isDark ? '#0A0A0B' : '#F7F9FC' }]}>
                     <Text style={[styles.title, { color: isDark ? '#fff' : '#111827' }]}>Camera Permission</Text>
                     <Text style={styles.text}>We need your camera to scan barcodes.</Text>
                     <Button title="Grant Permission" onPress={requestPermission} style={styles.btn} />

@@ -547,7 +547,7 @@ export function DashboardScreen({ navigation }: any) {
                         )}
                     </Card>
                 ) : (
-                    <Card style={[styles.connectCard, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}>
+                    <Card style={[styles.connectCard, { backgroundColor: isDark ? '#16181D' : '#eff6ff' }]}>
                         <View style={styles.connectCardContent}>
                             <View style={[styles.connectIconWrapper, { backgroundColor: primaryColor + '20' }]}>
                                 <CreditCard color={primaryColor} size={24} />

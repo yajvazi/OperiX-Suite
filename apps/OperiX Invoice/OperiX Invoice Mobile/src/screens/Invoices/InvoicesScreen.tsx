@@ -56,11 +56,11 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const inputBg = isDark ? '#14243A' : '#ffffff';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const inputBg = isDark ? '#151517' : '#ffffff';
 
     useEffect(() => {
         if (route?.params?.tab) {
@@ -74,7 +74,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         }
     }, [route?.params?.tab, route?.params?.status]);
 
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
 
     useFocusEffect(
         useCallback(() => {

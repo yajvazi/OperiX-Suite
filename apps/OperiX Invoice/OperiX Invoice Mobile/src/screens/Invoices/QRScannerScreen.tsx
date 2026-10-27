@@ -23,7 +23,7 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
 
     const mode = route.params?.mode || 'invoice'; // 'invoice' or 'generic'
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
 

@@ -21,7 +21,7 @@ const templateNames: Record<TemplateType, string> = {
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {
     const colors = templateStyles[template];
     const cardBg = isDark ? '#111827' : '#ffffff';
-    const borderColor = selected ? '#004FFE' : (isDark ? '#263A55' : '#E6EBF1');
+    const borderColor = selected ? '#004FFE' : (isDark ? '#262629' : '#E6EBF1');
 
     return (
         <View style={[styles.container, { backgroundColor: cardBg, borderColor }, selected && styles.selected]}>

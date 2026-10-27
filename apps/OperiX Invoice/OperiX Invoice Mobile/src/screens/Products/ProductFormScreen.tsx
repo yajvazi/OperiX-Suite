@@ -127,12 +127,12 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const [branchStocks, setBranchStocks] = useState<Array<{ branch_id: string; product_id: string; stock_quantity: number | string; low_stock_threshold: number | string }>>([]);
     const saveInFlight = useRef(false);
 
-    const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
+    const bgColor = isDark ? '#0A0A0B' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
-    const cardBg = isDark ? '#14243A' : '#ffffff';
-    const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
-    const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const cardBg = isDark ? '#151517' : '#ffffff';
+    const inputBg = isDark ? '#0A0A0B' : '#F4F7FB';
+    const borderColor = isDark ? '#262629' : '#E4E9F0';
     const categoryLabels: Record<string, string> = {
         Service: t('serviceCategory', language),
         Product: t('productCategory', language),
@@ -424,15 +424,15 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     <Input testID="product-name-input" label={`${t('name', language)} *`} value={formData.name} onChangeText={(text) => setFormData((current) => ({ ...current, name: text }))} placeholder={t('productOrServiceName', language)} />
                     <Input label={t('description', language)} value={formData.description} onChangeText={(text) => setFormData((current) => ({ ...current, description: text }))} placeholder={t('detailedDescription', language)} multiline numberOfLines={3} />
 
-                    <View style={[styles.imageField, { borderColor: isDark ? '#263A55' : '#E4E9F0', backgroundColor: inputBg }]}>
+                    <View style={[styles.imageField, { borderColor: isDark ? '#262629' : '#E4E9F0', backgroundColor: inputBg }]}>
                         {formData.image_url ? (
                             serviceIconNameFromValue(formData.image_url) ? (
-                                <View style={[styles.imagePreview, styles.serviceIconPreview, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}>
+                                <View style={[styles.imagePreview, styles.serviceIconPreview, { backgroundColor: isDark ? '#262629' : '#EDF4FF' }]}>
                                     <SvgXml xml={serviceIconSvg(serviceIconNameFromValue(formData.image_url)!, primaryColor)} width="54" height="54" />
                                 </View>
                             ) : <Image accessibilityLabel={t('productPhoto', language)} source={{ uri: formData.image_url }} style={styles.imagePreview} resizeMode="cover" />
                         ) : (
-                            <View style={[styles.imagePlaceholder, { backgroundColor: isDark ? '#263A55' : '#EDF4FF' }]}>
+                            <View style={[styles.imagePlaceholder, { backgroundColor: isDark ? '#262629' : '#EDF4FF' }]}>
                                 <ImageIcon color="#004FFE" size={25} />
                             </View>
                         )}
@@ -469,7 +469,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                         accessibilityLabel={t(option.labelKey as TranslationKey, language)}
                                         accessibilityState={{ selected }}
                                         onPress={() => setFormData((current) => ({ ...current, image_url: `icon:${option.name}` }))}
-                                        style={[styles.serviceIconOption, { backgroundColor: selected ? `${primaryColor}18` : inputBg, borderColor: selected ? primaryColor : (isDark ? '#263A55' : '#E4E9F0') }]}
+                                        style={[styles.serviceIconOption, { backgroundColor: selected ? `${primaryColor}18` : inputBg, borderColor: selected ? primaryColor : (isDark ? '#262629' : '#E4E9F0') }]}
                                     >
                                         <SvgXml xml={serviceIconSvg(option.name, selected ? primaryColor : mutedColor)} width="25" height="25" />
                                         <Text style={[styles.serviceIconLabel, { color: selected ? primaryColor : mutedColor }]} numberOfLines={1}>{t(option.labelKey as TranslationKey, language)}</Text>
@@ -590,7 +590,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                             value={formData.track_stock}
                             onValueChange={(val) => setFormData((current) => ({ ...current, track_stock: val }))}
                             disabled={!canAdjustInventory}
-                            trackColor={{ false: '#263A55', true: '#004FFE' }}
+                            trackColor={{ false: '#262629', true: '#004FFE' }}
                         />
                     </View>
 
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
     hintText: { fontSize: 12, marginTop: 4, lineHeight: 18 },
-    otherStockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#263A55' },
+    otherStockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#262629' },
     otherStockName: { fontSize: 13, fontWeight: '500' },
     otherStockValue: { fontSize: 13, fontWeight: '600' },
     row: { flexDirection: 'row', gap: 12 },
@@ -933,12 +933,12 @@ const styles = StyleSheet.create({
     decimalSeparator: { paddingBottom: 8 },
     picker: { padding: 16, borderRadius: 12 },
     optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-    option: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#263A55' },
+    option: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#262629' },
     optionActive: { backgroundColor: '#004FFE', borderColor: '#004FFE' },
     optionText: { color: '#98A2B3', fontWeight: '500' },
     optionTextActive: { color: '#fff' },
     checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 12 },
-    checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#263A55', alignItems: 'center', justifyContent: 'center' },
+    checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#262629', alignItems: 'center', justifyContent: 'center' },
     checkboxChecked: { backgroundColor: '#004FFE', borderColor: '#004FFE' },
     checkmark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
     checkboxLabel: { fontSize: 15 },
