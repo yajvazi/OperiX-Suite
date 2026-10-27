@@ -149,6 +149,11 @@ function writeRootFiles(outDir) {
     devDependencies: { typescript: privateRoot.devDependencies?.typescript ?? '~5.9.2' },
   };
   fs.writeFileSync(path.join(outDir, 'package.json'), `${JSON.stringify(rootPackage, null, 2)}\n`);
+  // A committed lockfile for this exact workspace set keeps builds reproducible. Regenerate it
+  // with docs/oss/README.md when dependencies change.
+  const committedLock = path.join(repoRoot, 'deploy', 'web-oss', 'package-lock.json');
+  if (fs.existsSync(committedLock)) fs.copyFileSync(committedLock, path.join(outDir, 'package-lock.json'));
+  fs.writeFileSync(path.join(outDir, '.dockerignore'), ['**/node_modules', '**/.next', '.git', '.env', '.env.local', ''].join('\n'));
   fs.writeFileSync(path.join(outDir, '.gitignore'), ['node_modules', '.next', 'dist', 'coverage', '.turbo', '*.tsbuildinfo', '.env', '.env.*', '!.env.example', '.DS_Store', ''].join('\n'));
   if (!fs.existsSync(path.join(outDir, 'README.md'))) {
     fs.writeFileSync(path.join(outDir, 'README.md'), [

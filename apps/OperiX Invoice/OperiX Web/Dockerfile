@@ -1,17 +1,13 @@
-FROM node:22-bookworm-slim AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY ["apps/OperiX Invoice/OperiX Web/package.json", "apps/OperiX Invoice/OperiX Web/package.json"]
-COPY ["packages/accounting/package.json", "packages/accounting/package.json"]
-COPY ["packages/money/package.json", "packages/money/package.json"]
-COPY ["packages/payroll/package.json", "packages/payroll/package.json"]
-RUN npm ci --workspace web-suite --include-workspace-root=false
-
+# Build context is the generated tree from scripts/oss/export-web.mjs (see
+# scripts/oss/build-web-image.sh): this app plus the shared packages it uses, with its
+# own package.json and package-lock.json. Install and build run in one stage so every
+# node_modules folder npm creates is available to the build.
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# .npmrc (legacy-peer-deps) is part of the context and must match how the lockfile was generated.
+RUN npm ci
 RUN npm run build --workspace web-suite
 
 FROM node:22-bookworm-slim AS runner
