@@ -2,6 +2,9 @@
 @import "@invoice-monorepo/app-shell/styles.css";
 @import "tailwindcss";
 
+/* Tailwind v4 defaults borders to currentColor; use the theme border instead. */
+@layer base { *, ::after, ::before { border-color: var(--operix-border, #e5e7eb); } }
+
 @font-face {
   font-family: "OblivianText-Bold";
   src: url("/fonts/OblivianText-Bold.otf") format("opentype");
@@ -1517,3 +1520,28 @@ input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 8p
 .reports-table-wrap .ux-table th { text-align: left; padding: 9px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--operix-muted); border-bottom: 1px solid var(--operix-border); }
 .reports-table-wrap .ux-table th.numeric, .reports-table-wrap .ux-table td.numeric { text-align: right; }
 .reports-table-wrap .ux-table td { padding: 9px 12px; }
+
+/* Dark-mode coverage for web-only screens */
+html[data-theme="dark"] .btn:not(.btn-primary):not(.btn-danger) { background: #17233a; color: var(--operix-ink); border-color: var(--operix-border-strong); }
+html[data-theme="dark"] .btn:not(.btn-primary):not(.btn-danger):hover { background: #1d2c47; border-color: #475467; }
+html[data-theme="dark"] .btn-danger { background: #2a1517; border-color: #5b2227; }
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .invoice-detail-heading h1,
+html[data-theme="dark"] .invoice-detail-number h1,
+html[data-theme="dark"] .invoice-editor-page h1,
+html[data-theme="dark"] .invoice-editor-page h2,
+html[data-theme="dark"] .invoice-editor-page .field > span,
+html[data-theme="dark"] .invoice-editor-page .card strong { color: var(--operix-ink); }
+html[data-theme="dark"] .invoice-editor-page .bg-white,
+html[data-theme="dark"] .invoice-editor-page .invoice-flow-card { background: var(--operix-surface); border-color: var(--operix-border); }
+html[data-theme="dark"] .invoice-editor-page aside .card { background: #0f172a; }
+html[data-theme="dark"] .data-table td, html[data-theme="dark"] .ux-table td { border-color: var(--operix-border); }
+html[data-theme="dark"] .invoice-items-table td, html[data-theme="dark"] .invoice-items-table th { border-color: var(--operix-border); }
+html[data-theme="dark"] .resource-row-actions button:hover { background: #1b2740; }
+html[data-theme="dark"] .resource-modal-header button, html[data-theme="dark"] .resource-modal-close { background: #17233a; color: var(--operix-ink); border-color: var(--operix-border-strong); }
+html[data-theme="dark"] .resource-modal label span, html[data-theme="dark"] .resource-modal .field > span { color: #c4cbd6; }
+html[data-theme="dark"] .invoice-flow-stepper button.is-active { background: #17315f; color: #8fb4ff; }
+html[data-theme="dark"] .invoice-flow-stepper button span { background: #1d2c47; color: #c4cbd6; }
+html[data-theme="dark"] .invoice-flow-stepper button.is-active span { background: var(--operix-blue); color: #fff; }
+html[data-theme="dark"] .icon-btn { background: #17233a; color: var(--operix-ink); border-color: var(--operix-border-strong); }
+html[data-theme="dark"] .invoice-flow-stepper button[aria-current], html[data-theme="dark"] .invoice-flow-stepper .is-active { background: #17315f; color: #8fb4ff; }
