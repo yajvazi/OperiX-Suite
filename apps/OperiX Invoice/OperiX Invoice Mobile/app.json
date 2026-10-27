@@ -64,6 +64,7 @@
       ],
       "@bacons/apple-targets",
       "./plugins/with-expo-constants-path-fix.js",
+      "./plugins/with-pods-min-deployment-target.js",
       "@react-native-community/datetimepicker",
       "expo-font"
     ],
