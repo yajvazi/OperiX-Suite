@@ -171,3 +171,14 @@ html[data-theme="dark"] .operix-shared-sidebar-icon-button:hover { color: #8cb1f
   .operix-settings-layout { grid-template-columns: 1fr; }
   html[data-theme="dark"] .operix-shared-sidebar-overlay { background: rgba(0, 0, 0, .58); }
 }
+
+/* Collapsible groups (child menus) */
+.operix-shared-sidebar-group { display: block; }
+.operix-shared-sidebar-group > summary { cursor: pointer; list-style: none; user-select: none; }
+.operix-shared-sidebar-group > summary::-webkit-details-marker { display: none; }
+.operix-shared-sidebar-group-chevron { margin-left: auto; flex: none; opacity: .65; transition: transform .18s ease; }
+.operix-shared-sidebar-group[open] > summary .operix-shared-sidebar-group-chevron { transform: rotate(180deg); }
+.operix-shared-sidebar-group.has-active > summary { color: var(--shared-sidebar-ink, inherit); font-weight: 600; }
+.operix-shared-sidebar-children { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 21px; padding-left: 10px; border-left: 1px solid var(--shared-sidebar-border, rgba(127,138,160,.28)); }
+.operix-shared-sidebar-children .operix-shared-sidebar-link { min-height: 34px; padding-left: 10px; font-size: 12.5px; }
+.operix-shared-sidebar-children .operix-shared-sidebar-link svg { display: none; }

@@ -13,6 +13,8 @@ export type OperixSidebarItem = {
   label: string;
   icon: OperixSidebarIcon;
   active?: boolean;
+  /** Renders the item as a collapsible group; the group opens automatically while a child is active. */
+  children?: OperixSidebarItem[];
 };
 
 export type OperixSidebarWorkspace = {
@@ -90,6 +92,16 @@ export function OperixSidebar({
     });
   };
 
+  const renderItem = (item: OperixSidebarItem) => {
+    if (!item.children?.length) return <span className="operix-shared-sidebar-item" key={`${item.href}-${item.label}`}>{link(item)}</span>;
+    const Icon = item.icon;
+    const groupActive = item.children.some((child) => child.active === true);
+    return <details className={`operix-shared-sidebar-group ${groupActive ? "has-active" : ""}`} key={`${item.href}-${item.label}`} open={groupActive || undefined}>
+      <summary className="operix-shared-sidebar-link"><Icon size={18} strokeWidth={groupActive ? 2.3 : 1.9} /><span>{item.label}</span><ChevronDown size={15} className="operix-shared-sidebar-group-chevron" aria-hidden="true" /></summary>
+      <div className="operix-shared-sidebar-children">{item.children.map((child) => <span className="operix-shared-sidebar-item" key={`${child.href}-${child.label}`}>{link(child, "is-child")}</span>)}</div>
+    </details>;
+  };
+
   return <>
     <aside className={`operix-shared-sidebar ${mobileOpen ? "is-open" : ""}`} aria-label={ariaLabel}>
       <div className="operix-shared-sidebar-brand">
@@ -115,7 +127,7 @@ export function OperixSidebar({
       <nav className="operix-shared-sidebar-nav" aria-label={ariaLabel}>
         {navSections.map((section, sectionIndex) => <div className={`operix-shared-sidebar-section ${sectionIndex > 0 ? "is-secondary" : ""}`} key={section.label}>
           <span className="operix-shared-sidebar-section-label">{section.label}</span>
-          {section.items.map((item) => <span className="operix-shared-sidebar-item" key={`${item.href}-${item.label}`}>{link(item)}</span>)}
+          {section.items.map(renderItem)}
         </div>)}
       </nav>
 

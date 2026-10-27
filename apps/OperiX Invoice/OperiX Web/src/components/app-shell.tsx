@@ -353,6 +353,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const visiblePrimaryNavigation = primaryNavigation.filter(canNavigate);
   const visibleNavigationSections = navigationSections.map((section) => ({ ...section, items: section.items.filter((item) => item.href !== "/settings" && item.href !== "/help").filter(canNavigate) })).filter((section) => section.items.length);
   const invoiceSidebarItems = visibleNavigationSections.flatMap((section) => section.items);
+  const allNavItems: NavigationItem[] = [...primaryNavigation, ...navigationSections.flatMap((section) => section.items), { href: "/supplier-bills", label: "Supplier Bills", icon: FileText, permission: "expense.view_own" }, { href: "/vendor-payments", label: "Vendor Payments", icon: HandCoins, permission: "expense.view_own" }];
+  const sidebarItem = (href: string) => { const item = allNavItems.find((candidate) => candidate.href === href); return item && canNavigate(item) ? { href: item.href, label: item.label, icon: item.icon, active: isNavigationItemActive(pathname, item.href) } : null; };
+  const sidebarGroup = (label: string, icon: NavigationItem["icon"], hrefs: string[]) => {
+    const children = hrefs.map(sidebarItem).filter((item): item is NonNullable<ReturnType<typeof sidebarItem>> => Boolean(item));
+    if (!children.length) return null;
+    return children.length === 1 ? children[0] : { href: children[0].href, label, icon, children };
+  };
+  const compact = <T,>(items: Array<T | null>) => items.filter((item): item is T => item !== null);
+  const sidebarSections = [
+    { label: "Workspace", items: compact([sidebarItem("/dashboard"), sidebarItem("/pos")]) },
+    { label: "Manage", items: compact([
+      sidebarGroup("Sales", FileText, ["/invoices", "/quotes", "/contracts", "/payments"]),
+      sidebarItem("/customers"),
+      sidebarGroup("Stock", Package, ["/products", "/inventory"]),
+      sidebarGroup("Purchases", WalletCards, ["/expenses", "/vendors", "/supplier-bills", "/vendor-payments"]),
+      sidebarGroup("Money", HandCoins, ["/cash-bank", "/income", "/accounting", "/payroll"]),
+      sidebarGroup("Reports", ReceiptText, ["/reports", "/tax-reports"]),
+    ]) },
+  ].filter((section) => section.items.length);
   const visibleCreateActions = createActions.filter((action) => workspace.can(action.permission));
   const renderSidebarLink = ({ href, className, children, onClick, "aria-current": ariaCurrent }: OperixSidebarLinkProps) => <Link href={href} className={className} onClick={onClick} aria-current={ariaCurrent}>{children}</Link>;
   const renderTopbarLink = ({ href, className, children, onClick, "aria-label": ariaLabel }: { href: string; className: string; children: React.ReactNode; onClick?: () => void; "aria-label"?: string }) => <Link href={href} className={className} onClick={onClick} aria-label={ariaLabel}>{children}</Link>;
@@ -370,10 +389,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <OperixSidebar
         logo={<InvoiceLogo href="/dashboard" />}
         ariaLabel="Invoice navigation"
-        navSections={[
-          { label: "Workspace", items: visiblePrimaryNavigation.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
-          { label: "Manage", items: invoiceSidebarItems.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
-        ]}
+        navSections={sidebarSections}
         settingsItem={workspace.can("settings.company") || workspace.can("settings.invoice") || workspace.can("permissions.manage") ? { label: "Settings", href: "/settings", icon: Settings2, active: isNavigationItemActive(pathname, "/settings") } : undefined}
         workspaceName={companyName}
         workspaces={companies.map((company) => ({ id: company.id, name: company.name, initials: initials(company.name) }))}
