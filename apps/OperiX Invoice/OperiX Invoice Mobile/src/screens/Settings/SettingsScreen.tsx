@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import {
     ChevronRight, Moon, Sun, Smartphone, Camera, Upload, X,
     Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages,
-    ShieldCheck, Briefcase, Users, Building, Zap, LogOut, Plus, Edit2, Trash2, Share2
+    ShieldCheck, Briefcase, Users, Building, MapPin, Zap, LogOut, Plus, Edit2, Trash2, Share2
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -20,7 +20,7 @@ import { CompanyBankAccount, CompanyBankAccountShare, Profile } from '@invoice-m
 import { t } from '@invoice-monorepo/i18n';
 import { brand, getPalette, normalizeBrandColor } from '../../theme/brand';
 import { getWorkspaceScope } from '../../services/workspace';
-import { MobileHeader, MobileScreen, ShortcutRow } from '../../components/mobile/MobileUI';
+import { MobileHeader, MobileScreen, SectionTitle, ShortcutRow } from '../../components/mobile/MobileUI';
 import { StampGeneratorModal } from '../../components/mobile/StampGeneratorModal';
 
 const languages = [
@@ -42,6 +42,9 @@ type BankAccountForm = {
     is_primary: boolean;
 };
 
+type BranchForm = { code: string; name: string; registered_address: string; municipality: string };
+const emptyBranchForm: BranchForm = { code: '', name: '', registered_address: '', municipality: '' };
+
 const emptyBankAccountForm: BankAccountForm = {
     bank_name: '',
     account_name: '',
@@ -53,7 +56,7 @@ const emptyBankAccountForm: BankAccountForm = {
 };
 
 export function SettingsScreen({ navigation }: any) {
-    const { user, signOut } = useAuth();
+    const { user, signOut, deleteAccount } = useAuth();
     const { themeMode, setThemeMode, isDark, primaryColor, setPrimaryColor, language, setLanguage } = useTheme();
     const [profile, setProfile] = useState<Profile>({
         id: user?.id || '',
@@ -75,6 +78,8 @@ export function SettingsScreen({ navigation }: any) {
     const [showSignaturePad, setShowSignaturePad] = useState(false);
     const [showStampGenerator, setShowStampGenerator] = useState(false);
     const [workspaceRole, setWorkspaceRole] = useState<'super_administrator' | 'company_administrator' | 'manager' | 'employee'>('employee');
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
     const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
     const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
     const [bankAccountSaving, setBankAccountSaving] = useState(false);
@@ -86,6 +91,11 @@ export function SettingsScreen({ navigation }: any) {
     const [shareableCompanies, setShareableCompanies] = useState<Array<{ id: string; company_name?: string }>>([]);
     const [bankAccountShares, setBankAccountShares] = useState<CompanyBankAccountShare[]>([]);
     const [bankShareSaving, setBankShareSaving] = useState(false);
+    const [branches, setBranches] = useState<Array<{ id: string; code: string; name: string; registered_address?: string | null; municipality?: string | null; is_active?: boolean }>>([]);
+    const [preferredBranchId, setPreferredBranchId] = useState<string | null>(null);
+    const [branchForm, setBranchForm] = useState<BranchForm>(emptyBranchForm);
+    const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
+    const [showBranchForm, setShowBranchForm] = useState(false);
 
     const palette = getPalette(isDark);
     const textColor = palette.text;
@@ -94,6 +104,8 @@ export function SettingsScreen({ navigation }: any) {
     const accentBg = palette.surfaceMuted;
     const borderColor = palette.border;
     const sectionPanelStyle = [styles.sectionContent, { backgroundColor: cardBg, borderColor }];
+    const profileDisplayName = [(profile as any).first_name, (profile as any).last_name].filter(Boolean).join(' ') || user?.email?.split('@')[0] || t('profile', language);
+    const can = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
 
     useEffect(() => {
         fetchProfile();
@@ -105,9 +117,16 @@ export function SettingsScreen({ navigation }: any) {
         try {
             workspaceScope = await getWorkspaceScope(user.id);
             setWorkspaceRole(workspaceScope.roleCode);
-            await fetchBankAccounts(workspaceScope.companyId);
+            setWorkspacePermissions(workspaceScope.permissions);
+            setPlatformAdmin(workspaceScope.platformAdmin);
+            if (workspaceScope.platformAdmin || workspaceScope.permissions.includes('settings.bank')) {
+                await fetchBankAccounts(workspaceScope.companyId);
+            }
+            await fetchBranches(workspaceScope.companyId);
         } catch {
             setWorkspaceRole('employee');
+            setWorkspacePermissions([]);
+            setPlatformAdmin(false);
         }
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profileData) {
@@ -123,6 +142,42 @@ export function SettingsScreen({ navigation }: any) {
                 currency: 'EUR',
                 primary_color: normalizeBrandColor(combined.primary_color),
             });
+        }
+    };
+
+    const fetchBranches = async (companyId?: string) => {
+        if (!user) return;
+        const activeCompanyId = companyId || (await getWorkspaceScope(user.id)).companyId;
+        if (!activeCompanyId) return;
+        const { data } = await supabase.from('branches').select('id,code,name,registered_address,municipality,is_active').eq('company_id', activeCompanyId).order('name');
+        setBranches((data || []) as typeof branches);
+        const preferred = await supabase.from('company_user_preferences').select('preferred_branch_id').eq('company_id', activeCompanyId).eq('user_id', user.id).maybeSingle();
+        setPreferredBranchId(preferred.data?.preferred_branch_id || null);
+    };
+
+    const saveBranchSettings = async () => {
+        if (!can('settings.company')) {
+            Alert.alert(t('error', language), 'Company settings permission is required.');
+            return;
+        }
+        if (!user || !branchForm.code.trim() || !branchForm.name.trim()) {
+            Alert.alert(t('error', language), language === 'sq' ? 'Kodi dhe emri i degës janë të detyrueshëm.' : 'Branch code and name are required.');
+            return;
+        }
+        try {
+            const { companyId } = await getWorkspaceScope(user.id);
+            const payload = { company_id: companyId, code: branchForm.code.trim().toUpperCase(), name: branchForm.name.trim(), registered_address: branchForm.registered_address.trim() || null, municipality: branchForm.municipality.trim() || null, is_active: true };
+            const request = editingBranchId
+                ? supabase.from('branches').update(payload).eq('id', editingBranchId)
+                : supabase.from('branches').insert({ ...payload, created_by: user.id });
+            const { error } = await request;
+            if (error) throw error;
+            setBranchForm(emptyBranchForm);
+            setEditingBranchId(null);
+            setShowBranchForm(false);
+            await fetchBranches(companyId);
+        } catch (error) {
+            Alert.alert(t('error', language), error instanceof Error ? error.message : 'Unable to save branch.');
         }
     };
 
@@ -154,7 +209,7 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const openBankShareForm = async (account: CompanyBankAccount) => {
-        if (account.is_shared) return;
+        if (account.is_shared || !can('settings.bank')) return;
         try {
             if (!user) return;
             const scope = await getWorkspaceScope(user.id);
@@ -171,7 +226,7 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const handleShareBankAccount = async (companyId: string) => {
-        if (!sharingBankAccount) return;
+        if (!sharingBankAccount || !can('settings.bank')) return;
         setBankShareSaving(true);
         try {
             await shareCompanyBankAccount(supabase, sharingBankAccount.id, companyId);
@@ -184,7 +239,7 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const handleRevokeBankAccountShare = async (companyId: string) => {
-        if (!sharingBankAccount) return;
+        if (!sharingBankAccount || !can('settings.bank')) return;
         setBankShareSaving(true);
         try {
             await revokeCompanyBankAccountShare(supabase, sharingBankAccount.id, companyId);
@@ -211,7 +266,10 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const handleSaveBankAccount = async () => {
-        if (!user) return;
+        if (!user || !can('settings.bank')) {
+            Alert.alert(t('error', language), 'Bank settings permission is required.');
+            return;
+        }
         if (!bankAccountForm.bank_name.trim() || (!bankAccountForm.account_number.trim() && !bankAccountForm.iban.trim())) {
             Alert.alert(t('error', language), t('bankAccountDetailsRequired', language));
             return;
@@ -252,6 +310,7 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const handleDeactivateBankAccount = (account: CompanyBankAccount) => {
+        if (!can('settings.bank')) return;
         Alert.alert(
             t('removeBankAccount', language),
             t('removeBankAccountConfirmation', language),
@@ -276,6 +335,21 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const updateProfile = async (updates: Partial<Profile>) => {
+        const permissionForField = (field: string) => {
+            if (['biometric_enabled', 'invoice_language', 'primary_color', 'default_client_discount'].includes(field)) return null;
+            if (['tax_id', 'tax_rate', 'tax_name'].includes(field)) return 'settings.tax';
+            if (['bank_name', 'bank_iban', 'bank_swift', 'bank_account'].includes(field)) return 'settings.bank';
+            if (['logo_url', 'signature_url', 'stamp_url', 'terms_conditions', 'template_config'].includes(field)) return 'settings.invoice';
+            return 'settings.company';
+        };
+        const unauthorizedField = Object.keys(updates).find((field) => {
+            const permission = permissionForField(field);
+            return permission !== null && !can(permission);
+        });
+        if (unauthorizedField) {
+            Alert.alert(t('error', language), 'You do not have permission to change this company setting.');
+            return;
+        }
         // Optimistic update
         setProfile(prev => ({ ...prev, ...updates }));
 
@@ -374,25 +448,28 @@ export function SettingsScreen({ navigation }: any) {
         }
     };
 
-    const renderHeader = (title: string, Icon: any, section: string, color: string) => {
+    const renderHeader = (title: string, description: string, Icon: any, section: string, color: string) => {
         const isActive = activeSection === section;
         return (
             <TouchableOpacity
                 testID={`settings-section-${section}`}
                 accessibilityRole="button"
                 accessibilityState={{ expanded: isActive }}
-                style={[styles.sectionHeader, { backgroundColor: cardBg, borderColor }, isActive && styles.sectionHeaderActive]}
+                style={[styles.sectionHeader, { backgroundColor: 'transparent', borderColor: 'transparent' }, isActive && styles.sectionHeaderActive]}
                 onPress={() => setActiveSection(isActive ? null : section)}
             >
                 <View style={styles.sectionHeaderLeft}>
                     <View style={[styles.sectionIcon, { backgroundColor: palette.iconSurface }]}>
                         <Icon color={color} size={20} />
                     </View>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
+                    <View style={styles.sectionHeaderCopy}>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
+                        <Text style={[styles.sectionDescription, { color: mutedColor }]} numberOfLines={2}>{description}</Text>
+                    </View>
                 </View>
                 <ChevronRight
                     color={mutedColor}
-                    size={20}
+                    size={18}
                     style={{ transform: [{ rotate: isActive ? '90deg' : '0deg' }] }}
                 />
             </TouchableOpacity>
@@ -405,6 +482,23 @@ export function SettingsScreen({ navigation }: any) {
         [
             { text: t('cancel', language), style: 'cancel' },
             { text: t('signOut', language), style: 'destructive', onPress: () => void signOut() },
+        ],
+    );
+
+    const confirmDeleteAccount = () => Alert.alert(
+        t('deleteAccountTitle', language),
+        t('deleteAccountConfirmation', language),
+        [
+            { text: t('cancel', language), style: 'cancel' },
+            {
+                text: t('deleteAccountConfirm', language),
+                style: 'destructive',
+                onPress: () => {
+                    void deleteAccount().then(({ error }) => {
+                        if (error) Alert.alert(t('deleteAccount', language), t('deleteAccountError', language));
+                    });
+                },
+            },
         ],
     );
 
@@ -421,20 +515,27 @@ export function SettingsScreen({ navigation }: any) {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={0}
             >
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {/* User Info Overview (Merged from Profile) */}
-                <View style={[styles.userCard, { backgroundColor: cardBg, borderColor }]}>
+                <TouchableOpacity
+                    testID="settings-profile-button"
+                    accessibilityRole="button"
+                    accessibilityLabel={t('profile', language)}
+                    onPress={() => navigation.navigate('Profile')}
+                    style={[styles.userCard, { backgroundColor: cardBg, borderColor }]}
+                >
                     <View style={[styles.userAvatar, { backgroundColor: primaryColor }]}>
                         <Text style={styles.avatarText}>{user?.email?.charAt(0).toUpperCase()}</Text>
                     </View>
                     <View style={styles.userDetails}>
-                        <Text style={[styles.userName, { color: textColor }]}>{user?.email?.split('@')[0]}</Text>
+                        <Text style={[styles.userName, { color: textColor }]}>{profileDisplayName}</Text>
                         <Text style={[styles.userEmail, { color: mutedColor }]}>{user?.email}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
+                <SectionTitle title={language === 'sq' ? 'Preferencat' : 'Preferences'} />
                 {/* Personal Settings (Merged from Profile) */}
-                {renderHeader(t('language', language), Languages, 'personal', primaryColor)}
+                {renderHeader(t('language', language), language === 'sq' ? 'Zgjidhni gjuhën e aplikacionit' : 'Choose the language used in the app', Languages, 'personal', primaryColor)}
                 {activeSection === 'personal' && (
                     <View style={sectionPanelStyle}>
                         <Text style={[styles.label, { color: textColor }]}>{t('appLanguage', language)}</Text>
@@ -464,7 +565,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Appearance (Merged from Profile) */}
-                {renderHeader(t('appTheme', language), Palette, 'appearance', primaryColor)}
+                {renderHeader(t('appTheme', language), language === 'sq' ? 'Pamja, ngjyra dhe mënyra e ekranit' : 'Appearance, colors, and display mode', Palette, 'appearance', primaryColor)}
                 {activeSection === 'appearance' && (
                     <View style={sectionPanelStyle}>
                         <Text style={[styles.label, { color: textColor }]}>{t('appTheme', language)}</Text>
@@ -513,38 +614,111 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Advanced Settings Link */}
-                <ShortcutRow
+                {can('settings.company') || can('settings.invoice') || can('financial.export') ? <ShortcutRow
                     icon={Zap}
                     title={t('advancedSettingsTitle', language)}
                     description={t('advancedSettingsDescription', language)}
                     onPress={() => navigation.navigate('AdvancedSettings')}
                     trailing={<ChevronRight color={palette.muted} size={18} />}
-                />
+                /> : null}
 
+                <SectionTitle title={language === 'sq' ? 'Kompania' : 'Company'} />
+                {can('subscription.manage') ? <ShortcutRow
+                    icon={CreditCard}
+                    title={language === 'sq' ? 'Abonimi dhe pagesa' : 'Subscription & billing'}
+                    description={language === 'sq' ? 'Shikoni planin, provën, përdorimin dhe statusin e pagesës' : 'View plan, trial, usage, and payment status'}
+                    onPress={() => navigation.navigate('Subscription')}
+                    trailing={<ChevronRight color={palette.muted} size={18} />}
+                /> : null}
+                {can('users.manage') ? <ShortcutRow
+                    icon={Users}
+                    title={language === 'sq' ? 'Përdoruesit dhe qasja' : 'Users & Access'}
+                    description={language === 'sq' ? 'Menaxhoni ekipin, rolet, lejet dhe vendet me pagesë' : 'Manage users, roles, permissions, invitations, and paid seats'}
+                    onPress={() => navigation.navigate('UsersAccess')}
+                    trailing={<ChevronRight color={palette.muted} size={18} />}
+                /> : null}
                 {/* Company Info */}
-                {renderHeader(t('companyProfile', language), Briefcase, 'company', primaryColor)}
-                {activeSection === 'company' && (
+                {can('settings.company') || can('settings.tax') ? renderHeader(t('companyProfile', language), language === 'sq' ? 'Të dhënat dhe kontaktet e kompanisë' : 'Company details and contact information', Briefcase, 'company', primaryColor) : null}
+                {activeSection === 'company' && (can('settings.company') || can('settings.tax')) && (
                     <View style={sectionPanelStyle}>
-                        <Input label={t('companyName', language)} value={profile.company_name} onChangeText={(value) => setProfile({ ...profile, company_name: value })} onEndEditing={() => updateProfile({ company_name: profile.company_name })} />
-                        <Input label={t('taxIdRegistration', language)} value={profile.tax_id} onChangeText={(value) => setProfile({ ...profile, tax_id: value })} onEndEditing={() => updateProfile({ tax_id: profile.tax_id })} />
-                        <Input label={t('email', language)} value={profile.email} onChangeText={(value) => setProfile({ ...profile, email: value })} onEndEditing={() => updateProfile({ email: profile.email })} keyboardType="email-address" />
-                        <Input label={t('phone', language)} value={profile.phone} onChangeText={(value) => setProfile({ ...profile, phone: value })} onEndEditing={() => updateProfile({ phone: profile.phone })} keyboardType="phone-pad" />
-                        <Input label={t('address', language)} value={profile.address} onChangeText={(value) => setProfile({ ...profile, address: value })} onEndEditing={() => updateProfile({ address: profile.address })} multiline />
+                        <Input editable={can('settings.company')} label={t('companyName', language)} value={profile.company_name} onChangeText={(value) => setProfile({ ...profile, company_name: value })} onEndEditing={() => updateProfile({ company_name: profile.company_name })} />
+                        <Input editable={can('settings.tax')} label={t('taxIdRegistration', language)} value={profile.tax_id} onChangeText={(value) => setProfile({ ...profile, tax_id: value })} onEndEditing={() => updateProfile({ tax_id: profile.tax_id })} />
+                        <Input editable={can('settings.company')} label={t('email', language)} value={profile.email} onChangeText={(value) => setProfile({ ...profile, email: value })} onEndEditing={() => updateProfile({ email: profile.email })} keyboardType="email-address" />
+                        <Input editable={can('settings.company')} label={t('phone', language)} value={profile.phone} onChangeText={(value) => setProfile({ ...profile, phone: value })} onEndEditing={() => updateProfile({ phone: profile.phone })} keyboardType="phone-pad" />
+                        <Input editable={can('settings.company')} label={t('address', language)} value={profile.address} onChangeText={(value) => setProfile({ ...profile, address: value })} onEndEditing={() => updateProfile({ address: profile.address })} multiline />
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             <View style={{ flex: 1 }}>
-                                <Input label={t('city', language)} value={profile.city} onChangeText={(value) => setProfile({ ...profile, city: value })} onEndEditing={() => updateProfile({ city: profile.city })} />
+                                <Input editable={can('settings.company')} label={t('city', language)} value={profile.city} onChangeText={(value) => setProfile({ ...profile, city: value })} onEndEditing={() => updateProfile({ city: profile.city })} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Input label={t('country', language)} value={profile.country} onChangeText={(value) => setProfile({ ...profile, country: value })} onEndEditing={() => updateProfile({ country: profile.country })} />
+                                <Input editable={can('settings.company')} label={t('country', language)} value={profile.country} onChangeText={(value) => setProfile({ ...profile, country: value })} onEndEditing={() => updateProfile({ country: profile.country })} />
                             </View>
                         </View>
-                        <Input label={t('website', language)} value={profile.website} onChangeText={(value) => setProfile({ ...profile, website: value })} onEndEditing={() => updateProfile({ website: profile.website })} placeholder="www.example.com" />
+                        <Input editable={can('settings.company')} label={t('website', language)} value={profile.website} onChangeText={(value) => setProfile({ ...profile, website: value })} onEndEditing={() => updateProfile({ website: profile.website })} placeholder="www.example.com" />
+                    </View>
+                )}
+
+                {renderHeader(language === 'sq' ? 'Degët' : 'Branches', language === 'sq' ? 'Menaxhoni degët dhe degën e preferuar për këtë kompani' : 'Manage company branches and your preferred branch', MapPin, 'branches', primaryColor)}
+                {activeSection === 'branches' && (
+                    <View style={sectionPanelStyle}>
+                        <Text style={[styles.label, { color: textColor }]}>{language === 'sq' ? 'Dega e preferuar' : 'Preferred branch'}</Text>
+                        <View style={styles.grid}>
+                            {branches.map((branch) => (
+                                <TouchableOpacity
+                                    key={branch.id}
+                                    accessibilityRole="radio"
+                                    accessibilityState={{ selected: preferredBranchId === branch.id }}
+                                    onPress={async () => {
+                                        const { companyId } = await getWorkspaceScope(user?.id || '');
+                                        const { error } = await supabase.rpc('set_preferred_branch', { p_company_id: companyId, p_branch_id: branch.id });
+                                        if (!error) setPreferredBranchId(branch.id);
+                                        else Alert.alert(t('error', language), error.message);
+                                    }}
+                                    style={[styles.optionChip, { flex: 1, backgroundColor: preferredBranchId === branch.id ? primaryColor : accentBg, borderColor: preferredBranchId === branch.id ? primaryColor : borderColor }]}
+                                >
+                                    <Text style={[styles.optionText, { color: preferredBranchId === branch.id ? '#fff' : textColor }]}>{branch.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        {can('settings.company') ? (
+                            <>
+                                <TouchableOpacity
+                                    testID="settings-add-branch-button"
+                                    accessibilityRole="button"
+                                    onPress={() => { setEditingBranchId(null); setBranchForm(emptyBranchForm); setShowBranchForm(true); }}
+                                    style={[styles.addBankButton, { borderColor: primaryColor, backgroundColor: `${primaryColor}12`, alignSelf: 'flex-start', marginTop: 14 }]}
+                                >
+                                    <Plus color={primaryColor} size={16} />
+                                    <Text style={[styles.addBankButtonText, { color: primaryColor }]}>{language === 'sq' ? 'Shto degë' : 'Add branch'}</Text>
+                                </TouchableOpacity>
+                                {showBranchForm ? (
+                                    <View style={[styles.bankAccountForm, { borderColor, backgroundColor: accentBg }]}>
+                                        <Input label={language === 'sq' ? 'Kodi' : 'Code'} value={branchForm.code} onChangeText={(value) => setBranchForm((current) => ({ ...current, code: value }))} placeholder="PR-01" />
+                                        <Input label={language === 'sq' ? 'Emri' : 'Name'} value={branchForm.name} onChangeText={(value) => setBranchForm((current) => ({ ...current, name: value }))} placeholder={language === 'sq' ? 'Dega Qendrore' : 'Main branch'} />
+                                        <Input label={t('address', language)} value={branchForm.registered_address} onChangeText={(value) => setBranchForm((current) => ({ ...current, registered_address: value }))} />
+                                        <Input label={t('city', language)} value={branchForm.municipality} onChangeText={(value) => setBranchForm((current) => ({ ...current, municipality: value }))} />
+                                        <View style={styles.bankAccountFormActions}>
+                                            <TouchableOpacity onPress={() => setShowBranchForm(false)} style={[styles.formSecondaryButton, { borderColor }]}><Text style={[styles.formSecondaryButtonText, { color: textColor }]}>{t('cancel', language)}</Text></TouchableOpacity>
+                                            <TouchableOpacity onPress={() => void saveBranchSettings()} style={[styles.formPrimaryButton, { backgroundColor: primaryColor }]}><Text style={styles.formPrimaryButtonText}>{t('save', language)}</Text></TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ) : null}
+                            </>
+                        ) : null}
+                        <View style={{ gap: 8, marginTop: 14 }}>
+                            {branches.map((branch) => (
+                                <View key={`settings-branch-${branch.id}`} style={[styles.bankAccountRow, { borderColor }]}>
+                                    <View style={styles.bankAccountCopy}><Text style={[styles.bankAccountName, { color: textColor }]}>{branch.name}</Text><Text style={[styles.bankAccountDetails, { color: mutedColor }]}>{branch.code}{branch.municipality ? ` · ${branch.municipality}` : ''}</Text></View>
+                                    {can('settings.company') ? <TouchableOpacity onPress={() => { setEditingBranchId(branch.id); setBranchForm({ code: branch.code, name: branch.name, registered_address: branch.registered_address || '', municipality: branch.municipality || '' }); setShowBranchForm(true); }} style={styles.bankAccountAction}><Edit2 color={mutedColor} size={17} /></TouchableOpacity> : null}
+                                </View>
+                            ))}
+                        </View>
                     </View>
                 )}
 
                 {/* Identity & Visuals */}
-                {renderHeader(t('logosSignatures', language), Camera, 'visuals', primaryColor)}
-                {activeSection === 'visuals' && (
+                {can('settings.invoice') ? renderHeader(t('logosSignatures', language), language === 'sq' ? 'Logo, nënshkrime dhe vula në dokumente' : 'Logos, signatures, and document stamps', Camera, 'visuals', primaryColor) : null}
+                {activeSection === 'visuals' && can('settings.invoice') && (
                     <View style={sectionPanelStyle}>
                         <AssetPicker label={t('companyLogo', language)} hint={t('logoFormatHint', language)} value={profile.logo_url} onPick={pickLogo} onClear={() => updateProfile({ logo_url: '' })} icon={ImageIcon} isDark={isDark} />
                         <AssetPicker
@@ -570,13 +744,13 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Bank Details */}
-                {renderHeader(t('bankDetails', language), CreditCard, 'payments', primaryColor)}
-                {activeSection === 'payments' && (
+                {can('settings.bank') ? renderHeader(t('bankDetails', language), language === 'sq' ? 'Llogaritë bankare dhe të dhënat në faturë' : 'Bank accounts and invoice payment details', CreditCard, 'payments', primaryColor) : null}
+                {activeSection === 'payments' && can('settings.bank') && (
                     <View style={sectionPanelStyle}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>{t('bankDetailsPdf', language)}</Text>
-                        <Input label={t('bank', language)} value={profile.bank_name} onChangeText={(value) => setProfile({ ...profile, bank_name: value })} onEndEditing={() => updateProfile({ bank_name: profile.bank_name })} />
-                        <Input label={t('iban', language)} value={profile.bank_iban} onChangeText={(value) => setProfile({ ...profile, bank_iban: value })} onEndEditing={() => updateProfile({ bank_iban: profile.bank_iban })} />
-                        <Input label={t('swift', language)} value={profile.bank_swift} onChangeText={(value) => setProfile({ ...profile, bank_swift: value })} onEndEditing={() => updateProfile({ bank_swift: profile.bank_swift })} />
+                        <Input editable={can('settings.bank')} label={t('bank', language)} value={profile.bank_name} onChangeText={(value) => setProfile({ ...profile, bank_name: value })} onEndEditing={() => updateProfile({ bank_name: profile.bank_name })} />
+                        <Input editable={can('settings.bank')} label={t('iban', language)} value={profile.bank_iban} onChangeText={(value) => setProfile({ ...profile, bank_iban: value })} onEndEditing={() => updateProfile({ bank_iban: profile.bank_iban })} />
+                        <Input editable={can('settings.bank')} label={t('swift', language)} value={profile.bank_swift} onChangeText={(value) => setProfile({ ...profile, bank_swift: value })} onEndEditing={() => updateProfile({ bank_swift: profile.bank_swift })} />
 
                         <View style={[styles.divider, { backgroundColor: borderColor }]} />
                         <View style={styles.bankAccountsHeader}>
@@ -584,7 +758,7 @@ export function SettingsScreen({ navigation }: any) {
                                 <Text style={[styles.label, { color: textColor }]}>{t('bankAccounts', language)}</Text>
                                 <Text style={[styles.hint, { color: mutedColor }]}>{t('bankAccountsDescription', language)}</Text>
                             </View>
-                            <TouchableOpacity
+                            {can('settings.bank') ? <TouchableOpacity
                                 testID="settings-add-bank-account-button"
                                 accessibilityRole="button"
                                 onPress={() => {
@@ -596,7 +770,7 @@ export function SettingsScreen({ navigation }: any) {
                             >
                                 <Plus color={primaryColor} size={16} />
                                 <Text style={[styles.addBankButtonText, { color: primaryColor }]}>{t('addBankAccount', language)}</Text>
-                            </TouchableOpacity>
+                            </TouchableOpacity> : null}
                         </View>
 
                         {bankAccountsLoading ? (
@@ -617,7 +791,7 @@ export function SettingsScreen({ navigation }: any) {
                                             {account.iban && account.account_name ? <Text style={[styles.bankAccountDetails, { color: mutedColor }]} numberOfLines={1}>{account.iban}</Text> : null}
                                         </View>
                                         <View style={styles.bankAccountActions}>
-                                            {!account.is_shared ? <>
+                                                {!account.is_shared && can('settings.bank') ? <>
                                                 <TouchableOpacity
                                                     testID={`settings-share-bank-account-${account.id}-button`}
                                                     accessibilityRole="button"
@@ -677,7 +851,7 @@ export function SettingsScreen({ navigation }: any) {
                                         <ScrollView
                                             style={styles.bankAccountModalScroll}
                                             contentContainerStyle={styles.bankAccountModalScrollContent}
-                                            keyboardShouldPersistTaps="always"
+                                            keyboardShouldPersistTaps="handled"
                                             keyboardDismissMode="none"
                                         >
                                             <Input label={`${t('bankName', language)} *`} value={bankAccountForm.bank_name} onChangeText={(value) => setBankAccountForm(prev => ({ ...prev, bank_name: value }))} />
@@ -743,7 +917,7 @@ export function SettingsScreen({ navigation }: any) {
                                         <ScrollView
                                             style={styles.bankAccountModalScroll}
                                             contentContainerStyle={styles.bankAccountModalScrollContent}
-                                            keyboardShouldPersistTaps="always"
+                                            keyboardShouldPersistTaps="handled"
                                         >
                                             <Text style={[styles.label, { color: textColor }]}>{t('shareWithTenant', language)}</Text>
                                             {shareableCompanies.length ? shareableCompanies.map((company) => {
@@ -777,9 +951,10 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 )}
 
+                <SectionTitle title={language === 'sq' ? 'Bashkëpunimi dhe siguria' : 'Team and security'} />
                 {/* Team & Collaboration */}
-                {renderHeader(t('teamCollaboration', language), Users, 'team', primaryColor)}
-                {activeSection === 'team' && (
+                {can('users.view') || can('settings.company') ? renderHeader(t('teamCollaboration', language), language === 'sq' ? 'Rolet, anëtarët dhe kompanitë e lidhura' : 'Roles, members, and connected companies', Users, 'team', primaryColor) : null}
+                {activeSection === 'team' && (can('users.view') || can('settings.company')) && (
                     <View style={sectionPanelStyle}>
                         <View style={styles.rowBetween}>
                             <View>
@@ -800,18 +975,18 @@ export function SettingsScreen({ navigation }: any) {
                             value={profile.company_id || user?.id}
                             editable={false}
                         />
-                        <ShortcutRow
+                        {can('settings.company') || can('users.manage') ? <ShortcutRow
                             icon={Building}
                             title={t('company', language)}
                             description={t('switchOrManageCompanies', language)}
                             onPress={() => navigation.navigate('ManageCompanies')}
                             trailing={<ChevronRight color={palette.muted} size={18} />}
-                        />
+                        /> : null}
                     </View>
                 )}
 
                 {/* Security (Merged from Profile) */}
-                {renderHeader(t('security', language), ShieldCheck, 'security', primaryColor)}
+                {renderHeader(t('security', language), t('biometricDescription', language), ShieldCheck, 'security', primaryColor)}
                 {activeSection === 'security' && (
                     <View style={sectionPanelStyle}>
                         <View style={styles.rowBetween}>
@@ -833,6 +1008,10 @@ export function SettingsScreen({ navigation }: any) {
 
 
                 <View style={styles.footer}>
+                    <TouchableOpacity testID="settings-delete-account-button" accessibilityRole="button" onPress={confirmDeleteAccount} style={[styles.signOut, { borderColor: brand.colors.error }]}>
+                        <Trash2 color={brand.colors.error} size={18} />
+                        <Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('deleteAccount', language)}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity testID="settings-logout-button" accessibilityRole="button" onPress={confirmSignOut} style={[styles.signOut, { borderColor }]}>
                         <LogOut color={brand.colors.error} size={18} />
                         <Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('signOut', language)}</Text>
@@ -910,9 +1089,9 @@ function AssetPicker({ label, hint, value, onPick, onClear, onDraw, icon, isDark
 const styles = StyleSheet.create({
     keyboardAvoidingView: { flex: 1 },
     scroll: { flex: 1 },
-    scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 2, paddingBottom: 100 },
 
-    userCard: { flexDirection: 'row', alignItems: 'center', minHeight: 84, padding: 14, marginBottom: 20, borderRadius: 16, borderWidth: 1, ...brand.shadow.card },
+    userCard: { flexDirection: 'row', alignItems: 'center', minHeight: 84, padding: 14, marginBottom: 12, borderRadius: 18, borderWidth: 1, ...brand.shadow.card },
     userAvatar: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
     avatarText: { color: '#fff', fontSize: 18, fontFamily: brand.fonts.semibold },
     userDetails: { marginLeft: 13, flex: 1 },
@@ -923,19 +1102,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        minHeight: 68,
-        paddingHorizontal: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-        marginBottom: 12,
-        ...brand.shadow.card,
+        minHeight: 64,
+        paddingHorizontal: 0,
+        borderRadius: 0,
+        borderWidth: 0,
+        marginBottom: 4,
     },
-    sectionHeaderActive: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0, marginBottom: 0 },
-    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
+    sectionHeaderActive: { marginBottom: 6 },
+    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
     sectionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    sectionTitle: { fontSize: 14, fontFamily: brand.fonts.semibold },
+    sectionHeaderCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
+    sectionTitle: { fontSize: 14, lineHeight: 18, fontFamily: brand.fonts.semibold },
+    sectionDescription: { fontSize: 11, lineHeight: 16, marginTop: 3, fontFamily: brand.fonts.regular },
 
-    sectionContent: { padding: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderTopWidth: 0, marginBottom: 12 },
+    sectionContent: { padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 12, ...brand.shadow.card },
 
     label: { fontSize: 13, fontFamily: brand.fonts.semibold, marginBottom: 10 },
     subLabel: { fontSize: 11, fontFamily: brand.fonts.semibold, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.4 },
@@ -981,7 +1161,7 @@ const styles = StyleSheet.create({
     bankAccountModalHeader: { minHeight: 62, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E9F0' },
     bankAccountCloseButton: { padding: 8, marginRight: -8 },
     bankAccountModalScroll: { flexGrow: 0 },
-    bankAccountModalScrollContent: { padding: 18, paddingBottom: 32 },
+    bankAccountModalScrollContent: { flexGrow: 1, padding: 18, paddingBottom: 32 },
     bankAccountForm: { marginTop: 14, padding: 12, borderRadius: 14, borderWidth: 1 },
     bankAccountFormTitle: { fontSize: 13, fontFamily: brand.fonts.semibold, marginBottom: 4 },
     optionTitle: { fontSize: 13, fontFamily: brand.fonts.semibold },

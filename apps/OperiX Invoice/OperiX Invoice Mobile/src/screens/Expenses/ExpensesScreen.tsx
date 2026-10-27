@@ -2,17 +2,18 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
+    TextInput,
     FlatList,
     TouchableOpacity,
     RefreshControl,
     Alert,
     StyleSheet,
-    TextInput,
     ScrollView,
 } from 'react-native';
 import { Trash2, Search, X, Plus, Filter, Calendar, DollarSign, Tag, TrendingUp, TrendingDown, Scale } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '@invoice-monorepo/api';
+import { supabase, EXPENSE_CATEGORIES, exactSum } from '@invoice-monorepo/api';
+import { DecimalAmount } from '@invoice-monorepo/money';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, FAB } from '@invoice-monorepo/ui';
@@ -33,7 +34,7 @@ export function ExpensesScreen({ navigation }: any) {
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
 
-    const categories = ['All', 'Travel', 'Supplies', 'Marketing', 'Software', 'Rent', 'Utilities', 'Sales', 'Refund', 'Grant', 'Other'];
+    const categories = ['All', ...EXPENSE_CATEGORIES.map((category) => category.id), 'Travel', 'Supplies', 'Marketing', 'Software', 'Rent', 'Utilities', 'Sales', 'Refund', 'Grant', 'Other'];
     const categoryLabel = (category: string) => ({
         All: t('all', language),
         Travel: t('travelCategory', language),
@@ -46,6 +47,7 @@ export function ExpensesScreen({ navigation }: any) {
         Refund: t('refundCategory', language),
         Grant: t('grantCategory', language),
         Other: t('other', language),
+        ...Object.fromEntries(EXPENSE_CATEGORIES.map((category) => [category.id, language === 'sq' ? category.sq : category.en])),
     } as Record<string, string>)[category] || category;
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
@@ -77,13 +79,14 @@ export function ExpensesScreen({ navigation }: any) {
         }
 
         if (category !== 'All') {
-            filtered = filtered.filter(e => e.category === category);
+            filtered = filtered.filter(e => e.category === category || (e as any).category_code === category);
         }
         if (query.trim()) {
             const q = query.toLowerCase();
             filtered = filtered.filter(e =>
                 e.description?.toLowerCase().includes(q) ||
                 e.category.toLowerCase().includes(q) ||
+                String((e as any).category_code || '').toLowerCase().includes(q) ||
                 e.vendor_name?.toLowerCase().includes(q) ||
                 e.invoice_number?.toLowerCase().includes(q)
             );
@@ -141,7 +144,7 @@ export function ExpensesScreen({ navigation }: any) {
                         {(item.type === 'income') ? <TrendingUp color='#12B76A' size={20} /> : <TrendingDown color='#ef4444' size={20} />}
                     </View>
                     <View style={styles.expenseTitle}>
-                        <Text style={[styles.category, { color: textColor }]}>{categoryLabel(item.category)}</Text>
+                        <Text style={[styles.category, { color: textColor }]}>{categoryLabel(String((item as any).category_code || item.category))}</Text>
                         <Text style={[styles.description, { color: mutedColor }]} numberOfLines={1}>{item.description || t('noDescription', language)}</Text>
                         {(item.vendor_name || item.invoice_number) ? (
                             <Text style={[styles.description, { color: mutedColor }]} numberOfLines={1}>
@@ -156,7 +159,8 @@ export function ExpensesScreen({ navigation }: any) {
                 <View style={styles.expenseFooter}>
                     <View style={styles.dateRow}>
                         <Calendar size={12} color={mutedColor} />
-                        <Text style={[styles.date, { color: mutedColor }]}>{item.date}</Text>
+                        <Text style={[styles.date, { color: mutedColor }]}>{(item as any).expense_number || item.date}</Text>
+                        {(item as any).documentation_status && (item as any).documentation_status !== 'complete' ? <Text style={[styles.statusText, { color: '#F79009' }]}>{(item as any).documentation_status === 'missing_supporting_document' ? t('missingSupportingDocument', language) : t('missingInformation', language)}</Text> : null}
                     </View>
                     <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
                         <Trash2 color="#ef4444" size={16} />
@@ -166,9 +170,9 @@ export function ExpensesScreen({ navigation }: any) {
         </TouchableOpacity>
     );
 
-    const totalIncome = filteredExpenses.filter(e => e.type === 'income').reduce((sum, e) => sum + Number(e.amount), 0);
-    const totalExpense = filteredExpenses.filter(e => e.type !== 'income').reduce((sum, e) => sum + Number(e.amount), 0);
-    const balance = totalIncome - totalExpense;
+    const totalIncome = exactSum(filteredExpenses.filter(e => e.type === 'income').map(e => e.amount));
+    const totalExpense = exactSum(filteredExpenses.filter(e => e.type !== 'income').map(e => e.amount));
+    const balance = Number(DecimalAmount.from(totalIncome).subtract(DecimalAmount.from(totalExpense)).toString());
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -189,6 +193,7 @@ export function ExpensesScreen({ navigation }: any) {
                 <View style={[styles.searchContainer, { backgroundColor: inputBg }]}>
                     <Search color={mutedColor} size={20} />
                     <TextInput
+                        testID="expenses-search-input"
                         style={[styles.searchInput, { color: textColor }]}
                         placeholder={t('search', language)}
                         placeholderTextColor={mutedColor}
@@ -209,16 +214,25 @@ export function ExpensesScreen({ navigation }: any) {
                 </View>
             )}
 
+            <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActions}>
+                {EXPENSE_CATEGORIES.filter((category) => ['fuel','electricity','water','internet','telecommunications','rent','consumable_materials','transport','other_expenses'].includes(category.id)).map((category) => (
+                    <TouchableOpacity key={category.id} style={[styles.quickAction, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ExpenseForm', { quickCategory: category.id })}>
+                        <Plus color={primaryColor} size={15} />
+                        <Text style={[styles.quickActionText, { color: textColor }]}>{language === 'sq' ? category.sq : category.en}</Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+
             <View style={styles.statsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                    {renderStatCard(t('balance', language), formatCurrency(balance), Scale, balance >= 0 ? '#12B76A' : '#ef4444')}
-                    {renderStatCard(t('totalIncomes', language), formatCurrency(totalIncome), TrendingUp, '#12B76A')}
-                    {renderStatCard(t('totalExpenses', language), formatCurrency(totalExpense), TrendingDown, '#ef4444')}
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    {renderStatCard(t('balance', language), formatCurrency(Number(balance)), Scale, balance >= 0 ? '#12B76A' : '#ef4444')}
+                    {renderStatCard(t('totalIncomes', language), formatCurrency(Number(totalIncome)), TrendingUp, '#12B76A')}
+                    {renderStatCard(t('totalExpenses', language), formatCurrency(Number(totalExpense)), TrendingDown, '#ef4444')}
                 </ScrollView>
             </View>
 
             <View style={styles.filterSection}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
                     {categories.map(cat => (
                         <TouchableOpacity
                             key={cat}
@@ -271,7 +285,10 @@ const styles = StyleSheet.create({
     iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 0, paddingHorizontal: 16, height: 50, borderRadius: 14, gap: 12, marginBottom: 16 },
-    searchInput: { flex: 1, fontSize: 16 },
+    searchInput: { flex: 1, fontSize: 16, height: '100%' },
+    quickActions: { paddingHorizontal: 20, gap: 8, paddingBottom: 14 },
+    quickAction: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
+    quickActionText: { fontSize: 12, fontWeight: '600' },
 
     statsContainer: { marginBottom: 24 },
     statsScroll: { paddingHorizontal: 20, gap: 12 },
@@ -308,6 +325,7 @@ const styles = StyleSheet.create({
     expenseFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
     dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     date: { fontSize: 12, fontWeight: '500' },
+    statusText: { fontSize: 11, fontWeight: '600', marginLeft: 8 },
     deleteButton: { padding: 6, marginRight: -6 },
 
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },

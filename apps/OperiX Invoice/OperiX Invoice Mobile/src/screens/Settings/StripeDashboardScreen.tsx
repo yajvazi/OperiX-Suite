@@ -229,7 +229,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
@@ -438,7 +438,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                         </View>
 
                         {selectedTransaction && (
-                            <ScrollView style={styles.modalBody}>
+                            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalBody}>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
                                     <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('type', language)}</Text>
                                     <Text style={[styles.modalValue, { color: textColor }]}>
@@ -646,7 +646,7 @@ export function StripeDashboardScreen({ navigation }: any) {
                         </View>
 
                         {selectedPayout && (
-                            <ScrollView style={styles.modalBody}>
+                            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalBody}>
                                 <View style={[styles.modalDetailRow, { borderBottomColor: isDark ? '#263A55' : '#E4E9F0' }]}>
                                     <Text style={[styles.modalLabel, { color: mutedColor }]}>{t('amount', language)}</Text>
                                     <Text style={[styles.modalValue, { color: '#004FFE', fontWeight: '600', fontSize: 18 }]}>

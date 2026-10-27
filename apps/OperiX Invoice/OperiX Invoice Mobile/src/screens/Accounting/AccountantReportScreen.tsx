@@ -15,14 +15,14 @@ import { createPdfZip, generateBulkPdf, sharePdfZip, type BulkPdfFile } from '..
 import { dateRangeZipFileName, documentPdfFileName, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { generateTransactionPdfHtml } from '../../services/pdf/transactionPdf';
-import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import type { RootStackParamList } from '../../navigation/types';
 import { brand, getPalette } from '../../theme/brand';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
 
 type AccountantType = 'invoices' | 'payments' | 'expenses' | 'sales' | 'vendorLedgers';
 type VendorRow = Record<string, any>;
-type VendorActivity = { vendor: VendorRow; bills: VendorRow[]; payments: VendorRow[] };
+type VendorActivity = { vendor: VendorRow; bills: VendorRow[]; payments: VendorRow[]; expenses: VendorRow[] };
 
 const ACCOUNTANT_TYPES: AccountantType[] = ['invoices', 'payments', 'expenses', 'sales', 'vendorLedgers'];
 
@@ -102,6 +102,16 @@ function vendorLedgerHtml(activity: VendorActivity, company: PdfCompany, languag
     const entries = [
         ...activity.bills.map((bill) => ({ date: bill.issue_date, description: `${t('supplierBill', language)} #${bill.bill_number || bill.id}`, debit: Number(bill.total_amount) || 0, credit: 0 })),
         ...activity.payments.map((payment) => ({ date: payment.payment_date, description: `${t('payment', language)}${payment.payment_method ? ` - ${payment.payment_method}` : ''}`, debit: 0, credit: Number(payment.amount) || 0 })),
+        ...activity.expenses.map((expense) => {
+            const total = Number(expense.amount) || 0;
+            const vat = Number(expense.tax_amount) || 0;
+            const net = Math.max(0, total - vat);
+            const vatRate = Number(expense.vat_rate) || 0;
+            const article = expense.article || expense.description || t('expense', language);
+            const invoice = expense.invoice_number ? ` · ${t('vendorInvoice', language)} #${expense.invoice_number}` : '';
+            const vatDetails = vat > 0 ? ` · ${t('priceWithoutVat', language)}: ${formatCurrency(net, 'EUR', language)} · ${t('vatAmount', language)} (${vatRate}%): ${formatCurrency(vat, 'EUR', language)}` : '';
+            return { date: expense.date, description: `${t('expensePayment', language)} · ${article}${invoice}${vatDetails}`, debit: 0, credit: total };
+        }),
     ].sort((left, right) => String(left.date).localeCompare(String(right.date)));
     let balance = 0;
     let debitTotal = 0;
@@ -152,6 +162,9 @@ export function AccountantReportScreen() {
         setError(null);
         try {
             const scope = await getWorkspaceScope(user.id);
+            if (!hasWorkspacePermission(scope, 'financial.export')) {
+                throw new Error('FINANCIAL_EXPORT_PERMISSION_REQUIRED');
+            }
             const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
             let tenantData: Record<string, any> = (scope.company || {}) as Record<string, any>;
             const activeCompanyId = profileData?.active_company_id || scope.companyId;
@@ -181,7 +194,7 @@ export function AccountantReportScreen() {
             setVendorPayments((vendorPaymentResult.data || []) as VendorRow[]);
         } catch (loadError) {
             console.error('Accountant report load error:', loadError);
-            setError(getLocalizedErrorMessage(loadError, language, 'unableToLoad'));
+            setError(loadError instanceof Error && loadError.message === 'FINANCIAL_EXPORT_PERMISSION_REQUIRED' ? t('permissionDenied', language) : getLocalizedErrorMessage(loadError, language, 'unableToLoad'));
         } finally {
             setLoading(false);
         }
@@ -207,7 +220,8 @@ export function AccountantReportScreen() {
         vendor,
         bills: filtered.bills.filter((bill) => String(bill.vendor_id) === String(vendor.id)),
         payments: filtered.vendorPayments.filter((payment) => String(payment.vendor_id) === String(vendor.id)),
-    })).filter((activity) => activity.bills.length || activity.payments.length), [filtered.bills, filtered.vendorPayments, vendors]);
+        expenses: filtered.expenses.filter((expense) => String(expense.vendor_id) === String(vendor.id)),
+    })).filter((activity) => activity.bills.length || activity.payments.length || activity.expenses.length), [filtered.bills, filtered.expenses, filtered.vendorPayments, vendors]);
 
     const typeLabel = (type: AccountantType) => ({
         invoices: t('accountantInvoices', language), payments: t('accountantIncomePayments', language), expenses: t('accountantExpenses', language), sales: t('accountantSales', language), vendorLedgers: t('accountantVendorLedgers', language),
@@ -250,6 +264,12 @@ export function AccountantReportScreen() {
     ];
 
     const handleExport = async () => {
+        if (!user) return;
+        const scope = await getWorkspaceScope(user.id);
+        if (!hasWorkspacePermission(scope, 'financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         if (!validDate(fromDate) || !validDate(toDate) || (fromDate && toDate && fromDate > toDate)) {
             Alert.alert(t('error', language), t('invalidDateRange', language));
             return;
@@ -292,7 +312,7 @@ export function AccountantReportScreen() {
             }
             if (selectedTypes.has('vendorLedgers')) {
                 for (const activity of vendorActivities) {
-                    const html = vendorLedgerHtml(activity, company, locale, fromDate || selectedDate([...activity.bills, ...activity.payments].map((row) => ({ date: row.issue_date || row.payment_date })), 'date', reportDateLabel), toDate || reportDateLabel);
+                    const html = vendorLedgerHtml(activity, company, locale, fromDate || selectedDate([...activity.bills, ...activity.payments, ...activity.expenses].map((row) => ({ date: row.issue_date || row.payment_date || row.date })), 'date', reportDateLabel), toDate || reportDateLabel);
                     await addFile(html, `${t('accountantVendorLedgers', language)}/${reportPdfFileName(tenantName, `${t('supplierCard', language)} - ${activity.vendor.name || '—'}`, reportDate)}`);
                 }
             }
@@ -313,10 +333,10 @@ export function AccountantReportScreen() {
 
     return <MobileScreen>
         <MobileHeader title={t('accountantReport', language)} subtitle={t('accountantReportSubtitle', language)} onBack={() => navigation.goBack()} />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={[styles.filterCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={styles.filterHeading}><View style={[styles.filterIcon, { backgroundColor: palette.iconSurface }]}><CalendarDays color={brand.colors.primary} size={17} /></View><View><Text style={[styles.filterTitle, { color: palette.text }]}>{t('dateRange', language)}</Text><Text style={[styles.filterHint, { color: palette.muted }]}>{t('dateRangeHint', language)}</Text></View></View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>{datePresets.map((preset) => <TouchableOpacity key={preset.id} onPress={() => applyPreset(preset.id)} style={[styles.preset, { backgroundColor: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? brand.colors.primary : palette.background, borderColor: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? brand.colors.primary : palette.border }]}><Text style={[styles.presetText, { color: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? '#fff' : palette.text }]}>{preset.label}</Text></TouchableOpacity>)}</ScrollView>
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>{datePresets.map((preset) => <TouchableOpacity key={preset.id} onPress={() => applyPreset(preset.id)} style={[styles.preset, { backgroundColor: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? brand.colors.primary : palette.background, borderColor: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? brand.colors.primary : palette.border }]}><Text style={[styles.presetText, { color: fromDate === dateRangeForPreset(preset.id).from && toDate === dateRangeForPreset(preset.id).to ? '#fff' : palette.text }]}>{preset.label}</Text></TouchableOpacity>)}</ScrollView>
                 <View style={styles.inputRow}><TouchableOpacity accessibilityRole="button" onPress={() => openDatePicker('from')} style={[styles.dateField, { borderColor: palette.border }]}><CalendarDays color={palette.muted} size={16} /><View style={styles.dateFieldCopy}><Text style={[styles.dateLabel, { color: palette.muted }]}>{t('dateFrom', language)}</Text><Text style={[styles.dateValue, { color: fromDate ? palette.text : palette.muted }]}>{fromDate ? displayDate(fromDate, locale) : t('chooseDate', language)}</Text></View><ChevronDown color={palette.muted} size={16} /></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => openDatePicker('to')} style={[styles.dateField, { borderColor: palette.border }]}><CalendarDays color={palette.muted} size={16} /><View style={styles.dateFieldCopy}><Text style={[styles.dateLabel, { color: palette.muted }]}>{t('dateTo', language)}</Text><Text style={[styles.dateValue, { color: toDate ? palette.text : palette.muted }]}>{toDate ? displayDate(toDate, locale) : t('chooseDate', language)}</Text></View><ChevronDown color={palette.muted} size={16} /></TouchableOpacity></View>
             </View>
             <Text style={[styles.sectionTitle, { color: palette.text }]}>{t('accountantSelectTypes', language)}</Text>
@@ -324,7 +344,7 @@ export function AccountantReportScreen() {
             <TouchableOpacity onPress={handleExport} disabled={exporting} style={[styles.exportButton, { backgroundColor: exporting ? palette.border : brand.colors.primary }]}><Download color="#fff" size={18} /><Text style={styles.exportText}>{exporting ? `${t('exporting', language)} ${exportProgress}/${exportTotal}` : t('downloadZip', language)}</Text></TouchableOpacity>
             <Text style={[styles.note, { color: palette.muted }]}>{t('accountantFolderNote', language)}</Text>
         </ScrollView>
-        {datePickerTarget ? <Modal visible transparent animationType="slide" onRequestClose={() => setDatePickerTarget(null)}><View style={styles.modalOverlay}><TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setDatePickerTarget(null)} /><View style={[styles.datePickerSheet, { backgroundColor: palette.surface }]}><View style={styles.datePickerHeader}><Text style={[styles.datePickerTitle, { color: palette.text }]}>{datePickerTarget === 'from' ? t('dateFrom', language) : t('dateTo', language)}</Text><TouchableOpacity accessibilityRole="button" onPress={() => setDatePickerTarget(null)}><X color={palette.muted} size={21} /></TouchableOpacity></View><DateTimePicker value={pickerDate} mode="date" display="spinner" onChange={(_, selected) => { if (selected) { setPickerDate(selected); setDateTarget(datePickerTarget, selected); } }} themeVariant={isDark ? 'dark' : 'light'} /><TouchableOpacity onPress={() => setDatePickerTarget(null)} style={[styles.doneButton, { backgroundColor: brand.colors.primary }]}><Text style={styles.doneText}>{t('done', language)}</Text></TouchableOpacity></View></View></Modal> : null}
+        {datePickerTarget ? <Modal visible transparent animationType="slide" onRequestClose={() => setDatePickerTarget(null)}><View style={styles.modalOverlay}><TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setDatePickerTarget(null)} /><View style={[styles.datePickerSheet, { backgroundColor: palette.surface }]}><View style={styles.datePickerHeader}><Text style={[styles.datePickerTitle, { color: palette.text }]}>{datePickerTarget === 'from' ? t('dateFrom', language) : t('dateTo', language)}</Text><TouchableOpacity accessibilityRole="button" onPress={() => setDatePickerTarget(null)}><X color={palette.muted} size={21} /></TouchableOpacity></View><DateTimePicker value={pickerDate} mode="date" display="spinner" onChange={(_, selected) => { if (selected) { setPickerDate(selected); setDateTarget(datePickerTarget, selected); } }} themeVariant={isDark ? 'dark' : 'light'} /><TouchableOpacity onPress={() => setDatePickerTarget(null)} style={[styles.doneButton, { backgroundColor: brand.colors.primary }]}><Text style={styles.doneText}>{t('done', language)}</Text></TouchableOpacity></View></View></Modal> : null}
     </MobileScreen>;
 }
 

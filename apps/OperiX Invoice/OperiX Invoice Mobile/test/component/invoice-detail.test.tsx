@@ -10,6 +10,11 @@ jest.mock('react-native-safe-area-context', () => ({
         const { View } = require('react-native');
         return ReactRuntime.createElement(View, props, children);
     },
+    SafeAreaProvider: ({ children }: { children?: React.ReactNode }) => {
+        const ReactRuntime = require('react');
+        return ReactRuntime.createElement(ReactRuntime.Fragment, null, children);
+    },
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('@react-navigation/native', () => {
@@ -31,8 +36,11 @@ jest.mock('../../src/services/workspace', () => ({
         company: { id: 'company-a', company_name: 'Test Company', parent_company_id: null },
         companies: [],
         profile: { id: 'user-a', company_id: 'company-a', company_name: 'Test Company', role: 'owner', currency: 'EUR', primary_color: '#004FFE', terms_conditions: '' },
+        permissions: ['invoice.edit', 'invoice.issue', 'invoice.void', 'invoice.credit', 'invoice.debit', 'payment.create'],
+        platformAdmin: true,
         isGroup: false,
     })),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 jest.mock('../../src/services/pdf/pdfService', () => ({
     generatePdf: jest.fn(async () => ({ success: true, uri: 'file:///tmp/invoice.pdf' })),
@@ -43,8 +51,10 @@ jest.mock('../../src/services/pdf/TemplateFactory', () => ({ generateInvoiceHtml
 jest.mock('@invoice-monorepo/api', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 jest.mock('@invoice-monorepo/api/repositories', () => ({
     getInvoice: jest.fn(),
+    listCompanyAgents: jest.fn(async () => []),
     listInvoicePayments: jest.fn(),
     deleteInvoice: jest.fn(),
+    postCreditNote: jest.fn(),
     transitionInvoiceStatus: jest.fn(),
 }));
 
@@ -90,6 +100,7 @@ describe('invoice detail workflow', () => {
         repositories().getInvoice.mockResolvedValue(invoice);
         repositories().listInvoicePayments.mockResolvedValue([{ id: 'payment-a', amount: 20, payment_date: '2026-08-19', payment_method: 'bank', payment_number: 'PAY-1' }]);
         repositories().transitionInvoiceStatus.mockResolvedValue({ data: { status: 'paid' }, error: null });
+        repositories().postCreditNote.mockResolvedValue({ id: 'credit-a', invoice_number: 'NK-1' });
         repositories().deleteInvoice.mockResolvedValue(undefined);
         supabase().from.mockImplementation((table: string) => makeQuery(table === 'profiles' ? { data: { id: 'user-a', company_name: 'Test Company', currency: 'EUR', primary_color: '#004FFE', role: 'owner', terms_conditions: '' }, error: null } : { data: [], error: null }));
     });
@@ -105,7 +116,7 @@ describe('invoice detail workflow', () => {
         expect(navigation.navigate).toHaveBeenCalledWith('PaymentForm', { invoiceId: 'invoice-a' });
 
         await fireEvent.press(screen.getByTestId('invoice-more-actions-button'));
-        await fireEvent.press(screen.getByText('Preview'));
+        await fireEvent.press(screen.getByTestId('invoice-more-preview-button'));
         await waitFor(() => expect(screen.getByTestId('webview')).toBeTruthy());
         await fireEvent.press(screen.getByTestId('invoice-preview-close-button'));
         await fireEvent.press(screen.getByTestId('invoice-more-actions-button'));
@@ -121,6 +132,38 @@ describe('invoice detail workflow', () => {
         fireEvent(screen.getByTestId('invoice-number-title'), 'longPress');
 
         await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalledWith('FAT-1'));
+    });
+
+    it('maps the sent action to the canonical issued status and supports cancellation', async () => {
+        repositories().getInvoice.mockResolvedValueOnce({ ...invoice, status: 'draft', commercial_status: 'DRAFT' });
+        const screen = await renderWithProviders(<InvoiceDetailScreen navigation={mockNavigation} route={{ params: { invoiceId: 'invoice-a' } }} />);
+        await waitFor(() => expect(screen.getByTestId('invoice-detail-screen')).toBeTruthy());
+
+        await fireEvent.press(screen.getByTestId('invoice-more-actions-button'));
+        await fireEvent.press(screen.getByTestId('invoice-status-sent-button'));
+        await waitFor(() => expect(repositories().transitionInvoiceStatus).toHaveBeenCalledWith(expect.anything(), 'invoice-a', 'ISSUED', 'mobile_sent'));
+
+        await fireEvent.press(screen.getByTestId('invoice-more-actions-button'));
+        await fireEvent.press(screen.getByTestId('invoice-status-cancelled-button'));
+        await waitFor(() => expect(repositories().transitionInvoiceStatus).toHaveBeenCalledWith(expect.anything(), 'invoice-a', 'CANCELLED', 'mobile_cancelled'));
+    });
+
+    it('creates and posts a credit note from the invoice actions', async () => {
+        const { Alert } = require('react-native') as { Alert: { alert: jest.Mock } };
+        Alert.alert = jest.fn();
+        supabase().rpc.mockResolvedValue({ data: { id: 'credit-a', invoice_number: 'NK-1' }, error: null });
+
+        const screen = await renderWithProviders(<InvoiceDetailScreen navigation={mockNavigation} route={{ params: { invoiceId: 'invoice-a' } }} />);
+        await waitFor(() => expect(screen.getByTestId('invoice-detail-screen')).toBeTruthy());
+        await fireEvent.press(screen.getByTestId('invoice-more-actions-button'));
+        await fireEvent.press(screen.getByTestId('invoice-create-credit-note-button'));
+
+        await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+        const confirmation = Alert.alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void | Promise<void> }>;
+        await confirmation.find((button) => button.text === 'Confirm')?.onPress?.();
+
+        await waitFor(() => expect(repositories().postCreditNote).toHaveBeenCalledWith(expect.anything(), 'credit-a'));
+        expect(Alert.alert).toHaveBeenCalledWith('Success', 'Credit note NK-1', expect.any(Array));
     });
 
     it('does not offer another payment for a fully paid cash invoice', async () => {
@@ -148,8 +191,11 @@ describe('invoice detail workflow', () => {
             company: { id: 'company-a', company_name: 'Test Company', parent_company_id: null },
             companies: [],
             profile: { id: 'user-a', company_id: 'company-a', company_name: 'Test Company', role: 'company_administrator', currency: 'EUR', primary_color: '#004FFE', terms_conditions: '' },
+            permissions: ['invoice.edit', 'invoice.delete_draft', 'invoice.issue', 'invoice.void', 'invoice.credit', 'invoice.debit', 'payment.create', 'financial.export'],
+            platformAdmin: true,
             isGroup: false,
         });
+        repositories().getInvoice.mockResolvedValueOnce({ ...invoice, status: 'draft', commercial_status: 'DRAFT' });
         supabase().from.mockImplementation((table: string) => makeQuery(table === 'profiles' ? { data: { id: 'user-a', company_name: 'Test Company', currency: 'EUR', primary_color: '#004FFE', role: 'company_administrator', terms_conditions: '' }, error: null } : { data: [], error: null }));
         Alert.alert = jest.fn();
 

@@ -21,8 +21,8 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { SERVICE_ICON_OPTIONS, serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
-import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
-import { deleteProduct, getProduct, saveProduct } from '@invoice-monorepo/api/repositories';
+import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { deleteProduct, getPreferredBranchId, getProduct, listBranches, listProductBranchStock, saveProduct, saveProductBranchStock } from '@invoice-monorepo/api/repositories';
 import * as Crypto from 'expo-crypto';
 
 interface ProductFormScreenProps {
@@ -118,9 +118,13 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const [minorPrice, setMinorPrice] = useState('00');
     const [taxRateInput, setTaxRateInput] = useState('');
     const [importVatRateInput, setImportVatRateInput] = useState('18');
-    // Keep the form interactive while the workspace permission check is loading.
-    // handleSave performs the authoritative permission check before writing.
-    const [canManageProducts, setCanManageProducts] = useState(true);
+    const [canManageProducts, setCanManageProducts] = useState(false);
+    const [canChangePrice, setCanChangePrice] = useState(false);
+    const [canAdjustInventory, setCanAdjustInventory] = useState(false);
+    const [canDeleteProduct, setCanDeleteProduct] = useState(false);
+    const [branches, setBranches] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
+    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+    const [branchStocks, setBranchStocks] = useState<Array<{ branch_id: string; product_id: string; stock_quantity: number | string; low_stock_threshold: number | string }>>([]);
     const saveInFlight = useRef(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
@@ -128,6 +132,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
     const inputBg = isDark ? '#0D1B2A' : '#F4F7FB';
+    const borderColor = isDark ? '#263A55' : '#E4E9F0';
     const categoryLabels: Record<string, string> = {
         Service: t('serviceCategory', language),
         Product: t('productCategory', language),
@@ -138,15 +143,38 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     useEffect(() => {
         void loadProductAccess();
         if (isEditing) fetchProduct();
+        else void loadBranchContext();
     }, [productId, user?.id]);
 
     const loadProductAccess = async () => {
         if (!user) return;
         try {
             const workspaceScope = await getWorkspaceScope(user.id);
-            setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+            setCanManageProducts(hasWorkspacePermission(workspaceScope, isEditing ? 'product.edit' : 'product.create'));
+            setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
+            setCanAdjustInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
+            setCanDeleteProduct(hasWorkspacePermission(workspaceScope, 'product.delete'));
         } catch {
             setCanManageProducts(false);
+        }
+    };
+
+    const loadBranchContext = async () => {
+        if (!user) return;
+        try {
+            const workspaceScope = await getWorkspaceScope(user.id);
+            const companyId = workspaceScope.company?.id || workspaceScope.companyId;
+            if (!companyId) return;
+            const branchRows = await listBranches(supabase, companyId).catch(() => []);
+            setBranches(branchRows.map((branch) => ({ id: branch.id, name: branch.name, code: branch.code })));
+            const preferred = await getPreferredBranchId(supabase, user.id, companyId).catch(() => null);
+            const selected = preferred && branchRows.some((branch) => branch.id === preferred)
+                ? preferred
+                : branchRows.length === 1 ? branchRows[0].id : null;
+            setSelectedBranchId(selected);
+        } catch {
+            setBranches([]);
+            setSelectedBranchId(null);
         }
     };
 
@@ -165,8 +193,23 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const fetchProduct = async () => {
         if (!user) return;
         const workspaceScope = await getWorkspaceScope(user.id);
-        setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+        setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
+        setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
+        setCanAdjustInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
+        setCanDeleteProduct(hasWorkspacePermission(workspaceScope, 'product.delete'));
         const companyIds = getActiveProductCompanyIds(workspaceScope);
+        const companyId = workspaceScope.company?.id || workspaceScope.companyId;
+        let branchForProduct: string | null = null;
+        if (companyId) {
+            const branchRows = await listBranches(supabase, companyId).catch(() => []);
+            setBranches(branchRows.map((branch) => ({ id: branch.id, name: branch.name, code: branch.code })));
+            const preferred = await getPreferredBranchId(supabase, user.id, companyId).catch(() => null);
+            const selected = preferred && branchRows.some((branch) => branch.id === preferred)
+                ? preferred
+                : branchRows.length === 1 ? branchRows[0].id : null;
+            branchForProduct = selected;
+            setSelectedBranchId(selected);
+        }
         const data = await getProduct(supabase, productId, { userId: user.id, companyIds });
         if (data) {
             const product = data as unknown as Record<string, unknown>;
@@ -210,6 +253,20 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 country_of_origin: String(product.country_of_origin || ''),
                 vat_treatment: String(product.vat_treatment || 'standard_18'),
             });
+            if (companyId) {
+                const allBranchStock = await listProductBranchStock(supabase, companyId, null, [productId]).catch(() => []);
+                setBranchStocks(allBranchStock);
+                const stock = branchForProduct
+                    ? allBranchStock.find((row) => row.branch_id === branchForProduct)
+                    : undefined;
+                if (stock || (branchForProduct && allBranchStock.length > 0)) {
+                    setFormData((current) => ({
+                        ...current,
+                        stock_quantity: stock ? Number(stock.stock_quantity) || 0 : 0,
+                        low_stock_threshold: stock ? Number(stock.low_stock_threshold) || current.low_stock_threshold : current.low_stock_threshold,
+                    }));
+                }
+            }
         }
     };
 
@@ -260,10 +317,13 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
         try {
             if (!user) throw new Error(t('signInToCreateProduct', language));
             const workspaceScope = await getWorkspaceScope(user.id);
-            if (!['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode)) {
-                throw new Error('Only Super admin, Admin, or Manager can manage products.');
+            const requiredPermission = isEditing ? 'product.edit' : 'product.create';
+            if (!hasWorkspacePermission(workspaceScope, requiredPermission)) {
+                throw new Error('You do not have permission to manage products.');
             }
             setCanManageProducts(true);
+            setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
+            setCanAdjustInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
             const { company } = workspaceScope;
             let imageUrl = formData.image_url;
             if (imageUrl && !isRemoteImageUrl(imageUrl) && !serviceIconNameFromValue(imageUrl)) {
@@ -282,7 +342,16 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 if (uploadError) throw uploadError;
                 imageUrl = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
             }
-            await saveProduct(supabase, { ...formData, image_url: imageUrl, user_id: user.id, company_id: company?.id ?? null }, isEditing ? productId : null);
+            const savedProduct = await saveProduct(supabase, { ...formData, image_url: imageUrl, user_id: user.id, company_id: company?.id ?? null }, isEditing ? productId : null);
+            if (company?.id && selectedBranchId && formData.track_stock && savedProduct?.id) {
+                await saveProductBranchStock(supabase, {
+                    companyId: company.id,
+                    productId: String(savedProduct.id),
+                    branchId: selectedBranchId,
+                    stockQuantity: formData.stock_quantity,
+                    lowStockThreshold: formData.low_stock_threshold,
+                });
+            }
             setLoading(false);
             navigation.goBack();
         } catch (error) {
@@ -295,7 +364,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     };
 
     const handleDelete = () => {
-        if (!isEditing || loading) return;
+        if (!isEditing || loading || !canDeleteProduct) return;
         Alert.alert(t('deleteProduct', language), t('deleteProductConfirmation', language), [
             { text: t('cancel', language), style: 'cancel' },
             {
@@ -326,10 +395,9 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
     return (
         <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             testID="product-form-screen"
             style={[styles.container, { backgroundColor: bgColor }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={0}
         >
             <View style={styles.header}>
                 <TouchableOpacity testID="product-form-back-button" accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -341,7 +409,12 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
+            >
                 {/* Basic Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
@@ -448,6 +521,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                     }}
                                     placeholder="0"
                                     keyboardType="number-pad"
+                                    editable={!isEditing || canChangePrice}
                                     containerStyle={{ flex: 2, marginBottom: 0 }}
                                 />
                                 <View style={styles.decimalSeparator}>
@@ -463,6 +537,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                     }}
                                     placeholder="00"
                                     keyboardType="number-pad"
+                                    editable={!isEditing || canChangePrice}
                                     containerStyle={{ flex: 1, marginBottom: 0 }}
                                     maxLength={2}
                                 />
@@ -485,7 +560,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
                     <View style={{ marginTop: 16 }}>
                         <Text style={[styles.fieldLabel, { color: textColor }]}>{t('unit', language)}</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                             {units.map((unit) => (
                                 <TouchableOpacity
                                     key={unit}
@@ -514,23 +589,49 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                             testID="product-track-stock-switch"
                             value={formData.track_stock}
                             onValueChange={(val) => setFormData((current) => ({ ...current, track_stock: val }))}
+                            disabled={!canAdjustInventory}
                             trackColor={{ false: '#263A55', true: '#004FFE' }}
                         />
                     </View>
 
                     {formData.track_stock && (
                         <>
+                            {branches.length > 0 ? (
+                                <View style={{ marginBottom: 12 }}>
+                                    <Text style={[styles.fieldLabel, { color: mutedColor }]}>{language === 'sq' ? 'Dega aktive e stokut' : 'Active stock branch'}</Text>
+                                    <View style={[styles.picker, { backgroundColor: inputBg, borderColor }]}>
+                                        <Text style={{ color: textColor, fontWeight: '600' }}>
+                                            {branches.find((branch) => branch.id === selectedBranchId)?.name || (language === 'sq' ? 'Zgjidhni degën e preferuar te cilësimet' : 'Select a preferred branch in settings')}
+                                        </Text>
+                                    </View>
+                                    <Text style={[styles.hintText, { color: mutedColor }]}>{language === 'sq' ? 'Sasia më poshtë ruhet automatikisht në degën tuaj të preferuar.' : 'The quantity below is saved automatically to your preferred branch.'}</Text>
+                                </View>
+                            ) : null}
                             <View style={styles.row}>
                                 <View style={styles.flex1}>
-                                    <Input testID="product-stock-input" label={t('currentStock', language)} value={String(formData.stock_quantity)} onChangeText={(text) => setFormData((current) => ({ ...current, stock_quantity: Number(text) || 0 }))} placeholder="0" keyboardType="number-pad" />
+                                    <Input testID="product-stock-input" label={t('currentStock', language)} value={String(formData.stock_quantity)} onChangeText={(text) => setFormData((current) => ({ ...current, stock_quantity: Number(text) || 0 }))} placeholder="0" keyboardType="number-pad" editable={canAdjustInventory} />
                                 </View>
                                 <View style={styles.flex1}>
-                                    <Input label={t('lowStockAlert', language)} value={String(formData.low_stock_threshold)} onChangeText={(text) => setFormData((current) => ({ ...current, low_stock_threshold: Number(text) || 0 }))} placeholder="5" keyboardType="number-pad" />
+                                    <Input label={t('lowStockAlert', language)} value={String(formData.low_stock_threshold)} onChangeText={(text) => setFormData((current) => ({ ...current, low_stock_threshold: Number(text) || 0 }))} placeholder="5" keyboardType="number-pad" editable={canAdjustInventory} />
                                 </View>
                             </View>
                             <Text style={[styles.hintText, { color: mutedColor }]}>
                                 {t('stockThresholdDescription', language)}
                             </Text>
+                            {branches.filter((branch) => branch.id !== selectedBranchId).length > 0 ? (
+                                <View style={{ marginTop: 10 }}>
+                                    <Text style={[styles.fieldLabel, { color: mutedColor }]}>{language === 'sq' ? 'Stoku në degët tjera' : 'Stock in other branches'}</Text>
+                                    {branches.filter((branch) => branch.id !== selectedBranchId).map((branch) => {
+                                        const stock = branchStocks.find((row) => row.branch_id === branch.id);
+                                        return (
+                                            <View key={branch.id} style={styles.otherStockRow}>
+                                                <Text style={[styles.otherStockName, { color: textColor }]}>{branch.name}</Text>
+                                                <Text style={[styles.otherStockValue, { color: mutedColor }]}>{Number(stock?.stock_quantity || 0)} {formData.unit}</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            ) : null}
                         </>
                     )}
                 </View>
@@ -754,7 +855,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                         </View>
                     </View>
                     <Text style={[styles.fieldLabel, { color: textColor }]}>{t('kosovoVatTreatment', language)}</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                         {[
                             ['standard_18', t('standard18', language)],
                             ['reduced_8', t('reduced8', language)],
@@ -792,7 +893,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                         disabled={!canManageProducts}
                         style={styles.saveButton}
                     />
-                    {isEditing && canManageProducts ? (
+                    {isEditing && canDeleteProduct ? (
                         <TouchableOpacity
                             testID="product-delete-button"
                             accessibilityRole="button"
@@ -822,6 +923,9 @@ const styles = StyleSheet.create({
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
     hintText: { fontSize: 12, marginTop: 4, lineHeight: 18 },
+    otherStockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#263A55' },
+    otherStockName: { fontSize: 13, fontWeight: '500' },
+    otherStockValue: { fontSize: 13, fontWeight: '600' },
     row: { flexDirection: 'row', gap: 12 },
     flex1: { flex: 1 },
     fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6, opacity: 0.8 },

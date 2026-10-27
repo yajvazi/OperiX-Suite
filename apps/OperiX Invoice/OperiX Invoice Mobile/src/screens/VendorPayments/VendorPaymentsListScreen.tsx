@@ -186,7 +186,7 @@ export function VendorPaymentsListScreen({ navigation }: any) {
                 </View>
             </Card>
 
-            <FlatList
+            <FlatList keyboardShouldPersistTaps="handled"
                 data={payments}
                 keyExtractor={(item) => item.id}
                 renderItem={renderPayment}

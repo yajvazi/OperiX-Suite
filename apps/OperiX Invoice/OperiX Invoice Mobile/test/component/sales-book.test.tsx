@@ -24,9 +24,12 @@ jest.mock('../../src/services/workspace', () => ({
         company: { id: 'company-a', company_name: 'Test Company', parent_company_id: null },
         companies: [{ id: 'company-a', company_name: 'Test Company', vat_registration_status: 'registered', accounting_period_frequency: 'monthly' }],
         profile: { id: 'user-a', company_id: 'company-a', company_name: 'Test Company', currency: 'EUR', role: 'company_administrator' },
+        permissions: ['sales_book.view', 'sales_book.manage'],
+        platformAdmin: true,
         roleCode: 'company_administrator',
         isGroup: false,
     })),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 
 jest.mock('@invoice-monorepo/api', () => ({ supabase: {} }));

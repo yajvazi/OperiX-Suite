@@ -2,12 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
+    TextInput,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
     Alert,
     StyleSheet,
-    TextInput,
 } from 'react-native';
 import { Trash2, Search, Building2, DollarSign, TrendingDown, MapPin, Mail, Phone, FileText, Edit2, X, Plus } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -256,7 +256,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
             >
                 {/* Stats */}
                 <View style={styles.statsContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('vendors', language), stats.totalVendors, Building2, '#004FFE')}
                         {renderStatCard(t('expenses', language), formatCurrency(stats.totalExpenses), TrendingDown, '#ef4444')}
                         {renderStatCard(t('taxRegistered', language), stats.withTaxId, FileText, '#12B76A')}
@@ -268,6 +268,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                     <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
+                            testID="vendors-search-input"
                             style={[styles.searchInput, { color: textColor }]}
                             placeholder={t('search', language)}
                             placeholderTextColor={mutedColor}
@@ -281,7 +282,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                         )}
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                         {cities.map((city, idx) => (
                             <TouchableOpacity
                                 key={idx}
@@ -350,8 +351,8 @@ const styles = StyleSheet.create({
     statLabel: { fontSize: 11, fontWeight: '500' },
 
     // Search & Filters
-    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 0, borderRadius: 14, marginBottom: 16, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, paddingVertical: 12 },
 
     filterScroll: { paddingHorizontal: 20, marginBottom: 16, gap: 8 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },

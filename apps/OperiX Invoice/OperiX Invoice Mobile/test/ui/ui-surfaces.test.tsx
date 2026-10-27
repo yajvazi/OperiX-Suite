@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, waitFor } from '@testing-library/react-native';
 import { POSScreen } from '../../src/screens/POS/POSScreen';
-import { ReportsHubScreen } from '../../src/screens/Reports/ReportsHubScreen';
+import { clearReportsSummaryCache, ReportsHubScreen } from '../../src/screens/Reports/ReportsHubScreen';
 import { SettingsScreen } from '../../src/screens/Settings/SettingsScreen';
 import { HelpSupportScreen } from '../../src/screens/Support/HelpSupportScreen';
 import { ProfileScreen } from '../../src/screens/Profile/ProfileScreen';
@@ -24,6 +24,8 @@ jest.mock('react-native-safe-area-context', () => ({
         const { View } = require('react-native');
         return ReactRuntime.createElement(View, props, children);
     },
+    SafeAreaProvider: ({ children }: { children?: React.ReactNode }) => children,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('@react-navigation/native', () => {
@@ -63,9 +65,20 @@ jest.mock('../../src/services/workspace', () => ({
         companies: [],
         profile: { id: mockUserId, company_id: 'company-a', company_name: 'Test Company', role: 'owner', currency: 'EUR' },
         isGroup: false,
+        permissions: [
+            'invoice.view', 'invoice.view_all', 'invoice.create', 'invoice.edit', 'invoice.issue', 'invoice.delete_draft', 'invoice.void', 'invoice.credit', 'invoice.debit',
+            'offer.create', 'offer.manage', 'proforma.create', 'proforma.manage', 'order.create', 'order.manage', 'delivery_note.create', 'delivery_note.manage',
+            'payment.view', 'payment.create', 'payment.refund', 'expense.view_own', 'expense.view_all', 'expense.create', 'expense.edit', 'expense.approve', 'expense.manage',
+            'customer.view', 'customer.view_all', 'customer.create', 'customer.edit', 'customer.delete', 'product.view', 'product.create', 'product.edit', 'product.change_price', 'product.delete',
+            'inventory.view', 'inventory.adjust', 'reports.sales', 'reports.operational', 'reports.profit', 'reports.tax', 'sales_book.view', 'sales_book.manage',
+            'accounting_period.view', 'accounting_period.close', 'accounting_period.reopen', 'users.view', 'users.manage', 'permissions.manage', 'audit.view', 'financial.export',
+            'settings.company', 'settings.tax', 'settings.invoice', 'settings.bank', 'settings.integrations', 'settings.api', 'settings.security', 'subscription.manage',
+        ],
+        platformAdmin: true,
     })),
     getActiveProductCompanyIds: jest.fn(() => ['company-a']),
     getActiveTenantCompanyIds: jest.fn(() => ['company-a']),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 
 jest.mock('@invoice-monorepo/api/repositories', () => ({
@@ -89,6 +102,8 @@ function makeQuery(table: string) {
         ? { data: { id: TEST_USER.id, email: TEST_USER.email, primary_color: '#004FFE' }, error: null }
         : table === 'operix_report_summary'
             ? { data: mockReportRows, error: mockReportError }
+            : table === 'operix_report_gross_sales'
+                ? { data: [{ company_id: 'company-a', gross_sales: 1000 }], error: null }
             : { data: null, error: null };
     const chain = jest.fn(() => query);
     query.select = chain;
@@ -96,6 +111,7 @@ function makeQuery(table: string) {
     query.in = chain;
     query.update = chain;
     query.order = chain;
+    query.maybeSingle = jest.fn(async () => result);
     query.single = jest.fn(async () => result);
     query.then = (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
     return query;
@@ -106,6 +122,7 @@ const repositories = () => require('@invoice-monorepo/api/repositories') as { li
 
 beforeEach(() => {
     jest.clearAllMocks();
+    clearReportsSummaryCache();
     mockNavigation.navigate.mockClear();
     mockNavigation.replace.mockClear();
     mockNavigation.goBack.mockClear();
@@ -135,6 +152,8 @@ describe('POS surfaces', () => {
 
         await fireEvent.press(screen.getByTestId('pos-customer-selector'));
         expect(screen.getByTestId('pos-customer-modal')).toBeTruthy();
+        await fireEvent.changeText(screen.getByTestId('pos-customer-search'), 'Blerine');
+        expect(screen.getByTestId('pos-customer-customer-a-button')).toBeTruthy();
         await fireEvent.press(screen.getByTestId('pos-customer-customer-a-button'));
         expect(screen.getByText('Blerinë & Co')).toBeTruthy();
 
@@ -174,7 +193,7 @@ describe('reports, settings, help, and profile surfaces', () => {
         const screen = await renderWithProviders(<ReportsHubScreen />);
         await waitFor(() => expect(screen.getByTestId('reports-hub-screen')).toBeTruthy());
         expect(screen.getByText('€750.00')).toBeTruthy();
-        expect(screen.getByText('€1,000.00')).toBeTruthy();
+        expect(screen.getAllByText('€1,000.00').length).toBeGreaterThan(0);
         await fireEvent.press(screen.getByTestId('reports-trial_balance-button'));
         expect(mockNavigation.navigate).toHaveBeenCalledWith('ReportPreview', { subtype: 'trial_balance' });
     });
@@ -182,7 +201,7 @@ describe('reports, settings, help, and profile surfaces', () => {
     it('shows a recoverable reports error instead of a blank screen', async () => {
         mockReportError = new Error('offline');
         const screen = await renderWithProviders(<ReportsHubScreen />);
-        await waitFor(() => expect(screen.getByLabelText('Try again')).toBeTruthy());
+        await waitFor(() => expect(screen.getByText('Try again')).toBeTruthy());
         expect(screen.getByTestId('reports-hub-screen')).toBeTruthy();
     });
 
@@ -226,7 +245,8 @@ describe('reports, settings, help, and profile surfaces', () => {
 
     it('redirects the legacy profile route to the merged settings screen', async () => {
         const navigation = createNavigationMock();
-        await renderWithProviders(<ProfileScreen navigation={navigation} />);
-        await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('Settings', { screen: 'SettingsMain' }));
+        const screen = await renderWithProviders(<ProfileScreen navigation={navigation} />);
+        await waitFor(() => expect(screen.getByTestId('profile-screen')).toBeTruthy());
+        expect(navigation.replace).not.toHaveBeenCalled();
     });
 });

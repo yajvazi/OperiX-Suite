@@ -16,9 +16,12 @@ jest.mock('../../src/services/workspace', () => ({
         companies: [],
         profile: { id: 'user-a', company_id: 'company-a', currency: 'EUR', company_name: 'Test Company' },
         roleCode: 'company_administrator',
+        permissions: ['invoice.create', 'invoice.edit', 'invoice.issue', 'payment.create', 'sales_book.manage'],
+        platformAdmin: true,
         isGroup: false,
     })),
     getActiveProductCompanyIds: jest.fn(() => ['company-a']),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 
 jest.mock('@invoice-monorepo/api/repositories', () => ({
@@ -26,6 +29,7 @@ jest.mock('@invoice-monorepo/api/repositories', () => ({
     listCustomers: jest.fn(async () => [{ id: 'customer-a', name: 'Blerinë & Co', email: 'blerine@example.com', pos_walk_in_customer: false, discount_percent: 5 }]),
     listInvoices: jest.fn(async () => []),
     listProducts: jest.fn(async () => [{ id: 'product-a', name: 'Shërbim premium', unit_price: 10, tax_rate: 18, tax_included: false, unit: 'pcs', sku: 'SKU-1' }]),
+    getPreferredBranchId: jest.fn(async () => null),
     saveInvoiceDocument: jest.fn(async () => ({ invoice: { id: 'invoice-a', invoice_number: 'FAT-2026-0001' }, totals: { total: 11.8 } })),
     saveCustomerPayment: jest.fn(async () => ({ payment: { id: 'payment-a' }, allocation: { id: 'allocation-a' }, allocationError: null })),
     setInvoiceDeliveryMethod: jest.fn(async () => null),
@@ -71,7 +75,9 @@ describe('invoice creation workflow', () => {
         await fireEvent.press(screen.getByTestId('invoice-due-date-button'));
         await fireEvent.press(screen.getByTestId('invoice-due-date-option-two_weeks'));
 
-        expect(screen.getByText('9/2/2026')).toBeTruthy();
+        const expectedDueDate = new Date();
+        expectedDueDate.setDate(expectedDueDate.getDate() + 14);
+        expect(screen.getByText(expectedDueDate.toLocaleDateString('en-US'))).toBeTruthy();
     });
 
     it('saves comments, due date, and delivery method from advanced options', async () => {

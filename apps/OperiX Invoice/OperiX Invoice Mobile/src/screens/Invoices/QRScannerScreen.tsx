@@ -244,7 +244,7 @@ export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
     return (
         <View style={styles.container}>
             <CameraView
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 enableTorch={torchOn}
                 barcodeScannerSettings={{
                     barcodeTypes: mode === 'invoice' ? ['qr', 'code128', 'code39'] : ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e']

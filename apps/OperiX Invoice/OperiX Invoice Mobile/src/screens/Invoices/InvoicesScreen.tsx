@@ -49,6 +49,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const [filteredInvoices, setFilteredInvoices] = useState<ListItem[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
     const [selectedType, setSelectedType] = useState<'invoice' | 'offer' | 'contract'>('invoice');
+    const [contractView, setContractView] = useState(() => route?.params?.tab === 'contract');
+    const [canManageContracts, setCanManageContracts] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +65,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     useEffect(() => {
         if (route?.params?.tab) {
             setSelectedType(route.params.tab);
+            setContractView(route.params.tab === 'contract');
             navigation.setParams({ tab: undefined });
         }
         if (route?.params?.status) {
@@ -82,7 +85,17 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const fetchData = async () => {
         if (!user) return;
 
-        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        const workspace = await getWorkspaceScope(user.id);
+        const { profile: workspaceProfile, companyIds } = workspace;
+        const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
+        setCanManageContracts(allowedContracts);
+        if ((selectedType === 'contract' || contractView) && !allowedContracts) {
+            setSelectedType('invoice');
+            setContractView(false);
+            setInvoices([]);
+            setFilteredInvoices([]);
+            return;
+        }
         setProfile(workspaceProfile);
         const scope = scopedResource(user.id, companyIds);
         const cacheKey = mobileCacheKey('invoices', user.id, companyIds, `recent:${selectedType}`);
@@ -230,7 +243,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('overview', language)}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>{t('recentActivity', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t(contractView ? 'contracts' : 'recentActivity', language)}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity testID="invoice-qr-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('QRScanner')}>
@@ -240,8 +253,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             </View>
 
             {/* Type Selector */}
-            <View style={[styles.typeSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-                {(['invoice', 'offer', 'contract'] as const).map((tValue) => (
+            {!contractView ? <View style={[styles.typeSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                {(['invoice', 'offer', ...(canManageContracts ? ['contract'] : [])] as Array<'invoice' | 'offer' | 'contract'>).map((tValue) => (
                     <TouchableOpacity
                         testID={`invoice-type-${tValue}-button`}
                         key={tValue}
@@ -256,15 +269,15 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         </Text>
                     </TouchableOpacity>
                 ))}
-            </View>
+            </View> : null}
 
             {/* View All Button */}
             <View style={{ paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t('recentActivity', language)}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{t(contractView ? 'contracts' : 'recentActivity', language)}</Text>
             </View>
 
 
-            <FlatList
+            <FlatList keyboardShouldPersistTaps="handled"
                 testID="invoices-list"
                 data={filteredInvoices}
                 renderItem={renderItem}
@@ -323,8 +336,8 @@ const styles = StyleSheet.create({
     headerActions: { flexDirection: 'row', gap: 12 },
     iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
-    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 0, borderRadius: 14, marginBottom: 16, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, paddingVertical: 12 },
 
     filterWrapper: { marginBottom: 16 },
     filterContent: { paddingHorizontal: 20, gap: 10, flexDirection: 'row' },

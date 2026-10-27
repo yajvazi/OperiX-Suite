@@ -95,7 +95,7 @@ export function JoinTeamScreen({ navigation }: any) {
 
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0} style={[styles.container, { backgroundColor: bgColor }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 <LoadingOverlay visible={loading} text={verifiedCompany ? t('joining', language) : t('verifyingToken', language)} />
 
                 <View style={styles.iconContainer}>
@@ -215,7 +215,7 @@ export function JoinTeamScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { padding: 24, justifyContent: 'center', minHeight: '100%' },
+    scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center', minHeight: '100%' },
     iconContainer: { alignItems: 'center', marginBottom: 24 },
     title: { fontSize: 28, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
     subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 32, lineHeight: 24 },
@@ -225,4 +225,3 @@ const styles = StyleSheet.create({
     inputGroup: { marginBottom: 16 },
     row: { flexDirection: 'row', gap: 12 },
 });
-

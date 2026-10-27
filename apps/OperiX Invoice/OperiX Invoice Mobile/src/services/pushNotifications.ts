@@ -20,12 +20,17 @@ function expoProjectId() {
     return Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
 }
 
+function notificationPermissionGranted(permission: Notifications.NotificationPermissionsStatus) {
+    return ('granted' in permission && permission.granted === true)
+        || ('status' in permission && permission.status === 'granted');
+}
+
 export async function registerPushNotifications(userId: string) {
     if (Platform.OS === 'web' || !Device.isDevice) return false;
 
     let permission = await Notifications.getPermissionsAsync();
-    if (permission.status !== 'granted') permission = await Notifications.requestPermissionsAsync();
-    if (permission.status !== 'granted') return false;
+    if (!notificationPermissionGranted(permission)) permission = await Notifications.requestPermissionsAsync();
+    if (!notificationPermissionGranted(permission)) return false;
 
     const projectId = expoProjectId();
     if (!projectId) throw new Error('Expo push notification project ID is not configured.');

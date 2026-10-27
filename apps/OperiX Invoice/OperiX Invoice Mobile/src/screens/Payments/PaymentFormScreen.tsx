@@ -4,31 +4,38 @@ import {
     View,
     Text,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
     Alert,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
     Switch,
+    ActivityIndicator,
 } from 'react-native';
 import { ArrowLeft, DollarSign, User, FileText, Building, Banknote, Trash2, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
+import { isCashPaymentAllowed } from '@invoice-monorepo/api/domain';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { Client, Invoice, CompanyBankAccount } from '@invoice-monorepo/types';
-import { t } from '@invoice-monorepo/i18n';
+import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import { generateTransactionPdf, generateTransactionPdfHtml, printTransactionPdf, shareTransactionPdf } from '../../services/pdf/transactionPdf';
 import { getWorkspaceScope } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import { TransactionDocumentActions, TransactionPreviewModal } from '../../components/mobile/TransactionDocumentActions';
+import { SearchField } from '../../components/mobile/MobileUI';
 import { documentPdfFileName } from '../../services/pdf/fileNaming';
+import { buildCustomerLedger } from '@invoice-monorepo/report-templates';
 import {
     getPayment,
     getInvoice,
     listCustomers,
+    listCustomerInvoices,
+    listCustomerPayments,
     listOpenCustomerInvoices,
     listCompanyBankAccounts,
+    listFinancialAccountBalances,
     saveCustomerPayment,
     deleteCustomerPayment,
 } from '@invoice-monorepo/api/repositories';
@@ -48,6 +55,12 @@ async function generatePaymentIdempotencyKey(): Promise<string> {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function cashLimitReached(value: string | number) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return false;
+    return !isCashPaymentAllowed(normalized);
+}
+
 export function PaymentFormScreen({ navigation, route }: any) {
     const { user } = useAuth();
     const { isDark, language, primaryColor } = useTheme();
@@ -58,19 +71,24 @@ export function PaymentFormScreen({ navigation, route }: any) {
 
     const [clients, setClients] = useState<Client[]>([]);
     const [unpaidInvoices, setUnpaidInvoices] = useState<Invoice[]>([]);
+    const [clientDebt, setClientDebt] = useState<number | null>(null);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [showClientPicker, setShowClientPicker] = useState(false);
+    const [clientSearch, setClientSearch] = useState('');
+    const [clientPickerLoading, setClientPickerLoading] = useState(false);
     const [showInvoicePicker, setShowInvoicePicker] = useState(false);
     const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
+    const [financialAccounts, setFinancialAccounts] = useState<Record<string, unknown>[]>([]);
     const [showBankPicker, setShowBankPicker] = useState(false);
 
     const [formData, setFormData] = useState({
         payment_number: '',
         amount: '',
         payment_date: new Date().toISOString().split('T')[0],
-        payment_method: 'cash' as 'cash' | 'bank',
+        payment_method: 'cash' as 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'other',
         company_bank_account_id: '',
+        fund_account_id: '',
         bank_reference: '',
         notes: '',
     });
@@ -91,12 +109,27 @@ export function PaymentFormScreen({ navigation, route }: any) {
     useEffect(() => {
         fetchClients();
         fetchBankAccounts();
+        fetchFinancialAccounts();
         if (isEditing) fetchPayment();
+
+        const focusSubscription = navigation.addListener?.('focus', fetchClients);
+        return () => {
+            if (typeof focusSubscription === 'function') {
+                focusSubscription();
+            } else {
+                focusSubscription?.remove?.();
+            }
+        };
     }, [paymentId]);
 
     useEffect(() => {
         if (selectedClient) {
-            fetchUnpaidInvoices(selectedClient.id);
+            setUnpaidInvoices([]);
+            setClientDebt(null);
+            void fetchUnpaidInvoices(selectedClient.id);
+        } else {
+            setUnpaidInvoices([]);
+            setClientDebt(null);
         }
     }, [selectedClient]);
 
@@ -119,6 +152,44 @@ export function PaymentFormScreen({ navigation, route }: any) {
         }
     };
 
+    const selectClient = (client: Client) => {
+        setSelectedClient(client);
+        setSelectedInvoice(null);
+        setClientSearch('');
+        setShowClientPicker(false);
+    };
+
+    const selectCitizen = async () => {
+        if (clientPickerLoading) return;
+
+        const existingCitizen = clients.find((client) => client.pos_walk_in_customer);
+        if (existingCitizen) {
+            selectClient(existingCitizen);
+            return;
+        }
+
+        if (!user) return;
+        setClientPickerLoading(true);
+        try {
+            const { companyId } = await getWorkspaceScope(user.id);
+            if (!companyId) throw new Error(t('selectCompany', language));
+            const { data, error } = await supabase.rpc('ensure_walk_in_customer', { p_company_id: companyId });
+            if (error) throw error;
+            if (!data) throw new Error(t('walkInCustomerUnavailable', language));
+
+            const citizen = data as unknown as Client;
+            setClients((current) => current.some((client) => client.id === citizen.id) ? current : [...current, citizen]);
+            selectClient(citizen);
+        } catch (error) {
+            Alert.alert(
+                t('error', language),
+                error instanceof Error ? error.message : t('walkInCustomerUnavailable', language),
+            );
+        } finally {
+            setClientPickerLoading(false);
+        }
+    };
+
     const fetchBankAccounts = async () => {
         if (!user) return;
         try {
@@ -137,11 +208,43 @@ export function PaymentFormScreen({ navigation, route }: any) {
         }
     };
 
+    const fetchFinancialAccounts = async () => {
+        if (!user || typeof listFinancialAccountBalances !== 'function') return;
+        try {
+            const scope = await getWorkspaceScope(user.id);
+            const data = await listFinancialAccountBalances(supabase, { userId: user.id, companyIds: scope.companyIds });
+            setFinancialAccounts(data as Record<string, unknown>[]);
+            if (!isEditing && data.length) {
+                const cash = data.find((account: any) => account.account_type === 'cash' || account.fund_type === 'cash') || data[0];
+                setFormData(prev => ({ ...prev, fund_account_id: prev.fund_account_id || String(cash.id) }));
+            }
+        } catch (error) {
+            console.warn('Financial account load error:', error);
+        }
+    };
+
     const fetchUnpaidInvoices = async (clientId: string) => {
         if (!user) return;
         const { companyIds } = await getWorkspaceScope(user.id);
-        const data = await listOpenCustomerInvoices(supabase, { userId: user.id, companyIds }, clientId);
-        if (data) setUnpaidInvoices(data as unknown as Invoice[]);
+        const scope = { userId: user.id, companyIds };
+        const [openData, invoiceData, paymentData] = await Promise.all([
+            listOpenCustomerInvoices(supabase, scope, clientId),
+            listCustomerInvoices(supabase, scope, clientId),
+            listCustomerPayments(supabase, scope, clientId),
+        ]);
+        if (openData) {
+            const invoices = openData as unknown as Invoice[];
+            setUnpaidInvoices(invoices);
+            const ledger = buildCustomerLedger({
+                invoices: invoiceData as any,
+                payments: paymentData as any,
+                from: '1900-01-01',
+                to: '9999-12-31',
+            });
+            setClientDebt(ledger.closingBalance);
+        } else {
+            setClientDebt(0);
+        }
     };
 
     const fetchInvoiceAndClient = async (invoiceId: string) => {
@@ -171,8 +274,9 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 payment_date: String(data.payment_date || ''),
                 // Older records may contain card; customer payments now settle
                 // only through cash or bank, so keep the edit flow valid.
-                payment_method: data.payment_method === 'cash' ? 'cash' : 'bank',
+                payment_method: data.payment_method === 'cash' ? 'cash' : (data.payment_method === 'card' || data.payment_method === 'online_payment' || data.payment_method === 'cheque' || data.payment_method === 'other' ? data.payment_method : 'bank'),
                 company_bank_account_id: String(data.company_bank_account_id || ''),
+                fund_account_id: String(data.fund_account_id || ''),
                 bank_reference: String(data.bank_reference || ''),
                 notes: String(data.notes || ''),
             });
@@ -312,6 +416,10 @@ export function PaymentFormScreen({ navigation, route }: any) {
             Alert.alert(t('error', language), t('validPaymentAmount', language));
             return;
         }
+        if (formData.payment_method === 'cash' && cashLimitReached(formData.amount)) {
+            Alert.alert(t('cashLimitTitle', language), t('cashLimitError', language));
+            return;
+        }
         if (!selectedClient) {
             Alert.alert(t('error', language), t('selectCustomerRequired', language));
             return;
@@ -343,6 +451,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 paymentDate: formData.payment_date,
                 paymentMethod: formData.payment_method,
                 companyBankAccountId: formData.payment_method === 'bank' ? formData.company_bank_account_id : null,
+                fundAccountId: formData.fund_account_id || null,
                 bankReference: formData.bank_reference || null,
                 notes: formData.notes || null,
                 currency: 'EUR',
@@ -434,11 +543,20 @@ export function PaymentFormScreen({ navigation, route }: any) {
     const paymentMethods = [
         { key: 'cash', label: t('cash', language), icon: Banknote, color: '#12B76A' },
         { key: 'bank', label: t('bank', language), icon: Building, color: '#3388FF' },
+        { key: 'card', label: t('card', language), icon: Banknote, color: '#7F56D9' },
+        { key: 'online_payment', label: t('onlinePayment', language), icon: DollarSign, color: '#F79009' },
+        { key: 'cheque', label: t('cheque', language), icon: FileText, color: '#667085' },
+        { key: 'other', label: t('other', language), icon: FileText, color: '#98A2B3' },
     ];
+    const filteredClients = clients.filter((client) => {
+        if (client.pos_walk_in_customer) return false;
+        return client.name.toLocaleLowerCase().includes(clientSearch.trim().toLocaleLowerCase());
+    });
 
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
             testID="payment-form-screen"
             style={[styles.container, { backgroundColor: bgColor }]}
         >
@@ -451,7 +569,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 </Text>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {isEditing ? <TransactionDocumentActions primaryColor={primaryColor} language={language === 'sq' ? 'sq' : 'en'} onPreview={() => { void handlePreview(); }} onPrint={() => { void handlePrint(); }} onEmail={() => { void handleEmail(); }} onShare={() => { void handleShare(); }} /> : null}
                 {/* Payment Number */}
                 <Card style={styles.card}>
@@ -493,22 +611,60 @@ export function PaymentFormScreen({ navigation, route }: any) {
                         </Text>
                     </TouchableOpacity>
 
+                    {selectedClient && (
+                        <View testID="payment-client-current-balance" style={[styles.clientBalance, { backgroundColor: isDark ? '#17352B' : '#F0FDF4', borderColor: isDark ? '#245B43' : '#BBE7CC' }]}>
+                            <Text style={[styles.clientBalanceLabel, { color: mutedColor }]}>{t('currentBalance', language)} ({t('debt', language)})</Text>
+                            <Text style={[styles.clientBalanceValue, { color: clientDebt && clientDebt > 0 ? '#EF4444' : '#12B76A' }]}>
+                                {clientDebt === null ? '…' : formatCurrency(clientDebt, 'EUR', language)}
+                            </Text>
+                        </View>
+                    )}
+
                     {showClientPicker && (
                         <View style={[styles.pickerList, { backgroundColor: cardBg, borderColor }]}>
-                            {clients.map(client => (
+                            <View style={styles.clientSearchContainer}>
+                                <SearchField
+                                    testID="payment-client-search-input"
+                                    value={clientSearch}
+                                    onChangeText={setClientSearch}
+                                    placeholder={t('searchCustomers', language)}
+                                    autoFocus
+                                />
+                            </View>
+                            <TouchableOpacity
+                                testID="payment-create-client-option"
+                                accessibilityRole="button"
+                                style={[styles.pickerItem, { borderBottomColor: borderColor }]}
+                                onPress={() => {
+                                    setClientSearch('');
+                                    setShowClientPicker(false);
+                                    navigation.navigate('ClientForm');
+                                }}
+                            >
+                                <Text style={[styles.pickerItemText, { color: primaryColor }]}>{t('createNewCustomer', language)}</Text>
+                                <Text style={[styles.pickerItemSubtext, { color: mutedColor }]}>{t('addCustomer', language)}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                testID="payment-citizen-option"
+                                accessibilityRole="button"
+                                accessibilityState={{ disabled: clientPickerLoading, selected: selectedClient?.pos_walk_in_customer === true }}
+                                disabled={clientPickerLoading}
+                                style={[styles.pickerItem, selectedClient?.pos_walk_in_customer === true && styles.pickerItemActive, { borderBottomColor: borderColor }]}
+                                onPress={() => { void selectCitizen(); }}
+                            >
+                                {clientPickerLoading ? <ActivityIndicator color={primaryColor} /> : <Text style={[styles.pickerItemText, { color: textColor }]}>{t('walkInCustomer', language)}</Text>}
+                                <Text style={[styles.pickerItemSubtext, { color: mutedColor }]}>{t('customerOptional', language)}</Text>
+                            </TouchableOpacity>
+                            {filteredClients.length ? filteredClients.map(client => (
                                 <TouchableOpacity
                                     testID={`payment-customer-option-${client.id}`}
                                     key={client.id}
                                     style={[styles.pickerItem, selectedClient?.id === client.id && styles.pickerItemActive]}
-                                    onPress={() => {
-                                        setSelectedClient(client);
-                                        setSelectedInvoice(null);
-                                        setShowClientPicker(false);
-                                    }}
+                                    onPress={() => selectClient(client)}
                                 >
                                     <Text style={[styles.pickerItemText, { color: textColor }]}>{client.name}</Text>
                                 </TouchableOpacity>
-                            ))}
+                            )) : <Text style={[styles.noItems, { color: mutedColor }]}>{t('noCustomersFound', language)}</Text>}
                         </View>
                     )}
                 </Card>
@@ -583,6 +739,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                         {paymentMethods.map(method => {
                             const Icon = method.icon;
                             const isActive = formData.payment_method === method.key;
+                            const cashDisabled = method.key === 'cash' && cashLimitReached(formData.amount);
                             return (
                                 <TouchableOpacity
                                     testID={`payment-method-${method.key}`}
@@ -590,17 +747,33 @@ export function PaymentFormScreen({ navigation, route }: any) {
                                     key={method.key}
                                     style={[
                                         styles.methodOption,
-                                        { backgroundColor: isActive ? method.color : (isDark ? '#263A55' : '#F4F7FB') }
+                                        {
+                                            backgroundColor: isActive ? method.color : (isDark ? '#1B304B' : '#F4F7FB'),
+                                            borderColor: isActive ? method.color : (isDark ? '#304965' : '#D7E0EC'),
+                                            opacity: cashDisabled ? 0.4 : 1,
+                                        },
                                     ]}
+                                    accessibilityState={{ selected: isActive, disabled: cashDisabled }}
+                                    disabled={cashDisabled}
                                     onPress={() => {
                                         const primaryBank = bankAccounts.find((account) => account.is_primary) || bankAccounts[0];
-                                        const paymentMethod = method.key as 'cash' | 'bank';
+                                        const paymentMethod = method.key as 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'other';
+                                        const selectedFund = financialAccounts.find((account: any) =>
+                                            paymentMethod === 'cash'
+                                                ? (account.account_type === 'cash' || account.fund_type === 'cash')
+                                                : paymentMethod === 'bank'
+                                                    ? String(account.company_bank_account_id || '') === String(formData.company_bank_account_id || primaryBank?.id || '')
+                                                    : String(account.account_type || account.fund_type || '') === paymentMethod
+                                        );
                                         setFormData(prev => ({
                                             ...prev,
                                             payment_method: paymentMethod,
                                             company_bank_account_id: paymentMethod === 'bank'
                                                 ? prev.company_bank_account_id || primaryBank?.id || ''
                                                 : '',
+                                            fund_account_id: selectedFund?.id
+                                                ? String(selectedFund.id)
+                                                : paymentMethod === 'cash' ? prev.fund_account_id : '',
                                         }));
                                         setShowBankPicker(paymentMethod === 'bank');
                                     }}
@@ -645,7 +818,11 @@ export function PaymentFormScreen({ navigation, route }: any) {
                                             accessibilityState={{ selected: formData.company_bank_account_id === account.id }}
                                             style={[styles.pickerItem, formData.company_bank_account_id === account.id && styles.pickerItemActive]}
                                             onPress={() => {
-                                                setFormData(prev => ({ ...prev, company_bank_account_id: account.id }));
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    company_bank_account_id: account.id,
+                                                    fund_account_id: String(financialAccounts.find((fund: any) => String(fund.company_bank_account_id || '') === String(account.id))?.id || prev.fund_account_id),
+                                                }));
                                                 setShowBankPicker(false);
                                             }}
                                         >
@@ -750,6 +927,18 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     pickerButtonText: { fontSize: 15 },
+    clientBalance: {
+        marginTop: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
+        borderRadius: 12,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    clientBalanceLabel: { fontSize: 12, fontWeight: '500' },
+    clientBalanceValue: { fontSize: 16, fontWeight: '700' },
     pickerList: {
         marginTop: 8,
         borderRadius: 12,
@@ -767,23 +956,27 @@ const styles = StyleSheet.create({
     pickerItemText: { fontSize: 15, fontWeight: '500' },
     pickerItemSubtext: { fontSize: 12, marginTop: 2 },
     noItems: { padding: 14, textAlign: 'center' },
+    clientSearchContainer: { padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(0,0,0,0.05)' },
     methodGrid: {
         flexDirection: 'row',
-        gap: 10,
+        flexWrap: 'wrap',
+        gap: 8,
         marginBottom: 16,
     },
     methodOption: {
-        flex: 1,
-        flexDirection: 'row',
+        width: '31.5%',
+        minHeight: 74,
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
+        gap: 6,
         minWidth: 0,
-        paddingHorizontal: 4,
-        paddingVertical: 14,
+        paddingHorizontal: 8,
+        paddingVertical: 10,
         borderRadius: 12,
+        borderWidth: 1,
     },
-    methodText: { flexShrink: 1, textAlign: 'center', fontWeight: '600', fontSize: 12, lineHeight: 15 },
+    methodText: { width: '100%', textAlign: 'center', fontWeight: '600', fontSize: 12, lineHeight: 16 },
     saveButton: { marginTop: 8 },
     deleteButton: { marginTop: 12 },
     optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E4E9F0' },

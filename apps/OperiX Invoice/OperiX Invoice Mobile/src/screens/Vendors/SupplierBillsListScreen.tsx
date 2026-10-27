@@ -170,6 +170,8 @@ export function SupplierBillsListScreen({ navigation }: any) {
                         keyExtractor={(item) => item.id}
                         renderItem={renderBill}
                         contentContainerStyle={styles.listContent}
+                        keyboardShouldPersistTaps="handled"
+                        keyboardDismissMode="on-drag"
                         refreshing={refreshing}
                         onRefresh={() => { setRefreshing(true); fetchBills(); }}
                         ListEmptyComponent={

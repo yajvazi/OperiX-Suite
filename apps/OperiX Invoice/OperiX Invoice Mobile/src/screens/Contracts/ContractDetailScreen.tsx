@@ -40,6 +40,7 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
     const [loading, setLoading] = useState(true);
     const [showPreview, setShowPreview] = useState(false);
     const [htmlContent, setHtmlContent] = useState('');
+    const [canManageContracts, setCanManageContracts] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -53,7 +54,9 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
 
     const fetchProfile = async () => {
         if (!user) return;
-        const { profile: workspaceProfile, company } = await getWorkspaceScope(user.id);
+        const workspace = await getWorkspaceScope(user.id);
+        setCanManageContracts(workspace.platformAdmin || workspace.permissions.includes('contracts.manage'));
+        const { profile: workspaceProfile, company } = workspace;
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) {
             setProfile({
@@ -81,6 +84,10 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
     };
 
     const handleDelete = () => {
+        if (!canManageContracts) {
+            Alert.alert(t('error', language), 'Contract management permission is required.');
+            return;
+        }
         Alert.alert(
             t('deleteContract', language),
             t('deleteContractConfirmation', language),
@@ -181,12 +188,12 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <Text style={[styles.title, { color: textColor }]}>{t('contractDetails', language)}</Text>
-                <TouchableOpacity onPress={handleDelete}>
+                {canManageContracts ? <TouchableOpacity onPress={handleDelete}>
                     <Trash2 color="#ef4444" size={24} />
-                </TouchableOpacity>
+                </TouchableOpacity> : <View style={{ width: 24 }} />}
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
                 {/* Header Card */}
                 <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
                     <View style={styles.headerCard}>

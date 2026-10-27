@@ -202,7 +202,19 @@ export interface OperixInputProps extends TextInputProps {
 
 export function OperixInput({ label, required = false, helperText, error, containerStyle, style, left, right, onChangeText, keyboardType, ...props }: OperixInputProps) {
     const { palette } = useMobileTheme();
-    const [focused, setFocused] = useState(false);
+    const inputRef = useRef<TextInput | null>(null);
+    // No focus-driven state here on purpose: re-rendering the input while iOS is
+    // making it first responder (or shortly after) drops focus and the keyboard
+    // flickers or hides by itself. Keep focus/blur passthrough only.
+    // Native autoFocus fires while a screen or modal is still animating in. On iOS
+    // the keyboard then starts to show and is torn down as the transition ends
+    // (show/hide a few ms apart), so focus once the transition has settled.
+    const { autoFocus, ...inputProps } = props;
+    useEffect(() => {
+        if (!autoFocus) return undefined;
+        const timer = setTimeout(() => inputRef.current?.focus(), Platform.OS === 'ios' ? 450 : 250);
+        return () => clearTimeout(timer);
+    }, [autoFocus]);
     const handleChangeText = (value: string) => {
         const normalized = keyboardType === 'numeric' || keyboardType === 'decimal-pad' ? value.replace(',', '.') : value;
         onChangeText?.(normalized);
@@ -210,18 +222,19 @@ export function OperixInput({ label, required = false, helperText, error, contai
     return (
         <View style={[styles.fieldContainer, containerStyle]}>
             {label ? <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>{label}{required ? <Text style={{ color: palette.error }}> *</Text> : null}</Text> : null}
-            <View style={[styles.inputShell, { backgroundColor: palette.surface, borderColor: error ? palette.error : focused ? palette.primary : palette.border }, focused && styles.inputFocused]}>
+            <View style={[styles.inputShell, { backgroundColor: palette.surface, borderColor: error ? palette.error : palette.border }]}>
                 {left ? <View style={styles.inputAffix}>{left}</View> : null}
                 <TextInput
-                    {...props}
+                    {...inputProps}
+                    ref={inputRef}
                     accessibilityLabel={props.accessibilityLabel || label}
                     // Keep the keyboard open while moving through a form. Individual
                     // screens can still opt into the native blur behavior explicitly.
                     blurOnSubmit={props.blurOnSubmit ?? false}
                     keyboardType={keyboardType}
                     onChangeText={handleChangeText}
-                    onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
-                    onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
+                    onFocus={props.onFocus}
+                    onBlur={props.onBlur}
                     placeholderTextColor={palette.muted}
                     style={[styles.input, { color: palette.text }, left ? styles.inputWithoutLeftPadding : undefined, right ? styles.inputWithoutRightPadding : undefined, style]}
                 />
@@ -276,7 +289,7 @@ export function OperixSelect({ label, required, value, placeholder = 'Select an 
 
 export function OperixSwitch({ label, description, value, onValueChange, disabled = false, style }: { label?: string; description?: string; value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
     const { palette } = useMobileTheme();
-    return <View style={[styles.switchRow, style]}><View style={styles.switchCopy}>{label ? <Text style={[styles.switchLabel, { color: palette.text }]}>{label}</Text> : null}{description ? <Text style={[styles.switchDescription, { color: palette.muted }]}>{description}</Text> : null}</View><Switch accessibilityLabel={label} accessibilityRole="switch" accessibilityState={{ checked: value, disabled }} disabled={disabled} value={value} onValueChange={onValueChange} trackColor={{ false: palette.borderStrong, true: palette.primary }} thumbColor={Platform.OS === 'android' ? (value ? '#FFFFFF' : '#F8FAFC') : undefined} />;</View>;
+    return <View style={[styles.switchRow, style]}><View style={styles.switchCopy}>{label ? <Text style={[styles.switchLabel, { color: palette.text }]}>{label}</Text> : null}{description ? <Text style={[styles.switchDescription, { color: palette.muted }]}>{description}</Text> : null}</View><Switch accessibilityLabel={label} accessibilityRole="switch" accessibilityState={{ checked: value, disabled }} disabled={disabled} value={value} onValueChange={onValueChange} trackColor={{ false: palette.borderStrong, true: palette.primary }} thumbColor={Platform.OS === 'android' ? (value ? '#FFFFFF' : '#F8FAFC') : undefined} /></View>;
 }
 
 export function OperixCheckbox({ label, value, onValueChange, disabled = false, style }: { label?: string; value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean; style?: StyleProp<ViewStyle> }) {
@@ -442,7 +455,7 @@ export function OperixFilterSheet({ visible, onClose, title = 'Filters', childre
 
 export function OperixActiveFilters({ filters, onRemove }: { filters: Array<{ id: string; label: string }>; onRemove: (id: string) => void }) {
     const { palette } = useMobileTheme();
-    return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeFilters}>{filters.map((filter) => <Pressable key={filter.id} accessibilityRole="button" accessibilityLabel={`Remove ${filter.label}`} onPress={() => onRemove(filter.id)} style={[styles.activeFilter, { backgroundColor: palette.iconSurface }]}><Text style={[styles.activeFilterText, { color: palette.primary }]}>{filter.label}</Text><X color={palette.primary} size={13} /></Pressable>)}</ScrollView>;
+    return <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeFilters}>{filters.map((filter) => <Pressable key={filter.id} accessibilityRole="button" accessibilityLabel={`Remove ${filter.label}`} onPress={() => onRemove(filter.id)} style={[styles.activeFilter, { backgroundColor: palette.iconSurface }]}><Text style={[styles.activeFilterText, { color: palette.primary }]}>{filter.label}</Text><X color={palette.primary} size={13} /></Pressable>)}</ScrollView>;
 }
 
 const styles = StyleSheet.create({
@@ -476,7 +489,9 @@ const styles = StyleSheet.create({
     radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
     radioDot: { width: 10, height: 10, borderRadius: 5 },
     searchContainer: { marginBottom: operixMobileTokens.spacing.md },
-    searchInput: { minHeight: 58, fontSize: 17 },
+    // Search fields stay compact enough for list screens while retaining the
+    // shared 44px+ touch target across mobile products.
+    searchInput: { minHeight: 52, fontSize: 15 },
     amountPrefix: { fontSize: operixMobileTokens.typography.size.bodyLarge, fontFamily: operixMobileTokens.typography.fontFamily.medium },
     badge: { alignSelf: 'flex-start', minHeight: 26, borderRadius: operixMobileTokens.radii.pill, paddingHorizontal: 9, paddingVertical: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
     compactBadge: { minHeight: 23, paddingHorizontal: 8, paddingVertical: 4 },

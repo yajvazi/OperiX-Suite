@@ -152,7 +152,7 @@ export function OperixIntelligenceScreen({ navigation }: Props) {
                 </View>}
             />
             {loading && !snapshot ? <View style={styles.centerState}><ActivityIndicator color={palette.primary} size="small" /><Text style={[styles.stateText, { color: palette.muted }]}>{t('operixIntelligenceLoading', language)}</Text></View> : error && !snapshot ? <View style={styles.centerState}><AlertTriangle color={palette.error} size={25} /><Text style={[styles.stateText, { color: palette.muted }]}>{error}</Text><TouchableOpacity accessibilityRole="button" onPress={() => void load(true)}><Text style={[styles.retryText, { color: palette.primary }]}>{t('retry', language)}</Text></TouchableOpacity></View> : snapshot ? (
-                <ScrollView
+                <ScrollView keyboardShouldPersistTaps="handled"
                     testID="operix-intelligence-scroll"
                     showsVerticalScrollIndicator={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void load(true); }} tintColor={palette.primary} />}
@@ -172,7 +172,7 @@ export function OperixIntelligenceScreen({ navigation }: Props) {
                             <MetricTile label={t('operixIntelligenceInvoices', language)} value={snapshot.briefing.invoicesIssued} palette={palette} />
                         </View>
                         <View style={[styles.commentary, { backgroundColor: palette.surfaceMuted }]}><Text style={[styles.commentaryLabel, { color: palette.primary }]}>{t('operixIntelligenceInsight', language)}{snapshot.commentarySource === 'ai' ? '' : ` · ${t('operixIntelligenceCalculated', language)}`}</Text><Text style={[styles.commentaryText, { color: palette.text }]}>{snapshot.commentary || fallbackCommentary}</Text></View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRow}>
+                        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionRow}>
                             <TouchableOpacity accessibilityRole="button" onPress={() => openAction({ target: 'sales' })} style={[styles.actionChip, { backgroundColor: palette.iconSurface }]}><Text style={[styles.actionChipText, { color: palette.primary }]}>{t('operixIntelligenceViewSales', language)}</Text></TouchableOpacity>
                             <TouchableOpacity accessibilityRole="button" onPress={() => openAction({ target: 'invoices', params: { status: 'overdue' } })} style={[styles.actionChip, { backgroundColor: palette.iconSurface }]}><Text style={[styles.actionChipText, { color: palette.primary }]}>{t('operixIntelligenceViewOverdue', language)}</Text></TouchableOpacity>
                             <TouchableOpacity accessibilityRole="button" onPress={() => openAction({ target: 'products' })} style={[styles.actionChip, { backgroundColor: palette.iconSurface }]}><Text style={[styles.actionChipText, { color: palette.primary }]}>{t('operixIntelligenceViewInventory', language)}</Text></TouchableOpacity>

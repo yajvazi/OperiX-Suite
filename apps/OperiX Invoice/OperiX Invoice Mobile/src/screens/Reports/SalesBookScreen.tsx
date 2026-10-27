@@ -16,7 +16,7 @@ import {
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import type { RootStackParamList } from '../../navigation/types';
 import { Button } from '@invoice-monorepo/ui';
@@ -87,7 +87,8 @@ export function SalesBookScreen() {
     const [error, setError] = useState<string | null>(null);
     const [companyNames, setCompanyNames] = useState<Map<string, string>>(new Map());
     const [currency, setCurrency] = useState('EUR');
-    const [roleCode, setRoleCode] = useState('employee');
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
     const [amendmentVisible, setAmendmentVisible] = useState(false);
     const [amendmentInvoiceId, setAmendmentInvoiceId] = useState<string | null>(null);
     const [amendmentReason, setAmendmentReason] = useState('');
@@ -96,13 +97,17 @@ export function SalesBookScreen() {
     const load = useCallback(async () => {
         if (!user) return;
         setLoading(true);
-        setError(null);
+            setError(null);
         try {
             const scope = await getWorkspaceScope(user.id);
+            setPermissions(scope.permissions);
+            setPlatformAdmin(scope.platformAdmin);
+            if (!hasWorkspacePermission(scope, 'sales_book.view')) {
+                throw new Error('SALES_BOOK_PERMISSION_REQUIRED');
+            }
             const names = new Map(scope.companies.map((company): [string, string] => [company.id, company.company_name || company.name || '']));
             setCompanyNames(names);
             setCurrency(scope.company?.currency || scope.profile.currency || 'EUR');
-            setRoleCode(scope.roleCode || String((scope.profile as any)?.role || 'employee'));
             const incompleteCompany = scope.companies.find((company) => !['monthly', 'quarterly', 'annual'].includes(String(company.accounting_period_frequency || '').toLowerCase()));
             if (incompleteCompany) {
                 setPeriods([]);
@@ -116,7 +121,7 @@ export function SalesBookScreen() {
             setSelectedPeriodId((current) => current && nextPeriods.some((period) => period.id === current) ? current : nextPeriods[0]?.id || null);
         } catch (loadError) {
             console.error('Sales Book load error:', loadError);
-            setError(t('salesBookLoadError', language));
+            setError(loadError instanceof Error && loadError.message === 'SALES_BOOK_PERMISSION_REQUIRED' ? t('permissionDenied', language) : t('salesBookLoadError', language));
         } finally {
             setLoading(false);
         }
@@ -158,9 +163,11 @@ export function SalesBookScreen() {
     }, [loadTransactions, selectedPeriod?.id]));
 
     const summary = selectedPeriod || { transaction_count: 0, taxable_amount: 0, vat_amount: 0, total_amount: 0 } as SalesBookPeriodRow;
-    const canManageDeclaration = ['super_administrator', 'company_administrator', 'manager'].includes(roleCode);
+    const can = (permission: string) => platformAdmin || permissions.includes(permission);
+    const canManageDeclaration = can('sales_book.manage');
 
     const askToDeclare = () => {
+        if (!canManageDeclaration) return;
         if (!selectedPeriod || selectedPeriod.status !== 'READY_FOR_DECLARATION') return;
         Alert.alert(
             t('markSalesBookDeclared', language),
@@ -186,6 +193,7 @@ export function SalesBookScreen() {
     };
 
     const saveAmendment = () => {
+        if (!canManageDeclaration) return;
         if (!selectedPeriod || !amendmentInvoiceId || !amendmentReason.trim()) return;
         setSavingAction(true);
         void createSalesBookAmendment(supabase, selectedPeriod.id, amendmentInvoiceId, amendmentReason.trim())
@@ -216,6 +224,10 @@ export function SalesBookScreen() {
     };
 
     const handleShare = async () => {
+        if (!can('financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         if (!selectedPeriod) return;
         await Share.share({
             message: `${t('salesBook', language)} — ${periodTitle(selectedPeriod, language)}\n${shortDate(selectedPeriod.period_start)} – ${shortDate(selectedPeriod.period_end)}\n${statusLabel(selectedPeriod.status, language)}\n${t('taxableAmount', language)}: ${formatCurrency(numeric(selectedPeriod.taxable_amount), currency, language)} · ${t('vat', language)}: ${formatCurrency(numeric(selectedPeriod.vat_amount), currency, language)} · ${t('total', language)}: ${formatCurrency(numeric(selectedPeriod.total_amount), currency, language)}`,
@@ -223,6 +235,10 @@ export function SalesBookScreen() {
     };
 
     const handleExport = async () => {
+        if (!can('financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         if (!selectedPeriod) return;
         setExporting(true);
         try {
@@ -249,9 +265,9 @@ export function SalesBookScreen() {
                 title={t('salesBook', language)}
                 subtitle={t('salesBookPeriodLifecycle', language)}
                 onBack={() => navigation.goBack()}
-                right={<TouchableOpacity accessibilityRole="button" accessibilityLabel={t('shareReport', language)} onPress={() => void handleShare()} hitSlop={10}><Share2 color={palette.text} size={20} /></TouchableOpacity>}
+                right={can('financial.export') ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('shareReport', language)} onPress={() => void handleShare()} hitSlop={10}><Share2 color={palette.text} size={20} /></TouchableOpacity> : undefined}
             />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                 {periods.length === 0 ? (
                     <View style={[styles.notice, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                         <ShieldAlert color={brand.colors.warning} size={20} />
@@ -280,14 +296,14 @@ export function SalesBookScreen() {
                     {(selectedPeriod.status === 'DECLARED' || selectedPeriod.status === 'AMENDED') && canManageDeclaration ? <Button title={t('startSalesBookAmendment', language)} icon={ShieldAlert} loading={savingAction} onPress={() => { setAmendmentInvoiceId(null); setAmendmentVisible(true); }} variant="secondary" style={styles.actionButton} /> : null}
 
                     <SectionTitle title={t('historicalSalesBooks', language)} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
                         <TouchableOpacity onPress={() => setYearFilter('ALL')} style={[styles.filter, { borderColor: yearFilter === 'ALL' ? brand.colors.primary : palette.border, backgroundColor: yearFilter === 'ALL' ? brand.colors.primary : palette.surface }]}><Text style={{ color: yearFilter === 'ALL' ? '#fff' : palette.text }}>{t('allYears', language)}</Text></TouchableOpacity>
                         {years.map((year) => <TouchableOpacity key={year} onPress={() => setYearFilter(year)} style={[styles.filter, { borderColor: yearFilter === year ? brand.colors.primary : palette.border, backgroundColor: yearFilter === year ? brand.colors.primary : palette.surface }]}><Text style={{ color: yearFilter === year ? '#fff' : palette.text }}>{year}</Text></TouchableOpacity>)}
                         {(['ALL', 'OPEN', 'READY_FOR_DECLARATION', 'DECLARED', 'AMENDED'] as StatusFilter[]).map((status) => <TouchableOpacity key={status} onPress={() => setStatusFilter(status)} style={[styles.filter, { borderColor: statusFilter === status ? brand.colors.primary : palette.border, backgroundColor: statusFilter === status ? brand.colors.primary : palette.surface }]}><Text style={{ color: statusFilter === status ? '#fff' : palette.text }}>{status === 'ALL' ? t('allStatuses', language) : statusLabel(status, language)}</Text></TouchableOpacity>)}
                     </ScrollView>
                     {filteredPeriods.map((period) => <TouchableOpacity key={period.id} accessibilityRole="button" onPress={() => setSelectedPeriodId(period.id)} style={[styles.periodRow, { backgroundColor: period.id === selectedPeriod?.id ? palette.iconSurface : palette.surface, borderColor: period.id === selectedPeriod?.id ? brand.colors.primary : palette.border }]}><View style={styles.periodCopy}><Text style={[styles.periodTitle, { color: palette.text }]}>{periodTitle(period, language)}</Text><Text style={[styles.periodDetail, { color: palette.muted }]}>{shortDate(period.period_start)} – {shortDate(period.period_end)} · {companyNames.get(period.company_id) || ''}</Text></View><View style={styles.periodRight}><Text style={[styles.periodStatus, { color: palette.text }]}>{statusLabel(period.status, language)}</Text><Text style={[styles.periodTotal, { color: palette.muted }]}>{formatCurrency(numeric(period.total_amount), currency, language)}</Text></View></TouchableOpacity>)}
                     {filteredPeriods.length === 0 ? <Text style={[styles.empty, { color: palette.muted }]}>{t('noSalesBookPeriods', language)}</Text> : null}
-                    <Button title={exporting ? t('preparing', language) : t('exportPdf', language)} icon={Download} loading={exporting} onPress={() => void handleExport()} style={styles.exportButton} />
+                    {can('financial.export') ? <Button title={exporting ? t('preparing', language) : t('exportPdf', language)} icon={Download} loading={exporting} onPress={() => void handleExport()} style={styles.exportButton} /> : null}
 
                     {transactions.map((row, index) => <TouchableOpacity key={`${String(row.invoice_id)}-${index}`} accessibilityRole="button" onPress={() => row.invoice_id ? navigation.navigate('InvoiceDetail', { invoiceId: String(row.invoice_id) }) : undefined} style={[styles.transaction, { backgroundColor: palette.surface, borderColor: palette.border }]}><View style={styles.transactionCopy}><Text style={[styles.transactionTitle, { color: palette.text }]}>{String(row.invoice_number || '—')}</Text><Text style={[styles.transactionDetail, { color: palette.muted }]}>{String(row.customer_name || '—')} · {String(row.invoice_date || '—')}</Text></View><View><Text style={[styles.transactionAmount, { color: palette.text }]}>{formatCurrency(numeric(row.total_amount), currency, language)}</Text><Text style={[styles.transactionVat, { color: palette.muted }]}>{formatCurrency(numeric(row.output_vat), currency, language)} {t('vat', language)}</Text></View></TouchableOpacity>)}
                     {transactions.length === 0 ? <Text style={[styles.empty, { color: palette.muted }]}>{t('noPostedRecords', language)}</Text> : null}
@@ -295,7 +311,7 @@ export function SalesBookScreen() {
 
                 <View style={{ height: 28 }} />
             </ScrollView>
-            <Modal visible={amendmentVisible} transparent animationType="slide" onRequestClose={() => setAmendmentVisible(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.surface }]}><Text style={[styles.modalTitle, { color: palette.text }]}>{t('startSalesBookAmendment', language)}</Text><Text style={[styles.modalText, { color: palette.muted }]}>{t('salesBookAmendmentReasonDescription', language)}</Text>{transactions.length > 0 ? <><Text style={[styles.selectionLabel, { color: palette.text }]}>{t('selectInvoiceForAmendment', language)}</Text><ScrollView style={styles.amendmentList} nestedScrollEnabled>{transactions.filter((row) => row.invoice_id).map((row) => { const invoiceId = String(row.invoice_id); const selected = amendmentInvoiceId === invoiceId; return <TouchableOpacity key={invoiceId} onPress={() => setAmendmentInvoiceId(selected ? null : invoiceId)} style={[styles.amendmentOption, { borderColor: selected ? brand.colors.primary : palette.border, backgroundColor: selected ? palette.iconSurface : palette.background }]}><View style={styles.transactionCopy}><Text style={[styles.transactionTitle, { color: palette.text }]}>{String(row.invoice_number || '—')}</Text><Text style={[styles.transactionDetail, { color: palette.muted }]}>{String(row.customer_name || '—')}</Text></View><Text style={[styles.transactionAmount, { color: selected ? brand.colors.primary : palette.text }]}>{formatCurrency(numeric(row.total_amount), currency, language)}</Text></TouchableOpacity>; })}</ScrollView></> : null}<TextInput value={amendmentReason} onChangeText={setAmendmentReason} placeholder={t('amendmentReasonPlaceholder', language)} placeholderTextColor={palette.muted} multiline style={[styles.reasonInput, { color: palette.text, borderColor: palette.border }]} /><View style={styles.modalActions}><Button title={t('cancel', language)} variant="secondary" onPress={() => setAmendmentVisible(false)} /><Button title={t('continue', language)} loading={savingAction} disabled={!amendmentInvoiceId || !amendmentReason.trim()} onPress={saveAmendment} /></View></View></View></Modal>
+            <Modal visible={amendmentVisible} transparent animationType="slide" onRequestClose={() => setAmendmentVisible(false)}><View style={styles.modalOverlay}><View style={[styles.modal, { backgroundColor: palette.surface }]}><Text style={[styles.modalTitle, { color: palette.text }]}>{t('startSalesBookAmendment', language)}</Text><Text style={[styles.modalText, { color: palette.muted }]}>{t('salesBookAmendmentReasonDescription', language)}</Text>{transactions.length > 0 ? <><Text style={[styles.selectionLabel, { color: palette.text }]}>{t('selectInvoiceForAmendment', language)}</Text><ScrollView keyboardShouldPersistTaps="handled" style={styles.amendmentList} nestedScrollEnabled>{transactions.filter((row) => row.invoice_id).map((row) => { const invoiceId = String(row.invoice_id); const selected = amendmentInvoiceId === invoiceId; return <TouchableOpacity key={invoiceId} onPress={() => setAmendmentInvoiceId(selected ? null : invoiceId)} style={[styles.amendmentOption, { borderColor: selected ? brand.colors.primary : palette.border, backgroundColor: selected ? palette.iconSurface : palette.background }]}><View style={styles.transactionCopy}><Text style={[styles.transactionTitle, { color: palette.text }]}>{String(row.invoice_number || '—')}</Text><Text style={[styles.transactionDetail, { color: palette.muted }]}>{String(row.customer_name || '—')}</Text></View><Text style={[styles.transactionAmount, { color: selected ? brand.colors.primary : palette.text }]}>{formatCurrency(numeric(row.total_amount), currency, language)}</Text></TouchableOpacity>; })}</ScrollView></> : null}<TextInput value={amendmentReason} onChangeText={setAmendmentReason} placeholder={t('amendmentReasonPlaceholder', language)} placeholderTextColor={palette.muted} multiline style={[styles.reasonInput, { color: palette.text, borderColor: palette.border }]} /><View style={styles.modalActions}><Button title={t('cancel', language)} variant="secondary" onPress={() => setAmendmentVisible(false)} /><Button title={t('continue', language)} loading={savingAction} disabled={!amendmentInvoiceId || !amendmentReason.trim()} onPress={saveAmendment} /></View></View></View></Modal>
         </MobileScreen>
     );
 }

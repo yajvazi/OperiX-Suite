@@ -1,28 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as MailComposer from 'expo-mail-composer';
 import * as Crypto from 'expo-crypto';
 import {
     View,
     Text,
+    TextInput,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
     Alert,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
     Switch,
 } from 'react-native';
-import { ArrowLeft, Tag, DollarSign, FileText, Camera, ChevronDown, ChevronUp, Trash2, Banknote, Building } from 'lucide-react-native';
+import { ArrowLeft, Tag, DollarSign, FileText, Camera, ChevronDown, ChevronUp, Trash2, Banknote, Building, Search, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@invoice-monorepo/api';
+import { supabase, EXPENSE_CATEGORIES, calculateExpenseEligibility, calculateExpenseTotals } from '@invoice-monorepo/api';
 import { listCompanyBankAccounts } from '@invoice-monorepo/api/repositories';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
-import { t } from '@invoice-monorepo/i18n';
-import type { CompanyBankAccount } from '@invoice-monorepo/types';
+import { formatCurrency, t } from '@invoice-monorepo/i18n';
+import type { CompanyBankAccount, Vendor } from '@invoice-monorepo/types';
 import { generateTransactionPdf, generateTransactionPdfHtml, printTransactionPdf, shareTransactionPdf } from '../../services/pdf/transactionPdf';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import { TransactionDocumentActions, TransactionPreviewModal } from '../../components/mobile/TransactionDocumentActions';
 import { documentPdfFileName } from '../../services/pdf/fileNaming';
@@ -39,6 +40,15 @@ async function generateExpenseIdempotencyKey(): Promise<string> {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+const EXPENSE_ARTICLE_OPTIONS = [
+    'carExpenses',
+    'diesel',
+    'petrol',
+    'officeSupplies',
+    'repairsMaintenance',
+    'travelExpenses',
+] as const;
+
 export function ExpenseFormScreen({ navigation, route }: any) {
     const { user } = useAuth();
     const { isDark, language, primaryColor } = useTheme();
@@ -48,8 +58,11 @@ export function ExpenseFormScreen({ navigation, route }: any) {
     const [formData, setFormData] = useState({
         amount: '',
         category: 'Other',
+        article: '',
         vendor_name: '',
+        vendor_id: '',
         invoice_number: '',
+        vat_rate: '0',
         description: '',
         bank_reference: '',
         notes: '',
@@ -57,6 +70,30 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         receipt_url: '',
         payment_method: 'cash' as 'cash' | 'bank',
         company_bank_account_id: '',
+        category_code: 'other_expenses',
+        document_type: 'other',
+        due_date: '',
+        tax_treatment: 'review_required',
+        vat_treatment: 'review_required',
+        tax_deductible_percentage: '',
+        vat_deductible_percentage: '',
+        tax_override_reason: '',
+        vat_override_reason: '',
+        business_use_percentage: '100',
+        capital_classification: 'operating_expense',
+        quantity: '',
+        unit: '',
+        billing_period_start: '',
+        billing_period_end: '',
+        utility_account_reference: '',
+        property_location: '',
+        contract_reference: '',
+        fuel_type: '',
+        litres: '',
+        price_per_litre: '',
+        registration_plate: '',
+        vehicle_label: '',
+        business_purpose: '',
     });
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -69,6 +106,10 @@ export function ExpenseFormScreen({ navigation, route }: any) {
     const [showExpenseStamp, setShowExpenseStamp] = useState(true);
     const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
     const [showBankPicker, setShowBankPicker] = useState(false);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [showVendorPicker, setShowVendorPicker] = useState(false);
+    const [vendorSearch, setVendorSearch] = useState('');
+    const [receiptAsset, setReceiptAsset] = useState<{ uri: string; fileName: string; mimeType: string; fileSize?: number } | null>(null);
 
     const defaultCategories = ['Travel', 'Supplies', 'Marketing', 'Software', 'Rent', 'Utilities', 'Other'];
     const categoryLabel = (category: string) => ({
@@ -101,9 +142,43 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 invoice_number: (scan.invoice_number || scan.bill_number) ? String(scan.invoice_number || scan.bill_number) : '',
             }));
         }
+        if (route.params?.selectedVendorName) {
+            setFormData(prev => ({
+                ...prev,
+                vendor_name: String(route.params.selectedVendorName),
+                vendor_id: route.params?.selectedVendorId ? String(route.params.selectedVendorId) : prev.vendor_id,
+            }));
+        }
+        if (!isEditing && route.params?.quickCategory) {
+            const quickCategory = EXPENSE_CATEGORIES.find((category) => category.id === String(route.params.quickCategory));
+            if (quickCategory) setFormData(prev => ({ ...prev, category_code: quickCategory.id, category: language === 'sq' ? quickCategory.sq : quickCategory.en }));
+        }
         fetchCategories();
         fetchBankAccounts();
-    }, [expenseId, route.params?.scannedData]);
+    }, [expenseId, route.params?.scannedData, route.params?.selectedVendorName, route.params?.selectedVendorId, route.params?.quickCategory, language]);
+
+    const fetchVendors = useCallback(async () => {
+        if (!user) return;
+        try {
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const { data, error } = await supabase
+                .from('vendors')
+                .select('id, user_id, company_id, name, email, phone, created_at')
+                .or(scopedResource(user.id, companyIds))
+                .order('name');
+
+            if (error) throw error;
+            setVendors((data || []) as Vendor[]);
+        } catch (error) {
+            console.warn('Expense vendor load error:', error);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        void fetchVendors();
+        const unsubscribe = navigation.addListener?.('focus', () => { void fetchVendors(); });
+        return typeof unsubscribe === 'function' ? unsubscribe : undefined;
+    }, [fetchVendors, navigation]);
 
     const fetchCategories = async () => {
         if (!user) return;
@@ -141,8 +216,15 @@ export function ExpenseFormScreen({ navigation, route }: any) {
             setFormData({
                 amount: String(data.amount),
                 category: String(data.category || 'Other'),
+                article: data.article ? String(data.article) : '',
                 vendor_name: data.vendor_name ? String(data.vendor_name) : '',
+                vendor_id: data.vendor_id ? String(data.vendor_id) : '',
                 invoice_number: data.invoice_number ? String(data.invoice_number) : '',
+                vat_rate: data.vat_rate != null
+                    ? String(data.vat_rate)
+                    : Number(data.amount) > 0 && Number(data.tax_amount) > 0
+                        ? String(Math.round(Number(data.tax_amount) / Number(data.amount) * 10000) / 100)
+                        : '0',
                 description: data.description ? String(data.description) : '',
                 bank_reference: data.bank_reference ? String(data.bank_reference) : '',
                 notes: data.notes ? String(data.notes) : '',
@@ -150,6 +232,30 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 receipt_url: data.receipt_url ? String(data.receipt_url) : '',
                 payment_method: data.payment_method === 'bank' ? 'bank' : 'cash',
                 company_bank_account_id: data.company_bank_account_id ? String(data.company_bank_account_id) : '',
+                category_code: String(data.category_code || 'other_expenses'),
+                document_type: String(data.document_type || 'other'),
+                due_date: data.due_date ? String(data.due_date) : '',
+                tax_treatment: String(data.tax_treatment || 'review_required'),
+                vat_treatment: String(data.vat_treatment || 'review_required'),
+                tax_deductible_percentage: data.tax_deductible_percentage == null ? '' : String(data.tax_deductible_percentage),
+                vat_deductible_percentage: data.vat_deductible_percentage == null ? '' : String(data.vat_deductible_percentage),
+                tax_override_reason: data.tax_override_reason ? String(data.tax_override_reason) : '',
+                vat_override_reason: data.vat_override_reason ? String(data.vat_override_reason) : '',
+                business_use_percentage: data.business_use_percentage == null ? '100' : String(data.business_use_percentage),
+                capital_classification: String(data.capital_classification || 'operating_expense'),
+                quantity: data.quantity == null ? '' : String(data.quantity),
+                unit: data.unit ? String(data.unit) : '',
+                billing_period_start: data.billing_period_start ? String(data.billing_period_start) : '',
+                billing_period_end: data.billing_period_end ? String(data.billing_period_end) : '',
+                utility_account_reference: data.utility_account_reference ? String(data.utility_account_reference) : '',
+                property_location: data.property_location ? String(data.property_location) : '',
+                contract_reference: data.contract_reference ? String(data.contract_reference) : '',
+                fuel_type: data.fuel_type ? String(data.fuel_type) : '',
+                litres: data.litres == null ? '' : String(data.litres),
+                price_per_litre: data.price_per_litre == null ? '' : String(data.price_per_litre),
+                registration_plate: data.registration_plate ? String(data.registration_plate) : '',
+                vehicle_label: data.vehicle_label ? String(data.vehicle_label) : '',
+                business_purpose: data.business_purpose ? String(data.business_purpose) : '',
             });
             setAccountingState(data.accounting_state ? String(data.accounting_state) : null);
         }
@@ -164,8 +270,23 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         });
 
         if (!result.canceled && result.assets[0].base64) {
-            setFormData({ ...formData, receipt_url: `data:image/jpeg;base64,${result.assets[0].base64}` });
+            const asset = result.assets[0];
+            setReceiptAsset({ uri: asset.uri, fileName: asset.fileName || `receipt-${Date.now()}.jpg`, mimeType: asset.mimeType || 'image/jpeg', fileSize: asset.fileSize });
+            setFormData({ ...formData, receipt_url: `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` });
         }
+    };
+
+    const archiveReceipt = async (recordId: string) => {
+        if (!receiptAsset || !user) return;
+        const { companyId } = await getWorkspaceScope(user.id);
+        if (!companyId) return;
+        const path = `${companyId}/expenses/${recordId}/${Date.now()}-${receiptAsset.fileName.replace(/[^a-zA-Z0-9._-]/g, '-')}`;
+        const response = await fetch(receiptAsset.uri);
+        const blob = await response.blob();
+        const { error: uploadError } = await supabase.storage.from('operix-expense-documents').upload(path, blob, { contentType: receiptAsset.mimeType, upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: archiveError } = await supabase.rpc('add_expense_attachment', { p_expense_id: recordId, p_storage_bucket: 'operix-expense-documents', p_storage_path: path, p_file_name: receiptAsset.fileName, p_content_type: receiptAsset.mimeType, p_byte_size: receiptAsset.fileSize || blob.size, p_metadata: { source: 'mobile_camera_or_library' } });
+        if (archiveError) throw archiveError;
     };
 
     const buildExpensePdfInput = async (recordId = expenseId) => {
@@ -175,25 +296,32 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         const selectedBankAccount = bankAccounts.find((account) => account.id === formData.company_bank_account_id);
         const expenseNumber = recordId ? `EXP-${String(recordId).slice(0, 8).toUpperCase()}` : t('expense', language);
         const tenantName = tenant?.company_name || tenant?.name || profile.company_name || t('yourBusiness', language);
+        const totalAmount = Number(formData.amount) || 0;
+        const vatRate = Math.min(Math.max(Number(formData.vat_rate) || 0, 0), 100);
+        const totals = calculateExpenseTotals({ grossAmount: String(totalAmount), vatRate: String(vatRate) });
         return {
-            title: t('expense', language),
-            fileName: documentPdfFileName(tenantName, expenseNumber, t('client', language)),
+            title: formData.vendor_name ? t('expensePayment', language) : t('expense', language),
+            fileName: documentPdfFileName(tenantName, expenseNumber, formData.vendor_name || t('vendor', language)),
             number: recordId ? expenseNumber : undefined,
             barcodeValue: recordId ? `EXPENSE:${recordId}` : undefined,
-            transactionType: 'expense' as const,
-            documentStatusLabel: t('expense', language),
-            amount: Number(formData.amount),
+            transactionType: formData.vendor_name ? 'payment' as const : 'expense' as const,
+            documentStatusLabel: formData.vendor_name ? t('expensePayment', language) : t('expense', language),
+            amount: totalAmount,
+            netAmount: Number(totals.netAmount),
+            vatRate: Number(totals.vatRate),
+            vatAmount: Number(totals.vatAmount),
             date: formData.date,
             method: formData.payment_method,
             counterparty: formData.vendor_name || undefined,
             counterpartyType: formData.vendor_name ? 'vendor' as const : undefined,
+            article: formData.article || undefined,
             relatedDocumentNumber: formData.invoice_number || undefined,
-            relatedDocumentLabel: t('invoiceNumber', language),
+            relatedDocumentLabel: t('vendorInvoice', language),
             description: formData.description,
             category: categoryLabel(formData.category),
             reference: formData.bank_reference || undefined,
             notes: formData.notes || undefined,
-            showClientSignature: true,
+            showClientSignature: false,
             language: language === 'sq' ? 'sq' as const : 'en' as const,
             company: {
                 name: tenant?.company_name || tenant?.name || profile.company_name,
@@ -311,15 +439,44 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         try {
             if (!user) throw new Error(t('signInSaveExpense', language));
             const { companyId } = await getWorkspaceScope(user.id);
+            const totalAmount = Number(formData.amount);
+            const vatRate = Math.min(Math.max(Number(formData.vat_rate) || 0, 0), 100);
+            const totals = calculateExpenseTotals({ grossAmount: String(totalAmount), vatRate: String(vatRate) });
+            const eligibility = calculateExpenseEligibility({
+                grossAmount: totals.grossAmount,
+                vatAmount: totals.vatAmount,
+                taxTreatment: formData.tax_treatment as any,
+                taxDeductiblePercentage: formData.tax_deductible_percentage || 0,
+                vatTreatment: formData.vat_treatment as any,
+                vatDeductiblePercentage: formData.vat_deductible_percentage || 0,
+                businessUsePercentage: formData.business_use_percentage || 100,
+            });
             const dataToSave = {
                 ...formData,
-                amount: Number(formData.amount),
+                amount: totalAmount,
+                receipt_url: formData.receipt_url.startsWith('data:') ? null : formData.receipt_url.trim() || null,
+                gross_amount: totals.grossAmount,
+                net_amount: totals.netAmount,
+                vat_amount: totals.vatAmount,
+                article: formData.article.trim() || null,
                 vendor_name: formData.vendor_name.trim() || null,
+                vendor_id: formData.vendor_id || null,
                 invoice_number: formData.invoice_number.trim() || null,
+                vat_rate: vatRate,
+                // Keep legacy journal API shape numeric for existing callers;
+                // the database trigger derives recoverability from the new
+                // VAT treatment fields before posting.
+                tax_amount: Number(totals.vatAmount),
+                tax_recoverable_amount: Number(totals.vatAmount),
+                tax_deductible_amount: eligibility.deductibleAmount,
+                tax_non_deductible_amount: eligibility.nonDeductibleAmount,
+                vat_deductible_amount: eligibility.deductibleVatAmount,
+                vat_non_deductible_amount: eligibility.nonDeductibleVatAmount,
                 bank_reference: formData.bank_reference.trim() || null,
                 notes: formData.notes.trim() || null,
                 company_bank_account_id: formData.payment_method === 'bank' ? formData.company_bank_account_id || null : null,
                 type: 'expense' as const,
+                purchase_book_eligible: Boolean(formData.invoice_number.trim() && formData.document_type !== 'other' && formData.vat_treatment !== 'no_vat_exempt'),
                 user_id: user.id,
                 company_id: companyId,
             };
@@ -333,6 +490,9 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 correctPostedExpense,
                 idempotencyKey: expenseIdempotencyKey,
             });
+            if (receiptAsset && savedExpense.id) {
+                try { await archiveReceipt(String(savedExpense.id)); } catch (attachmentError) { console.warn('Expense attachment upload failed:', attachmentError); }
+            }
             if (!isEditing || correctPostedExpense) {
                 void notifyBusinessEvent(correctPostedExpense ? 'expense_approved' : 'expense_created', companyId, String(savedExpense.id)).catch((notificationError) => console.warn('Expense notification could not be sent:', notificationError));
                 const selectedBankAccount = bankAccounts.find((account) => account.id === formData.company_bank_account_id);
@@ -362,9 +522,23 @@ export function ExpenseFormScreen({ navigation, route }: any) {
         }
     };
 
+    const filteredVendors = vendors.filter((vendor) => {
+        const query = vendorSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [vendor.name, vendor.email, vendor.phone]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(query));
+    });
+    const totalAmount = Number(formData.amount) || 0;
+    const vatRate = Math.min(Math.max(Number(formData.vat_rate) || 0, 0), 100);
+    const totals = calculateExpenseTotals({ grossAmount: String(totalAmount), vatRate: String(vatRate) });
+    const vatAmount = Number(totals.vatAmount);
+    const netAmount = Number(totals.netAmount);
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
             testID="expense-form-screen"
             style={[styles.container, { backgroundColor: bgColor }]}
         >
@@ -382,7 +556,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 </Text>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {isEditing ? <TransactionDocumentActions primaryColor={primaryColor} language={language === 'sq' ? 'sq' : 'en'} onPreview={() => { void handlePreview(); }} onPrint={() => { void handlePrint(); }} onEmail={() => { void handleEmail(); }} onShare={() => { void handleShare(); }} /> : null}
 
                 {/* Card 1: Details */}
@@ -404,7 +578,100 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                         value={formData.vendor_name}
                         onChangeText={(text) => setFormData({ ...formData, vendor_name: text })}
                         placeholder={t('vendorNamePlaceholder', language)}
+                        testID="expense-vendor-input"
+                        right={(
+                            <TouchableOpacity
+                                testID="expense-vendor-picker-button"
+                                accessibilityRole="button"
+                                accessibilityLabel={t('selectVendor', language)}
+                                accessibilityState={{ expanded: showVendorPicker }}
+                                onPress={() => setShowVendorPicker((current) => !current)}
+                                style={styles.inputAction}
+                            >
+                                <ChevronDown color={mutedColor} size={18} />
+                            </TouchableOpacity>
+                        )}
                     />
+
+                    {showVendorPicker ? (
+                        <View style={[styles.pickerList, styles.vendorPickerList, { backgroundColor: isDark ? '#14243A' : '#fff', borderColor }]}>
+                            <View style={[styles.vendorSearchRow, { backgroundColor: isDark ? '#0D1B2A' : '#F4F7FB' }]}>
+                                <Search color={mutedColor} size={17} />
+                                <TextInput
+                                    testID="expense-vendor-search-input"
+                                    accessibilityLabel={t('search', language)}
+                                    value={vendorSearch}
+                                    onChangeText={setVendorSearch}
+                                    placeholder={t('search', language)}
+                                    placeholderTextColor={mutedColor}
+                                    keyboardAppearance={isDark ? 'dark' : 'light'}
+                                    style={[styles.vendorSearchInput, { color: textColor }]}
+                                />
+                            </View>
+                            <TouchableOpacity
+                                testID="expense-add-vendor-button"
+                                accessibilityRole="button"
+                                style={[styles.vendorAddOption, { borderBottomColor: borderColor }]}
+                                onPress={() => {
+                                    setShowVendorPicker(false);
+                                    setVendorSearch('');
+                                    navigation.navigate('VendorForm', { returnToExpense: true });
+                                }}
+                            >
+                                <View style={[styles.vendorIconSmall, { backgroundColor: `${primaryColor}20` }]}>
+                                    <Plus color={primaryColor} size={17} />
+                                </View>
+                                <Text style={[styles.vendorOptionText, { color: primaryColor }]}>{t('newVendor', language)}</Text>
+                            </TouchableOpacity>
+                            {filteredVendors.length ? filteredVendors.map((vendor) => (
+                                <TouchableOpacity
+                                    key={vendor.id}
+                                    testID={`expense-vendor-option-${vendor.id}`}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: formData.vendor_name === vendor.name }}
+                                    style={[styles.vendorOption, { borderBottomColor: borderColor }]}
+                                    onPress={() => {
+                                        setFormData((prev) => ({ ...prev, vendor_name: vendor.name, vendor_id: vendor.id }));
+                                        setShowVendorPicker(false);
+                                        setVendorSearch('');
+                                    }}
+                                >
+                                    <View style={[styles.vendorIconSmall, { backgroundColor: `${primaryColor}10` }]}>
+                                        <Building color={primaryColor} size={16} />
+                                    </View>
+                                    <View style={styles.vendorOptionCopy}>
+                                        <Text style={[styles.vendorOptionText, { color: textColor }]}>{vendor.name}</Text>
+                                        {vendor.email ? <Text style={[styles.vendorOptionSubtext, { color: mutedColor }]}>{vendor.email}</Text> : null}
+                                    </View>
+                                </TouchableOpacity>
+                            )) : (
+                                <Text style={[styles.noItems, { color: mutedColor }]}>
+                                    {vendorSearch.trim() ? t('noVendorsFound', language) : t('noVendorsYet', language)}
+                                </Text>
+                            )}
+                        </View>
+                    ) : null}
+
+                    <Input
+                        testID="expense-article-input"
+                        label={t('article', language)}
+                        value={formData.article}
+                        onChangeText={(text) => setFormData({ ...formData, article: text })}
+                        placeholder={t('articlePlaceholder', language)}
+                    />
+                    <Text style={[styles.label, { color: textColor }]}>{t('expenseArticles', language)}</Text>
+                    <View style={styles.articleGrid}>
+                        {EXPENSE_ARTICLE_OPTIONS.map((articleKey) => (
+                            <TouchableOpacity
+                                key={articleKey}
+                                testID={`expense-article-option-${articleKey}`}
+                                style={[styles.articleOption, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }, formData.article === t(articleKey, language) && styles.activeArticleOption]}
+                                onPress={() => setFormData({ ...formData, article: t(articleKey, language) })}
+                            >
+                                <Text style={[styles.articleText, { color: mutedColor }, formData.article === t(articleKey, language) && styles.activeArticleText]}>{t(articleKey, language)}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
 
                     <Input
                         label={t('invoiceNumber', language)}
@@ -437,6 +704,30 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                         placeholder="0.00"
                         keyboardType="decimal-pad"
                     />
+
+                    <Input
+                        testID="expense-vat-rate-input"
+                        label={t('vatRatePercent', language)}
+                        value={formData.vat_rate}
+                        onChangeText={(text) => setFormData({ ...formData, vat_rate: text.replace(',', '.') })}
+                        placeholder="18"
+                        keyboardType="decimal-pad"
+                    />
+
+                    <View style={[styles.vatSummary, { backgroundColor: isDark ? '#102038' : '#F4F7FB', borderColor }]}>
+                        <View style={styles.vatSummaryRow}>
+                            <Text style={[styles.vatSummaryLabel, { color: mutedColor }]}>{t('priceWithoutVat', language)}</Text>
+                            <Text style={[styles.vatSummaryValue, { color: textColor }]}>{formatCurrency(netAmount, 'EUR', language)}</Text>
+                        </View>
+                        <View style={styles.vatSummaryRow}>
+                            <Text style={[styles.vatSummaryLabel, { color: mutedColor }]}>{t('vatAmount', language)} ({vatRate}%)</Text>
+                            <Text style={[styles.vatSummaryValue, { color: textColor }]}>{formatCurrency(vatAmount, 'EUR', language)}</Text>
+                        </View>
+                        <View style={[styles.vatSummaryRow, styles.vatSummaryTotal, { borderTopColor: borderColor }]}>
+                            <Text style={[styles.vatSummaryLabel, { color: textColor }]}>{t('totalWithVat', language)}</Text>
+                            <Text style={[styles.vatSummaryValue, { color: primaryColor }]}>{formatCurrency(totalAmount, 'EUR', language)}</Text>
+                        </View>
+                    </View>
 
                     <Text style={[styles.label, { color: textColor }]}>{t('paymentMethod', language)}</Text>
                     <View style={styles.typeGrid}>
@@ -598,6 +889,19 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                 </TouchableOpacity>
                             ))}
                     </View>
+                    <Text style={[styles.label, { color: textColor }]}>{t('expenseCategories', language)}</Text>
+                    <View style={styles.categoryGrid}>
+                        {EXPENSE_CATEGORIES.map((category) => (
+                            <TouchableOpacity
+                                key={category.id}
+                                testID={`expense-category-${category.id}`}
+                                style={[styles.categoryOption, { backgroundColor: isDark ? '#263A55' : '#F4F7FB' }, formData.category_code === category.id && styles.activeCategoryExpense]}
+                                onPress={() => setFormData({ ...formData, category_code: category.id, category: language === 'sq' ? category.sq : category.en })}
+                            >
+                                <Text style={[styles.categoryText, { color: isDark ? '#98A2B3' : '#667085' }, formData.category_code === category.id && styles.activeCategoryText]}>{language === 'sq' ? category.sq : category.en}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </Card>
 
                 <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: showAdvanced }} onPress={() => setShowAdvanced((current) => !current)} style={styles.advancedToggle}>
@@ -625,6 +929,32 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                             </>
                         )}
                     </TouchableOpacity>
+                    <Text style={[styles.label, { color: textColor }]}>{t('documentType', language)}</Text>
+                    <Input value={formData.document_type} onChangeText={(text) => setFormData({ ...formData, document_type: text })} placeholder="tax_invoice" />
+                    <Input label={t('dueDate', language)} value={formData.due_date} onChangeText={(text) => setFormData({ ...formData, due_date: text })} placeholder="YYYY-MM-DD" />
+                    <Text style={[styles.label, { color: textColor }]}>{t('taxTreatment', language)}</Text>
+                    <Input value={formData.tax_treatment} onChangeText={(text) => setFormData({ ...formData, tax_treatment: text })} placeholder="review_required" />
+                    <Input label={t('deductiblePercentage', language)} value={formData.tax_deductible_percentage} onChangeText={(text) => setFormData({ ...formData, tax_deductible_percentage: text })} placeholder="100" keyboardType="decimal-pad" />
+                    <Input label={t('overrideReason', language)} value={formData.tax_override_reason} onChangeText={(text) => setFormData({ ...formData, tax_override_reason: text })} />
+                    <Text style={[styles.label, { color: textColor }]}>{t('vatTreatment', language)}</Text>
+                    <Input value={formData.vat_treatment} onChangeText={(text) => setFormData({ ...formData, vat_treatment: text })} placeholder="review_required" />
+                    <Input label={t('vatDeductiblePercentage', language)} value={formData.vat_deductible_percentage} onChangeText={(text) => setFormData({ ...formData, vat_deductible_percentage: text })} placeholder="100" keyboardType="decimal-pad" />
+                    <Input label={t('vatOverrideReason', language)} value={formData.vat_override_reason} onChangeText={(text) => setFormData({ ...formData, vat_override_reason: text })} />
+                    <Input label={t('businessUsePercentage', language)} value={formData.business_use_percentage} onChangeText={(text) => setFormData({ ...formData, business_use_percentage: text })} placeholder="100" keyboardType="decimal-pad" />
+                    <Input label={t('capitalClassification', language)} value={formData.capital_classification} onChangeText={(text) => setFormData({ ...formData, capital_classification: text })} placeholder="operating_expense" />
+                    {formData.category_code === 'fuel' ? <>
+                        <Input label={t('vehicle', language)} value={formData.vehicle_label} onChangeText={(text) => setFormData({ ...formData, vehicle_label: text })} placeholder={t('vehiclePlaceholder', language)} />
+                        <Input label={t('registrationPlate', language)} value={formData.registration_plate} onChangeText={(text) => setFormData({ ...formData, registration_plate: text })} />
+                        <Input label={t('fuelType', language)} value={formData.fuel_type} onChangeText={(text) => setFormData({ ...formData, fuel_type: text })} placeholder="diesel" />
+                        <Input label={t('litres', language)} value={formData.litres} onChangeText={(text) => setFormData({ ...formData, litres: text })} keyboardType="decimal-pad" />
+                        <Input label={t('pricePerLitre', language)} value={formData.price_per_litre} onChangeText={(text) => setFormData({ ...formData, price_per_litre: text })} keyboardType="decimal-pad" />
+                        <Input label={t('businessPurpose', language)} value={formData.business_purpose} onChangeText={(text) => setFormData({ ...formData, business_purpose: text })} />
+                    </> : null}
+                    {['electricity','water','waste','heating','internet','telecommunications'].includes(formData.category_code) ? <>
+                        <Input label={t('billingPeriodStart', language)} value={formData.billing_period_start} onChangeText={(text) => setFormData({ ...formData, billing_period_start: text })} placeholder="YYYY-MM-DD" />
+                        <Input label={t('billingPeriodEnd', language)} value={formData.billing_period_end} onChangeText={(text) => setFormData({ ...formData, billing_period_end: text })} placeholder="YYYY-MM-DD" />
+                        <Input label={t('accountReference', language)} value={formData.utility_account_reference} onChangeText={(text) => setFormData({ ...formData, utility_account_reference: text })} />
+                    </> : null}
                 </Card> : null}
 
                 <Button
@@ -690,6 +1020,26 @@ const styles = StyleSheet.create({
     pickerItemText: { fontSize: 14, fontWeight: '600' },
     pickerItemSubtext: { fontSize: 12, marginTop: 3 },
     noItems: { padding: 14, textAlign: 'center' },
+    inputAction: { padding: 4 },
+    vendorPickerList: { marginBottom: 8 },
+    vendorSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 8, paddingHorizontal: 12, borderRadius: 10, minHeight: 42 },
+    vendorSearchInput: { flex: 1, fontSize: 14, paddingVertical: 8 },
+    vendorAddOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, gap: 10 },
+    vendorOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, gap: 10 },
+    vendorIconSmall: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    vendorOptionCopy: { flex: 1 },
+    vendorOptionText: { fontSize: 14, fontWeight: '600' },
+    vendorOptionSubtext: { fontSize: 12, marginTop: 2 },
+    articleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+    articleOption: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9 },
+    activeArticleOption: { backgroundColor: '#004FFE' },
+    articleText: { fontSize: 12, fontWeight: '600' },
+    activeArticleText: { color: '#fff' },
+    vatSummary: { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 4, marginBottom: 10 },
+    vatSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+    vatSummaryTotal: { marginTop: 5, paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth },
+    vatSummaryLabel: { fontSize: 13 },
+    vatSummaryValue: { fontSize: 14, fontWeight: '700' },
     bankHint: { fontSize: 11, lineHeight: 16, marginTop: 8 },
     advancedToggle: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     advancedText: { fontSize: 13, fontWeight: '700' },

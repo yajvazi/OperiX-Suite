@@ -39,17 +39,17 @@ export type LegacyInvoicesStackParamList = {
     SalesBook: undefined;
     PaymentForm: { paymentId?: string; invoiceId?: string; clientId?: string } | undefined;
     PaymentsList: undefined;
-    ClientForm: { clientId?: string } | undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
     CustomerLedger: { clientId?: string } | undefined;
     VendorLedger: { vendorId?: string } | undefined;
-    VendorForm: { vendorId?: string } | undefined;
+    VendorForm: { vendorId?: string; returnToExpense?: boolean } | undefined;
     VendorsList: undefined;
     VendorPaymentForm: { paymentId?: string } | undefined;
     VendorPaymentsList: undefined;
     SupplierBillForm: { billId?: string; scannedData?: unknown } | undefined;
     SupplierBillsList: undefined;
     ScanBill: undefined;
-    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown } | undefined;
+    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown; selectedVendorName?: string; selectedVendorId?: string } | undefined;
 };
 
 export type LegacyManagementStackParamList = {
@@ -58,11 +58,11 @@ export type LegacyManagementStackParamList = {
     ClientsList: undefined;
     ProductsList: undefined;
     VendorsList: undefined;
-    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown } | undefined;
+    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown; selectedVendorName?: string; selectedVendorId?: string } | undefined;
     ExpensesList: undefined;
-    ClientForm: { clientId?: string } | undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
     ProductForm: { productId?: string; scannedSKU?: string; restoredData?: unknown } | undefined;
-    VendorForm: { vendorId?: string } | undefined;
+    VendorForm: { vendorId?: string; returnToExpense?: boolean } | undefined;
     VendorPaymentForm: { paymentId?: string } | undefined;
     CustomerLedger: { clientId?: string } | undefined;
     VendorLedger: { vendorId?: string } | undefined;
@@ -71,7 +71,7 @@ export type LegacyManagementStackParamList = {
 export type LegacyExpensesStackParamList = {
     ExpensesDashboard: undefined;
     ExpensesList: { type?: 'expense' | 'income' } | undefined;
-    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown } | undefined;
+    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown; selectedVendorName?: string; selectedVendorId?: string } | undefined;
 };
 
 export type SettingsStackParamList = {
@@ -83,13 +83,15 @@ export type SettingsStackParamList = {
     PaymentIntegrations: undefined;
     StripeDashboard: undefined;
     ManageCompanies: undefined;
+    UsersAccess: undefined;
     AdvancedSettings: { section?: 'intelligence' } | undefined;
+    Subscription: undefined;
 };
 
 export type MainTabParamList = {
     Home: undefined;
-    Sales: undefined;
-    POS: { productId?: string } | undefined;
+    Sales: { mode?: 'contracts' } | undefined;
+    POS: { productId?: string; createdClientId?: string } | undefined;
     Business: undefined;
     More: undefined;
 };
@@ -122,15 +124,18 @@ export type RootStackParamList = {
     AllInvoices: { type?: string } | undefined;
     PaymentsList: undefined;
     PaymentForm: { paymentId?: string; invoiceId?: string; clientId?: string } | undefined;
-    ClientForm: { clientId?: string } | undefined;
+    OtherIncome: undefined;
+    OtherIncomeForm: undefined;
+    FinancialAccounts: undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
     CustomerDetail: { clientId: string };
     ProductsList: undefined;
     ProductForm: { productId?: string; scannedSKU?: string; restoredData?: unknown } | undefined;
     ProductDetail: { productId: string };
-    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown } | undefined;
+    ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown; selectedVendorName?: string; selectedVendorId?: string } | undefined;
     ExpensesList: { type?: 'expense' | 'income' } | undefined;
     VendorsList: undefined;
-    VendorForm: { vendorId?: string } | undefined;
+    VendorForm: { vendorId?: string; returnToExpense?: boolean } | undefined;
     VendorLedger: { vendorId?: string } | undefined;
     CustomerLedger: { clientId?: string } | undefined;
     VendorPaymentForm: { paymentId?: string } | undefined;

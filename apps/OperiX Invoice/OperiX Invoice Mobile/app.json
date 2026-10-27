@@ -6,14 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
+      "appleTeamId": "X3Z79N6Q9Y",
       "bundleIdentifier": "com.lrdygroup.operixinvoice",
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -32,7 +27,6 @@
         "backgroundColor": "#004FFE"
       },
       "package": "com.internetkudo.invoiceapp",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -48,6 +42,14 @@
       "expo-notifications",
       "expo-mail-composer",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to scan QR codes and capture receipt images."
@@ -61,6 +63,7 @@
         }
       ],
       "@bacons/apple-targets",
+      "./plugins/with-expo-constants-path-fix.js",
       "@react-native-community/datetimepicker",
       "expo-font"
     ],

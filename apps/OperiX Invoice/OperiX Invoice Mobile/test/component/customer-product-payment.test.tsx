@@ -16,7 +16,19 @@ jest.mock('../../src/services/workspace', () => ({
         roleCode: 'company_administrator',
         profile: { id: 'user-a', company_id: 'company-a', currency: 'EUR' },
         isGroup: false,
+        permissions: [
+            'invoice.view', 'invoice.view_all', 'invoice.create', 'invoice.edit', 'invoice.issue', 'invoice.delete_draft', 'invoice.void', 'invoice.credit', 'invoice.debit',
+            'offer.create', 'offer.manage', 'proforma.create', 'proforma.manage', 'order.create', 'order.manage', 'delivery_note.create', 'delivery_note.manage',
+            'payment.view', 'payment.create', 'payment.refund', 'expense.view_own', 'expense.view_all', 'expense.create', 'expense.edit', 'expense.approve', 'expense.manage',
+            'customer.view', 'customer.view_all', 'customer.create', 'customer.edit', 'customer.delete', 'product.view', 'product.create', 'product.edit', 'product.change_price', 'product.delete',
+            'inventory.view', 'inventory.adjust', 'reports.sales', 'reports.operational', 'reports.profit', 'reports.tax', 'sales_book.view', 'sales_book.manage',
+            'accounting_period.view', 'accounting_period.close', 'accounting_period.reopen', 'users.view', 'users.manage', 'permissions.manage', 'audit.view', 'financial.export',
+            'settings.company', 'settings.tax', 'settings.invoice', 'settings.bank', 'settings.integrations', 'settings.api', 'settings.security', 'subscription.manage',
+        ],
+        platformAdmin: true,
     })),
+    hasWorkspacePermission: jest.fn(() => true),
+    scopedResource: jest.fn(() => 'and(user_id.eq.user-a,company_id.is.null),company_id.eq.company-a'),
 }));
 
 jest.mock('@invoice-monorepo/api/repositories', () => ({
@@ -34,6 +46,8 @@ jest.mock('@invoice-monorepo/api/repositories', () => ({
     deleteExpense: jest.fn(async () => undefined),
     getInvoice: jest.fn(async () => ({ id: 'invoice-a', invoice_number: 'FAT-1', total_amount: 118, client: { id: 'customer-a', name: 'Blerinë & Co' } })),
     listCustomers: jest.fn(async () => [{ id: 'customer-a', name: 'Blerinë & Co', email: 'blerine@example.com' }]),
+    listCustomerInvoices: jest.fn(async () => [{ id: 'invoice-a', invoice_number: 'FAT-1', issue_date: '2026-08-01', total_amount: 118, status: 'sent', client_id: 'customer-a', commercial_document_type: 'INVOICE' }]),
+    listCustomerPayments: jest.fn(async () => []),
     listOpenCustomerInvoices: jest.fn(async () => [{ id: 'invoice-a', invoice_number: 'FAT-1', total_amount: 118, status: 'sent', client_id: 'customer-a' }]),
     saveCustomerPayment: jest.fn(async () => ({ payment: { id: 'payment-a', payment_number: 'PAY-1' }, allocation: null, allocationError: null })),
 }));
@@ -150,7 +164,7 @@ describe('payment form', () => {
         expect(screen.getByText('New Income Payment')).toBeTruthy();
         expect(screen.getByTestId('payment-method-cash')).toBeTruthy();
         expect(screen.getByTestId('payment-method-bank')).toBeTruthy();
-        expect(screen.queryByTestId('payment-method-card')).toBeNull();
+        expect(screen.getByTestId('payment-method-card')).toBeTruthy();
         await fireEvent.press(screen.getByTestId('payment-save-button'));
         expect(repos().saveCustomerPayment).not.toHaveBeenCalled();
         expect(alert).toHaveBeenCalled();
@@ -159,6 +173,9 @@ describe('payment form', () => {
         await fireEvent.press(screen.getByTestId('payment-customer-selector'));
         await waitFor(() => expect(screen.getByText('Blerinë & Co')).toBeTruthy());
         await fireEvent.press(screen.getByText('Blerinë & Co'));
+        await waitFor(() => expect(screen.getByTestId('payment-client-current-balance')).toBeTruthy());
+        expect(screen.getByText('Current balance (Debt)')).toBeTruthy();
+        expect(screen.getByText('€118.00')).toBeTruthy();
         await fireEvent.press(screen.getByTestId('payment-method-bank'));
         await waitFor(() => expect(screen.getByTestId('payment-bank-account-option-bank-a')).toBeTruthy());
         await fireEvent.press(screen.getByTestId('payment-bank-account-option-bank-a'));
@@ -168,6 +185,39 @@ describe('payment form', () => {
         expect(repos().saveCustomerPayment.mock.calls.at(-1)?.[1]).toMatchObject({ customerId: 'customer-a', amount: '25.50', paymentMethod: 'bank', companyBankAccountId: 'bank-a', bankReference: 'BANK-123', companyId: 'company-a' });
         expect(navigation.goBack).toHaveBeenCalled();
         alert.mockRestore();
+    });
+
+    it('locks cash and rejects a payment at the 300 euro limit', async () => {
+        const navigation = createNavigationMock();
+        const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+        const screen = await renderWithProviders(<PaymentFormScreen navigation={navigation} route={{ params: {} }} />);
+
+        await fireEvent.changeText(screen.getByTestId('payment-amount-input'), '300.00');
+        expect(screen.getByTestId('payment-method-cash').props.accessibilityState.disabled).toBe(true);
+        await fireEvent.press(screen.getByTestId('payment-save-button'));
+
+        expect(repos().saveCustomerPayment).not.toHaveBeenCalled();
+        expect(alert).toHaveBeenCalledWith('Cash limit', 'Cash payments are not allowed for amounts above 300€');
+        alert.mockRestore();
+    });
+
+    it('searches clients and places create-client and citizen options first', async () => {
+        const navigation = createNavigationMock();
+        const screen = await renderWithProviders(<PaymentFormScreen navigation={navigation} route={{ params: {} }} />);
+
+        await fireEvent.press(screen.getByTestId('payment-customer-selector'));
+        expect(screen.getByTestId('payment-create-client-option')).toBeTruthy();
+        expect(screen.getByTestId('payment-citizen-option')).toBeTruthy();
+        expect(screen.getByTestId('payment-client-search-input')).toBeTruthy();
+
+        await fireEvent.changeText(screen.getByTestId('payment-client-search-input'), 'Blerinë');
+        expect(screen.getByTestId('payment-customer-option-customer-a')).toBeTruthy();
+        await fireEvent.changeText(screen.getByTestId('payment-client-search-input'), 'missing');
+        expect(screen.queryByTestId('payment-customer-option-customer-a')).toBeNull();
+        expect(screen.getByText('No customers found.')).toBeTruthy();
+
+        await fireEvent.press(screen.getByTestId('payment-create-client-option'));
+        expect(navigation.navigate).toHaveBeenCalledWith('ClientForm');
     });
 
     it('loads a preselected invoice and prevents duplicate payment submission', async () => {
@@ -250,6 +300,8 @@ describe('expense form', () => {
 
         await fireEvent.changeText(screen.getByLabelText('Vendor'), 'Office Depot');
         await fireEvent.changeText(screen.getByLabelText('Invoice Number'), 'INV-1001');
+        await fireEvent.changeText(screen.getByTestId('expense-article-input'), 'Diesel');
+        await fireEvent.changeText(screen.getByTestId('expense-vat-rate-input'), '18');
         await fireEvent.press(screen.getByTestId('expense-payment-bank-button'));
         await waitFor(() => expect(screen.getByTestId('expense-bank-account-option-bank-a')).toBeTruthy());
         await fireEvent.press(screen.getByTestId('expense-bank-account-option-bank-a'));
@@ -260,6 +312,11 @@ describe('expense form', () => {
         await waitFor(() => expect(repos().saveExpense).toHaveBeenCalled());
         expect(repos().saveExpense.mock.calls.at(-1)?.[1]).toMatchObject({
             type: 'expense',
+            amount: 50,
+            article: 'Diesel',
+            vat_rate: 18,
+            tax_amount: 9,
+            tax_recoverable_amount: 9,
             vendor_name: 'Office Depot',
             invoice_number: 'INV-1001',
             payment_method: 'bank',

@@ -4,11 +4,11 @@ import {
     View,
     Text,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
     Alert,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
 } from 'react-native';
 import { ArrowLeft, Building2, CreditCard, Banknote, Calendar, FileText, Hash } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
@@ -367,6 +367,7 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
             style={[styles.container, { backgroundColor: bgColor }]}
         >
             <View style={styles.header}>
@@ -378,7 +379,7 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
                 </Text>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {isEditing ? <TransactionDocumentActions primaryColor={primaryColor} language={language === 'sq' ? 'sq' : 'en'} onPreview={() => { void handlePreview(); }} onPrint={() => { void handlePrint(); }} onEmail={() => { void handleEmail(); }} onShare={() => { void handleShare(); }} /> : null}
                 {/* Vendor Selection */}
                 <Card style={[styles.section, { backgroundColor: cardBg }]}>

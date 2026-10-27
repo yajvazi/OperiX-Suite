@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,10 +12,11 @@ import {
     ReceiptText,
     WalletCards,
 } from 'lucide-react-native';
-import { useTheme } from '@invoice-monorepo/hooks';
+import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { t } from '@invoice-monorepo/i18n';
 import type { TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
+import { getWorkspaceScope } from '../../services/workspace';
 import type { RootStackParamList } from '../../navigation/types';
 import { MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';
 
@@ -26,23 +27,36 @@ type TaxItem = {
     icon: React.ComponentType<{ color?: string; size?: number }>;
     route?: keyof RootStackParamList;
     subtype?: string;
+    permission: string;
 };
 
 const TAX_ITEMS: TaxItem[] = [
-    { key: 'sales_book', titleKey: 'salesBook', descriptionKey: 'postedSalesVat', icon: ReceiptText, route: 'SalesBook' },
-    { key: 'purchase_book', titleKey: 'purchaseBook', descriptionKey: 'supplierInvoicesVat', icon: FileText, route: 'ReportPreview', subtype: 'purchase_book' },
-    { key: 'cash_book', titleKey: 'cashAndPayments', descriptionKey: 'cashBankJournals', icon: WalletCards, route: 'ReportPreview', subtype: 'cash_book' },
-    { key: 'payroll', titleKey: 'payroll', descriptionKey: 'payrollPitPension', icon: Landmark, route: 'Payroll' },
-    { key: 'withholding', titleKey: 'withholdingTax', descriptionKey: 'verifiedWithholding', icon: FileCheck2, route: 'ReportPreview', subtype: 'withholding' },
-    { key: 'declarations', titleKey: 'declarations', descriptionKey: 'declarationPreviews', icon: FileCheck2, route: 'ReportPreview', subtype: 'declarations' },
-    { key: 'archive', titleKey: 'archivedDocuments', descriptionKey: 'sourceDocumentsLinked', icon: Archive, route: 'ReportPreview', subtype: 'archive' },
-    { key: 'tax_calendar', titleKey: 'taxCalendar', descriptionKey: 'taxObligations', icon: CalendarDays, route: 'ReportPreview', subtype: 'tax_calendar' },
+    { key: 'sales_book', titleKey: 'salesBook', descriptionKey: 'postedSalesVat', icon: ReceiptText, route: 'SalesBook', permission: 'sales_book.view' },
+    { key: 'purchase_book', titleKey: 'purchaseBook', descriptionKey: 'supplierInvoicesVat', icon: FileText, route: 'ReportPreview', subtype: 'purchase_book', permission: 'reports.tax' },
+    { key: 'cash_book', titleKey: 'cashAndPayments', descriptionKey: 'cashBankJournals', icon: WalletCards, route: 'ReportPreview', subtype: 'cash_book', permission: 'reports.operational' },
+    { key: 'payroll', titleKey: 'payroll', descriptionKey: 'payrollPitPension', icon: Landmark, route: 'Payroll', permission: 'users.view' },
+    { key: 'withholding', titleKey: 'withholdingTax', descriptionKey: 'verifiedWithholding', icon: FileCheck2, route: 'ReportPreview', subtype: 'withholding', permission: 'reports.tax' },
+    { key: 'declarations', titleKey: 'declarations', descriptionKey: 'declarationPreviews', icon: FileCheck2, route: 'ReportPreview', subtype: 'declarations', permission: 'reports.tax' },
+    { key: 'archive', titleKey: 'archivedDocuments', descriptionKey: 'sourceDocumentsLinked', icon: Archive, route: 'ReportPreview', subtype: 'archive', permission: 'audit.view' },
+    { key: 'tax_calendar', titleKey: 'taxCalendar', descriptionKey: 'taxObligations', icon: CalendarDays, route: 'ReportPreview', subtype: 'tax_calendar', permission: 'reports.tax' },
 ];
 
 export function TaxCenterScreen() {
+    const { user } = useAuth();
     const { isDark, language } = useTheme();
     const palette = getPalette(isDark);
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
+
+    useEffect(() => {
+        if (!user) return;
+        void getWorkspaceScope(user.id).then((scope) => {
+            setPermissions(scope.permissions);
+            setPlatformAdmin(scope.platformAdmin);
+        }).catch((error) => console.warn('Tax center permission load failed:', error));
+    }, [user?.id]);
+    const can = (permission: string) => platformAdmin || permissions.includes(permission);
 
     return (
         <MobileScreen>
@@ -61,9 +75,9 @@ export function TaxCenterScreen() {
                     </TouchableOpacity>
                 )}
             />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                     <SectionTitle title={t('taxBooksControls', language)} />
-                    {TAX_ITEMS.map((item) => {
+                    {TAX_ITEMS.filter((item) => can(item.permission)).map((item) => {
                         const Icon = item.icon;
                         return (
                             <TouchableOpacity

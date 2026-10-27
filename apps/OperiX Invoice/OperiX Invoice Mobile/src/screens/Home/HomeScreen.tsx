@@ -28,7 +28,7 @@ import { formatCurrency, formatDate as formatLocalizedDate, t } from '@invoice-m
 import { repairUnpostedExpenses, supabase } from '@invoice-monorepo/api';
 import type { Profile } from '@invoice-monorepo/types';
 import { brand, getPalette } from '../../theme/brand';
-import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -104,7 +104,8 @@ export function HomeScreen() {
     };
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [workspaceRole, setWorkspaceRole] = useState<'super_administrator' | 'company_administrator' | 'manager' | 'employee'>('employee');
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
     const [data, setData] = useState<HomeData>(emptyData);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +124,8 @@ export function HomeScreen() {
                 // expense repair function has been applied.
                 console.warn('Unable to repair legacy expense postings:', repairError);
             }
-            setWorkspaceRole(workspaceScope.roleCode);
+            setWorkspacePermissions(workspaceScope.permissions);
+            setPlatformAdmin(workspaceScope.platformAdmin);
             setProfile({ ...workspaceProfile, company_name: activeCompany?.company_name || workspaceProfile.company_name });
             const scope = scopedResource(user.id, companyIds);
             const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
@@ -172,7 +174,7 @@ export function HomeScreen() {
                     .in('company_id', companyIds),
                 supabase
                     .from('operix_fund_balances')
-                    .select('balance')
+                    .select('available_balance,balance')
                     .in('company_id', companyIds)
                     .eq('is_active', true),
                 supabase
@@ -246,7 +248,7 @@ export function HomeScreen() {
                     : receivablesRows.reduce((sum, row) => sum + Math.max(0, Number(row.outstanding_amount || 0)), 0),
                 overdue: invoices.filter((invoice) => invoice.status === 'overdue').reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
                 cashFlow: cashFlowRows.reduce((sum, row) => sum + Number(row.net_change || 0), 0),
-                totalAvailableFunds: uniqueFundBalanceRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
+                totalAvailableFunds: uniqueFundBalanceRows.reduce((sum, row) => sum + Number(row.available_balance ?? row.balance ?? 0), 0),
                 paymentsReceived: todayPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
                 lowStockCount: products.filter((product) => Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5)).length,
                 recentActivity: activity,
@@ -262,12 +264,14 @@ export function HomeScreen() {
         }
     }, [language, user]);
 
+    const can = (permission: string) => hasWorkspacePermission({ permissions: workspacePermissions, platformAdmin }, permission);
+
     useFocusEffect(useCallback(() => { void fetchData(); }, [fetchData]));
 
     const initials = useMemo(() => (profile?.company_name || user?.email || 'O').slice(0, 1).toUpperCase(), [profile?.company_name, user?.email]);
 
     const openSales = () => navigation.navigate('MainTabs', { screen: 'Sales' });
-    const openInvoiceBuilder = () => navigation.navigate('MainTabs', { screen: 'POS' });
+    const openInvoiceBuilder = () => navigation.navigate('InvoiceForm', { documentType: 'INVOICE' });
 
     const renderActivity = ({ item }: { item: ActivityItem }) => {
         const Icon = item.kind === 'payment' ? HandCoins : item.kind === 'expense' ? WalletCards : Receipt;
@@ -312,7 +316,7 @@ export function HomeScreen() {
             </View>
 
             {loading ? <LoadingState label={t('openingWorkspace', language)} /> : error ? <ErrorState onRetry={() => { setLoading(true); void fetchData(); }} message={error} /> : (
-                <FlatList
+                <FlatList keyboardShouldPersistTaps="handled"
                     testID="home-refreshable-list"
                     data={data.recentActivity}
                     keyExtractor={(item) => item.id}
@@ -362,7 +366,7 @@ export function HomeScreen() {
                                         valueStyle={styles.metricTotalValue}
                                     />
                                 </TouchableOpacity>
-                                <TouchableOpacity
+                                {can('reports.sales') || can('reports.operational') || can('reports.profit') ? <TouchableOpacity
                                     testID="home-outstanding-card"
                                     accessibilityRole="button"
                                     accessibilityLabel={t('moneyWaitingFor', language)}
@@ -377,7 +381,7 @@ export function HomeScreen() {
                                         icon={HandCoins}
                                         valueStyle={styles.metricOutstandingValue}
                                     />
-                                </TouchableOpacity>
+                                </TouchableOpacity> : null}
                             </View>
 
                             <TouchableOpacity testID="home-intelligence-card" accessibilityRole="button" onPress={() => navigation.navigate('OperixAI')} style={[styles.intelligenceCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
@@ -387,19 +391,19 @@ export function HomeScreen() {
 
                             <SectionTitle title={t('quickActions', language)} action={t('viewAll', language)} onPress={() => navigation.navigate('GlobalSearch')} />
                             <View style={styles.quickGrid}>
-                                <TouchableOpacity testID="home-new-invoice-button" accessibilityRole="button" onPress={openInvoiceBuilder} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                                {can('invoice.create') ? <TouchableOpacity testID="home-new-invoice-button" accessibilityRole="button" onPress={openInvoiceBuilder} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                                     <View style={[styles.quickIcon, { backgroundColor: quickIconBackgrounds.invoice }]}><FileText color={brand.colors.primary} size={19} /></View>
                                     <Text style={[styles.quickText, { color: palette.text }]}>{t('newInvoice', language)}</Text>
-                                </TouchableOpacity>
-                                {workspaceRole !== 'employee' ? <TouchableOpacity testID="home-new-customer-button" accessibilityRole="button" onPress={() => navigation.navigate('ClientForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                                </TouchableOpacity> : null}
+                                {can('customer.create') ? <TouchableOpacity testID="home-new-customer-button" accessibilityRole="button" onPress={() => navigation.navigate('ClientForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                                     <View style={[styles.quickIcon, { backgroundColor: quickIconBackgrounds.customer }]}><UserPlus color={brand.colors.success} size={19} /></View>
                                     <Text style={[styles.quickText, { color: palette.text }]}>{t('customer', language)}</Text>
                                 </TouchableOpacity> : null}
-                                {workspaceRole !== 'employee' ? <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('ExpenseForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                                {can('expense.create') ? <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('ExpenseForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                                     <View style={[styles.quickIcon, { backgroundColor: quickIconBackgrounds.expense }]}><WalletCards color={brand.colors.warning} size={19} /></View>
                                     <Text style={[styles.quickText, { color: palette.text }]}>{t('expense', language)}</Text>
                                 </TouchableOpacity> : null}
-                                {workspaceRole !== 'employee' ? <TouchableOpacity testID="home-new-payment-button" accessibilityRole="button" onPress={() => navigation.navigate('PaymentForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                                {can('payment.create') ? <TouchableOpacity testID="home-new-payment-button" accessibilityRole="button" onPress={() => navigation.navigate('PaymentForm')} style={[styles.quickAction, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                                     <View style={[styles.quickIcon, { backgroundColor: quickIconBackgrounds.payment }]}><HandCoins color={brand.colors.info} size={19} /></View>
                                     <Text style={[styles.quickText, { color: palette.text }]}>{t('incomePayment', language)}</Text>
                                 </TouchableOpacity> : null}

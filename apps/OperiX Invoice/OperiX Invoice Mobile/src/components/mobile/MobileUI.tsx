@@ -23,10 +23,9 @@ import {
 } from '@invoice-monorepo/ui';
 import { useTheme as useInvoiceTheme } from '@invoice-monorepo/hooks';
 import { t } from '@invoice-monorepo/i18n';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import type { RootStackParamList } from '../../navigation/types';
-import { BriefcaseBusiness, ClipboardList, FileCheck2, FileText, HandCoins, Package, PackageCheck, ReceiptText, UserPlus, WalletCards } from 'lucide-react-native';
-
+import { BriefcaseBusiness, ClipboardList, FileCheck2, FileSignature, FileText, HandCoins, Package, PackageCheck, ReceiptText, UserPlus, WalletCards } from 'lucide-react-native';
 /**
  * Invoice Mobile compatibility names. The implementation now lives in the
  * shared OperiX mobile package; product-specific create actions remain here.
@@ -58,15 +57,20 @@ export function GlobalCreateButton({ inline = false }: { inline?: boolean }) {
     const { language } = useInvoiceTheme();
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const [open, setOpen] = useState(false);
-    const [roleCode, setRoleCode] = useState<'super_administrator' | 'company_administrator' | 'manager' | 'employee'>('employee');
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
 
     useEffect(() => {
         let active = true;
         if (!user) return () => { active = false; };
-        void getWorkspaceScope(user.id).then(({ roleCode: workspaceRoleCode }) => {
-            if (active) setRoleCode(workspaceRoleCode);
+        void getWorkspaceScope(user.id).then((workspace) => {
+            if (!active) return;
+            setPermissions(workspace.permissions);
+            setPlatformAdmin(workspace.platformAdmin);
         }).catch(() => {
-            if (active) setRoleCode('employee');
+            if (!active) return;
+            setPermissions([]);
+            setPlatformAdmin(false);
         });
         return () => { active = false; };
     }, [user?.id]);
@@ -81,10 +85,25 @@ export function GlobalCreateButton({ inline = false }: { inline?: boolean }) {
         { id: 'product', label: t('products', language), description: t('addProduct', language), icon: Package, onPress: () => navigation.navigate('ProductForm') },
         { id: 'expense', label: t('expense', language), description: t('addExpense', language), icon: WalletCards, onPress: () => navigation.navigate('ExpenseForm') },
         { id: 'payment', label: t('payment', language), description: t('registerPayment', language), icon: HandCoins, onPress: () => navigation.navigate('PaymentForm') },
+        { id: 'other-income', label: t('otherIncome', language), description: t('addOtherIncome', language), icon: HandCoins, onPress: () => navigation.navigate('OtherIncomeForm') },
+        { id: 'contract', label: t('contracts', language), description: t('contractsAndAgreements', language), icon: FileSignature, onPress: () => navigation.navigate('ContractForm') },
     ];
-    const visibleActions = roleCode === 'employee'
-        ? actions.filter((action) => ['invoice', 'proforma', 'quote', 'order', 'delivery-note'].includes(action.id))
-        : actions;
+    const actionPermissions: Record<string, string> = {
+        invoice: 'invoice.create',
+        proforma: 'proforma.create',
+        quote: 'offer.create',
+        order: 'order.create',
+        'delivery-note': 'delivery_note.create',
+        client: 'customer.create',
+        product: 'product.create',
+        expense: 'expense.create',
+        payment: 'payment.create',
+        'other-income': 'payment.create',
+        contract: 'contracts.manage',
+    };
+    const visibleActions = actions.filter((action) => hasWorkspacePermission({ permissions, platformAdmin }, actionPermissions[action.id]));
+
+    if (!visibleActions.length) return null;
 
     return <>
         <View pointerEvents="box-none" style={inline ? { alignItems: 'flex-end', height: 68, justifyContent: 'center' } : undefined}>

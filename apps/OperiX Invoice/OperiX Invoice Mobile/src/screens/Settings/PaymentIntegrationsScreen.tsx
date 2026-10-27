@@ -59,11 +59,14 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
     const [showConnectModal, setShowConnectModal] = useState<'stripe' | 'paypal' | null>(null);
     const [profile, setProfile] = useState<any>(null);
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
+    const can = (permission: string) => platformAdmin || permissions.includes(permission);
 
     useEffect(() => {
         fetchConnections();
@@ -77,6 +80,8 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
             if (profileData) {
                 setProfile(profileData);
                 const scope = await getWorkspaceScope(user.id);
+                setPermissions(scope.permissions);
+                setPlatformAdmin(scope.platformAdmin);
                 const stores = await stripeService.listStores(scope.companyIds);
                 const stripeConnections: PaymentConnection[] = stores.map((store: StripeStore) => ({
                     id: store.id,
@@ -104,7 +109,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const connectStripe = async () => {
-        if (!user || loading) return;
+        if (!user || loading || !can('settings.integrations')) return;
 
         setLoading(true);
         try {
@@ -125,6 +130,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleConnect = async (provider: 'stripe' | 'paypal') => {
+        if (!can('settings.integrations')) return;
         if (provider === 'stripe') {
             await connectStripe();
             return;
@@ -135,7 +141,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleSaveLink = async (formData: any) => {
-        if (!user || !showConnectModal) return;
+        if (!user || !showConnectModal || !can('settings.integrations')) return;
 
         try {
             // PayPal - just save link.
@@ -155,6 +161,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleDisconnect = async (provider: 'stripe' | 'paypal', storeId?: string) => {
+        if (!can('settings.integrations')) return;
         Alert.alert(
             t('disconnect', language),
             t('disconnectConfirmation', language).replace('{provider}', provider.charAt(0).toUpperCase() + provider.slice(1)),
@@ -189,6 +196,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleSync = async (provider: 'stripe' | 'paypal', storeId?: string) => {
+        if (!can('settings.integrations')) return;
         if (provider !== 'stripe') {
             Alert.alert(t('notAvailable', language), t('paypalSyncUnavailable', language));
             return;
@@ -231,6 +239,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleAutoSyncToggle = async (provider: 'stripe' | 'paypal', value: boolean, storeId?: string) => {
+        if (!can('settings.integrations')) return;
         setConnections(prev => prev.map(conn =>
             conn.provider === provider && (!storeId || conn.store_id === storeId) ? { ...conn, auto_sync: value } : conn
         ));
@@ -329,6 +338,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                             <Switch
                                 value={connection.auto_sync}
                                 onValueChange={(v) => handleAutoSyncToggle(connection.provider, v, connection.store_id)}
+                                disabled={!can('settings.integrations')}
                                 trackColor={{ true: primaryColor }}
                             />
                         </View>
@@ -338,7 +348,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                             <TouchableOpacity
                                 style={[styles.syncButton, { backgroundColor: primaryColor }]}
                                 onPress={() => handleSync(connection.provider, connection.store_id)}
-                                disabled={syncing === (connection.store_id || connection.provider)}
+                                disabled={!can('settings.integrations') || syncing === (connection.store_id || connection.provider)}
                             >
                                 {syncing === (connection.store_id || connection.provider) ? (
                                     <ActivityIndicator color="#fff" size="small" />
@@ -353,12 +363,13 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                             <TouchableOpacity
                                 style={[styles.disconnectButton, { borderColor: '#ef4444' }]}
                                 onPress={() => handleDisconnect(connection.provider, connection.store_id)}
+                                disabled={!can('settings.integrations')}
                             >
                                 <X color="#ef4444" size={18} />
                             </TouchableOpacity>
 
                             {/* View Dashboard Button for Stripe */}
-                            {connection.provider === 'stripe' && (
+                            {connection.provider === 'stripe' && can('settings.integrations') && (
                                 <TouchableOpacity
                                     style={[styles.viewDashboardButton, { backgroundColor: '#635bff20', borderColor: '#635bff' }]}
                                     onPress={() => navigation.navigate('StripeDashboard')}
@@ -373,7 +384,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                     <TouchableOpacity
                         style={[styles.connectButton, { backgroundColor: providerColor }]}
                         onPress={() => handleConnect(connection.provider)}
-                        disabled={loading && isStripe}
+                        disabled={!can('settings.integrations') || (loading && isStripe)}
                     >
                         {loading && isStripe ? (
                             <ActivityIndicator color="#fff" size="small" />
@@ -405,7 +416,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                 <View style={{ width: 44 }} />
             </View>
 
-            <ScrollView
+            {!can('settings.integrations') ? <View style={{ padding: 20 }}><Text style={{ color: textColor }}>Integration settings permission is required.</Text></View> : <ScrollView keyboardShouldPersistTaps="handled"
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
@@ -454,7 +465,7 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                 )}
 
                 <View style={{ height: 40 }} />
-            </ScrollView>
+            </ScrollView>}
 
             <QuickAddModal
                 visible={!!showConnectModal}

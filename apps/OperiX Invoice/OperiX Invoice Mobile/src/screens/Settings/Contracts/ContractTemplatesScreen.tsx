@@ -16,6 +16,7 @@ import { ArrowLeft, Plus, FileText, ChevronRight, Trash2 } from 'lucide-react-na
 import { FAB, Card } from '@invoice-monorepo/ui';
 import { ContractTemplate } from '@invoice-monorepo/types';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope } from '../../../services/workspace';
 
 interface ContractTemplatesScreenProps {
     navigation: any;
@@ -30,6 +31,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
     const { isDark, language, primaryColor } = useTheme();
     const [templates, setTemplates] = useState<ContractTemplate[]>([]);
     const [loading, setLoading] = useState(true);
+    const [canManageContracts, setCanManageContracts] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -45,6 +47,14 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
     const fetchTemplates = async () => {
         if (!user) return;
         setLoading(true);
+        const workspace = await getWorkspaceScope(user.id).catch(() => null);
+        const allowed = Boolean(workspace?.platformAdmin || workspace?.permissions.includes('contracts.manage'));
+        setCanManageContracts(allowed);
+        if (!allowed) {
+            setTemplates([]);
+            setLoading(false);
+            return;
+        }
         const { data, error } = await supabase
             .from('contract_templates')
             .select('*')
@@ -95,12 +105,12 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                             {fieldCountLabel(item.fields?.length || 0, language)}
                         </Text>
                     </View>
-                    <TouchableOpacity
+                    {canManageContracts ? <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => handleDelete(item.id)}
                     >
                         <Trash2 color="#ef4444" size={20} />
-                    </TouchableOpacity>
+                    </TouchableOpacity> : null}
                     <ChevronRight color={mutedColor} size={20} />
                 </View>
             </Card>
@@ -122,7 +132,7 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                     <ActivityIndicator size="large" color={primaryColor} />
                 </View>
             ) : (
-                <FlatList
+                <FlatList keyboardShouldPersistTaps="handled"
                     data={templates}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
@@ -137,11 +147,11 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                 />
             )}
 
-            <FAB
+            {canManageContracts ? <FAB
                 onPress={() => navigation.navigate('ContractTemplateEditor')}
                 icon={Plus}
                 color={primaryColor}
-            />
+            /> : null}
         </View>
     );
 }
@@ -164,5 +174,4 @@ const styles = StyleSheet.create({
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { fontSize: 16 },
 });
-
 

@@ -223,7 +223,7 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
             </View>
 
             {/* List */}
-            <FlatList
+            <FlatList keyboardShouldPersistTaps="handled"
                 data={expenses}
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}

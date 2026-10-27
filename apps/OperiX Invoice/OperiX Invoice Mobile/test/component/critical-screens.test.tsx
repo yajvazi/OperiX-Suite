@@ -21,6 +21,11 @@ jest.mock('react-native-safe-area-context', () => ({
         const { View } = require('react-native');
         return ReactRuntime.createElement(View, props, children);
     },
+    SafeAreaProvider: ({ children }: { children?: React.ReactNode }) => {
+        const ReactRuntime = require('react');
+        return ReactRuntime.createElement(ReactRuntime.Fragment, null, children);
+    },
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('@react-navigation/native', () => {
@@ -28,6 +33,7 @@ jest.mock('@react-navigation/native', () => {
     return {
         ...actual,
         useNavigation: () => mockNavigation,
+        useRoute: () => ({ params: {} }),
         useFocusEffect: (effect: () => void | (() => void)) => {
             const ReactRuntime = require('react');
             ReactRuntime.useEffect(effect, [effect]);
@@ -43,14 +49,32 @@ jest.mock('../../src/services/workspace', () => ({
         companies: [],
         profile: { id: 'user-a', company_id: 'company-a', company_name: 'Test Company', role: 'owner', currency: 'EUR' },
         isGroup: false,
+        permissions: [
+            'invoice.view', 'invoice.view_all', 'invoice.create', 'invoice.edit', 'invoice.issue', 'invoice.delete_draft', 'invoice.void', 'invoice.credit', 'invoice.debit',
+            'offer.create', 'offer.manage', 'proforma.create', 'proforma.manage', 'order.create', 'order.manage', 'delivery_note.create', 'delivery_note.manage',
+            'payment.view', 'payment.create', 'payment.refund', 'expense.view_own', 'expense.view_all', 'expense.create', 'expense.edit', 'expense.approve', 'expense.manage',
+            'customer.view', 'customer.view_all', 'customer.create', 'customer.edit', 'customer.delete', 'product.view', 'product.create', 'product.edit', 'product.change_price', 'product.delete',
+            'inventory.view', 'inventory.adjust', 'reports.sales', 'reports.operational', 'reports.profit', 'reports.tax', 'sales_book.view', 'sales_book.manage',
+            'accounting_period.view', 'accounting_period.close', 'accounting_period.reopen', 'users.view', 'users.manage', 'permissions.manage', 'audit.view', 'financial.export',
+            'settings.company', 'settings.tax', 'settings.invoice', 'settings.bank', 'settings.integrations', 'settings.api', 'settings.security', 'subscription.manage',
+        ],
+        platformAdmin: true,
     })),
     getActiveProductCompanyIds: jest.fn(() => ['company-a']),
     getActiveTenantCompanyIds: jest.fn(() => ['company-a']),
     scopedResource: jest.fn(() => 'and(user_id.eq.user-a,company_id.is.null),company_id.eq.company-a'),
     scopedSearch: jest.fn(() => 'invoice_number.ilike.%needle%'),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 
-jest.mock('@invoice-monorepo/api', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
+jest.mock('@invoice-monorepo/api', () => ({
+    supabase: { from: jest.fn(), rpc: jest.fn() },
+    repairUnpostedExpenses: jest.fn(async () => undefined),
+    listBranches: jest.fn(async () => []),
+    getPreferredBranchId: jest.fn(async () => null),
+    listProductBranchStock: jest.fn(async () => []),
+    transferProductBranchStock: jest.fn(async () => undefined),
+}));
 
 function makeQuery(result: { data: unknown; error: unknown }) {
     const query: Record<string, unknown> = {};
@@ -105,6 +129,8 @@ describe('critical mobile screens', () => {
         expect(mockNavigation.navigate).toHaveBeenCalledWith('GlobalSearch');
         await fireEvent.press(screen.getByTestId('home-new-customer-button'));
         expect(mockNavigation.navigate).toHaveBeenCalledWith('ClientForm');
+        await fireEvent.press(screen.getByTestId('home-new-invoice-button'));
+        expect(mockNavigation.navigate).toHaveBeenCalledWith('InvoiceForm', { documentType: 'INVOICE' });
         const supabase = require('@invoice-monorepo/api').supabase as { from: jest.Mock };
         const queryCountBeforeRefresh = supabase.from.mock.calls.length;
         await act(async () => {
@@ -176,6 +202,19 @@ describe('critical mobile screens', () => {
         const actions = alert.mock.calls[0][2] as Array<{ onPress?: () => void }>;
         actions[1].onPress?.();
         await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+        alert.mockRestore();
+    });
+
+    it('shows account deletion above sign-out and requires confirmation', async () => {
+        const deleteAccount = jest.fn(async () => ({ error: null }));
+        const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+        const screen = await renderWithProviders(<MoreScreen />, { auth: { deleteAccount } });
+        await waitFor(() => expect(screen.getByTestId('more-delete-account-button')).toBeTruthy());
+        await fireEvent.press(screen.getByTestId('more-delete-account-button'));
+        expect(alert).toHaveBeenCalledTimes(1);
+        const actions = alert.mock.calls[0][2] as Array<{ onPress?: () => void }>;
+        await act(async () => { actions[1].onPress?.(); });
+        await waitFor(() => expect(deleteAccount).toHaveBeenCalledTimes(1));
         alert.mockRestore();
     });
 });

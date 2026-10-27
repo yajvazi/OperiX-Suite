@@ -3,12 +3,12 @@ import {
     View,
     Text,
     Image,
+    TextInput,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
     Alert,
     StyleSheet,
-    TextInput,
 } from 'react-native';
 import { Trash2, Search, X, Percent, Box, AlertTriangle, DollarSign, Scan } from 'lucide-react-native';
 import { SvgXml } from 'react-native-svg';
@@ -22,13 +22,20 @@ import { Product } from '@invoice-monorepo/types';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { t } from '@invoice-monorepo/i18n';
 import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
-import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
-import { deleteProduct, listProducts } from '@invoice-monorepo/api/repositories';
+import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { deleteProduct, getPreferredBranchId, listBranches, listProductBranchStock, listProducts } from '@invoice-monorepo/api/repositories';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface ProductsScreenProps {
     navigation: any;
     showHeader?: boolean;
+}
+
+interface BranchStockSummary {
+    mainQuantity: number;
+    mainThreshold: number;
+    branchName: string | null;
+    otherBranches: Array<{ name: string; quantity: number }>;
 }
 
 export function ProductsScreen({ navigation, showHeader = false }: ProductsScreenProps) {
@@ -42,6 +49,9 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock'>('name');
     const [showScanner, setShowScanner] = useState(false);
     const [canManageProducts, setCanManageProducts] = useState(false);
+    const [canCreateProducts, setCanCreateProducts] = useState(false);
+    const [canDeleteProducts, setCanDeleteProducts] = useState(false);
+    const [branchStockByProduct, setBranchStockByProduct] = useState<Record<string, BranchStockSummary>>({});
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -52,11 +62,13 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
 
     const categories = ['All', ...Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)))];
 
+    const getMainStock = (product: Product) => branchStockByProduct[product.id]?.mainQuantity ?? Number(product.stock_quantity || 0);
+
     const stats = {
         totalProducts: products.length,
-        totalValue: products.reduce((sum, p) => sum + (Number(p.unit_price) * (p.stock_quantity || 0)), 0),
-        lowStockItems: products.filter(p => p.track_stock && (p.stock_quantity || 0) <= (p.low_stock_threshold || 5)).length,
-        outOfStockItems: products.filter(p => p.track_stock && (p.stock_quantity || 0) <= 0).length,
+        totalValue: products.reduce((sum, p) => sum + (Number(p.unit_price) * getMainStock(p)), 0),
+        lowStockItems: products.filter(p => p.track_stock && getMainStock(p) <= (branchStockByProduct[p.id]?.mainThreshold ?? Number(p.low_stock_threshold || 5))).length,
+        outOfStockItems: products.filter(p => p.track_stock && getMainStock(p) <= 0).length,
     };
 
     useFocusEffect(
@@ -69,8 +81,11 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
         if (!user) return;
         try {
             const workspaceScope = await getWorkspaceScope(user.id);
-            setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+            setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
+            setCanCreateProducts(hasWorkspacePermission(workspaceScope, 'product.create'));
+            setCanDeleteProducts(hasWorkspacePermission(workspaceScope, 'product.delete'));
             const companyIds = getActiveProductCompanyIds(workspaceScope);
+            const companyId = workspaceScope.company?.id || workspaceScope.companyId;
             const cacheKey = mobileCacheKey('products', user.id, companyIds);
             const cachedProducts = await readMobileCache<Product[]>(cacheKey);
             if (cachedProducts) {
@@ -79,6 +94,34 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
             }
             const data = await listProducts(supabase, { userId: user.id, companyIds });
             const productRows = data as unknown as Product[];
+            if (companyId && productRows.length > 0) {
+                const branchRows = await listBranches(supabase, companyId).catch(() => []);
+                const preferredBranchId = await getPreferredBranchId(supabase, user.id, companyId).catch(() => null);
+                const activeBranchId = preferredBranchId && branchRows.some((branch) => branch.id === preferredBranchId)
+                    ? preferredBranchId
+                    : branchRows.length === 1 ? branchRows[0].id : null;
+                const stockRows = await listProductBranchStock(supabase, companyId, null, productRows.map((product) => product.id)).catch(() => []);
+                const branchNames = new Map<string, string>(branchRows.map((branch): [string, string] => [branch.id, branch.name]));
+                const summaries: Record<string, BranchStockSummary> = Object.fromEntries(productRows.map((product) => {
+                    const rows = stockRows.filter((row) => row.product_id === product.id);
+                    const mainRow = activeBranchId ? rows.find((row) => row.branch_id === activeBranchId) : undefined;
+                    const otherBranches = branchRows
+                        .filter((branch) => branch.id !== activeBranchId)
+                        .map((branch) => ({
+                            name: branch.name,
+                            quantity: Number(rows.find((row) => row.branch_id === branch.id)?.stock_quantity || 0),
+                        }));
+                    return [product.id, {
+                        mainQuantity: mainRow ? Number(mainRow.stock_quantity) || 0 : rows.length > 0 ? 0 : Number(product.stock_quantity || 0),
+                        mainThreshold: mainRow ? Number(mainRow.low_stock_threshold) || 5 : Number(product.low_stock_threshold || 5),
+                        branchName: activeBranchId ? branchNames.get(activeBranchId) || null : null,
+                        otherBranches,
+                    } satisfies BranchStockSummary];
+                })) as Record<string, BranchStockSummary>;
+                setBranchStockByProduct(summaries);
+            } else {
+                setBranchStockByProduct({});
+            }
             setProducts(productRows);
             applyFiltersAndSort(productRows, searchQuery, selectedCategory, sortBy);
             writeMobileCache(cacheKey, productRows);
@@ -110,7 +153,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
         filtered.sort((a, b) => {
             if (sort === 'name') return a.name.localeCompare(b.name);
             if (sort === 'price') return Number(b.unit_price) - Number(a.unit_price);
-            if (sort === 'stock') return (b.stock_quantity || 0) - (a.stock_quantity || 0);
+            if (sort === 'stock') return getMainStock(b) - getMainStock(a);
             return 0;
         });
 
@@ -119,7 +162,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
 
     useEffect(() => {
         applyFiltersAndSort(products, searchQuery, selectedCategory, sortBy);
-    }, [searchQuery, selectedCategory, sortBy, products]);
+    }, [searchQuery, selectedCategory, sortBy, products, branchStockByProduct]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -133,7 +176,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     };
 
     const handleDelete = (id: string) => {
-        if (!canManageProducts) return;
+        if (!canDeleteProducts) return;
         Alert.alert(t('delete', language), t('areYouSure', language), [
             { text: t('cancel', language), style: 'cancel' },
             {
@@ -163,8 +206,11 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     };
 
     const renderProduct = (item: Product) => {
-        const isLowStock = item.track_stock && (item.stock_quantity || 0) <= (item.low_stock_threshold || 5);
-        const outOfStock = item.track_stock && (item.stock_quantity || 0) <= 0;
+        const stockSummary = branchStockByProduct[item.id];
+        const mainStock = getMainStock(item);
+        const mainThreshold = stockSummary?.mainThreshold ?? Number(item.low_stock_threshold || 5);
+        const isLowStock = item.track_stock && mainStock <= mainThreshold;
+        const outOfStock = item.track_stock && mainStock <= 0;
         const serviceIcon = serviceIconNameFromValue(item.image_url);
 
         return (
@@ -195,13 +241,23 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                                         styles.stockText,
                                         { color: outOfStock ? '#ef4444' : isLowStock ? '#f59e0b' : mutedColor }
                                     ]}>
-                                        {t('inventory', language)}: {item.stock_quantity} {item.unit}
+                                        {t('inventory', language)}: {mainStock} {item.unit}{stockSummary?.branchName ? ` · ${stockSummary.branchName}` : ''}
                                     </Text>
                                     {isLowStock && <AlertTriangle size={12} color="#f59e0b" />}
                                 </View>
                             )}
+                            {item.track_stock && stockSummary?.otherBranches.length ? (
+                                <View style={styles.otherStockList}>
+                                    <Text style={[styles.otherStockLabel, { color: mutedColor }]}>{language === 'sq' ? 'Në degët tjera' : 'Other branches'}</Text>
+                                    {stockSummary.otherBranches.map((branch) => (
+                                        <Text key={branch.name} style={[styles.otherStockText, { color: mutedColor }]}>
+                                            {branch.name}: {branch.quantity} {item.unit}
+                                        </Text>
+                                    ))}
+                                </View>
+                            ) : null}
                         </View>
-                        {canManageProducts ? <TouchableOpacity testID={`product-delete-${item.id}`} onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
+                        {canDeleteProducts ? <TouchableOpacity testID={`product-delete-${item.id}`} onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
                             <Trash2 color="#ef4444" size={20} />
                         </TouchableOpacity> : null}
                     </View>
@@ -234,7 +290,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('products', language)}</Text>
                 </View>
-                {canManageProducts ? <TouchableOpacity testID="product-create-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ProductForm')}>
+                {canCreateProducts ? <TouchableOpacity testID="product-create-button" accessibilityRole="button" style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ProductForm')}>
                     <Box color={primaryColor} size={20} />
                 </TouchableOpacity> : null}
             </View>
@@ -246,7 +302,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
             >
                 {/* Inventory HUD */}
                 <View style={styles.statsContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('products', language), stats.totalProducts, Box, '#004FFE')}
                         {renderStatCard(t('totalValue', language), formatCurrency(stats.totalValue), DollarSign, '#12B76A')}
                         {renderStatCard(t('lowStock', language), stats.lowStockItems, AlertTriangle, '#f59e0b')}
@@ -271,7 +327,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                         {categories.map((cat, idx) => (
                             <TouchableOpacity
                                 key={idx}
@@ -332,7 +388,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                 onScanned={handleBarcodeScanned}
             />
 
-            <FAB testID="product-fab" onPress={() => navigation.navigate('ProductForm')} />
+            {canCreateProducts ? <FAB testID="product-fab" onPress={() => navigation.navigate('ProductForm')} /> : null}
         </View>
     );
 }
@@ -367,8 +423,8 @@ const styles = StyleSheet.create({
     statLabel: { fontSize: 11, fontWeight: '500' },
 
     // Search & Filter
-    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 0, borderRadius: 14, marginBottom: 16, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, paddingVertical: 12 },
 
     filterScroll: { gap: 8, marginBottom: 16, paddingHorizontal: 20 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
@@ -393,6 +449,9 @@ const styles = StyleSheet.create({
     productSku: { fontSize: 12, marginTop: 4 },
     stockRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
     stockText: { fontSize: 12, fontWeight: '600' },
+    otherStockList: { marginTop: 4, gap: 2 },
+    otherStockLabel: { fontSize: 11, fontWeight: '600' },
+    otherStockText: { fontSize: 11 },
 
     productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },

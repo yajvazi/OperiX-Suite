@@ -55,7 +55,7 @@ export function AboutScreen() {
     return (
         <MobileScreen>
             <MobileHeader title={t('aboutOperix', language)} subtitle={t('yourBusinessWorkspace', language)} onBack={() => navigation.goBack()} />
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 <View style={[styles.brandCard, { backgroundColor: isDark ? brand.colors.navy : '#EAF2FF', borderColor: isDark ? brand.colors.navy : '#D9E8FF' }]}>
                     <View style={[styles.logoPanel, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF' }]}>
                         <OperixLogo width={178} reversed={isDark} />

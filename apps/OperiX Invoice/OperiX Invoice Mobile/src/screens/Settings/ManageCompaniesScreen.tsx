@@ -6,6 +6,7 @@ import {
     RefreshControl,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TouchableOpacity,
     View,
@@ -29,7 +30,7 @@ import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { Button, Card, Input } from '@invoice-monorepo/ui';
 import { Company, Membership } from '@invoice-monorepo/types';
 import { formatDate as formatLocalizedDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
-import { invalidateWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, invalidateWorkspaceScope } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 
 type RoleOption = {
@@ -39,6 +40,22 @@ type RoleOption = {
     description?: string | null;
     company_id?: string | null;
     is_system?: boolean;
+};
+
+type Scope = 'OWN' | 'ASSIGNED' | 'ALL';
+
+type PermissionOption = {
+    code: string;
+    name: string;
+    category: string;
+    description?: string | null;
+    is_sensitive: boolean;
+};
+
+type MemberAccess = {
+    role_code?: string;
+    permissions?: string[];
+    scopes?: Record<string, Scope>;
 };
 
 type CompanyMember = {
@@ -51,6 +68,8 @@ type CompanyMember = {
     status: string | null;
     role_code: string;
     role_name: string;
+    is_company_owner?: boolean;
+    access?: MemberAccess | null;
 };
 
 type PendingInvitation = {
@@ -71,6 +90,46 @@ type CompanyEditForm = {
     tax_id: string;
 };
 
+const permissionCategoryLabels: Record<string, string> = {
+    invoices: 'Invoices',
+    documents: 'Documents',
+    payments: 'Payments',
+    expenses: 'Expenses',
+    customers: 'Customers',
+    products: 'Products',
+    inventory: 'Inventory',
+    reports: 'Reports',
+    accounting: 'Accounting',
+    users: 'Users',
+    security: 'Security',
+    settings: 'Settings',
+};
+
+const scopeResources: Array<{ resource: string; label: string }> = [
+    { resource: 'invoice', label: 'Invoices' },
+    { resource: 'offer', label: 'Offers' },
+    { resource: 'proforma', label: 'Pro-formas' },
+    { resource: 'order', label: 'Orders' },
+    { resource: 'delivery_note', label: 'Delivery notes' },
+    { resource: 'customer', label: 'Customers' },
+    { resource: 'expense', label: 'Expenses' },
+    { resource: 'payment', label: 'Payments' },
+    { resource: 'product', label: 'Products' },
+    { resource: 'inventory', label: 'Inventory' },
+];
+
+const sensitivePermissionCodes = new Set([
+    'payment.refund',
+    'invoice.void',
+    'invoice.credit',
+    'invoice.debit',
+    'financial.export',
+    'reports.profit',
+    'inventory.adjust',
+    'accounting_period.close',
+    'accounting_period.reopen',
+]);
+
 export function ManageCompaniesScreen({ navigation }: any) {
     const { user } = useAuth();
     const { isDark, primaryColor, language } = useTheme();
@@ -88,15 +147,23 @@ export function ManageCompaniesScreen({ navigation }: any) {
     const [managedCompanyId, setManagedCompanyId] = useState<string | null>(null);
     const [members, setMembers] = useState<CompanyMember[]>([]);
     const [roles, setRoles] = useState<RoleOption[]>([]);
+    const [permissionCatalog, setPermissionCatalog] = useState<PermissionOption[]>([]);
     const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
     const [managementLoading, setManagementLoading] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
     const [showInvite, setShowInvite] = useState(false);
     const [rolePickerMemberId, setRolePickerMemberId] = useState<string | null>(null);
+    const [accessEditorMemberId, setAccessEditorMemberId] = useState<string | null>(null);
+    const [editingPermissions, setEditingPermissions] = useState<Record<string, boolean>>({});
+    const [initialEditingPermissions, setInitialEditingPermissions] = useState<Record<string, boolean>>({});
+    const [editingScopes, setEditingScopes] = useState<Record<string, Scope>>({});
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRoleCode, setInviteRoleCode] = useState('employee');
     const [inviteToken, setInviteToken] = useState<string | null>(null);
     const [editParentCompanyId, setEditParentCompanyId] = useState<string | null>(null);
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
+    const [accessDenied, setAccessDenied] = useState(false);
     const [editForm, setEditForm] = useState<CompanyEditForm>({
         company_name: '',
         email: '',
@@ -119,6 +186,10 @@ export function ManageCompaniesScreen({ navigation }: any) {
         [roles],
     );
     const rootCompanies = companies.filter((company) => !company.parent_company_id);
+    const can = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
+    const canManageCompany = can('settings.company');
+    const canManageUsers = can('users.manage');
+    const canManagePermissions = can('permissions.manage');
 
     useEffect(() => {
         void fetchData();
@@ -129,23 +200,28 @@ export function ManageCompaniesScreen({ navigation }: any) {
         setLoading(true);
         setRefreshing(false);
         try {
-            const [companyResponse, membershipResponse, profileResponse] = await Promise.all([
-                supabase.from('companies').select('*').order('company_name'),
-                supabase.from('memberships').select('company_id, role').eq('user_id', user.id),
-                supabase.from('profiles').select('active_company_id, company_id').eq('id', user.id).single(),
-            ]);
+            const workspace = await getWorkspaceScope(user.id);
+            setWorkspacePermissions(workspace.permissions);
+            setPlatformAdmin(workspace.platformAdmin);
+            setAccessDenied(!workspace.platformAdmin && !workspace.permissions.some((permission) => ['settings.company', 'users.manage', 'permissions.manage'].includes(permission)));
+            const membershipResponse = await supabase
+                .from('memberships')
+                .select('company_id, role')
+                .eq('user_id', user.id)
+                .eq('status', 'active');
 
-            if (companyResponse.error) throw companyResponse.error;
             if (membershipResponse.error) throw membershipResponse.error;
 
-            const nextCompanies = (companyResponse.data || []) as Company[];
+            // Use the already account-scoped resolver result. Querying the
+            // companies table without an explicit membership/ownership scope
+            // exposes unrelated tenants in the workspace switcher.
+            const nextCompanies = (workspace.companies || []) as unknown as Company[];
             setCompanies(nextCompanies);
             setMembershipRoles(Object.fromEntries(
                 (membershipResponse.data || []).map((membership: Pick<Membership, 'company_id' | 'role'>) => [membership.company_id, membership.role]),
             ));
 
-            const nextActiveCompanyId = profileResponse.data?.active_company_id || profileResponse.data?.company_id || null;
-            setActiveCompanyId(nextActiveCompanyId);
+            setActiveCompanyId(workspace.companyId);
             if (!parentCompanyId) {
                 const firstMainCompany = nextCompanies.find((company) => !company.parent_company_id);
                 if (firstMainCompany) setParentCompanyId(firstMainCompany.id);
@@ -188,6 +264,10 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const handleCreate = async () => {
+        if (!canManageCompany) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
+        }
         if (createMode !== 'groupExisting' && !newCompanyName.trim()) {
             Alert.alert(t('companyNameRequired', language), t('enterCompanyName', language));
             return;
@@ -235,28 +315,39 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const fetchCompanyManagement = async (companyId: string) => {
+        if (!canManageUsers && !canManagePermissions) {
+            setMembers([]);
+            setRoles([]);
+            setPermissionCatalog([]);
+            setPendingInvitations([]);
+            return;
+        }
         setManagementLoading(true);
         try {
-            const [memberResponse, roleResponse, invitationResponse] = await Promise.all([
-                supabase.rpc('list_company_members', { p_company_id: companyId }),
+            const [memberResponse, roleResponse, invitationResponse, catalogResponse] = await Promise.all([
+                supabase.rpc('rbac_list_company_members', { p_company_id: companyId }),
                 supabase
                     .from('app_roles')
                     .select('id, code, name, description, company_id, is_system')
                     .or(`company_id.is.null,company_id.eq.${companyId}`)
                     .order('name'),
                 supabase.rpc('list_company_invitations', { p_company_id: companyId }),
+                canManagePermissions ? supabase.rpc('rbac_list_permission_catalog') : Promise.resolve({ data: [], error: null }),
             ]);
 
             if (memberResponse.error) throw memberResponse.error;
             if (roleResponse.error) throw roleResponse.error;
             if (invitationResponse.error) throw invitationResponse.error;
+            if (catalogResponse.error) throw catalogResponse.error;
 
             setMembers((memberResponse.data || []) as CompanyMember[]);
             setRoles((roleResponse.data || []) as RoleOption[]);
+            setPermissionCatalog((catalogResponse.data || []) as PermissionOption[]);
             setPendingInvitations((invitationResponse.data || []) as PendingInvitation[]);
         } catch (error: any) {
             setMembers([]);
             setRoles([]);
+            setPermissionCatalog([]);
             setPendingInvitations([]);
             Alert.alert(t('teamAccessUnavailable', language), getLocalizedErrorMessage(error, language, 'noPermissionManageCompany'));
         } finally {
@@ -265,11 +356,16 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const openCompanyManagement = async (company: Company) => {
+        if (!canManageCompany && !canManageUsers && !canManagePermissions) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
+        }
         setManagedCompanyId(company.id);
         setShowEdit(false);
         setShowInvite(false);
         setInviteToken(null);
         setRolePickerMemberId(null);
+        setAccessEditorMemberId(null);
         setEditParentCompanyId(company.parent_company_id || null);
         setEditForm({
             company_name: company.company_name || '',
@@ -283,6 +379,10 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const handleEditCompany = async () => {
+        if (!canManageCompany) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
+        }
         if (!managedCompany || !editForm.company_name.trim()) {
             Alert.alert(t('companyNameRequired', language), t('enterCompanyName', language));
             return;
@@ -319,48 +419,94 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const handleInvite = async () => {
-        if (!managedCompany || !inviteEmail.trim()) {
-            Alert.alert(t('emailRequired', language), t('enterUserEmail', language));
+        if (!canManageUsers) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
             return;
         }
+        // The former token-only RPC did not reserve or bill a user seat. All
+        // Invoice invitations now use the Users & Access flow, which performs
+        // the server-side billing preview and Auth invitation.
+        navigation.navigate('UsersAccess');
+    };
 
+    const handleRoleChange = async (member: CompanyMember, role: RoleOption) => {
+        if (!canManagePermissions || role.code === 'super_administrator' || role.code === 'owner') {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
+        }
         setManagementLoading(true);
         try {
-            const { data, error } = await supabase.rpc('create_company_invitation', {
-                p_company_id: managedCompany.id,
-                p_email: inviteEmail.trim().toLowerCase(),
-                p_role_code: inviteRoleCode,
+            const { error } = await supabase.rpc('rbac_update_member_access', {
+                p_membership_id: member.membership_id,
+                p_role_code: role.code,
+                p_permissions: {},
+                p_scopes: {},
             });
             if (error) throw error;
-            if (!data?.token) throw new Error(t('inviteWithoutToken', language));
-
-            setInviteToken(data.token);
-            await Clipboard.setStringAsync(data.token);
-            setInviteEmail('');
-            await fetchCompanyManagement(managedCompany.id);
-            void notifyBusinessEvent('member_added', managedCompany.id, null, {
-                message: `${inviteEmail.trim().toLowerCase()} was invited to the tenant.`,
-            }).catch((notificationError) => console.warn('Member notification could not be sent:', notificationError));
-            Alert.alert(t('inviteCreated', language), t('inviteCopiedInstruction', language));
+            setRolePickerMemberId(null);
+            setAccessEditorMemberId(null);
+            if (managedCompany) await fetchCompanyManagement(managedCompany.id);
         } catch (error: any) {
-            Alert.alert(t('couldNotCreateInvite', language), getLocalizedErrorMessage(error, language, 'retry'));
+            Alert.alert(t('couldNotChangePrivilege', language), getLocalizedErrorMessage(error, language, 'retry'));
         } finally {
             setManagementLoading(false);
         }
     };
 
-    const handleRoleChange = async (member: CompanyMember, role: RoleOption) => {
+    const openMemberAccessEditor = (member: CompanyMember) => {
+        if (!canManagePermissions || member.role_code === 'company_administrator' || member.role_code === 'admin') return;
+        const nextPermissions = Object.fromEntries(
+            permissionCatalog.map((permission) => [permission.code, Boolean(member.access?.permissions?.includes(permission.code))]),
+        );
+        const nextScopes = Object.fromEntries(
+            scopeResources.map(({ resource }) => [resource, member.access?.scopes?.[resource] || 'OWN']),
+        ) as Record<string, Scope>;
+        setRolePickerMemberId(null);
+        setAccessEditorMemberId((current) => current === member.membership_id ? null : member.membership_id);
+        setEditingPermissions(nextPermissions);
+        setInitialEditingPermissions(nextPermissions);
+        setEditingScopes(nextScopes);
+    };
+
+    const saveMemberAccess = async (member: CompanyMember) => {
+        if (!canManagePermissions || member.is_company_owner || member.user_id === user?.id) return;
+        const grantingSensitive = permissionCatalog.some((permission) =>
+            permission.is_sensitive
+            && editingPermissions[permission.code]
+            && !initialEditingPermissions[permission.code],
+        );
+        if (grantingSensitive) {
+            const confirmed = await new Promise<boolean>((resolve) => {
+                Alert.alert(
+                    'Sensitive permission',
+                    'This grants access to a sensitive financial or legally relevant operation. The change will be audited. Continue?',
+                    [
+                        { text: t('cancel', language), style: 'cancel', onPress: () => resolve(false) },
+                        { text: t('continue', language), style: 'destructive', onPress: () => resolve(true) },
+                    ],
+                    { cancelable: true, onDismiss: () => resolve(false) },
+                );
+            });
+            if (!confirmed) return;
+        }
+
         setManagementLoading(true);
         try {
-            const { error } = await supabase.rpc('set_company_member_role', {
+            const permissionPayload = Object.fromEntries(
+                permissionCatalog.map((permission) => [permission.code, Boolean(editingPermissions[permission.code])]),
+            );
+            const { error } = await supabase.rpc('rbac_update_member_access', {
                 p_membership_id: member.membership_id,
-                p_role_code: role.code,
+                p_role_code: member.role_code === 'admin' ? 'company_administrator' : member.role_code,
+                p_permissions: permissionPayload,
+                p_scopes: editingScopes,
             });
             if (error) throw error;
-            setRolePickerMemberId(null);
+            setAccessEditorMemberId(null);
             if (managedCompany) await fetchCompanyManagement(managedCompany.id);
+            Alert.alert(t('recordSaved', language), 'Team permissions and data scopes were saved and recorded in the audit log.');
         } catch (error: any) {
-            Alert.alert(t('couldNotChangePrivilege', language), getLocalizedErrorMessage(error, language, 'retry'));
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'retry'));
         } finally {
             setManagementLoading(false);
         }
@@ -384,29 +530,19 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const removeMember = async (member: CompanyMember) => {
-        setManagementLoading(true);
-        try {
-            const { error } = await supabase.rpc('remove_company_member', { p_membership_id: member.membership_id });
-            if (error) throw error;
-            if (managedCompany) await fetchCompanyManagement(managedCompany.id);
-        } catch (error: any) {
-            Alert.alert(t('couldNotRemoveAccess', language), getLocalizedErrorMessage(error, language, 'retry'));
-        } finally {
-            setManagementLoading(false);
+        if (!canManagePermissions) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
         }
+        navigation.navigate('UsersAccess');
     };
 
     const revokeInvitation = async (invitation: PendingInvitation) => {
-        setManagementLoading(true);
-        try {
-            const { error } = await supabase.rpc('revoke_company_invitation', { p_invitation_id: invitation.id });
-            if (error) throw error;
-            if (managedCompany) await fetchCompanyManagement(managedCompany.id);
-        } catch (error: any) {
-            Alert.alert(t('couldNotRevokeInvite', language), getLocalizedErrorMessage(error, language, 'retry'));
-        } finally {
-            setManagementLoading(false);
+        if (!canManagePermissions) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
         }
+        navigation.navigate('UsersAccess');
     };
 
     const handleArchiveCompany = (company: Company) => {
@@ -425,6 +561,10 @@ export function ManageCompaniesScreen({ navigation }: any) {
     };
 
     const archiveCompany = async (company: Company) => {
+        if (!canManageCompany) {
+            Alert.alert(t('error', language), t('noPermissionManageCompany', language));
+            return;
+        }
         setManagementLoading(true);
         try {
             const { error } = await supabase.rpc('archive_company', { p_company_id: company.id });
@@ -456,16 +596,18 @@ export function ManageCompaniesScreen({ navigation }: any) {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('back', language)}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg, borderColor }]} accessibilityRole="button" accessibilityLabel={t('back', language)}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View style={styles.headerCopy}>
                     <Text style={[styles.eyebrow, { color: mutedColor }]}>{t('workspace', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('companiesAccess', language)}</Text>
                 </View>
-                <TouchableOpacity onPress={() => setShowCreate((current) => !current)} style={styles.headerAction} accessibilityRole="button" accessibilityLabel={t('addCompany', language)}>
-                    {showCreate ? <X color={primaryColor} size={24} /> : <Plus color={primaryColor} size={24} />}
-                </TouchableOpacity>
+                {canManageCompany ? (
+                    <TouchableOpacity onPress={() => setShowCreate((current) => !current)} style={[styles.headerAction, { backgroundColor: `${primaryColor}12`, borderColor: `${primaryColor}45` }]} accessibilityRole="button" accessibilityLabel={t('addCompany', language)}>
+                        {showCreate ? <X color={primaryColor} size={24} /> : <Plus color={primaryColor} size={24} />}
+                    </TouchableOpacity>
+                ) : <View style={styles.headerActionPlaceholder} />}
             </View>
 
             <ScrollView
@@ -476,6 +618,11 @@ export function ManageCompaniesScreen({ navigation }: any) {
                 nestedScrollEnabled
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={primaryColor} />}
             >
+                {accessDenied ? (
+                    <Card style={[styles.managementCard, { backgroundColor: cardBg, borderColor }]}>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('noPermissionManageCompany', language)}</Text>
+                    </Card>
+                ) : null}
                 {showCreate && (
                     <Card style={[styles.createCard, { backgroundColor: cardBg, borderColor }]}>
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('addToOrganization', language)}</Text>
@@ -536,7 +683,16 @@ export function ManageCompaniesScreen({ navigation }: any) {
                     </Card>
                 )}
 
-                <Text style={[styles.label, { color: mutedColor }]}>{t('organizationLabel', language)}</Text>
+                <View style={styles.organizationHeader}>
+                    <View style={styles.organizationHeaderCopy}>
+                        <Text style={[styles.label, { color: mutedColor }]}>{t('organizationLabel', language)}</Text>
+                        <Text style={[styles.organizationHint, { color: mutedColor }]}>{t('switchOrManageCompanies', language)}</Text>
+                    </View>
+                    <View style={[styles.companyCount, { backgroundColor: `${primaryColor}14`, borderColor: `${primaryColor}35` }]}>
+                        <Building2 color={primaryColor} size={15} />
+                        <Text style={[styles.companyCountText, { color: primaryColor }]}>{companies.length}</Text>
+                    </View>
+                </View>
                 {companies
                     .filter((company) => !company.parent_company_id || !companies.some((parent) => parent.id === company.parent_company_id))
                     .map((company) => renderCompany(company, 0))}
@@ -573,7 +729,8 @@ export function ManageCompaniesScreen({ navigation }: any) {
             <View key={company.id} style={depth > 0 ? styles.subdivisionWrapper : undefined}>
                 <View style={styles.companyCardRow}>
                     <TouchableOpacity activeOpacity={0.7} onPress={() => { void handleSwitch(company.id); }} style={styles.companyCardTouch}>
-                        <Card style={[styles.companyCard, { backgroundColor: cardBg, borderColor }, depth > 0 && styles.subdivisionCard, isActive && { borderColor: primaryColor, borderWidth: 2 }, isManaged && { backgroundColor: `${primaryColor}10` }]}>
+                        <Card style={[styles.companyCard, { backgroundColor: cardBg, borderColor }, depth > 0 && styles.subdivisionCard, isActive && { borderColor: primaryColor, borderWidth: 2, backgroundColor: `${primaryColor}0B` }, isManaged && { backgroundColor: `${primaryColor}10` }]}>
+                            <View style={[styles.activeRail, { backgroundColor: primaryColor, opacity: isActive ? 1 : 0 }]} />
                             <View style={[styles.iconContainer, { backgroundColor: `${isActive ? primaryColor : '#667085'}20` }]}>
                                 <Building2 color={isActive ? primaryColor : '#667085'} size={24} />
                             </View>
@@ -592,14 +749,16 @@ export function ManageCompaniesScreen({ navigation }: any) {
                             )}
                         </Card>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => { void openCompanyManagement(company); }}
-                        style={[styles.manageButton, { backgroundColor: cardBg, borderColor }, isManaged && { borderColor: primaryColor, backgroundColor: `${primaryColor}15` }]}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('manageCompany', language).replace('{company}', company.company_name)}
-                    >
-                        <Pencil color={isManaged ? primaryColor : mutedColor} size={17} />
-                    </TouchableOpacity>
+                    {(canManageCompany || canManageUsers || canManagePermissions) ? (
+                        <TouchableOpacity
+                            onPress={() => { void openCompanyManagement(company); }}
+                            style={[styles.manageButton, { backgroundColor: cardBg, borderColor }, isManaged && { borderColor: primaryColor, backgroundColor: `${primaryColor}15` }]}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('manageCompany', language).replace('{company}', company.company_name)}
+                        >
+                            <Pencil color={isManaged ? primaryColor : mutedColor} size={17} />
+                        </TouchableOpacity>
+                    ) : null}
                 </View>
                 {children.map((child) => renderCompany(child, depth + 1))}
             </View>
@@ -610,7 +769,7 @@ export function ManageCompaniesScreen({ navigation }: any) {
         if (!managedCompany) return null;
 
         return (
-            <Card style={[styles.managementCard, { backgroundColor: cardBg, borderColor }]}>
+            <Card style={[styles.managementCard, { backgroundColor: cardBg, borderColor: managedCompany.id === activeCompanyId ? primaryColor : borderColor }]}>
                 <View style={styles.panelHeader}>
                     <View style={[styles.panelIcon, { backgroundColor: `${primaryColor}18` }]}>
                         <Building2 color={primaryColor} size={20} />
@@ -624,19 +783,23 @@ export function ManageCompaniesScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.actionRow}>
-                    <Button title={t('editDetails', language)} variant="outline" icon={Pencil} onPress={() => setShowEdit((current) => !current)} style={styles.flexButton} />
-                    <Button title={t('inviteUser', language)} icon={Mail} onPress={() => setShowInvite((current) => !current)} style={styles.flexButton} />
-                </View>
-                <TouchableOpacity
-                    onPress={() => handleArchiveCompany(managedCompany)}
-                    style={[styles.removeCompanyButton, { borderColor: '#FCA5A5' }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('removeCompany', language)}
-                >
-                    <Trash2 color="#DC2626" size={16} />
-                    <Text style={styles.removeCompanyText}>{t('removeCompany', language)}</Text>
-                </TouchableOpacity>
+                {canManageCompany ? (
+                    <View style={styles.actionRow}>
+                        <Button title={t('editDetails', language)} variant="outline" size="small" icon={Pencil} onPress={() => setShowEdit((current) => !current)} style={styles.flexButton} />
+                        {canManageUsers ? <Button title={t('inviteUser', language)} size="small" icon={Mail} onPress={() => navigation.navigate('UsersAccess')} style={styles.flexButton} /> : null}
+                    </View>
+                ) : null}
+                {canManageCompany ? (
+                    <TouchableOpacity
+                        onPress={() => handleArchiveCompany(managedCompany)}
+                        style={[styles.removeCompanyButton, { borderColor: '#FCA5A5', backgroundColor: '#DC26260A' }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('removeCompany', language)}
+                    >
+                        <Trash2 color="#DC2626" size={16} />
+                        <Text style={styles.removeCompanyText}>{t('removeCompany', language)}</Text>
+                    </TouchableOpacity>
+                ) : null}
 
                 {showEdit && renderEditForm()}
                 {showInvite && renderInviteForm()}
@@ -647,7 +810,9 @@ export function ManageCompaniesScreen({ navigation }: any) {
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('teamMembers', language)}</Text>
                         <Text style={[styles.helperText, { color: mutedColor }]}>{t('changeAccessForCompany', language)}</Text>
                     </View>
-                    <Users color={primaryColor} size={20} />
+                    <View style={[styles.sectionIcon, { backgroundColor: `${primaryColor}14` }]}>
+                        <Users color={primaryColor} size={18} />
+                    </View>
                 </View>
 
                 {managementLoading && members.length === 0 ? (
@@ -655,18 +820,12 @@ export function ManageCompaniesScreen({ navigation }: any) {
                 ) : members.length === 0 ? (
                     <Text style={[styles.helperText, { color: mutedColor, marginTop: 14 }]}>{t('noDirectMembers', language)}</Text>
                 ) : (
-                    <ScrollView
-                        style={styles.memberListScroll}
-                        contentContainerStyle={styles.memberList}
-                        nestedScrollEnabled
-                        keyboardShouldPersistTaps="handled"
-                        showsVerticalScrollIndicator
-                    >
+                    <ScrollView style={styles.memberListScroll} contentContainerStyle={styles.memberList} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
                         {members.map((member) => renderMember(member))}
                     </ScrollView>
                 )}
 
-                {pendingInvitations.length > 0 && (
+                {canManagePermissions && pendingInvitations.length > 0 && (
                     <View style={styles.inviteList}>
                         <Text style={[styles.subsectionTitle, { color: textColor }]}>{t('pendingInvitations', language)}</Text>
                         {pendingInvitations.map((invitation) => (
@@ -731,7 +890,7 @@ export function ManageCompaniesScreen({ navigation }: any) {
                     autoCapitalize="none"
                 />
                 <Text style={[styles.fieldLabel, { color: textColor }]}>{t('privilege', language)}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roleChoices}>
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roleChoices}>
                     {selectableRoles.map((role) => (
                         <TouchableOpacity
                             key={role.id}
@@ -762,7 +921,8 @@ export function ManageCompaniesScreen({ navigation }: any) {
         const displayName = [member.first_name, member.last_name].filter(Boolean).join(' ') || member.email || t('pendingUser', language);
         const roleOptions = selectableRoles;
         const companyOwnerId = (managedCompany as (Company & { owner_id?: string | null }) | null)?.owner_id;
-        const canManageMember = member.user_id !== user?.id
+        const canManageMember = canManagePermissions
+            && member.user_id !== user?.id
             && member.user_id !== companyOwnerId
             && member.role_code !== 'super_administrator';
 
@@ -790,7 +950,7 @@ export function ManageCompaniesScreen({ navigation }: any) {
                     </TouchableOpacity>
                 )}
                 {canManageMember && rolePickerMemberId === member.membership_id && (
-                    <ScrollView
+                    <ScrollView keyboardShouldPersistTaps="handled"
                         style={styles.memberRoleScroll}
                         horizontal
                         nestedScrollEnabled
@@ -805,6 +965,76 @@ export function ManageCompaniesScreen({ navigation }: any) {
                         ))}
                     </ScrollView>
                 )}
+                {canManageMember && member.role_code !== 'company_administrator' && member.role_code !== 'admin' && (
+                    <TouchableOpacity
+                        onPress={() => openMemberAccessEditor(member)}
+                        style={[styles.accessEditorToggle, { borderColor: primaryColor, backgroundColor: accessEditorMemberId === member.membership_id ? `${primaryColor}14` : 'transparent' }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Edit permissions and data scopes"
+                    >
+                        <Text style={[styles.accessEditorToggleText, { color: primaryColor }]}>Permissions &amp; scopes</Text>
+                    </TouchableOpacity>
+                )}
+                {canManageMember && accessEditorMemberId === member.membership_id && renderMemberAccessEditor(member)}
+            </View>
+        );
+    }
+
+    function renderMemberAccessEditor(member: CompanyMember) {
+        const groupedPermissions = permissionCatalog.reduce<Record<string, PermissionOption[]>>((groups, permission) => {
+            (groups[permission.category] ||= []).push(permission);
+            return groups;
+        }, {});
+        const sensitiveEnabled = Object.entries(editingPermissions).some(([code, enabled]) => enabled && sensitivePermissionCodes.has(code));
+
+        return (
+            <View style={[styles.accessEditor, { backgroundColor: inputBg, borderColor }]}>
+                <Text style={[styles.subsectionTitle, { color: textColor }]}>Permissions</Text>
+                <Text style={[styles.helperText, { color: mutedColor }]}>Role defaults can be adjusted by the tenant Admin. Platform permissions and Super Admin are never assignable here.</Text>
+                {Object.entries(groupedPermissions).map(([category, permissions]) => (
+                    <View key={category} style={[styles.permissionGroup, { borderColor }]}>
+                        <Text style={[styles.permissionGroupTitle, { color: textColor }]}>{permissionCategoryLabels[category] || category}</Text>
+                        {permissions.map((permission) => (
+                            <View key={permission.code} style={[styles.permissionRow, { borderTopColor: borderColor }]}>
+                                <View style={styles.permissionCopy}>
+                                    <Text style={[styles.permissionName, { color: textColor }]}>{permission.name}</Text>
+                                    {permission.description ? <Text style={[styles.permissionDescription, { color: mutedColor }]}>{permission.description}</Text> : null}
+                                    {permission.is_sensitive ? <Text style={styles.sensitiveLabel}>Sensitive · audited</Text> : null}
+                                </View>
+                                <Switch
+                                    value={Boolean(editingPermissions[permission.code])}
+                                    onValueChange={(value) => setEditingPermissions((current) => ({ ...current, [permission.code]: value }))}
+                                    trackColor={{ false: '#CBD5E1', true: `${primaryColor}70` }}
+                                    thumbColor={editingPermissions[permission.code] ? primaryColor : '#F8FAFC'}
+                                />
+                            </View>
+                        ))}
+                    </View>
+                ))}
+                <Text style={[styles.subsectionTitle, { color: textColor, marginTop: 16 }]}>Data scopes</Text>
+                <Text style={[styles.helperText, { color: mutedColor }]}>OWN, ASSIGNED, and ALL are enforced by database policies for scoped records.</Text>
+                {scopeResources.map(({ resource, label }) => (
+                    <View key={resource} style={styles.scopeRow}>
+                        <Text style={[styles.scopeLabel, { color: textColor }]}>{label}</Text>
+                        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeChoices}>
+                            {(['OWN', 'ASSIGNED', 'ALL'] as Scope[]).map((scope) => (
+                                <TouchableOpacity
+                                    key={scope}
+                                    onPress={() => setEditingScopes((current) => ({ ...current, [resource]: scope }))}
+                                    style={[styles.scopeChoice, { borderColor: editingScopes[resource] === scope ? primaryColor : borderColor, backgroundColor: editingScopes[resource] === scope ? primaryColor : 'transparent' }]}
+                                >
+                                    <Text style={{ color: editingScopes[resource] === scope ? '#fff' : mutedColor, fontSize: 10, fontWeight: '700' }}>{scope === 'OWN' ? 'Own' : scope === 'ASSIGNED' ? 'Assigned' : 'All'}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                ))}
+                {sensitiveEnabled ? (
+                    <View style={styles.sensitiveNotice}>
+                        <Text style={styles.sensitiveNoticeText}>Sensitive access is enabled. Refunds, voids, exports, profit reports, inventory adjustments, and accounting-period changes are audited.</Text>
+                    </View>
+                ) : null}
+                <Button title="Save access" onPress={() => { void saveMemberAccess(member); }} loading={managementLoading} style={{ marginTop: 14 }} />
             </View>
         );
     }
@@ -853,7 +1083,7 @@ function CompanyChoiceRow({
     return (
         <View style={styles.parentPicker}>
             <Text style={[styles.parentLabel, { color: textColor }]}>{label}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.parentOptions}>
+            <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.parentOptions}>
                 {includeNoParent && (
                     <TouchableOpacity
                         onPress={() => onSelect(null)}
@@ -882,13 +1112,14 @@ function CompanyChoiceRow({
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, gap: 12 },
-    backButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    backButton: { width: 40, height: 40, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     headerCopy: { flex: 1 },
-    headerAction: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    headerAction: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    headerActionPlaceholder: { width: 42, height: 42 },
     eyebrow: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
     title: { fontSize: 24, fontWeight: '800' },
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 48 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 56 },
     createCard: { padding: 16, marginBottom: 24, borderWidth: 1 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
     helperText: { fontSize: 12, lineHeight: 18 },
@@ -902,23 +1133,29 @@ const styles = StyleSheet.create({
     parentLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
     parentOptions: { gap: 8, paddingBottom: 4 },
     parentOption: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-    label: { fontSize: 12, fontWeight: 'bold', marginBottom: 12, marginHorizontal: 4 },
+    organizationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 2 },
+    organizationHeaderCopy: { flex: 1 },
+    organizationHint: { fontSize: 12, lineHeight: 17, marginTop: 0 },
+    companyCount: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+    companyCountText: { fontSize: 12, fontWeight: '800' },
+    label: { fontSize: 12, fontWeight: 'bold', marginBottom: 3, marginHorizontal: 0 },
     companyCardRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginBottom: 12 },
     companyCardTouch: { flex: 1 },
-    companyCard: { flexDirection: 'row', alignItems: 'center', padding: 16, minHeight: 92, borderWidth: 1 },
-    subdivisionWrapper: { marginLeft: 20 },
-    subdivisionCard: { paddingVertical: 13, minHeight: 80 },
-    manageButton: { width: 46, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    iconContainer: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    companyCard: { flexDirection: 'row', alignItems: 'center', padding: 14, minHeight: 96, borderWidth: 1, borderRadius: 18, overflow: 'hidden' },
+    subdivisionWrapper: { marginLeft: 16 },
+    subdivisionCard: { paddingVertical: 12, minHeight: 82 },
+    manageButton: { width: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    activeRail: { width: 3, alignSelf: 'stretch', borderRadius: 99, marginRight: 11 },
+    iconContainer: { width: 50, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 13 },
     companyInfo: { flex: 1, minWidth: 0 },
     companyName: { fontSize: 16, fontWeight: 'bold', marginBottom: 2 },
-    companyRole: { fontSize: 12, textTransform: 'capitalize' },
+    companyRole: { fontSize: 12, lineHeight: 17, textTransform: 'capitalize' },
     aggregateHint: { fontSize: 11, fontWeight: '600', marginTop: 4 },
-    activeBadge: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    activeBadge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
     emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
-    managementCard: { padding: 16, marginTop: 12, borderWidth: 1 },
-    panelHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    panelIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+    managementCard: { padding: 18, marginTop: 8, borderWidth: 1.5, borderRadius: 21 },
+    panelHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: 'rgba(148,163,184,0.06)' },
+    panelIcon: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
     panelHeaderCopy: { flex: 1 },
     panelEyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, marginBottom: 2 },
     panelTitle: { fontSize: 19, fontWeight: '800' },
@@ -933,12 +1170,13 @@ const styles = StyleSheet.create({
     tokenLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.7, marginBottom: 5 },
     tokenText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
     copyButton: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-    divider: { height: 1, backgroundColor: 'rgba(148,163,184,0.18)', marginVertical: 18 },
+    divider: { height: 1, backgroundColor: 'rgba(148,163,184,0.18)', marginVertical: 22 },
     sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     sectionHeadingCopy: { flex: 1 },
-    memberListScroll: { maxHeight: 360, marginTop: 12 },
+    sectionIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    memberListScroll: { marginTop: 12 },
     memberList: { paddingBottom: 2 },
-    memberRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', borderBottomWidth: 1, paddingVertical: 12, gap: 10 },
+    memberRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', borderBottomWidth: 1, paddingVertical: 14, gap: 10 },
     memberAvatar: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     smallIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     memberCopy: { flex: 1, minWidth: 0 },
@@ -946,12 +1184,28 @@ const styles = StyleSheet.create({
     memberMeta: { fontSize: 11, marginTop: 2 },
     rolePill: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, marginTop: 7 },
     rolePillText: { fontSize: 10, fontWeight: '800' },
-    removeButton: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    removeCompanyButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 11, marginTop: 10 },
+    removeButton: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EF44440D' },
+    removeCompanyButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 13, paddingVertical: 11, marginTop: 12 },
     removeCompanyText: { color: '#DC2626', fontSize: 13, fontWeight: '700' },
     memberRoleScroll: { width: '100%' },
     memberRoleChoices: { flexDirection: 'row', gap: 7, paddingTop: 2, paddingRight: 8 },
     memberRoleChoice: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 7 },
+    accessEditorToggle: { width: '100%', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, marginTop: 2 },
+    accessEditorToggleText: { fontSize: 10, fontWeight: '800', textAlign: 'center' },
+    accessEditor: { width: '100%', borderWidth: 1, borderRadius: 15, padding: 12, marginTop: 4 },
+    permissionGroup: { borderWidth: 1, borderRadius: 12, marginTop: 10, overflow: 'hidden' },
+    permissionGroupTitle: { fontSize: 12, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 9 },
+    permissionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, paddingHorizontal: 10, paddingVertical: 9 },
+    permissionCopy: { flex: 1, minWidth: 0 },
+    permissionName: { fontSize: 11, fontWeight: '700' },
+    permissionDescription: { fontSize: 10, lineHeight: 14, marginTop: 2 },
+    sensitiveLabel: { color: '#B45309', fontSize: 9, fontWeight: '800', marginTop: 2 },
+    scopeRow: { marginTop: 10 },
+    scopeLabel: { fontSize: 11, fontWeight: '700', marginBottom: 6 },
+    scopeChoices: { flexDirection: 'row', gap: 6, paddingRight: 6 },
+    scopeChoice: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+    sensitiveNotice: { borderRadius: 10, backgroundColor: '#FEF3C7', padding: 10, marginTop: 14 },
+    sensitiveNoticeText: { color: '#92400E', fontSize: 10, lineHeight: 15, fontWeight: '600' },
     inviteList: { marginTop: 18 },
     invitationRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 10, marginTop: 8, gap: 9 },
 });

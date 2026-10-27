@@ -8,10 +8,12 @@ import {
     type MobileDocCategory,
     type MobileDocLanguage,
 } from '../generated/mobileDocs';
+import { INVOICE_DOCUMENTATION_ARTICLE_LINKS } from '../generated/documentationLinks';
 
 export type DocumentationLanguage = MobileDocLanguage;
 
 export const HELP_RECENT_STORAGE_KEY = '@operix_invoice_help_recent';
+export const HELP_CENTER_URL = 'https://helpdesk.operixsuite.com';
 
 export function resolveDocumentationLanguage(value?: string | null): DocumentationLanguage {
     return normalizeLocale(value) === 'sq' ? 'sq' : 'en';
@@ -19,6 +21,13 @@ export function resolveDocumentationLanguage(value?: string | null): Documentati
 
 export function getHelpArticle(articleId: string, language: DocumentationLanguage): MobileDocArticle | undefined {
     return MOBILE_DOC_ARTICLES.find((article) => article.id === articleId && article.language === language);
+}
+
+/** Stable contextual link from a bundled article ID to the released Help Center article. */
+export function getHelpdeskArticleUrl(articleId: string, language: DocumentationLanguage): string | null {
+    const link = INVOICE_DOCUMENTATION_ARTICLE_LINKS[articleId];
+    if (!link) return null;
+    return `${HELP_CENTER_URL}/${language}/help/invoice/${link.category}/${link.slug}`;
 }
 
 export function getHelpCategory(categoryId: string): MobileDocCategory | undefined {

@@ -29,9 +29,20 @@ jest.mock('../../src/services/workspace', () => ({
         companies: [],
         profile: { id: 'user-a', company_id: 'company-a', company_name: 'Test Company', currency: 'EUR' },
         isGroup: false,
+        permissions: [
+            'invoice.view', 'invoice.view_all', 'invoice.create', 'invoice.edit', 'invoice.issue', 'invoice.delete_draft', 'invoice.void', 'invoice.credit', 'invoice.debit',
+            'offer.create', 'offer.manage', 'proforma.create', 'proforma.manage', 'order.create', 'order.manage', 'delivery_note.create', 'delivery_note.manage',
+            'payment.view', 'payment.create', 'payment.refund', 'expense.view_own', 'expense.view_all', 'expense.create', 'expense.edit', 'expense.approve', 'expense.manage',
+            'customer.view', 'customer.view_all', 'customer.create', 'customer.edit', 'customer.delete', 'product.view', 'product.create', 'product.edit', 'product.change_price', 'product.delete',
+            'inventory.view', 'inventory.adjust', 'reports.sales', 'reports.operational', 'reports.profit', 'reports.tax', 'sales_book.view', 'sales_book.manage',
+            'accounting_period.view', 'accounting_period.close', 'accounting_period.reopen', 'users.view', 'users.manage', 'permissions.manage', 'audit.view', 'financial.export',
+            'settings.company', 'settings.tax', 'settings.invoice', 'settings.bank', 'settings.integrations', 'settings.api', 'settings.security', 'subscription.manage',
+        ],
+        platformAdmin: true,
     })),
     getActiveProductCompanyIds: jest.fn(() => ['company-a']),
     scopedResource: jest.fn(() => 'and(user_id.eq.user-a,company_id.is.null),company_id.eq.company-a'),
+    hasWorkspacePermission: jest.fn(() => true),
 }));
 
 jest.mock('../../src/services/mobileCache', () => ({
@@ -43,6 +54,9 @@ jest.mock('../../src/services/mobileCache', () => ({
 jest.mock('@invoice-monorepo/api/repositories', () => ({
     listCustomers: jest.fn(async () => mockLists.customers),
     listProducts: jest.fn(async () => mockLists.products),
+    listBranches: jest.fn(async () => []),
+    getPreferredBranchId: jest.fn(async () => null),
+    listProductBranchStock: jest.fn(async () => []),
     listInvoices: jest.fn(async (_client: unknown, _scope: unknown, options: { documentType?: string } = {}) => options.documentType === 'QUOTE' ? [] : mockLists.invoices),
     listPayments: jest.fn(async () => mockLists.payments),
     deleteCustomerPayment: jest.fn(async () => undefined),

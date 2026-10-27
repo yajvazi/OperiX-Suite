@@ -3,11 +3,11 @@ import {
     View,
     Text,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
     Alert,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, User, Percent, FileText, MapPin, Globe, ChevronDown, ChevronUp, Trash2 } from 'lucide-react-native';
@@ -118,8 +118,12 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             const { company } = await getWorkspaceScope(user.id);
             const companyId = company?.id ?? null;
 
-            await saveCustomer(supabase, { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), user_id: user.id, company_id: companyId }, isEditing ? clientId : null);
-            navigation.goBack();
+            const savedClient = await saveCustomer(supabase, { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), user_id: user.id, company_id: companyId }, isEditing ? clientId : null);
+            if (route.params?.returnTo === 'POS' && savedClient?.id) {
+                navigation.navigate('POS', { createdClientId: savedClient.id });
+            } else {
+                navigation.goBack();
+            }
         } catch (error: any) {
             console.error('Exception:', error);
             Alert.alert(t('error', language), `${t('saveError', language)}: ${getLocalizedErrorMessage(error, language, 'somethingWentWrong')}`);
@@ -180,7 +184,7 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="always"
+                keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="none"
             >
                 {/* Contact Info */}

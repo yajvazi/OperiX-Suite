@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
+    TextInput,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
     StyleSheet,
-    TextInput,
 } from 'react-native';
 import { Search, Users, DollarSign, TrendingUp, MapPin, Mail, Phone, FileText, Star, X } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -238,7 +238,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
             >
                 {/* Stats */}
                 <View style={styles.statsContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('clients', language), stats.totalClients, Users, '#004FFE')}
                         {renderStatCard(t('revenue', language), formatCurrency(stats.totalRevenue), DollarSign, '#12B76A')}
                         {renderStatCard(t('active', language), stats.activeClients, TrendingUp, '#0ea5e9')}
@@ -264,7 +264,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                         )}
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                         {cities.map((city, idx) => (
                             <TouchableOpacity
                                 key={idx}
@@ -354,8 +354,8 @@ const styles = StyleSheet.create({
     statLabel: { fontSize: 11, fontWeight: '500' },
 
     // Search & Filter
-    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 0, borderRadius: 14, marginBottom: 16, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, paddingVertical: 12 },
 
     filterScroll: { gap: 8, marginBottom: 16, paddingHorizontal: 20 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },

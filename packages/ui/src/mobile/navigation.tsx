@@ -51,8 +51,8 @@ export function OperixBottomNavigation(props: BottomTabBarProps) {
 const styles = StyleSheet.create({
     tabBar: {
         borderTopWidth: 1,
-        paddingTop: 7,
-        paddingBottom: Platform.OS === 'ios' ? 23 : 8,
+        paddingTop: 5,
+        paddingBottom: Platform.OS === 'ios' ? 17 : 6,
         height: Platform.OS === 'ios' ? operixMobileTokens.layout.bottomNavigationHeightIOS : operixMobileTokens.layout.bottomNavigationHeightAndroid,
         paddingHorizontal: 8,
         elevation: 0,

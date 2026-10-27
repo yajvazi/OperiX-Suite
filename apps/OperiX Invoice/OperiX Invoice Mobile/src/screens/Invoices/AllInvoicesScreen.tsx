@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
+    TextInput,
     FlatList,
     TouchableOpacity,
     RefreshControl,
     StyleSheet,
-    TextInput,
     Modal
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -49,6 +49,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
     const [filteredInvoices, setFilteredInvoices] = useState<ListItem[]>([]);
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
     const [selectedType, setSelectedType] = useState<'invoice' | 'offer' | 'contract'>('invoice');
+    const [canManageContracts, setCanManageContracts] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -81,7 +82,16 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
     const fetchData = async () => {
         if (!user) return;
 
-        const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        const workspace = await getWorkspaceScope(user.id);
+        const { profile: workspaceProfile, companyIds } = workspace;
+        const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
+        setCanManageContracts(allowedContracts);
+        if (selectedType === 'contract' && !allowedContracts) {
+            setSelectedType('invoice');
+            setInvoices([]);
+            setFilteredInvoices([]);
+            return;
+        }
         setProfile(workspaceProfile);
         const scope = scopedResource(user.id, companyIds);
         const cacheKey = mobileCacheKey('invoices', user.id, companyIds, `all:${selectedType}:${sortOrder}`);
@@ -217,7 +227,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
 
             {/* Type Selector */}
             <View style={[styles.typeSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-                {(['invoice', 'offer', 'contract'] as const).map((tValue) => (
+                {(['invoice', 'offer', ...(canManageContracts ? ['contract'] : [])] as Array<'invoice' | 'offer' | 'contract'>).map((tValue) => (
                     <TouchableOpacity
                         key={tValue}
                         style={[
@@ -256,6 +266,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                 <View style={[styles.searchBar, { backgroundColor: inputBg, borderColor, borderWidth: 1 }]}>
                     <Search color={mutedColor} size={18} />
                     <TextInput
+                        testID="all-invoices-search-input"
                         style={[styles.searchInput, { color: textColor }]}
                         placeholder={t('search', language)}
                         placeholderTextColor={mutedColor}
@@ -278,7 +289,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
 
             {/* Status Filters */}
             <View style={styles.filterWrapper}>
-                <FlatList
+                <FlatList keyboardShouldPersistTaps="handled"
                     horizontal
                     data={statuses}
                     showsHorizontalScrollIndicator={false}

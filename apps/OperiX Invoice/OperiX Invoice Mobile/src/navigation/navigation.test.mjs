@@ -11,7 +11,7 @@ const navigationTypes = fs.readFileSync(path.join(navigationRoot, 'types.ts'), '
 test('mobile primary navigation exposes exactly five task destinations', () => {
     const tabRoutes = [...appNavigator.matchAll(/<Tab\.Screen name="([^"]+)"/g)].map((match) => match[1]);
     assert.deepEqual(tabRoutes, ['Home', 'Sales', 'POS', 'Business', 'More']);
-    assert.match(navigationTypes, /export type MainTabParamList = \{[\s\S]*?Home: undefined;[\s\S]*?Sales: undefined;[\s\S]*?POS:/);
+    assert.match(navigationTypes, /export type MainTabParamList = \{[\s\S]*?Home: undefined;[\s\S]*?Sales:[\s\S]*?POS:/);
 });
 
 test('removed legacy tab aliases are not used as navigation destinations', () => {

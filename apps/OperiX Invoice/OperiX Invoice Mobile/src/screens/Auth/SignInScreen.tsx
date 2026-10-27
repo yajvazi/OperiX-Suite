@@ -1,19 +1,21 @@
 import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    StyleSheet,
+    Text,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react-native';
 import { SvgXml } from 'react-native-svg';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { t } from '@invoice-monorepo/i18n';
+import { AuthPreferences } from '../../components/auth/AuthPreferences';
 import { OperixLogo } from '../../components/OperixLogo';
 import { brand, getPalette } from '../../theme/brand';
 
@@ -61,34 +63,48 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
     };
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0} style={[styles.container, { backgroundColor: palette.background }]}>
-            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+        <View style={[styles.container, { backgroundColor: palette.background }]}>
+            <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0} style={styles.safeArea}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 <View style={styles.hero}>
                     <OperixLogo width={175} reversed />
-                    <Text style={styles.heroEyebrow}>OPERIX SUITE</Text>
-                    <Text style={styles.heroTitle}>Make every invoice feel effortless.</Text>
-                    <Text style={styles.heroSubtitle}>One calm workspace for your team, customers, and cash flow.</Text>
+                    <Text style={styles.heroEyebrow}>{t('authProductEyebrow', language)}</Text>
+                    <Text style={styles.heroTitle}>{t('authHeroTitle', language)}</Text>
+                    <Text style={styles.heroSubtitle}>{t('authHeroSubtitle', language)}</Text>
                 </View>
                 <View style={[styles.form, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-                    <Text style={[styles.formEyebrow, { color: primaryColor }]}>WELCOME BACK</Text>
-                    <Text style={[styles.formTitle, { color: palette.text }]}>Sign in to Invoice</Text>
-                    <Text style={[styles.formSubtitle, { color: palette.muted }]}>Use the same OperiX account you use across the Suite.</Text>
+                    <Text style={[styles.formEyebrow, { color: primaryColor }]}>{t('authWelcomeBack', language)}</Text>
+                    <Text style={[styles.formTitle, { color: palette.text }]}>{t('authSignInTitle', language)}</Text>
+                    <Text style={[styles.formSubtitle, { color: palette.muted }]}>{t('authSignInSubtitle', language)}</Text>
                     {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
                     <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{t('email', language)}</Text><View style={[styles.field, { borderColor: palette.border }]}><Mail color={palette.muted} size={18} /><TextInput testID="auth-email-input" style={[styles.input, { color: palette.text }]} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /></View></View>
                     <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{t('password', language)}</Text><View style={[styles.field, { borderColor: palette.border }]}><LockKeyhole color={palette.muted} size={18} /><TextInput testID="auth-password-input" style={[styles.input, { color: palette.text }]} placeholder={t('enterPassword', language)} placeholderTextColor={palette.muted} value={password} onChangeText={setPassword} secureTextEntry /></View></View>
                     <TouchableOpacity testID="auth-sign-in-button" accessibilityRole="button" style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]} onPress={handleSignIn} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <><Text style={styles.buttonText}>{t('signIn', language)}</Text><ArrowRight color="#fff" size={17} /></>}</TouchableOpacity>
                     <View style={styles.divider}><View style={[styles.line, { backgroundColor: palette.border }]} /><Text style={[styles.dividerText, { color: palette.muted }]}>{t('or', language)}</Text><View style={[styles.line, { backgroundColor: palette.border }]} /></View>
-                    <TouchableOpacity testID="auth-google-button" accessibilityRole="button" style={[styles.googleButton, { borderColor: palette.border }]} onPress={async () => { setLoading(true); const { error: googleError } = await signInWithGoogle(); if (googleError) setError(t('signInFailed', language)); setLoading(false); }} disabled={loading}><SvgXml xml={googleLogoXml} width={20} height={20} /><Text style={[styles.googleButtonText, { color: palette.text }]}>{t('continueWithGoogle', language)}</Text></TouchableOpacity>
-                    <View style={styles.footer}><Text style={[styles.footerText, { color: palette.muted }]}>{t('doNotHaveAccount', language)}</Text><TouchableOpacity testID="auth-sign-up-link" accessibilityRole="button" onPress={onNavigateToSignUp}><Text style={[styles.link, { color: primaryColor }]}>{t('signUp', language)}</Text></TouchableOpacity></View>
-                    <Text style={[styles.securityNote, { color: palette.muted }]}>Protected by your OperiX account.</Text>
+                    <TouchableOpacity testID="auth-google-button" accessibilityRole="button" style={[styles.googleButton, { backgroundColor: palette.surfaceMuted, borderColor: palette.borderStrong }]} onPress={async () => { setLoading(true); const { error: googleError } = await signInWithGoogle(); if (googleError) setError(t('signInFailed', language)); setLoading(false); }} disabled={loading}><SvgXml xml={googleLogoXml} width={20} height={20} /><Text style={[styles.googleButtonText, { color: palette.text }]}>{t('continueWithGoogle', language)}</Text></TouchableOpacity>
+                    <View style={[styles.footer, { backgroundColor: palette.surfaceMuted, borderColor: palette.border }]}>
+                        <Text style={[styles.footerText, { color: palette.muted }]}>{t('doNotHaveAccount', language)}</Text>
+                        <TouchableOpacity testID="auth-sign-up-link" accessibilityRole="button" activeOpacity={0.75} style={[styles.signUpButton, { backgroundColor: palette.iconSurface, borderColor: primaryColor }]} onPress={onNavigateToSignUp}>
+                            <Text style={[styles.link, { color: primaryColor }]}>{t('signUp', language)}</Text>
+                            <ArrowRight color={primaryColor} size={15} strokeWidth={2.5} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[styles.preferencePanel, { backgroundColor: palette.surfaceMuted, borderColor: palette.border }]}>
+                        <AuthPreferences variant="footer" />
+                    </View>
+                    <Text style={[styles.securityNote, { color: palette.muted }]}>{t('authSecurityNote', language)}</Text>
                 </View>
             </ScrollView>
-        </KeyboardAvoidingView>
+            </KeyboardAvoidingView>
+            </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    safeArea: { flex: 1 },
     scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 22 },
     hero: { minHeight: 260, justifyContent: 'flex-end', padding: 24, borderRadius: 22, backgroundColor: brand.colors.navy, overflow: 'hidden' },
     heroEyebrow: { marginTop: 30, color: '#8DB1FF', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
@@ -110,10 +126,12 @@ const styles = StyleSheet.create({
     divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 18 },
     line: { flex: 1, height: 1 },
     dividerText: { marginHorizontal: 10, fontSize: 10, fontWeight: '700' },
-    googleButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderRadius: 13 },
+    googleButton: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderRadius: 14 },
     googleButtonText: { fontSize: 13, fontWeight: '600' },
-    footer: { flexDirection: 'row', justifyContent: 'center', gap: 4, marginTop: 20 },
+    footer: { minHeight: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderRadius: 14 },
     footerText: { fontSize: 12 },
-    link: { fontSize: 12, fontWeight: '700' },
+    signUpButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 13, borderWidth: 1, borderRadius: 11 },
+    link: { fontSize: 12, fontWeight: '800' },
+    preferencePanel: { marginTop: 10, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1, borderRadius: 14 },
     securityNote: { marginTop: 17, textAlign: 'center', fontSize: 10, lineHeight: 15 },
 });

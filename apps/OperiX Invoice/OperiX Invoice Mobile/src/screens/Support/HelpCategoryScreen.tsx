@@ -44,12 +44,13 @@ export function HelpCategoryScreen({ navigation, route }: Props) {
 
     return (
         <MobileScreen>
-            <MobileHeader
-                title={category ? getHelpCategoryTitle(category.id, documentationLanguage) : copy.missing}
-                subtitle={copy.subtitle}
-                onBack={() => navigation.goBack()}
-                right={<HelpLanguageToggle language={documentationLanguage} onChange={setDocumentationLanguage} />}
-            />
+            <View style={styles.screenContent}>
+                <MobileHeader
+                    title={category ? getHelpCategoryTitle(category.id, documentationLanguage) : copy.missing}
+                    subtitle={copy.subtitle}
+                    onBack={() => navigation.goBack()}
+                    right={<HelpLanguageToggle language={documentationLanguage} onChange={setDocumentationLanguage} />}
+                />
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {category ? (
                     <>
@@ -72,11 +73,13 @@ export function HelpCategoryScreen({ navigation, route }: Props) {
                 ) : <EmptyState icon={CircleHelp} title={copy.missing} description={copy.missingDescription} />}
                 <View style={{ height: 28 }} />
             </ScrollView>
+            </View>
         </MobileScreen>
     );
 }
 
 const styles = StyleSheet.create({
+    screenContent: { flex: 1 },
     content: { paddingHorizontal: 20, paddingBottom: 24 },
     summary: { borderWidth: 1, borderRadius: 18, padding: 15, marginBottom: 14, ...brand.shadow.card },
     summaryTitle: { fontSize: 17, fontFamily: brand.fonts.semibold },

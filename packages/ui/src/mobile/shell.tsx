@@ -1,5 +1,7 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import {
+    GestureResponderEvent,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -8,6 +10,7 @@ import {
     StyleProp,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
     ViewStyle,
@@ -22,10 +25,52 @@ import { OperixBottomSheet, OperixIconButton, OperixListItem, OperixIcon } from 
 
 export type OperixProduct = 'invoice' | 'hr' | 'booking' | 'desk' | 'scanner' | 'tracker' | (string & {});
 
+// Closes the keyboard when a tap lands outside the input that was focused when
+// the touch began. It only reads raw touch events (it never becomes a responder),
+// so inputs and buttons keep their first-tap behavior. Everything is decided from
+// the state at touch start: a tap that opens the keyboard (or moves focus to
+// another input) can never dismiss it, even while the layout shifts.
+function useDismissKeyboardOnOutsideTap() {
+    const touch = useRef<{ x: number; y: number; focused: any; bounds: { x: number; y: number; width: number; height: number } | null } | null>(null);
+    return {
+        onTouchStart: (event: GestureResponderEvent) => {
+            const { pageX, pageY } = event.nativeEvent;
+            const focused = Keyboard.isVisible() ? (TextInput as any).State?.currentlyFocusedInput?.() : null;
+            if (!focused) { touch.current = null; return; }
+            const current = { x: pageX, y: pageY, focused, bounds: null as { x: number; y: number; width: number; height: number } | null };
+            touch.current = current;
+            focused.measureInWindow?.((x: number, y: number, width: number, height: number) => { current.bounds = { x, y, width, height }; });
+        },
+        onTouchEnd: (event: GestureResponderEvent) => {
+            const current = touch.current;
+            touch.current = null;
+            if (!current?.bounds) return;
+            const { pageX, pageY } = event.nativeEvent;
+            if (Math.hypot(pageX - current.x, pageY - current.y) > 10) return;
+            const { x, y, width, height } = current.bounds;
+            const inside = pageX >= x - 4 && pageX <= x + width + 4 && pageY >= y - 4 && pageY <= y + height + 4;
+            if (inside) return;
+            // Let a tap on another input move focus first; only dismiss if focus stayed put.
+            setTimeout(() => {
+                if ((TextInput as any).State?.currentlyFocusedInput?.() === current.focused) Keyboard.dismiss();
+            }, 60);
+        },
+    };
+}
+
 export function OperixMobileAppShell({ product, children, style }: { product: OperixProduct; children: ReactNode; style?: StyleProp<ViewStyle> }) {
     const { isDark, primaryColor } = useTheme();
     const palette = getOperixPalette(isDark, primaryColor);
-    return <View accessibilityLabel={`OperiX ${product} mobile`} style={[styles.appShell, { backgroundColor: palette.background }, style]}>{children}</View>;
+    const dismissKeyboardTouch = useDismissKeyboardOnOutsideTap();
+    return (
+        <View
+            accessibilityLabel={`OperiX ${product} mobile`}
+            style={[styles.appShell, { backgroundColor: palette.background }, style]}
+            {...dismissKeyboardTouch}
+        >
+            {children}
+        </View>
+    );
 }
 
 export function OperixHeader({ title, subtitle, product, onBack, showBack = Boolean(onBack), right, style, onTitleLongPress, titleTestID }: { title: string; subtitle?: string; product?: string; onBack?: () => void; showBack?: boolean; right?: ReactNode; style?: StyleProp<ViewStyle>; onTitleLongPress?: () => void; titleTestID?: string }) {
@@ -43,14 +88,14 @@ export function OperixScreen({ children, style, edges = ['top'], testID }: { chi
     return <SafeAreaView testID={testID} edges={edges} style={[styles.screen, { backgroundColor: palette.background }, style]}>{children}</SafeAreaView>;
 }
 
-export function OperixScrollableScreen({ children, style, contentContainerStyle, refreshing, onRefresh, keyboardShouldPersistTaps = 'always', showsVerticalScrollIndicator = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; contentContainerStyle?: StyleProp<ViewStyle>; refreshing?: boolean; onRefresh?: () => void; keyboardShouldPersistTaps?: 'always' | 'never' | 'handled'; showsVerticalScrollIndicator?: boolean }) {
+export function OperixScrollableScreen({ children, style, contentContainerStyle, refreshing, onRefresh, keyboardShouldPersistTaps = 'handled', showsVerticalScrollIndicator = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; contentContainerStyle?: StyleProp<ViewStyle>; refreshing?: boolean; onRefresh?: () => void; keyboardShouldPersistTaps?: 'always' | 'never' | 'handled'; showsVerticalScrollIndicator?: boolean }) {
     const { isDark, primaryColor } = useTheme();
     const palette = getOperixPalette(isDark, primaryColor);
     return <OperixScreen style={style}><ScrollView style={styles.flex} contentContainerStyle={[styles.scrollContent, contentContainerStyle]} showsVerticalScrollIndicator={showsVerticalScrollIndicator} keyboardShouldPersistTaps={keyboardShouldPersistTaps} refreshControl={onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={palette.primary} /> : undefined}>{children}</ScrollView></OperixScreen>;
 }
 
 export function OperixFormScreen({ children, footer, style, contentContainerStyle }: { children: ReactNode; footer?: ReactNode; style?: StyleProp<ViewStyle>; contentContainerStyle?: StyleProp<ViewStyle> }) {
-    return <OperixScreen edges={['top', 'bottom']} style={style}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}><ScrollView style={styles.flex} contentContainerStyle={[styles.formContent, contentContainerStyle]} keyboardShouldPersistTaps="always" keyboardDismissMode="none">{children}</ScrollView>{footer ? <View style={styles.formFooter}>{footer}</View> : null}</KeyboardAvoidingView></OperixScreen>;
+    return <OperixScreen edges={['top', 'bottom']} style={style}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}><ScrollView style={styles.flex} contentContainerStyle={[styles.formContent, contentContainerStyle]} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">{children}</ScrollView>{footer ? <View style={styles.formFooter}>{footer}</View> : null}</KeyboardAvoidingView></OperixScreen>;
 }
 
 export function OperixListScreen({ title, subtitle, onBack, right, search, filters, children, action, refreshing, onRefresh, contentContainerStyle }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode; search?: ReactNode; filters?: ReactNode; children: ReactNode; action?: ReactNode; refreshing?: boolean; onRefresh?: () => void; contentContainerStyle?: StyleProp<ViewStyle> }) {
@@ -58,7 +103,7 @@ export function OperixListScreen({ title, subtitle, onBack, right, search, filte
 }
 
 export function OperixDetailScreen({ title, subtitle, onBack, right, status, children, action, contentContainerStyle }: { title: string; subtitle?: string; onBack?: () => void; right?: ReactNode; status?: ReactNode; children: ReactNode; action?: ReactNode; contentContainerStyle?: StyleProp<ViewStyle> }) {
-    return <OperixScreen><View style={styles.flex}><OperixHeader title={title} subtitle={subtitle} onBack={onBack} right={right} /><ScrollView style={styles.flex} contentContainerStyle={[styles.detailContent, contentContainerStyle]}>{status ? <View style={styles.detailStatus}>{status}</View> : null}{children}</ScrollView>{action ? <View pointerEvents="box-none" style={styles.floatingDock}>{action}</View> : null}</View></OperixScreen>;
+    return <OperixScreen><View style={styles.flex}><OperixHeader title={title} subtitle={subtitle} onBack={onBack} right={right} /><ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={[styles.detailContent, contentContainerStyle]}>{status ? <View style={styles.detailStatus}>{status}</View> : null}{children}</ScrollView>{action ? <View pointerEvents="box-none" style={styles.floatingDock}>{action}</View> : null}</View></OperixScreen>;
 }
 
 export function OperixSettingsScreen({ title = 'Settings', subtitle, onBack, children }: { title?: string; subtitle?: string; onBack?: () => void; children: ReactNode }) {
@@ -93,7 +138,7 @@ export function OperixAccountMenu({ name, email, items, onSignOut, signOutLabel 
 
 export function OperixTabNavigation({ tabs, activeKey, onChange, style }: { tabs: Array<{ key: string; label: string }>; activeKey: string; onChange: (key: string) => void; style?: StyleProp<ViewStyle> }) {
     const { palette } = useMobileThemeForShell();
-    return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabNavigation, style]}>{tabs.map((tab) => { const active = tab.key === activeKey; return <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => onChange(tab.key)} style={[styles.tab, { backgroundColor: active ? palette.primary : palette.surface, borderColor: active ? palette.primary : palette.border }]}><Text style={[styles.tabText, { color: active ? '#FFFFFF' : palette.muted }]}>{tab.label}</Text></TouchableOpacity>; })}</ScrollView>;
+    return <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabNavigation, style]}>{tabs.map((tab) => { const active = tab.key === activeKey; return <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => onChange(tab.key)} style={[styles.tab, { backgroundColor: active ? palette.primary : palette.surface, borderColor: active ? palette.primary : palette.border }]}><Text style={[styles.tabText, { color: active ? '#FFFFFF' : palette.muted }]}>{tab.label}</Text></TouchableOpacity>; })}</ScrollView>;
 }
 
 function useMobileThemeForShell() {

@@ -1,6 +1,7 @@
 import React, { ReactElement } from 'react';
 import { render } from '@testing-library/react-native';
 import { AuthContext, ThemeContext } from '@invoice-monorepo/context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export const TEST_USER = {
     id: '00000000-0000-0000-0000-000000000001',
@@ -30,10 +31,13 @@ export function createAuthValue(overrides: Record<string, unknown> = {}) {
         user: TEST_USER,
         session: { user: TEST_USER },
         loading: false,
+        isOnboarding: false,
+        beginOnboarding: jest.fn(),
         signUp: jest.fn(async () => ({ error: null })),
         signIn: jest.fn(async () => ({ error: null })),
         signInWithGoogle: jest.fn(async () => ({ error: null })),
         verifyEmailOtp: jest.fn(async () => ({ error: null })),
+        completeSignup: jest.fn(async () => ({ companyId: 'company-1', error: null })),
         signOut: jest.fn(async () => undefined),
         ...overrides,
     } as any;
@@ -60,7 +64,9 @@ export function renderWithProviders(
     return render(
         <AuthContext.Provider value={createAuthValue(options.auth)}>
             <ThemeContext.Provider value={createThemeValue(options.theme)}>
-                {ui}
+                <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
+                    {ui}
+                </SafeAreaProvider>
             </ThemeContext.Provider>
         </AuthContext.Provider>,
     );

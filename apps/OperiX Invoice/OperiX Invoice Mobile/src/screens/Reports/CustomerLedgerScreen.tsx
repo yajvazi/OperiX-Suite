@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
+    TextInput,
     ScrollView,
     StyleSheet,
     TouchableOpacity,
     Alert,
     ActivityIndicator,
-    TextInput,
     FlatList,
     Switch,
 } from 'react-native';
@@ -27,7 +27,7 @@ import {
 } from '@invoice-monorepo/report-templates';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { listCustomerInvoices, listCustomerPayments } from '@invoice-monorepo/api/repositories';
 
@@ -57,6 +57,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     const [showLedgerSignature, setShowLedgerSignature] = useState(true);
     const [showLedgerStamp, setShowLedgerStamp] = useState(true);
     const [showLedgerClientSignature, setShowLedgerClientSignature] = useState(true);
+    const [canExport, setCanExport] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
@@ -90,7 +91,9 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     const fetchInitialData = async () => {
         if (!user) return;
 
-        const { profile: workspaceProfile, company, companyIds } = await getWorkspaceScope(user.id);
+        const workspace = await getWorkspaceScope(user.id);
+        setCanExport(hasWorkspacePermission(workspace, 'financial.export'));
+        const { profile: workspaceProfile, company, companyIds } = workspace;
         const tenant = company as any;
         setProfile({
             ...workspaceProfile,
@@ -157,6 +160,10 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     const selectedClient = clients.find(c => c.id === selectedClientId);
 
     const handleExportPDF = async () => {
+        if (!user || !hasWorkspacePermission(await getWorkspaceScope(user.id), 'financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         if (!selectedClient || !profile) return;
         setExporting(true);
         try {
@@ -221,6 +228,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                     <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
+                            testID="customer-ledger-search-input"
                             style={[styles.searchInput, { color: textColor }]}
                             placeholder={t('search', language)}
                             placeholderTextColor={mutedColor}
@@ -237,7 +245,7 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                     {loading ? (
                         <ActivityIndicator color={primaryColor} size="large" style={{ marginTop: 20 }} />
                     ) : (
-                        <FlatList
+                        <FlatList keyboardShouldPersistTaps="handled"
                             data={filteredClients}
                             keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
@@ -275,13 +283,13 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
                     <Text style={[styles.mainTitle, { color: textColor, fontSize: 18 }]} numberOfLines={1}>{selectedClient?.name}</Text>
                     <Text style={{ color: mutedColor, fontSize: 12 }}>{t('customerLedger', language)}</Text>
                 </View>
-                <TouchableOpacity
+                {canExport ? <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: cardBg }]}
                     onPress={handleExportPDF}
                     disabled={exporting}
                 >
                     <Download color={exporting ? mutedColor : primaryColor} size={20} />
-                </TouchableOpacity>
+                </TouchableOpacity> : <View style={{ width: 44 }} />}
             </View>
 
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
@@ -393,8 +401,8 @@ const styles = StyleSheet.create({
 
     content: { padding: 20, paddingBottom: 40 },
 
-    searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 16, paddingVertical: 0, borderRadius: 14, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, paddingVertical: 12, fontWeight: '500' },
 
     clientListItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, gap: 16 },
     clientIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

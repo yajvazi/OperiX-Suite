@@ -3,11 +3,11 @@ import {
     View,
     Text,
     ScrollView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
     Alert,
     StyleSheet,
-    KeyboardAvoidingView,
-    Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, Building2, MapPin, Globe, FileText } from 'lucide-react-native';
@@ -105,9 +105,19 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                 const { error } = await supabase.from('vendors').update(payload).eq('id', vendorId);
                 if (error) throw error;
             } else {
-                const { error } = await supabase.from('vendors').insert(payload);
+                const { data, error } = await supabase.from('vendors').insert(payload).select('id').single();
                 if (error) throw error;
+                if (!data?.id) throw new Error('The new vendor could not be identified.');
+                if (route.params?.returnToExpense) {
+                    navigation.navigate('ExpenseForm', {
+                        selectedVendorId: String(data.id),
+                        selectedVendorName: formData.name,
+                    });
+                    setLoading(false);
+                    return;
+                }
             }
+
             navigation.goBack();
         } catch (error: any) {
             console.error('Error saving vendor:', error);
@@ -120,6 +130,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
             style={[styles.container, { backgroundColor: bgColor }]}
         >
             <View style={styles.header}>
@@ -132,7 +143,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {/* Contact Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
@@ -221,4 +232,3 @@ const styles = StyleSheet.create({
     halfField: { flex: 1 },
     saveButton: { marginTop: 8 },
 });
-

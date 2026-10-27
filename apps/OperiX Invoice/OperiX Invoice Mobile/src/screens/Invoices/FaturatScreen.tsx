@@ -108,6 +108,7 @@ export function FaturatScreen({ navigation }: any) {
         pendingAmount: 0,
     });
     const [recentActivity, setRecentActivity] = useState<any[]>([]);
+    const [canManageContracts, setCanManageContracts] = useState(false);
 
     const palette = getPalette(isDark);
     const bgColor = palette.background;
@@ -131,7 +132,10 @@ export function FaturatScreen({ navigation }: any) {
     const fetchData = async () => {
         if (!user) return;
         try {
-            const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+            const workspace = await getWorkspaceScope(user.id);
+            const { profile: workspaceProfile, companyIds } = workspace;
+            const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
+            setCanManageContracts(allowedContracts);
             if (workspaceProfile) {
                 setProfile(workspaceProfile);
                 const scope = scopedResource(user.id, companyIds);
@@ -222,10 +226,9 @@ export function FaturatScreen({ navigation }: any) {
                 newCounts['expense'] = vendorPaymentsCount || 0;
 
                 // Contracts
-                const { data: allContracts } = await supabase
-                    .from('contracts')
-                    .select('type')
-                    .or(scope);
+                const { data: allContracts } = allowedContracts
+                    ? await supabase.from('contracts').select('type').or(scope)
+                    : { data: [] as Array<{ type: string }> };
 
                 if (allContracts) {
                     newCounts['employmentContract'] = allContracts.filter(c => c.type === 'employment').length;
@@ -386,7 +389,7 @@ export function FaturatScreen({ navigation }: any) {
 
             {/* Quick Actions */}
             <View style={styles.quickActionsSection}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsContainer}>
+                <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsContainer}>
                     <TouchableOpacity
                         style={[styles.quickActionCard, { backgroundColor: cardBg, borderColor }]}
                         onPress={() => navigation.navigate('InvoiceForm', { type: 'invoice', subtype: 'regular' })}
@@ -503,7 +506,7 @@ export function FaturatScreen({ navigation }: any) {
         <>
             <Text style={[styles.sectionTitle, { color: textColor, marginTop: 16 }]}>{t('contracts', language)}</Text>
             <View style={{ gap: 10 }}>
-                {legalDocuments.map(doc => renderDocumentCard(doc))}
+                {canManageContracts ? legalDocuments.map(doc => renderDocumentCard(doc)) : null}
             </View>
         </>
     );
@@ -537,7 +540,7 @@ export function FaturatScreen({ navigation }: any) {
             {/* Modern Tab Bar */}
             <View style={styles.tabsWrapper}>
                 <View style={[styles.tabBar, { backgroundColor: cardBg, borderColor }]}>
-                    {tabs.map((tab) => {
+                    {tabs.filter((tab) => tab.key !== 'legal' || canManageContracts).map((tab) => {
                         const isActive = activeTab === tab.key;
                         const Icon = tab.icon;
                         return (
@@ -563,7 +566,7 @@ export function FaturatScreen({ navigation }: any) {
                 </View>
             </View>
 
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />}

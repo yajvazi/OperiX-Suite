@@ -4,11 +4,11 @@ import {
     Text,
     ScrollView,
     TouchableOpacity,
-    KeyboardAvoidingView,
-    Platform,
     Alert,
     StyleSheet,
     Image,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { ArrowLeft, ChevronRight, Check, FileText, User, PenTool, X } from 'lucide-react-native';
 import { useTheme } from '@invoice-monorepo/hooks';
@@ -36,6 +36,7 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     ];
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [canManageContracts, setCanManageContracts] = useState<boolean | null>(null);
 
     // Form Data
     const [type, setType] = useState<string | null>(null);
@@ -81,15 +82,15 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
             if (!user) return;
 
             try {
-                let companyIds: string[] = [];
-                try {
-                    const workspace = await getWorkspaceScope(user.id);
-                    companyIds = workspace.companyIds;
-                } catch (workspaceError) {
-                    // Older accounts can exist without an active company. Keep the
-                    // user-owned contract flow usable while the workspace is repaired.
-                    console.warn('Contract workspace scope unavailable:', workspaceError);
+                const workspace = await getWorkspaceScope(user.id);
+                const allowed = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
+                setCanManageContracts(allowed);
+                if (!allowed) {
+                    Alert.alert(t('error', language), 'Contract management permission is required.');
+                    navigation.goBack();
+                    return;
                 }
+                const companyIds = workspace.companyIds;
 
                 const clientsQuery = companyIds.length
                     ? supabase.from('clients').select('*').or(scopedResource(user.id, companyIds))
@@ -119,6 +120,10 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
     }, [user?.id, route?.params?.subtype, language]);
 
     const handleSave = async () => {
+        if (canManageContracts !== true) {
+            Alert.alert(t('error', language), 'Contract management permission is required.');
+            return;
+        }
         if (!title || !clientId || !type) {
             Alert.alert(t('error', language), t('requiredFields', language));
             return;
@@ -127,12 +132,9 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
         setLoading(true);
         try {
             if (!user) throw new Error(t('signInCreateContract', language));
-            let companyId: string | null = null;
-            try {
-                companyId = (await getWorkspaceScope(user.id)).companyId;
-            } catch (workspaceError) {
-                console.warn('Contract workspace scope unavailable while saving:', workspaceError);
-            }
+            const workspace = await getWorkspaceScope(user.id);
+            if (!(workspace.platformAdmin || workspace.permissions.includes('contracts.manage'))) throw new Error('Contract management permission is required.');
+            const companyId = workspace.companyId;
             const requiredFields = (selectedTemplate?.fields || []).filter((field) => field.required && !String(answers[field.key || field.id] || '').trim());
             if (requiredFields.length) {
                 Alert.alert(t('error', language), `${t('requiredFields', language)}: ${requiredFields.map((field) => field.label).join(', ')}`);
@@ -435,7 +437,7 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {step === 0 && renderTypeSelection()}
                 {step === 1 && renderBasicInfo()}
                 {step === 2 && renderQuestions()}

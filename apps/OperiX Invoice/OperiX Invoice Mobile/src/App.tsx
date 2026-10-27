@@ -28,7 +28,6 @@ function ThemedAppContent() {
             <AppNavigator />
             <StatusBar
                 style={isDark ? 'light' : 'dark'}
-                backgroundColor={isDark ? '#0D1B2A' : '#F7F9FC'}
             />
         </>
     );
@@ -78,7 +77,7 @@ export function App() {
         <ThemeProvider>
             <AuthProvider>
                 <SafeAreaProvider>
-            <OperixMobileAppShell product="invoice"><PushNotificationBootstrap /><ThemedAppContent /></OperixMobileAppShell>
+                    <OperixMobileAppShell product="invoice"><PushNotificationBootstrap /><ThemedAppContent /></OperixMobileAppShell>
                 </SafeAreaProvider>
             </AuthProvider>
         </ThemeProvider>

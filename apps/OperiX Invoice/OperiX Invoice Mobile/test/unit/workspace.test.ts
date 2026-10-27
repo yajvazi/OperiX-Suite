@@ -19,12 +19,12 @@ describe('tenant workspace scope', () => {
     });
 
     it('shows tenant products to a group root while keeping child tenants isolated', () => {
-        expect(getActiveProductCompanyIds({ company: { id: 'child', company_name: 'Child', parent_company_id: 'root' }, companyId: 'child', roleCode: 'company_administrator', companyIds: ['child', 'sibling'], profile: {} as any, companies: [], isGroup: false, user: null })).toEqual(['child']);
-        expect(getActiveProductCompanyIds({ company: { id: 'root', company_name: 'Root', parent_company_id: null }, companyId: 'root', roleCode: 'company_administrator', companyIds: ['root', 'child'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['root', 'child']);
+        expect(getActiveProductCompanyIds({ company: { id: 'child', company_name: 'Child', parent_company_id: 'root' }, companyId: 'child', roleCode: 'company_administrator', permissions: [], scopes: {}, platformAdmin: false, companyIds: ['child', 'sibling'], profile: {} as any, companies: [], isGroup: false, user: null })).toEqual(['child']);
+        expect(getActiveProductCompanyIds({ company: { id: 'root', company_name: 'Root', parent_company_id: null }, companyId: 'root', roleCode: 'company_administrator', permissions: [], scopes: {}, platformAdmin: false, companyIds: ['root', 'child'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['root', 'child']);
     });
 
     it('shows descendant tenant data only from a main company', () => {
-        expect(getActiveTenantCompanyIds({ company: { id: 'child', company_name: 'Child', parent_company_id: 'root' }, companyId: 'child', roleCode: 'company_administrator', companyIds: ['child', 'grandchild'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['child']);
-        expect(getActiveTenantCompanyIds({ company: { id: 'root', company_name: 'Root', parent_company_id: null }, companyId: 'root', roleCode: 'company_administrator', companyIds: ['root', 'child'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['root', 'child']);
+        expect(getActiveTenantCompanyIds({ company: { id: 'child', company_name: 'Child', parent_company_id: 'root' }, companyId: 'child', roleCode: 'company_administrator', permissions: [], scopes: {}, platformAdmin: false, companyIds: ['child', 'grandchild'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['child']);
+        expect(getActiveTenantCompanyIds({ company: { id: 'root', company_name: 'Root', parent_company_id: null }, companyId: 'root', roleCode: 'company_administrator', permissions: [], scopes: {}, platformAdmin: false, companyIds: ['root', 'child'], profile: {} as any, companies: [], isGroup: true, user: null })).toEqual(['root', 'child']);
     });
 });

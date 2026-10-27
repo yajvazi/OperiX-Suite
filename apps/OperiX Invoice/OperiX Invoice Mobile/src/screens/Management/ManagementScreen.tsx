@@ -161,14 +161,14 @@ export function ManagementScreen({ navigation }: any) {
                 </View>
             </View>
 
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Stats Dashboard */}
                 <View style={styles.statsContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
                         {renderStatCard(t('clients', language), stats.totalClients, Users, '#004FFE')}
                         {renderStatCard(t('products', language), stats.totalProducts, Package, '#3388FF')}
                         {renderStatCard(t('vendors', language), stats.totalVendors, Building2, '#06B6D4')}

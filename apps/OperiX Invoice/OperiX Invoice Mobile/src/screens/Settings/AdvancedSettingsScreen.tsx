@@ -13,10 +13,13 @@ import {
     Settings,
     Layout,
     BrainCircuit,
+    Upload,
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '@invoice-monorepo/api';
+import { autoMapTransferColumns, dataTransferDefinitions, mappedTransferRecord, missingTransferFields, normalizeTransferRow, parseTransferCsv, stringifyTransferCsv, type DataTransferEntity } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
@@ -31,14 +34,19 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [profile, setProfile] = useState<any>(null);
     const [numberingSequences, setNumberingSequences] = useState<Array<Record<string, any>>>([]);
-    const [activeSection, setActiveSection] = useState<string | null>(route?.params?.section || 'integrations');
+    const [activeSection, setActiveSection] = useState<string | null>(route?.params?.section || null);
+    const [transferEntity, setTransferEntity] = useState<DataTransferEntity>('clients');
+    const [transferBusy, setTransferBusy] = useState(false);
     const [intelligenceSettings, setIntelligenceSettings] = useState<AISettings>({ ai_enabled: true, preferred_language: 'auto', daily_briefing_enabled: true, history_enabled: true, intelligence_enabled: true, invoice_alerts_enabled: true, customer_insights_enabled: true, inventory_alerts_enabled: true, sales_insights_enabled: true, payment_alerts_enabled: true, push_notifications_enabled: true, show_amounts_in_notifications: true });
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
 
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
     const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const can = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
 
     useEffect(() => {
         fetchProfile();
@@ -55,6 +63,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     };
 
     const updateIntelligenceSetting = async (key: keyof AISettings, value: boolean) => {
+        if (!can('settings.company')) return;
         setIntelligenceSettings((current) => ({ ...current, [key]: value }));
         try {
             const saved = await saveAISettings({ [key]: value } as Partial<AISettings>, language === 'sq' ? 'sq' : 'en');
@@ -66,6 +75,11 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
 
     const fetchProfile = async () => {
         if (!user) return;
+        const workspaceScope = await getWorkspaceScope(user.id).catch(() => null);
+        if (workspaceScope) {
+            setWorkspacePermissions(workspaceScope.permissions);
+            setPlatformAdmin(workspaceScope.platformAdmin);
+        }
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) {
             setProfile(data);
@@ -84,7 +98,10 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     };
 
     const updateField = async (field: string, value: any) => {
-        if (!user) return;
+        if (!user || (!can('settings.invoice') && !can('settings.company'))) {
+            Alert.alert(t('error', language), 'Advanced company settings permission is required.');
+            return;
+        }
 
         // Update local state immediately for snappy UI
         setProfile((prev: any) => ({ ...prev, [field]: value }));
@@ -109,6 +126,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
         try {
             if (!user) throw new Error(t('signInToCreateProduct', language));
             const workspaceScope = await getWorkspaceScope(user.id);
+            if (!(workspaceScope.platformAdmin || workspaceScope.permissions.includes('financial.export'))) throw new Error('Financial export permission is required.');
             const { companyIds } = workspaceScope;
             const scope = scopedResource(user.id, companyIds);
             const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
@@ -172,22 +190,109 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
         }
     };
 
-    const renderHeader = (title: string, Icon: any, section: string, color: string) => {
+    const findTransferIdentity = (entity: DataTransferEntity, row: Record<string, unknown>) => {
+        if (entity === 'products' && String(row.sku || '').trim()) return 'sku';
+        if (entity === 'clients') return ['tax_id', 'fiscal_number', 'nui'].find((key) => String(row[key] || '').trim()) || null;
+        if (entity === 'vendors') return ['tax_id', 'fiscal_number', 'vat_number'].find((key) => String(row[key] || '').trim()) || null;
+        return null;
+    };
+
+    const handleExportTransfer = async (format: 'json' | 'csv') => {
+        try {
+            if (!user) throw new Error(t('signInToCreateProduct', language));
+            const scope = await getWorkspaceScope(user.id);
+            if (!(scope.platformAdmin || scope.permissions.includes('financial.export'))) throw new Error('Financial export permission is required.');
+            const definition = dataTransferDefinitions[transferEntity];
+            const scoped = scopedResource(user.id, scope.companyIds);
+            const result = await supabase.from(definition.table).select(definition.exportFields.map((field) => field.key).join(',')).or(scoped).limit(5000);
+            if (result.error) throw result.error;
+            const rows = (result.data || []) as unknown as Array<Record<string, unknown>>;
+            const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
+            const date = new Date().toISOString().slice(0, 10);
+            const extension = format === 'csv' ? 'csv' : 'json';
+            const content = format === 'csv'
+                ? `\uFEFF${stringifyTransferCsv(transferEntity, rows)}`
+                : JSON.stringify({ entity: transferEntity, exported_at: new Date().toISOString(), rows }, null, 2);
+            const fileUri = `${folder}operix-${transferEntity}-${date}.${extension}`;
+            await FileSystem.writeAsStringAsync(fileUri, content);
+            await Sharing.shareAsync(fileUri, { mimeType: format === 'csv' ? 'text/csv' : 'application/json', dialogTitle: `Export ${definition.label}` });
+            Alert.alert(t('success', language), `${rows.length} ${definition.label.toLowerCase()} exported.`);
+        } catch (error) {
+            Alert.alert(t('error', language), `${t('exportFailed', language)}: ${getLocalizedErrorMessage(error, language, 'unknownError')}`);
+        }
+    };
+
+    const handleImportTransfer = async () => {
+        try {
+            if (!user) throw new Error(t('signInToCreateProduct', language));
+            const scope = await getWorkspaceScope(user.id);
+            if (!(scope.platformAdmin || scope.permissions.includes('settings.company'))) throw new Error('Only tenant administrators can import company data.');
+            if (!scope.companyId) throw new Error('No active company workspace is configured.');
+            const selected = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'], copyToCacheDirectory: true });
+            if (selected.canceled || !selected.assets?.[0]?.uri) return;
+            setTransferBusy(true);
+            const content = await FileSystem.readAsStringAsync(selected.assets[0].uri);
+            const parsed = parseTransferCsv(content);
+            const mapping = autoMapTransferColumns(transferEntity, parsed.headers);
+            const rows = parsed.rows.map((record) => normalizeTransferRow(transferEntity, mappedTransferRecord(record, mapping)));
+            const invalid = rows.filter((row) => missingTransferFields(transferEntity, row).length > 0).length;
+            if (!rows.length || invalid) throw new Error(invalid ? `${invalid} rows are missing required fields.` : 'The CSV does not contain any data rows.');
+            const definition = dataTransferDefinitions[transferEntity];
+            let created = 0;
+            let updated = 0;
+            for (const row of rows) {
+                const payload: Record<string, unknown> = { ...row, user_id: user.id, company_id: scope.companyId };
+                if (transferEntity === 'products') {
+                    payload.unit = payload.unit || 'pcs';
+                    payload.unit_price = payload.unit_price ?? 0;
+                    payload.tax_rate = payload.tax_rate ?? 18;
+                    payload.tax_included = payload.tax_included ?? false;
+                    payload.purchase_currency = payload.purchase_currency || 'EUR';
+                    payload.exchange_rate = payload.exchange_rate || 1;
+                    payload.vat_treatment = payload.vat_treatment || 'standard_18';
+                }
+                if (transferEntity === 'vendors') payload.default_currency = payload.default_currency || 'EUR';
+                if (transferEntity === 'expenses') payload.type = 'expense';
+                const identity = findTransferIdentity(transferEntity, row);
+                let existingId: string | null = null;
+                if (identity) {
+                    const existing = await supabase.from(definition.table).select('id').eq('company_id', scope.companyId).eq(identity, String(row[identity])).maybeSingle();
+                    if (existing.error) throw existing.error;
+                    existingId = existing.data?.id ? String(existing.data.id) : null;
+                }
+                const result = existingId
+                    ? await supabase.from(definition.table).update(payload).eq('id', existingId).eq('company_id', scope.companyId).select('id').single()
+                    : await supabase.from(definition.table).insert(payload).select('id').single();
+                if (result.error) throw result.error;
+                if (existingId) updated += 1; else created += 1;
+            }
+            Alert.alert(t('success', language), `${created} created, ${updated} updated.`);
+        } catch (error) {
+            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'unknownError'));
+        } finally {
+            setTransferBusy(false);
+        }
+    };
+
+    const renderHeader = (title: string, description: string, Icon: any, section: string, color: string) => {
         const isActive = activeSection === section;
         return (
             <TouchableOpacity
-                style={[styles.sectionHeader, { backgroundColor: cardBg }]}
+                style={styles.sectionHeader}
                 onPress={() => setActiveSection(isActive ? null : section)}
             >
                 <View style={styles.sectionHeaderLeft}>
-                    <View style={[styles.sectionIcon, { backgroundColor: color + '15' }]}>
+                    <View style={[styles.sectionIcon, { backgroundColor: isDark ? '#102E65' : '#EDF4FF' }]}>
                         <Icon color={color} size={20} />
                     </View>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
+                    <View style={styles.sectionHeaderCopy}>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
+                        <Text style={[styles.sectionDescription, { color: mutedColor }]} numberOfLines={2}>{description}</Text>
+                    </View>
                 </View>
                 <ChevronRight
                     color={mutedColor}
-                    size={20}
+                    size={18}
                     style={{ transform: [{ rotate: isActive ? '90deg' : '0deg' }] }}
                 />
             </TouchableOpacity>
@@ -195,6 +300,9 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     };
 
     if (!profile) return null;
+    if (!can('settings.company') && !can('settings.invoice') && !can('financial.export')) {
+        return <View style={[styles.container, { backgroundColor: bgColor }]}><Text style={[styles.title, { color: textColor, margin: 24 }]}>You do not have permission to access advanced settings.</Text></View>;
+    }
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -224,7 +332,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
                 {/* Document Layout */}
-                {renderHeader(t('documentLayout', language), Layout, 'appearance', primaryColor)}
+                {renderHeader(t('documentLayout', language), t('invoiceDesignStyle', language), Layout, 'appearance', primaryColor)}
                 {activeSection === 'appearance' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.label, { color: textColor }]}>{t('defaultTermsConditions', language)}</Text>
@@ -265,13 +373,13 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                             onPress={() => navigation.navigate('TemplateEditor')}
                             style={{ marginTop: 8 }}
                         />
-                        <Button
+                        {can('contracts.manage') ? <Button
                             title={t('contractTemplates', language)}
                             variant="shortcut"
                             icon={FileText}
                             onPress={() => navigation.navigate('ContractTemplates')}
                             style={{ marginTop: 8 }}
-                        />
+                        /> : null}
                         <Button
                             title={t('invoiceFieldsDefaults', language)}
                             variant="shortcut"
@@ -282,7 +390,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                     </Card>
                 )}
 
-                {renderHeader(t('documentNumbering', language), Hash, 'numbering', primaryColor)}
+                {renderHeader(t('documentNumbering', language), t('numberingDescription', language), Hash, 'numbering', primaryColor)}
                 {activeSection === 'numbering' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor }]}>{t('numberingDescription', language)}</Text>
@@ -293,7 +401,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                     </Card>
                 )}
 
-                {renderHeader(t('operixIntelligence', language), BrainCircuit, 'intelligence', primaryColor)}
+                {renderHeader(t('operixIntelligence', language), t('operixIntelligenceSettingsDescription', language), BrainCircuit, 'intelligence', primaryColor)}
                 {activeSection === 'intelligence' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>{t('operixIntelligenceSettings', language)}</Text>
@@ -318,7 +426,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                 )}
 
                 {/* Stripe/PayPal Integration */}
-                {renderHeader(t('paymentIntegrations', language), CreditCard, 'integrations', primaryColor)}
+                {renderHeader(t('paymentIntegrations', language), t('stripePayPalDescription', language), CreditCard, 'integrations', primaryColor)}
                 {activeSection === 'integrations' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>{t('nativeIntegrations', language)}</Text>
@@ -335,7 +443,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                 )}
 
                 {/* Email & SMTP */}
-                {renderHeader(t('emailServerSmtp', language), Mail, 'smtp', primaryColor)}
+                {renderHeader(t('emailServerSmtp', language), t('smtpDescription', language), Mail, 'smtp', primaryColor)}
                 {activeSection === 'smtp' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor, marginBottom: 16 }]}>
@@ -393,20 +501,35 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                 )}
 
                 {/* Backup & Data */}
-                {renderHeader(t('backupRestore', language), Download, 'backup', primaryColor)}
+                {renderHeader(t('backupRestore', language), t('exportDataDescription', language), Download, 'backup', primaryColor)}
                 {activeSection === 'backup' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
                             {t('exportDataDescription', language)}
                         </Text>
-                        <Button title={t('backupAllJson', language)} variant="shortcut" onPress={() => handleExportData('json')} icon={Download} />
+                        {can('financial.export') ? <Button title={t('backupAllJson', language)} variant="shortcut" onPress={() => handleExportData('json')} icon={Download} /> : null}
                         <View style={{ height: 12 }} />
-                        <Button title={t('exportInvoicesCsv', language)} variant="shortcut" onPress={() => handleExportData('csv')} icon={FileText} />
+                        {can('financial.export') ? <Button title={t('exportInvoicesCsv', language)} variant="shortcut" onPress={() => handleExportData('csv')} icon={FileText} /> : null}
+                        <View style={{ height: 20 }} />
+                        <Text style={[styles.inputLabel, { color: textColor, marginBottom: 8 }]}>Resource import / export</Text>
+                        <View style={styles.transferEntityGrid}>
+                            {(Object.keys(dataTransferDefinitions) as DataTransferEntity[]).map((entity) => {
+                                const selected = transferEntity === entity;
+                                return <TouchableOpacity key={entity} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => setTransferEntity(entity)} style={[styles.transferEntity, { backgroundColor: selected ? primaryColor : (isDark ? '#0D1B2A' : '#F7F9FC'), borderColor: selected ? primaryColor : borderColor }]}><Text style={{ color: selected ? '#fff' : textColor, fontSize: 12, fontWeight: '600' }}>{dataTransferDefinitions[entity].label}</Text></TouchableOpacity>;
+                            })}
+                        </View>
+                        <View style={{ height: 12 }} />
+                        {can('financial.export') ? <Button title={`Export ${dataTransferDefinitions[transferEntity].label} CSV`} variant="shortcut" onPress={() => void handleExportTransfer('csv')} icon={Download} disabled={transferBusy} /> : null}
+                        <View style={{ height: 10 }} />
+                        {can('financial.export') ? <Button title={`Export ${dataTransferDefinitions[transferEntity].label} JSON`} variant="shortcut" onPress={() => void handleExportTransfer('json')} icon={FileText} disabled={transferBusy} /> : null}
+                        <View style={{ height: 10 }} />
+                        {can('settings.company') ? <Button title={transferBusy ? 'Importing…' : `Import ${dataTransferDefinitions[transferEntity].label} CSV`} variant="shortcut" onPress={() => void handleImportTransfer()} icon={Upload} disabled={transferBusy} /> : null}
+                        {!can('settings.company') ? <Text style={[styles.hint, { color: mutedColor, marginTop: 8 }]}>Import requires tenant administrator access.</Text> : null}
                     </Card>
                 )}
 
                 {/* Account Settings */}
-                {renderHeader(t('accountSecurity', language), User, 'account', primaryColor)}
+                {renderHeader(t('accountSecurity', language), t('manageProfileSecurity', language), User, 'account', primaryColor)}
                 {activeSection === 'account' && (
                     <Card style={styles.sectionContent}>
                         <Button
@@ -462,14 +585,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderRadius: 14,
-        marginBottom: 10,
+        minHeight: 64,
+        paddingVertical: 10,
+        marginBottom: 4,
     },
-    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-    sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '700' },
-    sectionContent: { padding: 20, borderRadius: 20, marginTop: -6, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
+    sectionIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    sectionHeaderCopy: { flex: 1, minWidth: 0, paddingRight: 10 },
+    sectionTitle: { fontSize: 14, lineHeight: 18, fontWeight: '700' },
+    sectionDescription: { fontSize: 11, lineHeight: 16, marginTop: 3 },
+    sectionContent: { padding: 16, borderRadius: 18, marginTop: 6, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(148,163,184,0.18)' },
     subLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
     hint: { fontSize: 13, lineHeight: 20 },
     inputLabel: { fontSize: 14, fontWeight: '600' },
@@ -487,6 +612,8 @@ const styles = StyleSheet.create({
     langGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     langOption: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
     langText: { fontSize: 13, fontWeight: '600' },
+    transferEntityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    transferEntity: { minWidth: 88, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
     sequenceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, borderBottomWidth: 1 },
     sequenceCopy: { flex: 1, paddingRight: 12 },
     sequencePreview: { fontSize: 12, fontWeight: '800', maxWidth: 150, textAlign: 'right' },

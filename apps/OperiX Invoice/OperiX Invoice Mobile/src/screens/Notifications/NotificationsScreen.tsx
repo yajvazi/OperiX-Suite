@@ -96,7 +96,7 @@ export function NotificationsScreen({ navigation }: Props) {
 
     return <MobileScreen testID="notifications-screen">
         <MobileHeader title={t('notifications', language)} subtitle={t('operixIntelligenceNotificationsSubtitle', language)} onBack={() => navigation.goBack()} right={<OperixIconButton label={t('operixIntelligenceRefresh', language)} variant="ghost" onPress={() => void load()}><Clock3 color={palette.text} size={19} /></OperixIconButton>} />
-        {loading ? <View style={styles.center}><ActivityIndicator color={palette.primary} size="small" /></View> : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {loading ? <View style={styles.center}><ActivityIndicator color={palette.primary} size="small" /></View> : <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             {error ? <View style={[styles.error, { backgroundColor: palette.surfaceMuted }]}><Bell color={palette.warning} size={18} /><Text style={[styles.errorText, { color: palette.muted }]}>{error}</Text></View> : null}
             {today.length ? <View style={styles.section}><Text style={[styles.sectionTitle, { color: palette.text }]}>{t('operixIntelligenceNotificationsToday', language)}</Text>{renderRows(today)}</View> : null}
             {earlier.length ? <View style={styles.section}><Text style={[styles.sectionTitle, { color: palette.text }]}>{t('operixIntelligenceNotificationsEarlier', language)}</Text>{renderRows(earlier)}</View> : null}

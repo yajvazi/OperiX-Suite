@@ -173,9 +173,13 @@ describe('Supabase repository query contracts', () => {
     });
 
     it('deletes expenses through the ledger-aware RPC', async () => {
-        const client = new FakeSupabase();
+        const client = new FakeSupabase({ expenses: [{ data: { id: 'expense-a', company_id: 'company-a' }, error: null }] });
         await deleteExpense(client as any, 'expense-a', 'company-a', 'user-a');
-        expect(client.requests).toHaveLength(0);
+        expect(client.requests[0].table).toBe('expenses');
+        expect(client.requests[0].request.calls).toEqual(expect.arrayContaining([
+            { method: 'eq', args: ['id', 'expense-a'] },
+            { method: 'or', args: ['and(user_id.eq.user-a,company_id.is.null),company_id.eq.company-a'] },
+        ]));
         expect(client.rpcs).toEqual([{ name: 'delete_expense', args: { p_expense_id: 'expense-a' } }]);
     });
 

@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  TextInput,
   FlatList,
+  TextInput,
 } from "react-native";
 import {
   ArrowLeft,
@@ -28,7 +28,6 @@ import { formatCurrency, getLocalizedErrorMessage, t } from "@invoice-monorepo/i
 import { Vendor, Profile } from "@invoice-monorepo/types";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { renderTransactionReportHtml } from "@invoice-monorepo/report-templates";
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 
@@ -39,7 +38,7 @@ interface LedgerEntry {
   debit: number;
   credit: number;
   balance: number;
-  type: "purchase" | "payment";
+  type: "purchase" | "payment" | "expense";
 }
 
 export function VendorLedgerScreen({ navigation, route }: any) {
@@ -58,7 +57,6 @@ export function VendorLedgerScreen({ navigation, route }: any) {
   );
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [totals, setTotals] = useState({ debit: 0, credit: 0, balance: 0 });
-  const [vendorBills, setVendorBills] = useState<Record<string, unknown>[]>([]);
 
   const bgColor = isDark ? "#0D1B2A" : "#F7F9FC";
   const textColor = isDark ? "#fff" : "#111827";
@@ -125,13 +123,12 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         .select("*")
         .eq("vendor_id", selectedVendorId)
         .order("issue_date", { ascending: true });
-      setVendorBills(
-        (bills || []).map((bill) => ({
-          ...bill,
-          vendor: selectedVendor || { name: "—" },
-        })),
-      );
-
+      const { data: expenses } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("vendor_id", selectedVendorId)
+        .eq("type", "expense")
+        .order("date", { ascending: true });
       const entries: LedgerEntry[] = [];
 
       bills?.forEach((bill) => {
@@ -143,6 +140,27 @@ export function VendorLedgerScreen({ navigation, route }: any) {
           credit: 0,
           balance: 0,
           type: "purchase",
+        });
+      });
+
+      expenses?.forEach((expense) => {
+        const total = Number(expense.amount) || 0;
+        const vat = Number(expense.tax_amount) || 0;
+        const net = Math.max(0, total - vat);
+        const vatRate = Number(expense.vat_rate) || 0;
+        const article = expense.article || expense.description || t('expense', language);
+        const invoice = expense.invoice_number ? ` · ${t('vendorInvoice', language)} #${expense.invoice_number}` : '';
+        const vatDetails = vat > 0
+          ? ` · ${t('priceWithoutVat', language)}: ${formatCurrency(net, 'EUR', language)} · ${t('vatAmount', language)} (${vatRate}%): ${formatCurrency(vat, 'EUR', language)}`
+          : '';
+        entries.push({
+          id: expense.id,
+          date: expense.date,
+          description: `${t('expensePayment', language)} · ${article}${invoice}${vatDetails}`,
+          debit: 0,
+          credit: total,
+          balance: 0,
+          type: "expense",
         });
       });
 
@@ -192,26 +210,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     if (!selectedVendor || !profile) return;
     setExporting(true);
     try {
-      const html = renderTransactionReportHtml({
-        template: "vendor-ledger",
-        title: `${t('supplierCard', language)} - ${selectedVendor.name}`,
-        company: {
-          name: profile.company_name,
-          email: profile.email,
-          phone: profile.phone,
-          address: profile.address,
-          city: profile.city,
-          country: profile.country,
-          website: profile.website,
-          taxId: profile.tax_id,
-          bankName: profile.bank_name,
-          bankAccount: profile.bank_account,
-          iban: profile.bank_iban,
-          swift: profile.bank_swift,
-          logoUrl: profile.logo_url,
-        },
-        rows: vendorBills,
-      });
+      const html = generateLedgerHTML();
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       const namedUri = await namePdfFile(uri, reportPdfFileName(profile.company_name || t('company', language), t('supplierCard', language)));
       await Sharing.shareAsync(namedUri, {
@@ -375,6 +374,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
           >
             <Search color={mutedColor} size={20} />
             <TextInput
+              testID="vendor-ledger-search-input"
               style={[styles.searchInput, { color: textColor }]}
               placeholder={t("search", language)}
               placeholderTextColor={mutedColor}
@@ -395,7 +395,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
               style={{ marginTop: 20 }}
             />
           ) : (
-            <FlatList
+            <FlatList keyboardShouldPersistTaps="handled"
               data={filteredVendors}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
@@ -677,11 +677,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 0,
     borderRadius: 14,
     gap: 12,
   },
-  searchInput: { flex: 1, fontSize: 16, fontWeight: "500" },
+  searchInput: { flex: 1, fontSize: 16, fontWeight: "500", paddingVertical: 12 },
 
   clientListItem: {
     flexDirection: "row",

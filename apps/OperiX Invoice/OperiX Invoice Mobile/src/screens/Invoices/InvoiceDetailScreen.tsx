@@ -16,7 +16,7 @@ import {
 import { ArrowLeft, Edit, Share2, FileText, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard, Download, Printer, Receipt, X, MoreHorizontal, HandCoins, ChevronRight, UserRound } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@invoice-monorepo/api';
-import { deleteInvoice, getInvoice, listCompanyAgents, listInvoicePayments, transitionInvoiceStatus } from '@invoice-monorepo/api/repositories';
+import { deleteInvoice, getInvoice, listCompanyAgents, listInvoicePayments, postCreditNote, transitionInvoiceStatus } from '@invoice-monorepo/api/repositories';
 import { calculateInvoice } from '@invoice-monorepo/money';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
@@ -27,7 +27,7 @@ import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { brand, normalizeBrandColor } from '../../theme/brand';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen, MobileStatusBadge, ShortcutRow } from '../../components/mobile/MobileUI';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import type { CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 import {
@@ -44,7 +44,13 @@ interface InvoiceDetailScreenProps {
 function agentDisplayName(agent: CompanyAgent | null | undefined) {
     if (!agent) return '';
     const name = [agent.first_name, agent.last_name].filter(Boolean).join(' ').trim();
-    return name || agent.email || '';
+    return name;
+}
+
+function profileDisplayName(profile: Record<string, any> | null | undefined) {
+    if (!profile) return '';
+    return [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim()
+        || String(profile.full_name || '').trim();
 }
 
 function paymentTypeLabel(value: unknown, language: 'en' | 'sq') {
@@ -52,7 +58,69 @@ function paymentTypeLabel(value: unknown, language: 'en' | 'sq') {
         case 'cash': return t('cash', language);
         case 'bank': return t('bankTransfer', language);
         case 'card': return t('card', language);
+        case 'online_payment': return t('onlinePayment', language);
+        case 'cheque': return t('cheque', language);
+        case 'other': return t('other', language);
+        case 'customer_credit': return t('debt', language);
         default: return String(value || '');
+    }
+}
+
+const invoiceStatusOptions = [
+    { key: 'draft', commercialStatus: 'DRAFT' },
+    { key: 'sent', commercialStatus: 'SENT' },
+    { key: 'paid', commercialStatus: 'PAID' },
+    { key: 'overdue', commercialStatus: 'OVERDUE' },
+    { key: 'cancelled', commercialStatus: 'CANCELLED' },
+] as const;
+
+type InvoiceStatusOption = typeof invoiceStatusOptions[number];
+
+function transitionCommercialStatus(invoice: Invoice, status: InvoiceStatusOption['key']) {
+    const documentType = resolveCommercialDocumentType(invoice as any);
+    const financialDocument = ['INVOICE', 'ADVANCE_INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType);
+
+    // Invoices use ISSUED as their canonical equivalent of the legacy
+    // "sent" label. Operational documents keep SENT.
+    if (status === 'sent' && financialDocument) return 'ISSUED';
+    return invoiceStatusOptions.find((option) => option.key === status)?.commercialStatus || 'DRAFT';
+}
+
+function isInvoiceStatusSelected(invoice: Invoice, option: InvoiceStatusOption) {
+    const commercialStatus = String((invoice as any).commercial_status || '').toUpperCase();
+    const legacyStatus = String(invoice.status || '').toLowerCase();
+    if (commercialStatus) {
+        return commercialStatus === option.commercialStatus
+            || (option.key === 'sent' && commercialStatus === 'ISSUED');
+    }
+    return legacyStatus === option.key;
+}
+
+function canTransitionInvoiceStatus(invoice: Invoice, status: InvoiceStatusOption['key']) {
+    const accountingState = String((invoice as any).accounting_state || '').toLowerCase();
+    if (!['posted', 'reversed'].includes(accountingState)) return true;
+
+    // Posted financial records can only move through payment/receivable
+    // workflows. Correction documents must be created separately.
+    return ['paid', 'overdue'].includes(status);
+}
+
+function permissionForInvoiceStatus(invoice: Invoice, status: InvoiceStatusOption['key']) {
+    if (status === 'paid' || status === 'overdue') return 'payment.create';
+    if (status === 'cancelled') return 'invoice.void';
+    if (status === 'sent' && ['INVOICE', 'ADVANCE_INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(resolveCommercialDocumentType(invoice as any))) return 'invoice.issue';
+    return status === 'draft' ? 'invoice.edit' : 'invoice.issue';
+}
+
+function permissionForInvoiceConversion(targetType: CommercialDocumentType) {
+    switch (targetType) {
+        case 'QUOTE': return 'offer.create';
+        case 'PROFORMA': return 'proforma.create';
+        case 'SALES_ORDER': return 'order.create';
+        case 'DELIVERY_NOTE': return 'delivery_note.create';
+        case 'CREDIT_NOTE': return 'invoice.credit';
+        case 'DEBIT_NOTE': return 'invoice.debit';
+        default: return 'invoice.create';
     }
 }
 
@@ -80,8 +148,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const [relatedDocuments, setRelatedDocuments] = useState<Array<Record<string, any>>>([]);
     const [events, setEvents] = useState<Array<Record<string, any>>>([]);
     const [salesBookPeriodStatus, setSalesBookPeriodStatus] = useState<string | null>(null);
-    const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
     const [invoiceAgent, setInvoiceAgent] = useState('');
+    const [updatingStatus, setUpdatingStatus] = useState<InvoiceStatusOption['key'] | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -105,7 +175,8 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         try {
         const workspaceScope = await getWorkspaceScope(user.id);
-        setWorkspaceRole(workspaceScope.roleCode || String((workspaceScope.profile as any)?.role || 'employee'));
+        setWorkspacePermissions(workspaceScope.permissions);
+        setPlatformAdmin(workspaceScope.platformAdmin);
         const queryScope = { userId: user.id, companyIds: workspaceScope.companyIds };
 
         let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
@@ -124,7 +195,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         if (profileData) setProfile(profileData);
 
-        const invoiceData = await getInvoice(supabase, invoiceId, queryScope, '*, client:clients(*), items:invoice_items(*, product:products(sku, name, image_url))');
+        const invoiceData = await getInvoice(supabase, invoiceId, queryScope, '*, branch:branches!invoices_branch_id_fkey(id,code,name), client:clients(*), items:invoice_items(*, product:products(sku, name, image_url))');
 
         if (invoiceData) {
             setInvoice(invoiceData as unknown as Invoice);
@@ -136,12 +207,20 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         const invoiceRow = invoiceData as unknown as Record<string, any>;
         const creatorUserId = String(invoiceRow.user_id || '');
-        let creatorLabel = creatorUserId === user.id ? String(user.email || profileData?.email || '') : '';
+        let creatorLabel = creatorUserId === user.id ? profileDisplayName(profileData) : '';
         try {
-            const agents = await listCompanyAgents(supabase, workspaceScope.companyId);
+            const agents = await listCompanyAgents(supabase, String(invoiceRow.company_id || workspaceScope.companyId));
             creatorLabel = agentDisplayName(agents.find((agent) => agent.user_id === creatorUserId)) || creatorLabel;
         } catch (agentError) {
             console.warn('Invoice agent lookup unavailable:', agentError);
+        }
+        if (!creatorLabel && creatorUserId) {
+            const { data: creatorProfile } = await supabase
+                .from('profiles')
+                .select('first_name,last_name,full_name')
+                .eq('id', creatorUserId)
+                .maybeSingle();
+            creatorLabel = profileDisplayName(creatorProfile);
         }
         setInvoiceAgent(creatorLabel);
         if (invoiceRow.sales_book_period_id) {
@@ -204,6 +283,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const calculatedLines = calculated.lines;
         const documentType = resolveCommercialDocumentType(invoice as any);
         const fiscalIdentifiersHidden = documentType === 'PROFORMA' || documentType === 'QUOTE' || documentType === 'SALES_ORDER' || documentType === 'DELIVERY_NOTE';
+        const operatingBranch = (invoice as any).branch as { name?: string | null; code?: string | null } | null | undefined;
+        const operatingBranchLabel = operatingBranch
+            ? operatingBranch.code || ''
+            : '';
 
         return {
             company: {
@@ -248,11 +331,13 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 currency: calculated.currency,
                 language,
                 notes: invoice.notes,
-                department: profile.company_name || '',
+                department: operatingBranchLabel || profile.company_name || '',
                 agent: invoiceAgent,
                 reference: invoiceAgent,
                 yourReference: paymentTypeLabel(invoice.payment_method, language === 'sq' ? 'sq' : 'en'),
                 terms: profile.terms_conditions,
+                status: invoice.status,
+                paymentStatus: invoice.payment_status,
                 buyerSignatureUrl: invoice.buyer_signature_url,
                 showStampOnInvoice: showStampOnInvoice ?? true,
                 paymentMethod: invoice.payment_method,
@@ -325,6 +410,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     };
 
     const handleGeneratePdf = async () => {
+        if (!can('financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         const data = buildInvoiceData();
         if (!data) { Alert.alert(t('error', language), t('failedToGeneratePdf', language)); return; }
 
@@ -343,6 +432,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     };
 
     const handleSendEmail = async () => {
+        if (!can('invoice.issue')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         const clientEmail = (invoice as any).client?.email;
         if (!clientEmail) {
             Alert.alert(t('noClientEmail', language), t('clientHasNoEmail', language));
@@ -383,6 +476,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     };
 
     const handleShare = async () => {
+        if (!can('financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         const data = buildInvoiceData();
         if (!data) return;
 
@@ -400,6 +497,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     };
 
     const handlePrintWithTemplate = async (templateToUse: TemplateType) => {
+        if (!can('financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         if (printInProgress.current) return;
         const data = buildInvoiceData();
         if (!data) return;
@@ -441,23 +542,48 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         setShowPreview(true);
     };
 
-    const handleUpdateStatus = async (status: string) => {
-        if (!invoice || !canManageInvoice) return;
-        const nextStatus = status === 'sent' ? 'SENT' : status === 'paid' ? 'PAID' : status === 'overdue' ? 'OVERDUE' : status === 'cancelled' ? 'CANCELLED' : 'DRAFT';
-        const { data, error } = await transitionInvoiceStatus(supabase, invoice.id, nextStatus, `mobile_${status}`);
-        if (error) {
-            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
-            return;
-        }
-        if (data) {
-            setInvoice({ ...invoice, ...(data as any), status: status as any, commercial_status: nextStatus } as Invoice);
-            const notificationType = nextStatus === 'PAID' ? 'invoice_paid' : nextStatus === 'CANCELLED' ? 'invoice_cancelled' : 'invoice_updated';
-            void notifyBusinessEvent(notificationType, String(invoice.company_id), String(invoice.id)).catch((notificationError) => console.warn('Invoice status notification could not be sent:', notificationError));
+    const handleUpdateStatus = async (status: InvoiceStatusOption['key']) => {
+        if (!invoice || updatingStatus || !can(permissionForInvoiceStatus(invoice, status))) return;
+        const option = invoiceStatusOptions.find((candidate) => candidate.key === status);
+        if (!option || !canTransitionInvoiceStatus(invoice, status)) return;
+
+        const nextStatus = transitionCommercialStatus(invoice, status);
+        if (isInvoiceStatusSelected(invoice, option)) return;
+
+        setUpdatingStatus(status);
+        try {
+            const { data, error } = await transitionInvoiceStatus(supabase, invoice.id, nextStatus, `mobile_${status}`);
+            if (error) {
+                Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
+                return;
+            }
+            if (data) {
+                // Keep the legacy status in sync locally until the next detail
+                // fetch. The RPC returns canonical commercial_status, while
+                // older list/report surfaces still read status.
+                setInvoice({ ...invoice, ...(data as any), status: status as any, commercial_status: nextStatus } as Invoice);
+                const notificationType = nextStatus === 'PAID' ? 'invoice_paid' : nextStatus === 'CANCELLED' ? 'invoice_cancelled' : 'invoice_updated';
+                void notifyBusinessEvent(notificationType, String(invoice.company_id), String(invoice.id)).catch((notificationError) => console.warn('Invoice status notification could not be sent:', notificationError));
+            }
+        } finally {
+            setUpdatingStatus(null);
         }
     };
 
-    const handleConvert = async (targetType: CommercialDocumentType) => {
-        if (!invoice || !canManageInvoice) return;
+    const handleConvert = async (targetType: CommercialDocumentType, _language?: string) => {
+        if (!invoice) return;
+        const targetPermission = permissionForInvoiceConversion(targetType);
+        const sourcePermission = targetType === 'CREDIT_NOTE' || targetType === 'DEBIT_NOTE' ? targetPermission : 'invoice.edit';
+        if (!can(sourcePermission) || !can(targetPermission) || ((targetType === 'CREDIT_NOTE' || targetType === 'DEBIT_NOTE') && !can('invoice.issue'))) {
+            Alert.alert(t('error', language), t('permissionDenied', language));
+            return;
+        }
+        // iOS can drop an Alert presented during a sheet dismissal. Wait for
+        // the actions sheet to finish closing before showing confirmation.
+        if (showMore) {
+            setShowMore(false);
+            await new Promise((resolve) => setTimeout(resolve, 200));
+        }
         Alert.alert(
             `${t('create', language)} ${documentTypeLabel(targetType, language === 'sq' ? 'sq' : 'en')}`,
             `${t('sourceDocumentKept', language)} · ${invoice.invoice_number}`,
@@ -466,17 +592,29 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 {
                     text: t('confirm', language),
                     onPress: async () => {
-                        const { data, error } = await supabase.rpc('convert_commercial_document', {
-                            p_source_document_id: invoice.id,
-                            p_target_document_type: targetType,
-                        });
-                        if (error || !data) {
-                            Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'unableToLoad'));
-                            return;
+                        try {
+                            const { data, error } = await supabase.rpc('convert_commercial_document', {
+                                p_source_document_id: invoice.id,
+                                p_target_document_type: targetType,
+                            });
+                            if (error || !data) {
+                                Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'unableToLoad'));
+                                return;
+                            }
+                            let createdDocument = data as any;
+                            if (targetType === 'CREDIT_NOTE') {
+                                createdDocument = await postCreditNote(supabase, String((data as any).id));
+                            }
+                            if (!createdDocument?.id) {
+                                Alert.alert(t('error', language), t('unableToLoad', language));
+                                return;
+                            }
+                            Alert.alert(t('success', language), `${documentTypeLabel(targetType, language === 'sq' ? 'sq' : 'en')} ${createdDocument.invoice_number || ''}`, [
+                                { text: t('open', language), onPress: () => navigation.replace('InvoiceDetail', { invoiceId: createdDocument.id }) },
+                            ]);
+                        } catch (conversionError) {
+                            Alert.alert(t('error', language), getLocalizedErrorMessage(conversionError, language, 'unableToLoad'));
                         }
-                        Alert.alert(t('success', language), `${documentTypeLabel(targetType, language === 'sq' ? 'sq' : 'en')} ${(data as any).invoice_number || ''}`, [
-                            { text: t('open', language), onPress: () => navigation.replace('InvoiceDetail', { invoiceId: (data as any).id }) },
-                        ]);
                     }
                 }
             ]
@@ -486,7 +624,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const handleTransformToInvoice = async () => handleConvert('INVOICE');
 
     const handleDelete = async () => {
-        if (!invoice) return;
+        if (!invoice || !can('invoice.delete_draft')) return;
         Alert.alert(
             t('deleteInvoice', language),
             t('deleteInvoiceConfirmation', language),
@@ -528,22 +666,21 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
     const invoiceClient = (invoice as any).client;
     const documentType = resolveCommercialDocumentType(invoice as any);
+    const isCreditNote = documentType === 'CREDIT_NOTE';
+    const signedAmount = (value: number) => isCreditNote ? -Math.abs(value) : value;
     const documentLabel = documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en');
     const editable = !isImmutableCommercialStatus((invoice as any).commercial_status || invoice.status) && (invoice as any).accounting_state !== 'posted';
-    const effectiveRole = String(workspaceRole || 'employee').trim().toLowerCase();
-    const canManageInvoice = [
-        'company_administrator',
-        'manager',
-        'super_administrator',
-    ].includes(effectiveRole);
-    const postedInvoiceEditable = String((invoice as any).accounting_state || '').toLowerCase() === 'posted' && documentType === 'INVOICE';
-    const legacyInvoiceEditable = String((invoice as any).accounting_state || '').toLowerCase() === 'legacy' && documentType === 'INVOICE';
+    const can = (permission: string) => hasWorkspacePermission({ permissions: workspacePermissions, platformAdmin }, permission);
+    const canManageInvoice = ['invoice.edit', 'invoice.issue', 'invoice.void', 'invoice.credit', 'invoice.debit', 'payment.create'].some(can);
     const salesBookPeriodLocked = ['DECLARED', 'AMENDED'].includes(String(salesBookPeriodStatus || '').toUpperCase());
-    const canEditInvoice = canManageInvoice && !salesBookPeriodLocked && (editable || postedInvoiceEditable || legacyInvoiceEditable);
-    // Deletion is available for every commercial document type and status.
-    // The controlled backend workflow still rejects protected records (for
-    // example opening balances or documents with unresolved references).
-    const canDeleteInvoice = canManageInvoice && !salesBookPeriodLocked;
+    const canEditInvoice = can('invoice.edit') && !salesBookPeriodLocked && editable;
+    const canDeleteInvoice = can('invoice.delete_draft') && !salesBookPeriodLocked && String((invoice as any).commercial_status || invoice.status || '').toUpperCase() === 'DRAFT';
+    const canExportInvoice = can('financial.export');
+    const canConvertTo = (targetType: CommercialDocumentType) => {
+        const targetPermission = permissionForInvoiceConversion(targetType);
+        const sourcePermission = targetType === 'CREDIT_NOTE' || targetType === 'DEBIT_NOTE' ? targetPermission : 'invoice.edit';
+        return can(sourcePermission) && can(targetPermission) && ((targetType !== 'CREDIT_NOTE' && targetType !== 'DEBIT_NOTE') || can('invoice.issue'));
+    };
     const paidTotal = payments.length
         ? payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         : Number(invoice.amount_received || 0);
@@ -562,14 +699,19 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         paidAmount: paidTotal,
         currency: detailTotals.currency,
     }).remaining;
-    const isFullyPaid = outstandingTotal <= 0.005;
+    const isFullyPaid = isCreditNote || outstandingTotal <= 0.005;
+    const displayOutstanding = isCreditNote
+        ? signedAmount(Number(invoice.total_amount || detailTotals.total))
+        : outstandingTotal;
     // Payment allocations are the source of truth for what the customer has
     // settled. A posted invoice can retain the commercial label "ISSUED" in
     // older data, so the detail view must not show that stale label after the
     // invoice is fully paid.
-    const displayCommercialStatus = isFullyPaid
-        ? 'PAID'
-        : ((invoice as any).commercial_status || invoice.status);
+    const displayCommercialStatus = isCreditNote
+        ? (String(invoice.status || '').toUpperCase() === 'POSTED' ? 'POSTED' : ((invoice as any).commercial_status || invoice.status))
+        : isFullyPaid
+            ? 'PAID'
+            : ((invoice as any).commercial_status || invoice.status);
 
     return (
         <MobileScreen testID="invoice-detail-screen">
@@ -581,14 +723,14 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 titleTestID="invoice-number-title"
                 right={<TouchableOpacity testID="invoice-more-actions-button" accessibilityRole="button" accessibilityLabel={t('moreInvoiceActions', language)} onPress={() => setShowMore(true)} style={styles.mobileHeaderAction}><MoreHorizontal color={textColor} size={21} /></TouchableOpacity>}
             />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.mobileContent}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.mobileContent}>
                 <View style={[styles.mobileHero, { backgroundColor: primaryColor }]}>
-                    <View style={styles.mobileHeroTop}><View><Text style={styles.mobileHeroLabel}>{documentLabel} · {t('total', language)}</Text><Text style={styles.mobileHeroAmount}>{formatCurrency(Number(invoice.total_amount || 0))}</Text></View><MobileStatusBadge status={displayCommercialStatus} /></View>
+                    <View style={styles.mobileHeroTop}><View><Text style={styles.mobileHeroLabel}>{documentLabel} · {t('total', language)}</Text><Text style={styles.mobileHeroAmount}>{formatCurrency(signedAmount(Number(invoice.total_amount || 0)))}</Text></View><MobileStatusBadge status={displayCommercialStatus} /></View>
                     <View style={styles.mobileHeroDates}><View><Text style={styles.mobileHeroMetaLabel}>{t('invoiceDate', language)}</Text><Text style={styles.mobileHeroMeta}>{invoice.issue_date}</Text></View><View><Text style={styles.mobileHeroMetaLabel}>{t('dueDate', language)}</Text><Text style={styles.mobileHeroMeta}>{invoice.due_date || t('onReceipt', language)}</Text></View></View>
                 </View>
 
-                <View style={styles.mobilePrimaryActions}>{!isFullyPaid ? <TouchableOpacity testID="invoice-add-payment-button" accessibilityRole="button" accessibilityLabel={documentType === 'PROFORMA' ? t('registerAdvance', language) : t('registerPayment', language)} onPress={() => documentType === 'PROFORMA' ? navigation.navigate('InvoiceForm', { documentType: 'ADVANCE_INVOICE', sourceDocumentId: invoice.id }) : navigation.navigate('PaymentForm', { invoiceId: invoice.id })} style={[styles.mobilePrimaryAction, { backgroundColor: primaryColor }]}><HandCoins color="#fff" size={21} /></TouchableOpacity> : null}<TouchableOpacity testID="invoice-send-button" accessibilityRole="button" accessibilityLabel={t('send', language)} onPress={handleSendEmail} style={[styles.mobileSecondaryAction, { backgroundColor: cardBg, borderColor }]}><Mail color={textColor} size={21} /></TouchableOpacity><TouchableOpacity testID="invoice-share-button" accessibilityRole="button" accessibilityLabel={t('share', language)} onPress={handleShare} style={[styles.mobileSecondaryAction, { backgroundColor: cardBg, borderColor }]}><Share2 color={textColor} size={21} /></TouchableOpacity></View>
-                <View style={styles.mobileDocumentActions}><TouchableOpacity testID="invoice-print-button" accessibilityRole="button" accessibilityLabel={t('print', language)} onPress={handlePrint} style={[styles.mobileDocumentAction, { backgroundColor: primaryColor, borderColor: primaryColor }]}><Printer color="#fff" size={18} /><Text style={[styles.mobileDocumentActionText, { color: '#fff' }]}>{t('print', language)}</Text></TouchableOpacity><TouchableOpacity testID="invoice-preview-button" accessibilityRole="button" accessibilityLabel={t('preview', language)} onPress={handlePreview} style={[styles.mobileDocumentAction, { backgroundColor: primaryColor, borderColor: primaryColor }]}><Eye color="#fff" size={18} /><Text style={[styles.mobileDocumentActionText, { color: '#fff' }]}>{t('preview', language)}</Text></TouchableOpacity></View>
+                <View style={styles.mobilePrimaryActions}>{!isFullyPaid && can('payment.create') ? <TouchableOpacity testID="invoice-add-payment-button" accessibilityRole="button" accessibilityLabel={documentType === 'PROFORMA' ? t('registerAdvance', language) : t('registerPayment', language)} onPress={() => documentType === 'PROFORMA' ? navigation.navigate('InvoiceForm', { documentType: 'ADVANCE_INVOICE', sourceDocumentId: invoice.id }) : navigation.navigate('PaymentForm', { invoiceId: invoice.id })} style={[styles.mobilePrimaryAction, { backgroundColor: primaryColor }]}><HandCoins color="#fff" size={21} /></TouchableOpacity> : null}{can('invoice.issue') ? <TouchableOpacity testID="invoice-send-button" accessibilityRole="button" accessibilityLabel={t('send', language)} onPress={handleSendEmail} style={[styles.mobileSecondaryAction, { backgroundColor: cardBg, borderColor }]}><Mail color={textColor} size={21} /></TouchableOpacity> : null}{can('financial.export') ? <TouchableOpacity testID="invoice-share-button" accessibilityRole="button" accessibilityLabel={t('share', language)} onPress={handleShare} style={[styles.mobileSecondaryAction, { backgroundColor: cardBg, borderColor }]}><Share2 color={textColor} size={21} /></TouchableOpacity> : null}</View>
+                <View style={styles.mobileDocumentActions}>{can('financial.export') ? <TouchableOpacity testID="invoice-print-button" accessibilityRole="button" accessibilityLabel={t('print', language)} onPress={handlePrint} style={[styles.mobileDocumentAction, { backgroundColor: primaryColor, borderColor: primaryColor }]}><Printer color="#fff" size={18} /><Text style={[styles.mobileDocumentActionText, { color: '#fff' }]}>{t('print', language)}</Text></TouchableOpacity> : null}<TouchableOpacity testID="invoice-preview-button" accessibilityRole="button" accessibilityLabel={t('preview', language)} onPress={handlePreview} style={[styles.mobileDocumentAction, { backgroundColor: primaryColor, borderColor: primaryColor }]}><Eye color="#fff" size={18} /><Text style={[styles.mobileDocumentActionText, { color: '#fff' }]}>{t('preview', language)}</Text></TouchableOpacity></View>
 
                 <Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('customer', language)}</Text>
                 <ShortcutRow testID="invoice-customer-detail-button" icon={UserRound} title={invoiceClient?.name || t('noClientAssigned', language)} description={invoiceClient?.email || invoiceClient?.phone || t('customerDetailsUnavailable', language)} onPress={() => invoiceClient?.id && navigation.navigate('CustomerDetail', { clientId: invoiceClient.id })} trailing={<ChevronRight color={mutedColor} size={18} />} />
@@ -599,29 +741,29 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     {items.length ? items.map((item, index) => <View key={item.id} style={[styles.mobileItemRow, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
                         <View style={styles.mobileItemCopy}>
                             <Text style={[styles.mobileItemName, { color: textColor }]}>{item.description}</Text>
-                            <Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{item.quantity} × {formatCurrency(Number(item.unit_price || 0))}</Text>
+                            <Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{item.quantity} × {formatCurrency(signedAmount(Number(item.unit_price || 0)))}</Text>
                         </View>
-                        <Text style={[styles.mobileItemTotal, { color: textColor }]}>{formatCurrency(detailTotals.lines[index]?.total ?? Number(item.amount || 0))}</Text>
+                        <Text style={[styles.mobileItemTotal, { color: textColor }]}>{formatCurrency(signedAmount(detailTotals.lines[index]?.total ?? Number(item.amount || 0)))}</Text>
                     </View>) : <Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{t('noLineItemsAvailable', language)}</Text>}
                     <View style={[styles.mobileTotals, { borderTopColor: borderColor }]}>
-                        <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('subtotal', language)}</Text><Text style={[styles.mobileTotalValue, { color: textColor }]}>{formatCurrency(detailTotals.subtotal)}</Text></View>
-                        {detailTotals.discount > 0 ? <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('discount', language)}</Text><Text style={[styles.mobileTotalValue, { color: brand.colors.success }]}>-{formatCurrency(detailTotals.discount)}</Text></View> : null}
-                        {detailTotals.tax > 0 ? <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('tax', language)}</Text><Text style={[styles.mobileTotalValue, { color: textColor }]}>{formatCurrency(detailTotals.tax)}</Text></View> : null}
-                        <View style={[styles.mobileTotalRow, { marginTop: 5 }]}><Text style={[styles.mobileTotalStrong, { color: textColor }]}>{t('total', language)}</Text><Text style={[styles.mobileTotalStrong, { color: primaryColor }]}>{formatCurrency(Number(invoice.total_amount || detailTotals.total))}</Text></View>
+                        <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('subtotal', language)}</Text><Text style={[styles.mobileTotalValue, { color: textColor }]}>{formatCurrency(signedAmount(detailTotals.subtotal))}</Text></View>
+                        {detailTotals.discount > 0 ? <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('discount', language)}</Text><Text style={[styles.mobileTotalValue, { color: brand.colors.success }]}>{isCreditNote ? formatCurrency(-Math.abs(detailTotals.discount)) : `-${formatCurrency(detailTotals.discount)}`}</Text></View> : null}
+                        {detailTotals.tax > 0 ? <View style={styles.mobileTotalRow}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('tax', language)}</Text><Text style={[styles.mobileTotalValue, { color: textColor }]}>{formatCurrency(signedAmount(detailTotals.tax))}</Text></View> : null}
+                        <View style={[styles.mobileTotalRow, { marginTop: 5 }]}><Text style={[styles.mobileTotalStrong, { color: textColor }]}>{t('total', language)}</Text><Text style={[styles.mobileTotalStrong, { color: primaryColor }]}>{formatCurrency(signedAmount(Number(invoice.total_amount || detailTotals.total)))}</Text></View>
                     </View>
                 </View>
 
                 <Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('incomePayments', language)}</Text>
-                <View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}>{payments.length ? payments.map((payment) => <View key={payment.id} style={styles.mobilePaymentRow}><View style={styles.mobilePaymentIcon}><HandCoins color={brand.colors.success} size={16} /></View><View style={styles.mobileItemCopy}><Text style={[styles.mobileItemName, { color: textColor }]}>{payment.payment_number || t('paymentReceived', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{payment.payment_date} · {payment.payment_method === 'cash' ? t('cash', language) : t('bank', language)}</Text></View><Text style={[styles.mobileItemTotal, { color: brand.colors.success }]}>+{formatCurrency(Number(payment.amount || 0))}</Text></View>) : <Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{t('noPaymentsRecordedYet', language)}</Text>}<View style={[styles.mobileOutstanding, { borderTopColor: borderColor }]}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('outstanding', language)}</Text><Text style={[styles.mobileTotalStrong, { color: outstandingTotal > 0 ? brand.colors.error : brand.colors.success }]}>{formatCurrency(outstandingTotal)}</Text></View></View>
+                <View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}>{payments.length ? payments.map((payment) => <View key={payment.id} style={styles.mobilePaymentRow}><View style={styles.mobilePaymentIcon}><HandCoins color={brand.colors.success} size={16} /></View><View style={styles.mobileItemCopy}><Text style={[styles.mobileItemName, { color: textColor }]}>{payment.payment_number || t('paymentReceived', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{payment.payment_date} · {payment.payment_method === 'cash' ? t('cash', language) : t('bank', language)}</Text></View><Text style={[styles.mobileItemTotal, { color: brand.colors.success }]}>+{formatCurrency(Number(payment.amount || 0))}</Text></View>) : <Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{t('noPaymentsRecordedYet', language)}</Text>}<View style={[styles.mobileOutstanding, { borderTopColor: borderColor }]}><Text style={[styles.mobileTotalLabel, { color: mutedColor }]}>{t('outstanding', language)}</Text><Text style={[styles.mobileTotalStrong, { color: displayOutstanding > 0 ? brand.colors.error : brand.colors.success }]}>{formatCurrency(displayOutstanding)}</Text></View></View>
 
-                {relatedDocuments.length ? <><Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('relatedDocuments', language)}</Text><View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}>{relatedDocuments.map((related) => { const relatedType = resolveCommercialDocumentType(related); return <TouchableOpacity key={related.id} accessibilityRole="button" onPress={() => navigation.push('InvoiceDetail', { invoiceId: related.id })} style={styles.mobileActivityRow}><View style={[styles.mobileActivityDot, { backgroundColor: primaryColor }]} /><View style={styles.mobileItemCopy}><Text style={[styles.mobileItemName, { color: textColor }]}>{documentTypeLabel(relatedType, language === 'sq' ? 'sq' : 'en')} · {related.invoice_number}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{formatCurrency(Number(related.total_amount || 0))} · {related.commercial_status || related.status}</Text></View><ChevronRight color={mutedColor} size={17} /></TouchableOpacity>; })}</View></> : null}
+                {relatedDocuments.length ? <><Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('relatedDocuments', language)}</Text><View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}>{relatedDocuments.map((related) => { const relatedType = resolveCommercialDocumentType(related); return <TouchableOpacity key={related.id} accessibilityRole="button" onPress={() => navigation.push('InvoiceDetail', { invoiceId: related.id })} style={styles.mobileActivityRow}><View style={[styles.mobileActivityDot, { backgroundColor: primaryColor }]} /><View style={styles.mobileItemCopy}><Text style={[styles.mobileItemName, { color: textColor }]}>{documentTypeLabel(relatedType, language === 'sq' ? 'sq' : 'en')} · {related.invoice_number}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{formatCurrency(relatedType === 'CREDIT_NOTE' ? -Math.abs(Number(related.total_amount || 0)) : Number(related.total_amount || 0))} · {related.commercial_status || related.status}</Text></View><ChevronRight color={mutedColor} size={17} /></TouchableOpacity>; })}</View></> : null}
                 {invoice.notes ? <><Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('notes', language)}</Text><View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}><Text style={[styles.mobileNotes, { color: textColor }]}>{invoice.notes}</Text></View></> : null}
                 <Text style={[styles.mobileSectionTitle, { color: textColor }]}>{t('recentActivity', language)}</Text>
                 <View style={[styles.mobileCard, { backgroundColor: cardBg, borderColor }]}>{(events.length ? events : [{ event_type: 'created', occurred_at: invoice.created_at || invoice.issue_date, to_status: (invoice as any).commercial_status || invoice.status }]).map((event, index) => <View key={event.id || `${event.event_type}-${index}`} style={styles.mobileActivityRow}><View style={[styles.mobileActivityDot, { backgroundColor: index === 0 ? primaryColor : brand.colors.success }]} /><View style={styles.mobileItemCopy}><Text style={[styles.mobileItemName, { color: textColor }]}>{event.event_type ? String(event.event_type).replace(/_/g, ' ') : t('created', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{event.occurred_at ? new Date(event.occurred_at).toLocaleString(language === 'sq' ? 'sq-XK' : 'en-US') : invoice.issue_date}{event.to_status ? ` · ${event.to_status}` : ''}</Text></View></View>)}</View>
                 <View style={{ height: 28 }} />
             </ScrollView>
 
-            <Modal visible={showMore} transparent animationType="slide" onRequestClose={() => setShowMore(false)}><View style={styles.mobileModalOverlay}><View style={[styles.mobileModalSheet, { backgroundColor: cardBg }]}><View style={styles.mobileSheetHandle} /><View style={styles.mobileSheetHeader}><View><Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('actions', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{documentLabel} · {t('sourceDocumentKept', language)}</Text></View><TouchableOpacity accessibilityRole="button" onPress={() => setShowMore(false)}><X color={textColor} size={21} /></TouchableOpacity></View>{canEditInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); navigation.navigate('InvoiceForm', { invoiceId: invoice.id, documentType }); }} style={styles.mobileMoreRow}><Edit color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('editInvoice', language)}</Text></TouchableOpacity> : null}<TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); handlePreview(); }} style={styles.mobileMoreRow}><Eye color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('preview', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleGeneratePdf(); }} style={styles.mobileMoreRow}><Download color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('share', language)} PDF</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handlePrint(); }} style={styles.mobileMoreRow}><Printer color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('print', language)}</Text></TouchableOpacity>{documentType === 'QUOTE' ? <><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('SALES_ORDER'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createOrder', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity></> : null}{documentType === 'PROFORMA' ? <><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('ADVANCE_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createAdvanceInvoice', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity></> : null}{documentType === 'SALES_ORDER' ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DELIVERY_NOTE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('deliveryNote', language)}</Text></TouchableOpacity> : null}{documentType === 'SALES_ORDER' || documentType === 'DELIVERY_NOTE' ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'ADVANCE_INVOICE' ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('FINAL_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createFinalInvoice', language)}</Text></TouchableOpacity> : null}{['INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType) ? <><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('CREDIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('creditNote', language)}</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DEBIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('debitNote', language)}</Text></TouchableOpacity></> : null}<Text style={[styles.mobileMoreLabel, { color: mutedColor }]}>{t('changeStatus', language)}</Text><View style={styles.mobileStatusOptions}>{['draft', 'sent', 'paid', 'overdue', 'cancelled'].map((nextStatus) => <TouchableOpacity key={nextStatus} accessibilityRole="button" onPress={() => { setShowMore(false); void handleUpdateStatus(nextStatus); }} style={[styles.mobileStatusOption, { borderColor: invoice.status === nextStatus ? primaryColor : borderColor, backgroundColor: invoice.status === nextStatus ? `${primaryColor}14` : cardBg }]}><Text style={[styles.mobileStatusOptionText, { color: invoice.status === nextStatus ? primaryColor : mutedColor }]}>{nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}</Text></TouchableOpacity>)}</View>{canDeleteInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleDelete(); }} style={[styles.mobileMoreRow, { marginTop: 6 }]}><Trash2 color={brand.colors.error} size={18} /><Text style={[styles.mobileMoreText, { color: brand.colors.error }]}>{t('deleteInvoice', language)}</Text></TouchableOpacity> : null}</View></View></Modal>
+            <Modal visible={showMore} transparent animationType="slide" onRequestClose={() => setShowMore(false)}><View style={styles.mobileModalOverlay}><View style={[styles.mobileModalSheet, { backgroundColor: cardBg }]}><View style={styles.mobileSheetHandle} /><View style={styles.mobileSheetHeader}><View><Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('actions', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{documentLabel} · {t('sourceDocumentKept', language)}</Text></View><TouchableOpacity accessibilityRole="button" onPress={() => setShowMore(false)}><X color={textColor} size={21} /></TouchableOpacity></View>{canEditInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); navigation.navigate('InvoiceForm', { invoiceId: invoice.id, documentType }); }} style={styles.mobileMoreRow}><Edit color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('editInvoice', language)}</Text></TouchableOpacity> : null}<TouchableOpacity testID="invoice-more-preview-button" accessibilityRole="button" onPress={() => { setShowMore(false); handlePreview(); }} style={styles.mobileMoreRow}><Eye color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('preview', language)}</Text></TouchableOpacity>{canExportInvoice ? <><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleGeneratePdf(); }} style={styles.mobileMoreRow}><Download color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('share', language)} PDF</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handlePrint(); }} style={styles.mobileMoreRow}><Printer color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('print', language)}</Text></TouchableOpacity></> : null}{documentType === 'QUOTE' && canConvertTo('SALES_ORDER') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('SALES_ORDER'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createOrder', language)}</Text></TouchableOpacity> : null}{documentType === 'QUOTE' && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'PROFORMA' && canConvertTo('ADVANCE_INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('ADVANCE_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createAdvanceInvoice', language)}</Text></TouchableOpacity> : null}{documentType === 'PROFORMA' && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE', language); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'SALES_ORDER' && canConvertTo('DELIVERY_NOTE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DELIVERY_NOTE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('deliveryNote', language)}</Text></TouchableOpacity> : null}{(documentType === 'SALES_ORDER' || documentType === 'DELIVERY_NOTE') && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'ADVANCE_INVOICE' && canConvertTo('FINAL_INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('FINAL_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createFinalInvoice', language)}</Text></TouchableOpacity> : null}{['INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType) && canConvertTo('CREDIT_NOTE') ? <TouchableOpacity testID="invoice-create-credit-note-button" accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('CREDIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('creditNote', language)}</Text></TouchableOpacity> : null}{['INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType) && canConvertTo('DEBIT_NOTE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DEBIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('debitNote', language)}</Text></TouchableOpacity> : null}<Text style={[styles.mobileMoreLabel, { color: mutedColor }]}>{t('changeStatus', language)}</Text><View style={styles.mobileStatusOptions}>{invoiceStatusOptions.map((option) => { const disabled = Boolean(updatingStatus) || !canTransitionInvoiceStatus(invoice, option.key) || !can(permissionForInvoiceStatus(invoice, option.key)); const selected = isInvoiceStatusSelected(invoice, option); return <TouchableOpacity key={option.key} testID={`invoice-status-${option.key}-button`} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} onPress={() => { setShowMore(false); void handleUpdateStatus(option.key); }} style={[styles.mobileStatusOption, { borderColor: selected ? primaryColor : borderColor, backgroundColor: selected ? `${primaryColor}14` : cardBg, opacity: disabled ? 0.45 : 1 }]}><Text style={[styles.mobileStatusOptionText, { color: selected ? primaryColor : mutedColor }]}>{option.key.charAt(0).toUpperCase() + option.key.slice(1)}</Text></TouchableOpacity>; })}</View>{canDeleteInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleDelete(); }} style={[styles.mobileMoreRow, { marginTop: 6 }]}><Trash2 color={brand.colors.error} size={18} /><Text style={[styles.mobileMoreText, { color: brand.colors.error }]}>{t('deleteInvoice', language)}</Text></TouchableOpacity> : null}</View></View></Modal>
 
             <Modal visible={showPreview} animationType="slide"><View style={{ flex: 1, backgroundColor: bgColor }}><View style={styles.mobilePreviewHeader}><TouchableOpacity testID="invoice-preview-close-button" accessibilityRole="button" onPress={() => setShowPreview(false)}><X color={textColor} size={23} /></TouchableOpacity><Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('invoicePreview', language)}</Text><TouchableOpacity testID="invoice-preview-print-button" accessibilityRole="button" onPress={handlePrint}><Printer color={primaryColor} size={22} /></TouchableOpacity></View><WebView testID="invoice-preview-webview" source={{ html: htmlContent }} style={{ flex: 1 }} originWhitelist={['*']} /></View></Modal>
         </MobileScreen>
@@ -648,7 +790,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     </View>
                 </View>
                 <View style={styles.headerRight}>
-                    {invoice.type === 'offer' && (
+                    {invoice.type === 'offer' && canConvertTo('INVOICE') && (
                         <TouchableOpacity
                             style={[styles.smallActionBtn, { backgroundColor: primaryColor, marginRight: 8 }]}
                             onPress={handleTransformToInvoice}
@@ -675,7 +817,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Status Card */}
                 <Card style={styles.mainCard}>
                     <View style={styles.mainCardHeader}>
@@ -704,18 +846,21 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 {canManageInvoice ? <>
                     <Text style={[styles.sectionTitle, { color: textColor }]}>{t('statusUpdate', language)}</Text>
                     <View style={styles.statusScroll}>
-                        {['draft', 'sent', 'paid', 'overdue'].map((status) => (
+                        {invoiceStatusOptions.map((option) => (
                             <TouchableOpacity
-                                key={status}
+                                key={option.key}
+                                testID={`invoice-status-${option.key}-legacy-button`}
+                                disabled={Boolean(updatingStatus) || !canTransitionInvoiceStatus(invoice, option.key) || !can(permissionForInvoiceStatus(invoice, option.key))}
                                 style={[
                                     styles.statusChip,
                                     { backgroundColor: cardBg, borderColor },
-                                    invoice.status === status && { backgroundColor: primaryColor, borderColor: primaryColor }
+                                    isInvoiceStatusSelected(invoice, option) && { backgroundColor: primaryColor, borderColor: primaryColor },
+                                    (!canTransitionInvoiceStatus(invoice, option.key) || updatingStatus) && { opacity: 0.45 },
                                 ]}
-                                onPress={() => handleUpdateStatus(status)}
+                                onPress={() => handleUpdateStatus(option.key)}
                             >
-                                <Text style={[styles.statusChipText, { color: invoice.status === status ? '#fff' : mutedColor }]}>
-                                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                                <Text style={[styles.statusChipText, { color: isInvoiceStatusSelected(invoice, option) ? '#fff' : mutedColor }]}>
+                                    {option.key.charAt(0).toUpperCase() + option.key.slice(1)}
                                 </Text>
                             </TouchableOpacity>
                         ))}
@@ -784,6 +929,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             icon={Share2}
                             variant="secondary"
                             style={{ flex: 1 }}
+                            disabled={!canExportInvoice}
                         />
                         <Button
                             title={t('email', language)}
@@ -792,6 +938,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             variant="secondary"
                             style={{ flex: 1 }}
                             loading={sending}
+                            disabled={!can('invoice.issue')}
                         />
                     </View>
 
@@ -803,6 +950,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             variant="primary" // Changed to primary for visibility/differentiation logic or kept utility
                             style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
+                            disabled={!canExportInvoice}
                         />
                         <Button
                             title={t('receiptPrint', language)}
@@ -811,6 +959,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             variant="primary"
                             style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
+                            disabled={!canExportInvoice}
                         />
                     </View>
 
@@ -822,6 +971,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             variant="primary"
                             style={{ flex: 1, backgroundColor: isDark ? '#263A55' : '#E4E9F0' }}
                             textStyle={{ color: textColor }}
+                            disabled={!canExportInvoice}
                         />
                     </View>
                 </View>

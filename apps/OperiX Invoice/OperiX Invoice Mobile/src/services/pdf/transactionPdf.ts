@@ -10,7 +10,11 @@ export type TransactionPdfInput = {
     fileName?: string;
     number?: string;
     amount: number;
+    netAmount?: number;
+    vatRate?: number;
+    vatAmount?: number;
     date: string;
+    article?: string;
     description?: string;
     notes?: string;
     category?: string;
@@ -69,6 +73,8 @@ export function generateTransactionPdfHtml(data: TransactionPdfInput): string {
                 : data.method || (transactionType === 'expense' ? t('expense', language) : transactionType === 'income' ? t('income', language) : undefined);
     const counterpartyLabel = data.counterpartyType === 'vendor' ? t('vendor', language) : t('customer', language);
     const amountLabel = formatCurrency(data.amount, data.currency || 'EUR', language);
+    const netAmountLabel = formatCurrency(data.netAmount ?? data.amount, data.currency || 'EUR', language);
+    const vatAmountLabel = formatCurrency(data.vatAmount || 0, data.currency || 'EUR', language);
     const displayDate = formatPdfDate(data.date);
     const relatedDocumentLabel = data.relatedDocumentLabel || (data.counterpartyType === 'vendor' ? t('supplierBill', language) : t('invoice', language));
     const companyAddress = [company.address, company.city, company.country].filter(Boolean).join(', ');
@@ -82,6 +88,10 @@ export function generateTransactionPdfHtml(data: TransactionPdfInput): string {
     const categoryCell = data.category && data.counterparty
         ? `<div class="info-cell"><div class="label">${escapeHtml(t('category', language))}</div><div class="value">${escapeHtml(data.category)}</div></div>`
         : '';
+    const articleCell = data.article
+        ? `<div class="info-cell"><div class="label">${escapeHtml(t('article', language))}</div><div class="value">${escapeHtml(data.article)}</div></div>`
+        : '';
+    const vatBreakdown = data.netAmount !== undefined || data.vatAmount !== undefined;
     const counterpartyInfoCells = data.counterparty
         ? `${data.counterpartyEmail ? `<div class="info-cell"><div class="label">Email</div><div class="value">${escapeHtml(data.counterpartyEmail)}</div></div>` : ''}${data.counterpartyPhone ? `<div class="info-cell"><div class="label">${escapeHtml(t('phone', language))}</div><div class="value">${escapeHtml(data.counterpartyPhone)}</div></div>` : ''}${data.counterpartyAddress ? `<div class="info-cell"><div class="label">${escapeHtml(t('address', language))}</div><div class="value">${escapeHtml(data.counterpartyAddress)}</div></div>` : ''}`
         : '';
@@ -137,7 +147,7 @@ export function generateTransactionPdfHtml(data: TransactionPdfInput): string {
       .signatures { margin-top:auto; margin-bottom:16px; display:flex; justify-content:center; align-items:flex-end; gap:18px; page-break-inside:avoid; }
       .signature-block { width:30%; min-width:92px; text-align:center; font-size:8px; color:#667085; }
       .signature-asset { height:71px; display:flex; align-items:flex-end; justify-content:center; }
-      .signature-asset img { max-width:100%; max-height:68px; object-fit:contain; }
+      .signature-asset img { max-width:100%; max-height:68px; object-fit:contain; filter:brightness(0) saturate(100%) invert(25%) sepia(99%) saturate(4164%) hue-rotate(218deg) brightness(98%) contrast(104%); -webkit-filter:brightness(0) saturate(100%) invert(25%) sepia(99%) saturate(4164%) hue-rotate(218deg) brightness(98%) contrast(104%); }
       .signature-line { border-top:1px solid #172033; margin-top:5px; }
       .signature-label { margin-top:5px; line-height:1.2; }
       .stamp-asset { height:80px; display:flex; align-items:center; justify-content:center; }
@@ -150,9 +160,9 @@ export function generateTransactionPdfHtml(data: TransactionPdfInput): string {
         <header class="header"><div>${identity}</div><div class="document-head"><div class="document-label">${escapeHtml(data.title)}</div><div class="document-number">${escapeHtml(data.number || '—')}</div><div class="document-status">${escapeHtml(documentStatusLabel)}</div></div></header>
         <div class="title">${escapeHtml(data.title)}</div>
         <section class="payment-hero"><div><div class="hero-label">${escapeHtml(amountText)}</div><div class="hero-value">${escapeHtml(amountLabel)}</div></div><div class="hero-method">${escapeHtml(methodLabel || '—')}</div></section>
-        <section class="info-grid"><div class="info-cell"><div class="label">${escapeHtml(t('dateLabel', language))}</div><div class="value">${escapeHtml(displayDate)}</div></div>${partyCell}<div class="info-cell"><div class="label">${escapeHtml(t('paymentMethod', language))}</div><div class="value">${escapeHtml(methodLabel || data.method || '—')}</div></div>${data.relatedDocumentNumber ? `<div class="info-cell"><div class="label">${escapeHtml(relatedDocumentLabel)}</div><div class="value">${escapeHtml(data.relatedDocumentNumber)}</div></div>` : ''}${data.reference ? `<div class="info-cell"><div class="label">${escapeHtml(t('bankReference', language))}</div><div class="value">${escapeHtml(data.reference)}</div></div>` : ''}${counterpartyInfoCells}${categoryCell}</section>
+        <section class="info-grid"><div class="info-cell"><div class="label">${escapeHtml(t('dateLabel', language))}</div><div class="value">${escapeHtml(displayDate)}</div></div>${partyCell}<div class="info-cell"><div class="label">${escapeHtml(t('paymentMethod', language))}</div><div class="value">${escapeHtml(methodLabel || data.method || '—')}</div></div>${data.relatedDocumentNumber ? `<div class="info-cell"><div class="label">${escapeHtml(relatedDocumentLabel)}</div><div class="value">${escapeHtml(data.relatedDocumentNumber)}</div></div>` : ''}${data.reference ? `<div class="info-cell"><div class="label">${escapeHtml(t('bankReference', language))}</div><div class="value">${escapeHtml(data.reference)}</div></div>` : ''}${counterpartyInfoCells}${articleCell}${categoryCell}</section>
         ${data.description || data.notes ? `<section class="details"><div class="details-title">${escapeHtml(t('paymentDetails', language))}</div>${data.description ? `<div class="details-row"><div class="details-label">${escapeHtml(t('description', language))}</div><div class="details-value">${escapeHtml(data.description)}</div></div>` : ''}${data.notes ? `<div class="details-row"><div class="details-label">${escapeHtml(t('notes', language))}</div><div class="details-value">${escapeHtml(data.notes)}</div></div>` : ''}</section>` : ''}
-        <section class="summary"><div class="summary-row"><span>${escapeHtml(amountText)}</span><b>${escapeHtml(amountLabel)}</b></div><div class="summary-row grand"><span>${escapeHtml(t('total', language))}</span><span>${escapeHtml(amountLabel)}</span></div></section>
+        <section class="summary">${vatBreakdown ? `<div class="summary-row"><span>${escapeHtml(t('priceWithoutVat', language))}</span><b>${escapeHtml(netAmountLabel)}</b></div><div class="summary-row"><span>${escapeHtml(t('vatAmount', language))}${data.vatRate !== undefined ? ` (${escapeHtml(data.vatRate)}%)` : ''}</span><b>${escapeHtml(vatAmountLabel)}</b></div>` : `<div class="summary-row"><span>${escapeHtml(amountText)}</span><b>${escapeHtml(amountLabel)}</b></div>`}<div class="summary-row grand"><span>${escapeHtml(vatBreakdown ? t('totalWithVat', language) : amountText)}</span><span>${escapeHtml(amountLabel)}</span></div></section>
         ${signaturesMarkup}
         <footer class="footer"><div><b>${escapeHtml(t('bank', language))}:</b> ${escapeHtml(company.bankName || '—')}<br><b>IBAN:</b> ${escapeHtml(company.iban || '—')}${company.taxId ? `<br><b>ID:</b> ${escapeHtml(company.taxId)}` : ''}</div><div class="footer-center">${escapeHtml(companyAddress)}<br>${escapeHtml(company.phone || '')}</div><div class="footer-right">${escapeHtml(company.email || '')}<br>${escapeHtml(company.website || '')}<br>${escapeHtml(t('generatedByOperix', language))}</div></footer>
       </main>

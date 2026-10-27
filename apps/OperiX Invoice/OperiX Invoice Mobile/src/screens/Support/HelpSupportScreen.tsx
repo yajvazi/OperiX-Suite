@@ -12,6 +12,7 @@ import {
     loadRecentlyViewedHelpArticleIds,
     resolveDocumentationLanguage,
     searchHelpArticles,
+    HELP_CENTER_URL,
     type DocumentationLanguage,
 } from '../../services/helpDocumentation';
 import { brand, getPalette } from '../../theme/brand';
@@ -19,7 +20,6 @@ import { EmptyState, MobileHeader, MobileScreen, SearchField, SectionTitle } fro
 import { HelpArticleCard, HelpCategoryCard, HelpLanguageToggle } from '../../components/mobile/HelpCenterUI';
 import { MOBILE_DOC_CATEGORIES } from '../../generated/mobileDocs';
 
-const HELP_CENTER_URL = 'https://helpdesk.operixsuite.com';
 const CONTACT_URL = 'https://operixsuite.com/#contact';
 
 const COPY = {
@@ -95,12 +95,13 @@ export function HelpSupportScreen({ navigation, route }: Props) {
 
     return (
         <MobileScreen testID="help-support-screen">
-            <MobileHeader
-                title={copy.title}
-                subtitle={copy.subtitle}
-                onBack={() => navigation.goBack()}
-                right={<HelpLanguageToggle language={documentationLanguage} onChange={setDocumentationLanguage} />}
-            />
+            <View style={styles.screenContent}>
+                <MobileHeader
+                    title={copy.title}
+                    subtitle={copy.subtitle}
+                    onBack={() => navigation.goBack()}
+                    right={<HelpLanguageToggle language={documentationLanguage} onChange={setDocumentationLanguage} />}
+                />
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={[styles.introCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                     <View style={[styles.introIcon, { backgroundColor: palette.iconSurface }]}><LifeBuoy color={brand.colors.primary} size={23} /></View>
@@ -180,11 +181,13 @@ export function HelpSupportScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
                 <View style={{ height: 26 }} />
             </ScrollView>
+            </View>
         </MobileScreen>
     );
 }
 
 const styles = StyleSheet.create({
+    screenContent: { flex: 1 },
     content: { paddingHorizontal: 20, paddingBottom: 24 },
     introCard: { borderWidth: 1, borderRadius: 19, padding: 15, flexDirection: 'row', alignItems: 'center', marginBottom: 14, ...brand.shadow.card },
     introIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 12 },

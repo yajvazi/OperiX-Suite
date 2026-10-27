@@ -336,7 +336,7 @@ export function PaymentsListScreen({ navigation }: any) {
       </Card>
 
       {/* Payments List */}
-      <FlatList
+      <FlatList keyboardShouldPersistTaps="handled"
         data={payments}
         renderItem={renderPayment}
         keyExtractor={(item) => item.id}

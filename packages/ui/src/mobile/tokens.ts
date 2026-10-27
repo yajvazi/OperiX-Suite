@@ -55,8 +55,8 @@ export const operixMobileTokens = {
         sectionSpacing: 20,
         cardPadding: 16,
         headerHeight: 68,
-        bottomNavigationHeightIOS: 88,
-        bottomNavigationHeightAndroid: 68,
+        bottomNavigationHeightIOS: 82,
+        bottomNavigationHeightAndroid: 66,
     },
     radii: {
         control: 14,

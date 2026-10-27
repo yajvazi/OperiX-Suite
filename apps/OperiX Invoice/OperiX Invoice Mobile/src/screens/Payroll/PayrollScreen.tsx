@@ -66,7 +66,7 @@ export function PayrollScreen() {
     const openLiability = liabilities.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid_amount || 0), 0);
 
     if (loading) return <View style={[styles.center, { backgroundColor: palette.background }]}><ActivityIndicator color="#004FFE" /></View>;
-    return <ScrollView style={{ backgroundColor: palette.background }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+    return <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: palette.background }} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
         <Text style={[styles.eyebrow, { color: '#004FFE' }]}>OPERIX INVOICE</Text>
         <Text style={[styles.title, { color: palette.text }]}>{t('payroll', language)}</Text>
         <Text style={[styles.subtitle, { color: palette.muted }]}>{t('securePayrollSubtitle', language)}</Text>

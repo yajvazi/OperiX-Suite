@@ -7,12 +7,13 @@ import {
     TouchableOpacity,
     StyleSheet,
     Alert,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
     Modal,
-    TextInput,
-    Switch
+    Switch,
+    TextInput
 } from 'react-native';
 import {
     ArrowLeft,
@@ -23,6 +24,13 @@ import {
     Trash2,
     FileText,
     CreditCard,
+    Banknote,
+    Landmark,
+    Globe2,
+    Clock3,
+    Store,
+    Truck,
+    BusFront,
     Check,
     Search,
     ChevronDown,
@@ -38,49 +46,67 @@ import { WebView } from 'react-native-webview';
 import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
+import { isCashPaymentAllowed } from '@invoice-monorepo/api/domain';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input, SignaturePadModal } from '@invoice-monorepo/ui';
 import { Invoice, InvoiceItem, Client, Product, Profile, PaymentMethod } from '@invoice-monorepo/types';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { calculateInvoice } from '@invoice-monorepo/money';
-import { applySalesBookAmendment, buildSalesBookAmendmentPayload, completePosSale, getInvoice, listCustomers, listInvoices, listProducts, saveCustomerPayment, saveInvoiceDocument, setInvoiceDeliveryDetails, setInvoiceProductPictures, type InvoiceDraftInput } from '@invoice-monorepo/api/repositories';
+import { applySalesBookAmendment, buildSalesBookAmendmentPayload, completePosSale, getInvoice, getPreferredBranchId, listBranches, listCustomers, listInvoices, listProductBranchStock, listProducts, saveCustomerPayment, saveInvoiceDocument, setInvoiceBranch, setInvoiceDeliveryDetails, setInvoiceProductPictures, type InvoiceDraftInput } from '@invoice-monorepo/api/repositories';
 import type { CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 import {
+    COMMERCIAL_DOCUMENT_TYPES,
+    DOCUMENT_DEFINITIONS,
     documentTypeLabel,
     resolveCommercialDocumentType,
 } from '@invoice-monorepo/commercial-documents';
 import { normalizeBrandColor } from '../../theme/brand';
-import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
+import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { notifyInvoiceCreated } from '../../services/pushNotifications';
+import { openExternalLink } from '../../services/externalLinks';
+import { getHelpdeskArticleUrl } from '../../services/helpDocumentation';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import * as Crypto from 'expo-crypto';
-
 interface InvoiceFormScreenProps {
     navigation: any;
     route: any;
 }
-
 const wholePercentageValue = (value: unknown) => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return 0;
     return Math.min(100, Math.max(0, Math.trunc(parsed)));
 };
-
+const documentTypeHelpKeys = {
+    QUOTE: 'documentTypeHelpQuote',
+    PROFORMA: 'documentTypeHelpProforma',
+    SALES_ORDER: 'documentTypeHelpSalesOrder',
+    DELIVERY_NOTE: 'documentTypeHelpDeliveryNote',
+    INVOICE: 'documentTypeHelpInvoice',
+    ADVANCE_INVOICE: 'documentTypeHelpAdvanceInvoice',
+    FINAL_INVOICE: 'documentTypeHelpFinalInvoice',
+    CREDIT_NOTE: 'documentTypeHelpCreditNote',
+    DEBIT_NOTE: 'documentTypeHelpDebitNote',
+    SIMPLIFIED_INVOICE: 'documentTypeHelpSimplifiedInvoice',
+    FISCAL_RECEIPT: 'documentTypeHelpFiscalReceipt',
+    BAD_DEBT_INVOICE: 'documentTypeHelpBadDebtInvoice',
+} as const;
 const wholePercentageText = (text: string) => {
     const integerPart = text.split(/[.,]/, 1)[0].replace(/\D/g, '');
     return integerPart ? String(wholePercentageValue(integerPart)) : '';
 };
-
 const paymentTypeLabel = (value: PaymentMethod, language: 'en' | 'sq') => {
     switch (value) {
         case 'cash': return t('cash', language);
         case 'bank': return t('bankTransfer', language);
         case 'card': return t('card', language);
+        case 'online_payment': return t('onlinePayment', language);
+        case 'cheque': return t('cheque', language);
+        case 'other': return t('other', language);
+        case 'customer_credit': return t('debt', language);
         default: return value;
     }
 };
-
 type DeliveryMethod = 'pickup' | 'delivery' | 'bus' | 'other';
 type DueDatePreset = 'one_week' | 'two_weeks' | 'one_month' | 'two_months' | 'three_months' | 'custom';
 type StoreLocation = {
@@ -90,7 +116,6 @@ type StoreLocation = {
     registered_address?: string | null;
     municipality?: string | null;
 };
-
 function addMonthsClamped(date: Date, months: number) {
     const result = new Date(date);
     const day = result.getDate();
@@ -100,24 +125,20 @@ function addMonthsClamped(date: Date, months: number) {
     result.setDate(Math.min(day, lastDay));
     return result;
 }
-
 function toMinorCurrencyUnits(value: number) {
     return Math.round((Number.isFinite(value) ? value : 0) * 100);
 }
-
 export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps) {
     const { user } = useAuth();
     const { isDark, language, primaryColor } = useTheme();
     const { invoiceId, clientId, type = 'invoice', subtype = 'regular', documentType: routeDocumentType, sourceDocumentId, documentKey, salesBookAmendmentId, posCart, posCustomerId, posPaymentMethod, posIdempotencyKey } = route.params || {};
     const initialDocumentType = (routeDocumentType || resolveCommercialDocumentType({ type, subtype })) as CommercialDocumentType;
     const isPosFlow = Array.isArray(posCart) && posCart.length > 0;
-
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const saveInFlight = useRef(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
-
     // Form State
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [issueDate, setIssueDate] = useState(new Date());
@@ -125,8 +146,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [dueDatePreset, setDueDatePreset] = useState<DueDatePreset | null>(null);
     const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | null>(null);
     const [deliveryDetails, setDeliveryDetails] = useState('');
+    const [postCod, setPostCod] = useState(false);
     const [pickupBranchId, setPickupBranchId] = useState<string | null>(null);
+    const [invoiceBranchId, setInvoiceBranchId] = useState<string | null>(null);
     const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
+    const [branchStockByProduct, setBranchStockByProduct] = useState<Record<string, number>>({});
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [walkInCustomer, setWalkInCustomer] = useState<Client | null>(null);
     const [items, setItems] = useState<Partial<InvoiceItem>[]>([]);
@@ -140,14 +164,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank');
     const [amountReceived, setAmountReceived] = useState('');
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+    const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
+    const [platformAdmin, setPlatformAdmin] = useState(false);
     const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
-    const [invoiceNumberAutoGenerated, setInvoiceNumberAutoGenerated] = useState(true);
     const [customerSignatureRequested, setCustomerSignatureRequested] = useState(false);
     const [customerSignature, setCustomerSignature] = useState<string | null>(null);
     const [showCustomerSignaturePad, setShowCustomerSignaturePad] = useState(false);
-    const [showProductPictures, setShowProductPictures] = useState(false);
-
+    const [showProductPictures, setShowProductPictures] = useState(true);
     // Pickers
     const [showClientPicker, setShowClientPicker] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
@@ -159,23 +182,36 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showDueDateOptions, setShowDueDateOptions] = useState(false);
     const [showPickupBranchPicker, setShowPickupBranchPicker] = useState(false);
+    const [showDocumentTypePicker, setShowDocumentTypePicker] = useState(false);
     const [datePickerMode, setDatePickerMode] = useState<'issue' | 'due'>('issue');
     const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-    const [showInvoiceStamp, setShowInvoiceStamp] = useState(false);
+    const [showInvoiceStamp, setShowInvoiceStamp] = useState(true);
     const [showInvoiceSignature, setShowInvoiceSignature] = useState(true);
-
     // Preview State
     const [showPreview, setShowPreview] = useState(false);
     const [previewHtml, setPreviewHtml] = useState('');
-
     const bgColor = isDark ? '#0D1B2A' : '#F7F9FC';
     const textColor = isDark ? '#fff' : '#111827';
     const mutedColor = isDark ? '#98A2B3' : '#667085';
     const cardBg = isDark ? '#14243A' : '#ffffff';
     const borderColor = isDark ? '#263A55' : '#E4E9F0';
+    const modalBackdropColor = isDark ? 'rgba(0,0,0,0.96)' : 'rgba(0,0,0,0.72)';
+    const currency = profile?.currency || 'EUR';
+    const canPermission = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
+    const documentPermission = (typeOption: CommercialDocumentType) => typeOption === 'QUOTE' ? 'offer.create'
+        : typeOption === 'PROFORMA' ? 'proforma.create'
+            : typeOption === 'SALES_ORDER' ? 'order.create'
+                : typeOption === 'DELIVERY_NOTE' ? 'delivery_note.create'
+                    : typeOption === 'CREDIT_NOTE' ? 'invoice.credit'
+                        : typeOption === 'DEBIT_NOTE' ? 'invoice.debit'
+                            : 'invoice.create';
     const selectedCustomerIsWalkIn = !selectedClient || selectedClient.pos_walk_in_customer === true;
     const selectedCustomerName = selectedCustomerIsWalkIn ? t('walkInCustomer', language) : selectedClient?.name || t('walkInCustomer', language);
     const selectedPickupLocation = storeLocations.find((location) => location.id === pickupBranchId) || null;
+    const selectedOperatingBranch = storeLocations.find((location) => location.id === invoiceBranchId) || null;
+    const operatingBranchLabel = selectedOperatingBranch
+        ? selectedOperatingBranch.code || ''
+        : '';
     const resolvedDeliveryDetails = deliveryMethod === 'pickup'
         ? selectedPickupLocation
             ? [selectedPickupLocation.name, selectedPickupLocation.registered_address, selectedPickupLocation.municipality].filter(Boolean).join(', ')
@@ -189,11 +225,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             || !['DRAFT', 'SENT', 'VIEWED'].includes(String(commercialStatus || '').toUpperCase())
         )
     );
-
     useEffect(() => {
         void loadData();
     }, [user?.id]);
-
     // The customer form is opened on top of this screen. Refresh only the
     // customer collection when returning so a newly-created customer is
     // available without resetting the invoice draft.
@@ -203,7 +237,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             void refreshClients();
         }, [user?.id, loading])
     );
-
     const refreshClients = async () => {
         if (!user) return;
         try {
@@ -216,18 +249,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             console.error('Unable to refresh invoice customers:', error);
         }
     };
-
     const loadData = async () => {
         setLoading(true);
         if (!user) {
             setLoading(false);
             return;
         }
-
         // Load the workspace first because its company scope includes all
         // subdivisions when a main/group company is selected.
         const workspaceScope = await getWorkspaceScope(user.id);
-        setWorkspaceRole(workspaceScope.roleCode);
+        setWorkspacePermissions(workspaceScope.permissions);
+        setPlatformAdmin(workspaceScope.platformAdmin);
         const { profile: workspaceProfile, company: activeCompany } = workspaceScope;
         const companyIds = workspaceScope.companyIds;
         const productCompanyIds = getActiveProductCompanyIds(workspaceScope);
@@ -242,13 +274,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const customersCacheKey = mobileCacheKey('customers', user.id, companyIds);
         const productsCacheKey = mobileCacheKey('products', user.id, productCompanyIds);
         const storeLocationsPromise = resolvedCompanyId && typeof (supabase as any).from === 'function'
-            ? supabase
-                .from('branches')
-                .select('id,name,code,registered_address,municipality')
-                .eq('company_id', resolvedCompanyId)
-                .eq('is_active', true)
-                .order('name')
-            : Promise.resolve({ data: [], error: null } as any);
+            ? listBranches(supabase, resolvedCompanyId)
+            : Promise.resolve([] as StoreLocation[]);
         const [cachedClients, cachedProducts] = await Promise.all([
             readMobileCache<Client[]>(customersCacheKey),
             readMobileCache<Product[]>(productsCacheKey),
@@ -263,15 +290,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const walkInCustomerPromise = !invoiceId && !isPosFlow && resolvedCompanyId
             ? supabase.rpc('ensure_walk_in_customer', { p_company_id: resolvedCompanyId })
             : Promise.resolve({ data: null, error: null } as any);
-
-        const [{ data: clientsData }, { data: productsData }, invoiceResult, walkInCustomerResult, storeLocationsResult] = await Promise.all([
+        const [clientsResult, productsResult, invoiceResult, walkInCustomerResult, storeLocationsResult] = await Promise.all([
             clientsPromise,
             productsPromise,
             invoicePromise,
             walkInCustomerPromise,
             storeLocationsPromise,
         ]);
-        const storeRows = (storeLocationsResult?.data || []) as StoreLocation[];
+        const clientsData = clientsResult.data;
+        const productsData = productsResult.data;
+        const storeRows = (storeLocationsResult || []) as unknown as StoreLocation[];
         setStoreLocations(storeRows);
         const clientRows = clientsData as unknown as Client[];
         const productRows = productsData as unknown as Product[];
@@ -283,13 +311,22 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             setProducts(productRows);
             writeMobileCache(productsCacheKey, productRows);
         }
-
         const existingWalkInCustomer = clientRows.find((client) => client.pos_walk_in_customer) || null;
         const ensuredWalkInCustomer = (walkInCustomerResult.data || existingWalkInCustomer) as Client | null;
         if (ensuredWalkInCustomer) setWalkInCustomer(ensuredWalkInCustomer);
-
         if (!invoiceId) {
-            if (storeRows.length === 1) setPickupBranchId(storeRows[0].id);
+            const preferredBranchId = resolvedCompanyId && user?.id
+                ? await getPreferredBranchId(supabase, user.id, resolvedCompanyId).catch(() => null)
+                : null;
+            const defaultBranchId = preferredBranchId && storeRows.some((row) => row.id === preferredBranchId)
+                ? preferredBranchId
+                : storeRows.length === 1 ? storeRows[0].id : null;
+            if (defaultBranchId) {
+                setInvoiceBranchId(defaultBranchId);
+                setPickupBranchId(defaultBranchId);
+                const branchStock = await listProductBranchStock(supabase, resolvedCompanyId!, defaultBranchId).catch(() => []);
+                setBranchStockByProduct(Object.fromEntries(branchStock.map((row) => [row.product_id, Number(row.stock_quantity) || 0])));
+            }
             const initialClientId = clientId || posCustomerId;
             if (initialClientId && clientsData) {
                 const initialClient = clientRows.find((client) => client.id === initialClientId);
@@ -316,18 +353,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 setPaymentMethod(posPaymentMethod === 'cash' ? 'cash' : posPaymentMethod === 'card' ? 'card' : 'bank');
             }
         }
-
         // Load the invoice and its line items in the same request when editing.
         if (invoiceId) {
             const invoice = invoiceResult.data as any;
-
             if (invoice) {
                 const resolvedType = resolveCommercialDocumentType(invoice);
                 setDocumentType(resolvedType);
                 setLinkedSourceDocumentId(invoice.source_document_id || sourceDocumentId || null);
                 setAccountingState(String(invoice.accounting_state || 'legacy').toLowerCase());
                 setInvoiceNumber(invoice.invoice_number);
-                setInvoiceNumberAutoGenerated(false);
                 setIssueDate(new Date(invoice.issue_date));
                 if (invoice.due_date) {
                     setDueDate(new Date(invoice.due_date));
@@ -335,7 +369,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 }
                 setDeliveryMethod((invoice.delivery_method as DeliveryMethod | null) || null);
                 setDeliveryDetails(invoice.delivery_details || '');
+                setPostCod(Boolean(invoice.post_cod));
                 setPickupBranchId(invoice.pickup_branch_id || null);
+                setInvoiceBranchId(invoice.branch_id || invoice.pickup_branch_id || null);
+                if (invoice.branch_id && resolvedCompanyId) {
+                    const branchStock = await listProductBranchStock(supabase, resolvedCompanyId, invoice.branch_id).catch(() => []);
+                    setBranchStockByProduct(Object.fromEntries(branchStock.map((row) => [row.product_id, Number(row.stock_quantity) || 0])));
+                }
                 setNotes(invoice.notes || '');
                 setStatus(invoice.status);
                 setCommercialStatus(invoice.commercial_status || invoice.status?.toUpperCase() || 'DRAFT');
@@ -348,9 +388,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 setCustomerSignatureRequested(Boolean(invoice.customer_signature_requested));
                 setCustomerSignature(invoice.buyer_signature_url || null);
                 setShowProductPictures(Boolean(invoice.show_product_pictures));
-
                 if (invoice.items) setItems(invoice.items.map((item: any) => ({
                     ...item,
+                    id: item.id || Crypto.randomUUID(),
                     discount: wholePercentageValue(item.discount),
                     image_url: item.image_url || item.product?.image_url || undefined,
                 })));
@@ -359,15 +399,37 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             // The number is reserved transactionally only when the document is
             // saved. Draft screens must never calculate a number from a list.
             setInvoiceNumber('');
-            setInvoiceNumberAutoGenerated(true);
         }
         setLoading(false);
     };
 
+    const closeProductPicker = useCallback(() => {
+        Keyboard.dismiss();
+        setProductSearch('');
+        setShowProductPicker(false);
+    }, []);
+
+    const openProductPicker = useCallback(() => {
+        Keyboard.dismiss();
+        setProductSearch('');
+        setShowProductPicker(true);
+    }, []);
+
+    const closeClientPicker = useCallback(() => {
+        Keyboard.dismiss();
+        setClientSearch('');
+        setShowClientPicker(false);
+    }, []);
+
+    const openClientPicker = useCallback(() => {
+        Keyboard.dismiss();
+        setShowClientPicker(true);
+    }, []);
+
     const handleAddItem = (product?: Product) => {
         const currentGlobalDiscount = wholePercentageValue(discount);
         const newItem: Partial<InvoiceItem> = {
-            id: `temp-${Date.now()}`,
+            id: `temp-${Crypto.randomUUID()}`,
             description: product?.name || '',
             quantity: 1,
             unit_price: product?.unit_price || 0,
@@ -386,8 +448,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const discountAmount = subtotal * (currentGlobalDiscount / 100);
         newItem.amount = subtotal - discountAmount;
 
-        setItems([...items, newItem]);
-        setShowProductPicker(false);
+        setItems((currentItems) => [...currentItems, newItem]);
+        closeProductPicker();
     };
 
     const handleUpdateItem = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -418,12 +480,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         if (deliveryMethod === method) {
             setDeliveryMethod(null);
             setDeliveryDetails('');
+            setPostCod(false);
             setPickupBranchId(null);
             return;
         }
         setDeliveryMethod(method);
         setDeliveryDetails('');
-        setPickupBranchId(method === 'pickup' && storeLocations.length === 1 ? storeLocations[0].id : null);
+        if (method !== 'delivery') setPostCod(false);
+        const defaultBranch = method === 'pickup' && storeLocations.length === 1 ? storeLocations[0].id : null;
+        setPickupBranchId(defaultBranch);
+        if (defaultBranch) setInvoiceBranchId(defaultBranch);
     };
 
     const loadLinkedDocuments = async () => {
@@ -452,8 +518,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const applyLinkedDocument = (source: Record<string, any>) => {
         const sourceItems = Array.isArray(source.items) ? source.items : [];
         setLinkedSourceDocumentId(String(source.id));
-        setItems(sourceItems.map((item: any, index: number) => ({
-            id: item.id || `linked-${index}`,
+        setItems(sourceItems.map((item: any) => ({
+            id: item.id || Crypto.randomUUID(),
             product_id: item.product_id || null,
             description: item.description || item.product?.name || '',
             quantity: Number(item.quantity || 0),
@@ -488,15 +554,29 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
     const handleSave = async () => {
         if (saveInFlight.current) return;
-        const effectiveRole = String(workspaceRole || 'employee').trim().toLowerCase();
-        const canCreateDocument = ['super_administrator', 'company_administrator', 'manager', 'employee'].includes(effectiveRole);
-        const canEditExistingDocument = ['super_administrator', 'company_administrator', 'manager'].includes(effectiveRole);
-        if (!canCreateDocument || (invoiceId && !canEditExistingDocument)) {
-            Alert.alert(t('error', language), 'Employee users can create documents but cannot edit existing invoices.');
+        if (!user) return;
+        const workspaceScope = await getWorkspaceScope(user.id);
+        const can = (permission: string) => hasWorkspacePermission(workspaceScope, permission);
+        const documentCreatePermission = documentType === 'QUOTE' ? 'offer.create'
+            : documentType === 'PROFORMA' ? 'proforma.create'
+                : documentType === 'SALES_ORDER' ? 'order.create'
+                    : documentType === 'DELIVERY_NOTE' ? 'delivery_note.create'
+                        : documentType === 'CREDIT_NOTE' ? 'invoice.credit'
+                            : documentType === 'DEBIT_NOTE' ? 'invoice.debit'
+                                : 'invoice.create';
+        const canCreateDocument = can(documentCreatePermission);
+        const canEditExistingDocument = can('invoice.edit');
+        const canIssueDocument = documentType === 'INVOICE' && can('invoice.issue');
+        if ((!invoiceId && !canCreateDocument) || (invoiceId && !canEditExistingDocument && !salesBookAmendmentId) || (salesBookAmendmentId && !can('sales_book.manage'))) {
+            Alert.alert(t('error', language), t('permissionDenied', language));
             return;
         }
         if (items.length === 0) {
             Alert.alert(t('error', language), t('pleaseAddItem', language));
+            return;
+        }
+        if (storeLocations.length > 0 && !invoiceBranchId) {
+            Alert.alert(t('error', language), language === 'sq' ? 'Zgjidhni degën e faturës.' : 'Select the invoice branch.');
             return;
         }
         if (documentType === 'INVOICE' && customerSignatureRequested && !customerSignature) {
@@ -505,6 +585,14 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         }
         if (deliveryMethod === 'pickup' && storeLocations.length > 0 && !pickupBranchId) {
             Alert.alert(t('error', language), t('selectPickupStore', language));
+            return;
+        }
+        if (documentType === 'INVOICE' && paymentMethod === 'cash' && Number(amountReceived || 0) > 0 && !can('payment.create')) {
+            Alert.alert(t('error', language), t('permissionDenied', language));
+            return;
+        }
+        if (isPosFlow && (!can('invoice.issue') || !can('payment.create'))) {
+            Alert.alert(t('error', language), t('permissionDenied', language));
             return;
         }
         saveInFlight.current = true;
@@ -535,7 +623,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             const cashIsFullyPaid = documentType === 'INVOICE'
                 && paymentMethod === 'cash'
                 && toMinorCurrencyUnits(amountPaid) >= toMinorCurrencyUnits(totals.total);
-            if (paymentMethod === 'cash' && totals.total >= 300) {
+            if (paymentMethod === 'cash' && !isCashPaymentAllowed(amountPaid)) {
                 Alert.alert(t('cashLimitTitle', language), t('cashLimitError', language));
                 return;
             }
@@ -547,11 +635,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             const domainDraft: InvoiceDraftInput = {
                 userId: user.id,
                 companyId,
+                branchId: invoiceBranchId,
                 clientId: customerForInvoice?.id || null,
-                invoiceNumber: invoiceId || !invoiceNumberAutoGenerated ? invoiceNumber.trim() || null : null,
+                // Document numbers are always assigned by the tenant-scoped
+                // allocator. Existing records retain their original number.
+                invoiceNumber: invoiceId ? invoiceNumber : null,
                 issueDate: issueDateOnly,
                 dueDate: dueDateOnly,
                 documentType,
+                postCod: deliveryMethod === 'delivery' && postCod,
                 status: status === 'paid' ? 'sent' : status,
                 // A cash invoice filled with the exact amount is paid at the
                 // point of creation. The payment ledger entry is registered
@@ -600,10 +692,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     ? 'customer_credit'
                     : posPaymentMethod === 'other'
                         ? 'other'
-                        : paymentMethod;
+                        : paymentMethod === 'online_payment' || paymentMethod === 'cheque'
+                            ? 'other'
+                            : paymentMethod === 'cash' || paymentMethod === 'card' || paymentMethod === 'bank'
+                                ? paymentMethod
+                                : 'bank';
                 const posResult = await completePosSale(supabase, {
                     userId: user.id,
                     companyId,
+                    branchId: invoiceBranchId,
                     customerId: customerForInvoice?.id || null,
                     lines: domainDraft.lines.map((line) => ({
                         productId: line.productId || '',
@@ -636,11 +733,19 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     // A mobile invoice save is the issue/finalize action. The
                     // backend validates and posts it atomically; non-invoice
                     // commercial documents remain drafts.
-                    postInvoice: documentType === 'INVOICE',
+                    postInvoice: documentType === 'INVOICE' && canIssueDocument,
+                    // A new finalized invoice is also an inventory issue when
+                    // its lines reference stock-tracked products. The RPC
+                    // ignores services/non-stock products and is idempotent.
+                    stockCheckout: !invoiceId && documentType === 'INVOICE' && canIssueDocument,
                     replacePostedInvoice: replaceInvoiceDocument,
                     idempotencyKey: domainDraft.idempotencyKey,
                 });
                 savedInvoice = saved.invoice;
+
+                if (savedInvoice.id && invoiceBranchId) {
+                    await setInvoiceBranch(supabase, savedInvoice.id, invoiceBranchId);
+                }
 
                 // Ordinary invoices are posted by saveInvoiceDocument, but the
                 // invoice's amount_received field is only a snapshot. When a
@@ -655,6 +760,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     && !isPosFlow
                     && documentType === 'INVOICE'
                     && paymentMethod === 'cash'
+                    && !postCod
                     && Boolean(customerForInvoice?.id)
                     && Boolean(savedInvoice.id)
                     && cashPaymentAmount > 0
@@ -691,6 +797,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     deliveryMethod,
                     pickupBranchId,
                     deliveryDetails: resolvedDeliveryDetails,
+                    postCod: deliveryMethod === 'delivery' && postCod,
                 });
             }
 
@@ -773,6 +880,10 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const handlePreview = async () => {
         const totals = calculateTotals();
         const companyId = activeCompanyId;
+        const profileRecord = profile as (Profile & { first_name?: string | null; last_name?: string | null }) | null;
+        const agentName = [profileRecord?.first_name, profileRecord?.last_name].filter(Boolean).join(' ').trim()
+            || String((user as any)?.user_metadata?.full_name || '').trim()
+            || [String((user as any)?.user_metadata?.first_name || ''), String((user as any)?.user_metadata?.last_name || '')].filter(Boolean).join(' ').trim();
 
         // Mock invoice data for preview
         const invoiceData: any = {
@@ -811,13 +922,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 currency: 'EUR',
                 language,
                 notes: notes,
-                department: profile?.company_name || '',
+                department: operatingBranchLabel || profile?.company_name || '',
                 type: type,
                 commercialDocumentType: documentType,
                 documentTypeLabel: documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en'),
                 status: 'draft',
-                agent: user?.email || profile?.email || '',
-                reference: user?.email || profile?.email || '',
+                agent: agentName,
+                reference: agentName,
                 yourReference: paymentTypeLabel(paymentMethod, language === 'sq' ? 'sq' : 'en'),
                 buyerSignatureUrl: customerSignatureRequested ? customerSignature || undefined : undefined,
                 showStampOnInvoice: showInvoiceStamp,
@@ -858,9 +969,23 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const totals = calculateTotals();
+    const openInvoiceContextHelp = () => {
+        const documentationUrl = getHelpdeskArticleUrl('invoices/create-and-edit', language === 'sq' ? 'sq' : 'en');
+        Alert.alert(
+            documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en'),
+            t(documentTypeHelpKeys[documentType], language),
+            [
+                { text: language === 'sq' ? 'Mbyll' : 'Close', style: 'cancel' },
+                ...(documentationUrl ? [{ text: language === 'sq' ? 'Hap Help Center' : 'Open Help Center', onPress: () => void openExternalLink(documentationUrl, language === 'sq' ? 'Help Center' : 'Help Center') }] : []),
+            ],
+        );
+    };
 
     return (
-        <View testID="invoice-form-screen" style={[styles.container, { backgroundColor: bgColor }]}>
+        <View
+            testID="invoice-form-screen"
+            style={[styles.container, { backgroundColor: bgColor }]}
+        >
             <View style={styles.header}>
                 <TouchableOpacity testID="invoice-form-back-button" accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
@@ -878,13 +1003,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 <TouchableOpacity
                     testID="invoice-help-button"
                     accessibilityRole="button"
-                    accessibilityLabel={language === 'sq' ? 'Ndihmë për faturën' : 'Invoice help'}
-                    onPress={() => {
-                        const helpParams = { articleId: 'invoices/create-and-edit', language: language === 'sq' ? 'sq' : 'en' } as const;
-                        const parentNavigation = navigation.getParent?.();
-                        if (parentNavigation) parentNavigation.navigate('HelpArticle', helpParams);
-                        else navigation.navigate('HelpArticle', helpParams);
-                    }}
+                    accessibilityLabel={`${documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en')} - ${t('documentTypeHelp', language)}`}
+                    onPress={openInvoiceContextHelp}
                     style={[styles.contextHelpButton, { backgroundColor: cardBg, borderColor }]}
                 >
                     <CircleHelp color={primaryColor} size={20} />
@@ -907,7 +1027,64 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="none"
                 >
-
+                    {!invoiceId && !isPosFlow && (
+                        <View style={styles.documentTypeSelector}>
+                            <Text style={[styles.sectionTitle, { color: textColor, marginTop: 0 }]}>{t('documentType', language)}</Text>
+                            <TouchableOpacity
+                                testID="invoice-document-type-selector"
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: showDocumentTypePicker }}
+                                onPress={() => setShowDocumentTypePicker((current) => !current)}
+                                style={[styles.documentTypeButton, { backgroundColor: cardBg, borderColor }]}
+                            >
+                                <View style={styles.documentTypeButtonCopy}>
+                                    <Text style={[styles.documentTypeButtonLabel, { color: textColor }]}>
+                                        {documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en')}
+                                    </Text>
+                                    <Text style={[styles.documentTypeButtonHint, { color: mutedColor }]}>
+                                        {DOCUMENT_DEFINITIONS[documentType].prefix}
+                                    </Text>
+                                </View>
+                                <ChevronDown color={primaryColor} size={20} />
+                            </TouchableOpacity>
+                            {showDocumentTypePicker && (
+                                <View style={[styles.documentTypeOptions, { backgroundColor: cardBg, borderColor }]}>
+                                    {COMMERCIAL_DOCUMENT_TYPES.filter((typeOption) => canPermission(documentPermission(typeOption))).map((typeOption) => {
+                                        const selected = documentType === typeOption;
+                                        return (
+                                            <View
+                                                key={typeOption}
+                                                style={[styles.documentTypeOption, selected && { backgroundColor: `${primaryColor}18` }]}
+                                            >
+                                                <TouchableOpacity
+                                                    testID={`invoice-document-type-option-${typeOption}`}
+                                                    accessibilityRole="button"
+                                                    accessibilityState={{ selected }}
+                                                    onPress={() => {
+                                                        setDocumentType(typeOption);
+                                                        setCommercialStatus(DOCUMENT_DEFINITIONS[typeOption].statuses[0] || 'DRAFT');
+                                                        setStatus('draft');
+                                                        setShowDocumentTypePicker(false);
+                                                    }}
+                                                    style={styles.documentTypeOptionSelect}
+                                                >
+                                                    <View style={styles.documentTypeOptionCopy}>
+                                                        <Text style={[styles.documentTypeOptionTitle, { color: selected ? primaryColor : textColor }]}>
+                                                            {documentTypeLabel(typeOption, language === 'sq' ? 'sq' : 'en')}
+                                                        </Text>
+                                                        <Text style={[styles.documentTypeOptionMeta, { color: mutedColor }]}>
+                                                            {DOCUMENT_DEFINITIONS[typeOption].prefix} · {typeOption}
+                                                        </Text>
+                                                    </View>
+                                                    {selected ? <Check color={primaryColor} size={18} /> : null}
+                                                </TouchableOpacity>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </View>
+                    )}
                     {/* General Info */}
                     <Text style={[styles.sectionTitle, { color: textColor }]}>{t('details', language)}</Text>
                     <Card style={styles.card}>
@@ -927,16 +1104,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        {showAdvancedOptions ? <Input
-                            label={t('documentNumber', language)}
-                            value={invoiceNumber}
-                            onChangeText={(value) => {
-                                setInvoiceNumberAutoGenerated(false);
-                                setInvoiceNumber(value);
-                            }}
-                            placeholder="INV-2026-001"
-                            containerStyle={{ marginTop: 14 }}
-                        /> : null}
                         {showAdvancedOptions ? <>
                             <View style={{ marginTop: 14 }}>
                                 <Text style={[styles.label, { color: mutedColor }]}>{t('linkDocument', language)}</Text>
@@ -969,18 +1136,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                            <Text style={[styles.label, { color: mutedColor, marginTop: 14 }]}>{t('comments', language)}</Text>
-                            <TextInput
-                                testID="invoice-notes-input"
-                                style={[styles.notesInput, { color: textColor, borderColor }]}
-                                value={notes}
-                                onChangeText={setNotes}
-                                placeholder={t('addPaymentTermsOrNotes', language)}
-                                placeholderTextColor={mutedColor}
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                            />
                             <View style={styles.invoicePictureOption}>
                                 <View style={styles.invoicePictureOptionText}>
                                     <Text style={[styles.invoicePictureOptionTitle, { color: textColor }]}>{t('showProductPictures', language)}</Text>
@@ -1023,97 +1178,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     thumbColor={showInvoiceSignature ? primaryColor : '#f4f4f5'}
                                 />
                             </View>
-                            <Text style={[styles.label, { color: mutedColor, marginTop: 14 }]}>{t('deliveryMethod', language)}</Text>
-                            <View style={styles.deliveryOptions}>
-                                {(['pickup', 'delivery', 'bus', 'other'] as DeliveryMethod[]).map((method) => (
-                                    <TouchableOpacity
-                                        key={method}
-                                        testID={`invoice-delivery-method-${method}`}
-                                        accessibilityRole="button"
-                                        accessibilityState={{ selected: deliveryMethod === method }}
-                                        onPress={() => handleDeliveryMethodChange(method)}
-                                        style={[styles.deliveryOption, { borderColor: deliveryMethod === method ? primaryColor : borderColor, backgroundColor: deliveryMethod === method ? `${primaryColor}18` : cardBg }]}
-                                    >
-                                        <Text style={[styles.deliveryOptionText, { color: deliveryMethod === method ? primaryColor : mutedColor }]}>{t(method, language)}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                            {deliveryMethod === 'pickup' ? (
-                                storeLocations.length > 0 ? (
-                                    <>
-                                        <Text style={[styles.label, { color: mutedColor, marginTop: 14 }]}>{t('pickupStore', language)}</Text>
-                                        <TouchableOpacity
-                                            testID="invoice-pickup-store-selector"
-                                            accessibilityRole="button"
-                                            accessibilityLabel={t('pickupStore', language)}
-                                            onPress={() => setShowPickupBranchPicker(true)}
-                                            style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
-                                        >
-                                            <Text style={[styles.dateText, { color: selectedPickupLocation ? textColor : mutedColor, flex: 1 }]}>
-                                                {selectedPickupLocation?.name || t('selectPickupStore', language)}
-                                            </Text>
-                                            <ChevronDown color={mutedColor} size={18} />
-                                        </TouchableOpacity>
-                                        {selectedPickupLocation?.registered_address || selectedPickupLocation?.municipality ? (
-                                            <Text style={[styles.transportHint, { color: mutedColor }]}>
-                                                {[selectedPickupLocation.registered_address, selectedPickupLocation.municipality].filter(Boolean).join(', ')}
-                                            </Text>
-                                        ) : null}
-                                    </>
-                                ) : (
-                                    <View style={{ marginTop: 14 }}>
-                                        <Text style={[styles.label, { color: mutedColor }]}>{t('pickupLocation', language)}</Text>
-                                        <TextInput
-                                            testID="invoice-pickup-location-input"
-                                            value={deliveryDetails}
-                                            onChangeText={setDeliveryDetails}
-                                            placeholder={t('enterPickupLocation', language)}
-                                            placeholderTextColor={mutedColor}
-                                            style={[styles.transportInput, { color: textColor, borderColor }]}
-                                        />
-                                    </View>
-                                )
-                            ) : null}
-                            {deliveryMethod === 'delivery' ? (
-                                <View style={{ marginTop: 14 }}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>{t('deliveryLocation', language)}</Text>
-                                    <TextInput
-                                        testID="invoice-delivery-location-input"
-                                        value={deliveryDetails}
-                                        onChangeText={setDeliveryDetails}
-                                        placeholder={t('enterDeliveryLocation', language)}
-                                        placeholderTextColor={mutedColor}
-                                        style={[styles.transportInput, { color: textColor, borderColor }]}
-                                    />
-                                </View>
-                            ) : null}
-                            {deliveryMethod === 'bus' ? (
-                                <View style={{ marginTop: 14 }}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>{t('busLine', language)}</Text>
-                                    <TextInput
-                                        testID="invoice-bus-line-input"
-                                        value={deliveryDetails}
-                                        onChangeText={setDeliveryDetails}
-                                        placeholder={t('enterBusLine', language)}
-                                        placeholderTextColor={mutedColor}
-                                        style={[styles.transportInput, { color: textColor, borderColor }]}
-                                    />
-                                </View>
-                            ) : null}
-                            {deliveryMethod === 'other' ? (
-                                <View style={{ marginTop: 14 }}>
-                                    <Text style={[styles.label, { color: mutedColor }]}>{t('transportDetails', language)}</Text>
-                                    <TextInput
-                                        testID="invoice-other-transport-input"
-                                        value={deliveryDetails}
-                                        onChangeText={setDeliveryDetails}
-                                        placeholder={t('enterTransportDetails', language)}
-                                        placeholderTextColor={mutedColor}
-                                        multiline
-                                        style={[styles.transportInput, styles.transportMultilineInput, { color: textColor, borderColor }]}
-                                    />
-                                </View>
-                            ) : null}
                         </> : null}
                         <TouchableOpacity
                             testID="invoice-more-options-button"
@@ -1126,7 +1190,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             {showAdvancedOptions ? <ChevronUp color={primaryColor} size={17} /> : <ChevronDown color={primaryColor} size={17} />}
                         </TouchableOpacity>
                     </Card>
-
                     {/* Customer Selection */}
                     <Text style={[styles.sectionTitle, { color: textColor }]}>{t('customer', language)}</Text>
                     <Card style={styles.card}>
@@ -1140,13 +1203,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     {selectedCustomerIsWalkIn ? t('customerOptional', language) : selectedClient?.email || selectedClient?.phone || t('noContactDetails', language)}
                                 </Text>
                             </View>
-                            <TouchableOpacity testID="invoice-customer-selector" onPress={() => setShowClientPicker(true)} style={styles.changeClientButton} accessibilityRole="button" accessibilityLabel={t('chooseCustomer', language)}>
+                            <TouchableOpacity testID="invoice-customer-selector" onPress={openClientPicker} style={styles.changeClientButton} accessibilityRole="button" accessibilityLabel={t('chooseCustomer', language)}>
                                 <Text style={[styles.changeClientText, { color: primaryColor }]}>{selectedCustomerIsWalkIn ? t('choose', language) : t('change', language)}</Text>
                                 <ChevronDown color={primaryColor} size={16} />
                             </TouchableOpacity>
                         </View>
                     </Card>
-
                     {/* Items */}
                     <View style={styles.itemsHeader}>
                         <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 0 }]}>{t('items', language)}</Text>
@@ -1155,7 +1217,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             <Text style={{ color: primaryColor, fontWeight: '600', marginLeft: 4 }}>{t('addItem', language)}</Text>
                         </TouchableOpacity>
                     </View>
-
                     <Card style={[styles.card, { padding: 0 }]}>
                         {items.length === 0 ? (
                             <View style={styles.emptyItems}>
@@ -1169,8 +1230,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 />
                             </View>
                         ) : (
-                            items.map((item, index) => (
-                                <View key={index} style={[styles.itemRow, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
+                                items.map((item, index) => (
+                                <View key={item.id} style={[styles.itemRow, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
                                     <View style={styles.itemHeader}>
                                         <TextInput
                                             testID={`invoice-item-description-${index}`}
@@ -1184,7 +1245,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                             <Trash2 color="#ef4444" size={18} />
                                         </TouchableOpacity>
                                     </View>
-
                                     <View style={styles.itemInputs}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.inputLabel, { color: mutedColor }]}>{t('qty', language)}</Text>
@@ -1228,7 +1288,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 </View>
                             ))
                         )}
-
                         {items.length > 0 && (
                             <View style={[styles.summaryFooter, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f9fafb', borderTopColor: borderColor }]}>
                                 <View style={styles.summaryRow}>
@@ -1242,7 +1301,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 <View style={[styles.summaryRow, { marginTop: 8 }]}>
                                     <Text style={{ color: primaryColor, fontWeight: '600', fontSize: 18 }}>{formatCurrency(totals.total)}</Text>
                                 </View>
-
                                 {items.length > 0 && (
                                     <View style={[styles.summaryRow, { marginTop: 12, alignItems: 'center' }]}>
                                         <Text style={{ color: mutedColor }}>{t('discount', language)} (%)</Text>
@@ -1283,42 +1341,60 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             </View>
                         )}
                     </Card>
-
                     {/* Payment */}
                     <Text style={[styles.sectionTitle, { color: textColor }]}>{t('payment', language)}</Text>
                     <Card style={[styles.card, { marginBottom: 18 }]}>
                         <Text style={{ color: mutedColor, marginBottom: 8 }}>{t('paymentMethod', language)}</Text>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={styles.invoicePaymentMethodGrid}>
                             {([
-                                ['bank', t('bankTransfer', language)],
-                                ['cash', t('cash', language)],
-                                ['card', t('card', language)],
-                            ] as const).map(([key, label]) => {
-                                const cashDisabled = key === 'cash' && calculateTotals().total >= 300;
+                                ['cash', t('cash', language), Banknote, '#12B76A'],
+                                ['bank', t('bankTransfer', language), Landmark, '#3388FF'],
+                                ['card', t('card', language), CreditCard, '#7F56D9'],
+                                ['online_payment', t('onlinePayment', language), Globe2, '#F79009'],
+                                ['customer_credit', t('debt', language), Clock3, '#F04438'],
+                                ['other', t('other', language), CircleHelp, '#98A2B3'],
+                            ] as const).map(([key, label, Icon, activeColor]) => {
+                                const cashDisabled = key === 'cash'
+                                    && (!isCashPaymentAllowed(calculateTotals().total)
+                                        || !isCashPaymentAllowed(Number(amountReceived) || 0));
+                                const selected = paymentMethod === key;
                                 return (
                                 <TouchableOpacity
                                     testID={`invoice-payment-method-${key}`}
                                     accessibilityRole="button"
+                                    accessibilityState={{ selected: paymentMethod === key, disabled: cashDisabled }}
                                     key={key}
                                     disabled={cashDisabled}
                                     onPress={() => setPaymentMethod(key)}
-                                    style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: paymentMethod === key ? primaryColor : borderColor, backgroundColor: paymentMethod === key ? primaryColor + '18' : 'transparent', alignItems: 'center', opacity: cashDisabled ? 0.4 : 1 }}
+                                    style={[styles.invoicePaymentMethod, {
+                                        borderColor: selected ? activeColor : borderColor,
+                                        backgroundColor: selected ? `${activeColor}18` : cardBg,
+                                        opacity: cashDisabled ? 0.4 : 1,
+                                    }]}
                                 >
-                                    <Text style={{ color: paymentMethod === key ? primaryColor : mutedColor, fontWeight: '600', fontSize: 12 }}>{label}</Text>
+                                    <View style={[styles.invoicePaymentMethodIcon, { backgroundColor: selected ? `${activeColor}22` : `${mutedColor}12` }]}>
+                                        <Icon color={selected ? activeColor : mutedColor} size={19} />
+                                    </View>
+                                    <Text numberOfLines={2} style={[styles.invoicePaymentMethodText, { color: selected ? activeColor : mutedColor }]}>{label}</Text>
+                                    {selected ? <View style={[styles.invoicePaymentMethodCheck, { backgroundColor: activeColor }]}><Check color="#fff" size={11} strokeWidth={3} /></View> : null}
                                 </TouchableOpacity>
                                 );
                             })}
                         </View>
                         {paymentMethod === 'cash' && (
-                            <View style={{ marginTop: 14 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={{ color: mutedColor, marginBottom: 6 }}>{t('amountPaid', language)}</Text>
+                            <View style={styles.cashPaymentPanel}>
+                                <View style={styles.paymentAmountHeader}>
+                                    <View>
+                                        <Text style={[styles.paymentAmountLabel, { color: textColor }]}>{t('amountPaid', language)}</Text>
+                                        <Text style={[styles.paymentAmountHint, { color: mutedColor }]}>{currency || 'EUR'}</Text>
+                                    </View>
                                     <TouchableOpacity testID="invoice-exact-amount-button" accessibilityRole="button" onPress={() => {
                                         setAmountReceived(calculateTotals().total.toFixed(2));
                                         setStatus('paid');
                                         setCommercialStatus('PAID');
-                                    }}>
-                                        <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 12 }}>{t('exactAmount', language)}</Text>
+                                    }} style={[styles.exactAmountButton, { backgroundColor: `${primaryColor}18`, borderColor: `${primaryColor}55` }]}>
+                                        <Check color={primaryColor} size={15} strokeWidth={3} />
+                                        <Text style={[styles.exactAmountText, { color: primaryColor }]}>{t('exactAmount', language)}</Text>
                                     </TouchableOpacity>
                                 </View>
                                 <TextInput
@@ -1328,19 +1404,170 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     keyboardType="decimal-pad"
                                     placeholder="0.00"
                                     placeholderTextColor={mutedColor}
-                                    style={[styles.notesInput, { height: 48, minHeight: 48, color: textColor, borderColor }]}
+                                    style={[styles.paymentAmountInput, { color: textColor, borderColor, backgroundColor: cardBg }]}
                                 />
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                                    <Text style={{ color: mutedColor }}>{t('change', language)}</Text>
-                                    <Text style={{ color: primaryColor, fontWeight: '700' }}>
+                                <View style={[styles.changeSummary, { backgroundColor: `${primaryColor}0D`, borderColor: `${primaryColor}30` }]}>
+                                    <View style={styles.changeSummaryCopy}>
+                                        <Text style={[styles.changeSummaryLabel, { color: textColor }]}>{t('change', language)}</Text>
+                                        <Text style={[styles.changeSummaryHint, { color: mutedColor }]}>{language === 'sq' ? 'Shuma që i kthehet klientit' : 'Amount to return to the customer'}</Text>
+                                    </View>
+                                    <Text style={[styles.changeSummaryValue, { color: primaryColor }]}>
                                         {formatCurrency(Math.max(0, (Number(amountReceived) || 0) - calculateTotals().total))}
                                     </Text>
                                 </View>
-                                <Text style={{ color: mutedColor, fontSize: 11, marginTop: 6 }}>{t('cashPaymentBelowLimit', language)}</Text>
+                                <View style={styles.paymentLimitHint}>
+                                    <CircleHelp color={mutedColor} size={14} />
+                                    <Text style={[styles.paymentLimitHintText, { color: mutedColor }]}>{t('cashPaymentBelowLimit', language)}</Text>
+                                </View>
                             </View>
                         )}
+                        <Text style={[styles.label, { color: mutedColor, marginTop: 18 }]}>{t('comments', language)}</Text>
+                        <TextInput
+                            testID="invoice-notes-input"
+                            style={[styles.notesInput, { color: textColor, borderColor }]}
+                            value={notes}
+                            onChangeText={setNotes}
+                            placeholder={t('addPaymentTermsOrNotes', language)}
+                            placeholderTextColor={mutedColor}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+                        {storeLocations.length > 0 && deliveryMethod !== 'pickup' ? (
+                            <>
+                                <Text style={[styles.label, { color: mutedColor, marginTop: 18 }]}>{language === 'sq' ? 'Dega e faturës dhe stokut' : 'Invoice and stock branch'}</Text>
+                                <TouchableOpacity
+                                    testID="invoice-operating-branch-selector"
+                                    accessibilityRole="button"
+                                    onPress={() => setShowPickupBranchPicker(true)}
+                                    style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                >
+                                    <Text style={[styles.dateText, { color: invoiceBranchId ? textColor : mutedColor, flex: 1 }]}>
+                                        {storeLocations.find((location) => location.id === invoiceBranchId)?.name || (language === 'sq' ? 'Zgjidhni degën' : 'Select branch')}
+                                    </Text>
+                                    <ChevronDown color={mutedColor} size={18} />
+                                </TouchableOpacity>
+                            </>
+                        ) : null}
+                        <Text style={[styles.label, { color: mutedColor, marginTop: 18 }]}>{t('deliveryMethod', language)}</Text>
+                        <View style={styles.deliveryOptions}>
+                            {(['pickup', 'delivery', 'bus', 'other'] as DeliveryMethod[]).map((method) => (
+                                (() => {
+                                    const selected = deliveryMethod === method;
+                                    const DeliveryIcon = method === 'pickup' ? Store : method === 'delivery' ? Truck : method === 'bus' ? BusFront : CircleHelp;
+                                    const activeColor = method === 'pickup' ? '#12B76A' : method === 'delivery' ? '#3388FF' : method === 'bus' ? '#7F56D9' : '#98A2B3';
+                                    return (
+                                        <TouchableOpacity
+                                            key={method}
+                                            testID={`invoice-delivery-method-${method}`}
+                                            accessibilityRole="button"
+                                            accessibilityState={{ selected }}
+                                            onPress={() => handleDeliveryMethodChange(method)}
+                                            style={[styles.deliveryOption, { borderColor: selected ? activeColor : borderColor, backgroundColor: selected ? `${activeColor}18` : cardBg }]}
+                                        >
+                                            <View style={[styles.deliveryOptionIcon, { backgroundColor: selected ? `${activeColor}22` : `${mutedColor}12` }]}>
+                                                <DeliveryIcon color={selected ? activeColor : mutedColor} size={18} />
+                                            </View>
+                                            <Text style={[styles.deliveryOptionText, { color: selected ? activeColor : mutedColor }]}>{t(method, language)}</Text>
+                                            {selected ? <View style={[styles.deliveryOptionCheck, { backgroundColor: activeColor }]}><Check color="#fff" size={11} strokeWidth={3} /></View> : null}
+                                        </TouchableOpacity>
+                                    );
+                                })()
+                            ))}
+                        </View>
+                        {deliveryMethod === 'pickup' ? (
+                            storeLocations.length > 0 ? (
+                                <>
+                                    <Text style={[styles.label, { color: mutedColor, marginTop: 14 }]}>{language === 'sq' ? 'Dega e marrjes në pikë' : 'Pickup branch'}</Text>
+                                    <TouchableOpacity
+                                        testID="invoice-pickup-store-selector"
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t('pickupStore', language)}
+                                        onPress={() => setShowPickupBranchPicker(true)}
+                                        style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                    >
+                                        <Text style={[styles.dateText, { color: selectedPickupLocation ? textColor : mutedColor, flex: 1 }]}>
+                                            {selectedPickupLocation?.name || t('selectPickupStore', language)}
+                                        </Text>
+                                        <ChevronDown color={mutedColor} size={18} />
+                                    </TouchableOpacity>
+                                    {selectedPickupLocation?.registered_address || selectedPickupLocation?.municipality ? (
+                                        <Text style={[styles.transportHint, { color: mutedColor }]}>
+                                            {[selectedPickupLocation.registered_address, selectedPickupLocation.municipality].filter(Boolean).join(', ')}
+                                        </Text>
+                                    ) : null}
+                                </>
+                            ) : (
+                                <View style={{ marginTop: 14 }}>
+                                    <Text style={[styles.label, { color: mutedColor }]}>{t('pickupLocation', language)}</Text>
+                                    <TextInput
+                                        testID="invoice-pickup-location-input"
+                                        value={deliveryDetails}
+                                        onChangeText={setDeliveryDetails}
+                                        placeholder={t('enterPickupLocation', language)}
+                                        placeholderTextColor={mutedColor}
+                                        style={[styles.transportInput, { color: textColor, borderColor }]}
+                                    />
+                                </View>
+                            )
+                        ) : null}
+                        {deliveryMethod === 'delivery' ? (
+                            <>
+                                <View style={{ marginTop: 14 }}>
+                                    <Text style={[styles.label, { color: mutedColor }]}>{t('deliveryLocation', language)}</Text>
+                                    <TextInput
+                                        testID="invoice-delivery-location-input"
+                                        value={deliveryDetails}
+                                        onChangeText={setDeliveryDetails}
+                                        placeholder={t('enterDeliveryLocation', language)}
+                                        placeholderTextColor={mutedColor}
+                                        style={[styles.transportInput, { color: textColor, borderColor }]}
+                                    />
+                                </View>
+                                <View style={[styles.invoicePictureOption, { marginTop: 10 }]}>
+                                    <View style={styles.invoicePictureOptionText}>
+                                        <Text style={[styles.invoicePictureOptionTitle, { color: textColor }]}>{t('postCod', language)}</Text>
+                                        <Text style={[styles.invoicePictureOptionDescription, { color: mutedColor }]}>{t('postCodDescription', language)}</Text>
+                                    </View>
+                                    <Switch
+                                        testID="invoice-post-cod-switch"
+                                        accessibilityLabel={t('postCod', language)}
+                                        value={postCod}
+                                        onValueChange={setPostCod}
+                                        trackColor={{ false: borderColor, true: `${primaryColor}88` }}
+                                        thumbColor={postCod ? primaryColor : '#f4f4f5'}
+                                    />
+                                </View>
+                            </>
+                        ) : null}
+                        {deliveryMethod === 'bus' ? (
+                            <View style={{ marginTop: 14 }}>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('busLine', language)}</Text>
+                                <TextInput
+                                    testID="invoice-bus-line-input"
+                                    value={deliveryDetails}
+                                    onChangeText={setDeliveryDetails}
+                                    placeholder={t('enterBusLine', language)}
+                                    placeholderTextColor={mutedColor}
+                                    style={[styles.transportInput, { color: textColor, borderColor }]}
+                                />
+                            </View>
+                        ) : null}
+                        {deliveryMethod === 'other' ? (
+                            <View style={{ marginTop: 14 }}>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('transportDetails', language)}</Text>
+                                <TextInput
+                                    testID="invoice-other-transport-input"
+                                    value={deliveryDetails}
+                                    onChangeText={setDeliveryDetails}
+                                    placeholder={t('enterTransportDetails', language)}
+                                    placeholderTextColor={mutedColor}
+                                    multiline
+                                    style={[styles.transportInput, styles.transportMultilineInput, { color: textColor, borderColor }]}
+                                />
+                            </View>
+                        ) : null}
                     </Card>
-
                     {documentType === 'INVOICE' && (
                         <>
                             <Text style={[styles.sectionTitle, { color: textColor }]}>{t('customerAcceptance', language)}</Text>
@@ -1380,12 +1607,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             </Card>
                         </>
                     )}
-
                     <View style={{ height: 120 }} />
-
                 </ScrollView>
             </KeyboardAvoidingView>}
-
             {/* Sticky Actions Footer */}
             <View style={[styles.footer, { backgroundColor: isDark ? '#14243A' : '#fff', borderTopColor: borderColor }]}>
                 <TouchableOpacity
@@ -1393,7 +1617,10 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     accessibilityRole="button"
                     accessibilityLabel={t('preview', language)}
                     style={[styles.previewButton, { borderColor: primaryColor }]}
-                    onPress={() => void handlePreview()}
+                    onPress={() => {
+                        Keyboard.dismiss();
+                        void handlePreview();
+                    }}
                 >
                     <Eye color={primaryColor} size={19} />
                 </TouchableOpacity>
@@ -1402,17 +1629,19 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     accessibilityRole="button"
                     accessibilityLabel={t('addItem', language)}
                     style={[styles.addItemButton, { backgroundColor: primaryColor + '15', borderColor: primaryColor }]}
-                    onPress={() => setShowProductPicker(true)}
+                    onPress={openProductPicker}
                 >
                     <Plus color={primaryColor} size={20} />
                 </TouchableOpacity>
-
                 <TouchableOpacity
                     testID="invoice-save-button"
                     accessibilityRole="button"
                     style={[styles.saveButtonFull, { backgroundColor: primaryColor }]}
-                    onPress={handleSave}
-                    disabled={saving || !workspaceRole || Boolean(invoiceId && !['super_administrator', 'company_administrator', 'manager'].includes(String(workspaceRole).toLowerCase()))}
+                    onPress={() => {
+                        Keyboard.dismiss();
+                        void handleSave();
+                    }}
+                    disabled={saving || workspacePermissions.length === 0 || Boolean(invoiceId && !workspacePermissions.includes('invoice.edit') && !salesBookAmendmentId)}
                 >
                     {saving ? (
                         <ActivityIndicator color="#fff" size="small" />
@@ -1424,7 +1653,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     )}
                 </TouchableOpacity>
             </View>
-
             {/* Preview Modal */}
             <Modal visible={showPreview} animationType="slide" presentationStyle="pageSheet">
                 <View style={[styles.previewContainer, { backgroundColor: bgColor }]}>
@@ -1450,29 +1678,29 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     />
                 </View>
             </Modal>
-
             {/* Client Picker Modal */}
-            <Modal visible={showClientPicker} animationType="slide" transparent>
-                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
-                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+            <Modal visible={showClientPicker} animationType="slide" transparent onRequestClose={closeClientPicker}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                                        <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('selectCustomer', language)}</Text>
-                            <TouchableOpacity testID="invoice-close-customer-picker-button" accessibilityRole="button" onPress={() => setShowClientPicker(false)}>
+                            <TouchableOpacity testID="invoice-close-customer-picker-button" accessibilityRole="button" onPress={closeClientPicker}>
                                 <Text style={{ color: primaryColor, fontSize: 16 }}>{t('close', language)}</Text>
                             </TouchableOpacity>
                         </View>
-                        <View style={{ padding: 12 }}>
-                            <Input
-                                placeholder={t('searchCustomers', language)}
-                                testID="invoice-customer-search-input"
-                                value={clientSearch}
-                                onChangeText={setClientSearch}
-                            />
-                        </View>
                         <ScrollView
+                            style={{ flex: 1 }}
                             contentContainerStyle={{ padding: 12 }}
                             keyboardShouldPersistTaps="handled"
                         >
+                            <View style={{ paddingBottom: 12 }}>
+                                <Input
+                                    placeholder={t('searchCustomers', language)}
+                                    testID="invoice-customer-search-input"
+                                    value={clientSearch}
+                                    onChangeText={setClientSearch}
+                                />
+                            </View>
                             <TouchableOpacity
                                 testID="invoice-walk-in-customer-option"
                                 style={[styles.modalItem, { borderBottomColor: borderColor }]}
@@ -1480,7 +1708,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     setSelectedClient(walkInCustomer);
                                     setLinkedSourceDocumentId(null);
                                     setDiscount('0');
-                                    setShowClientPicker(false);
+                                    closeClientPicker();
                                 }}
                             >
                                 <View style={[styles.modalIcon, { backgroundColor: '#e0e7ff' }]}>
@@ -1506,7 +1734,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                         } else {
                                             setDiscount('0');
                                         }
-                                        setShowClientPicker(false);
+                                        closeClientPicker();
                                     }}
                                 >
                                     <View style={[styles.modalIcon, { backgroundColor: '#e0e7ff' }]}>
@@ -1524,7 +1752,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 accessibilityRole="button"
                                 style={[styles.modalAddNew, { borderColor: primaryColor }]}
                                 onPress={() => {
-                                    setShowClientPicker(false);
+                                    closeClientPicker();
                                     navigation.navigate('ClientForm');
                                 }}
                             >
@@ -1535,18 +1763,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     </View>
                 </View>
             </Modal>
-
             {/* Store pickup location picker */}
             <Modal visible={showPickupBranchPicker} animationType="slide" transparent onRequestClose={() => setShowPickupBranchPicker(false)}>
-                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
-                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                    <View style={[styles.modalContent, styles.branchPickerContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
-                            <Text style={[styles.modalTitle, { color: textColor }]}>{t('pickupStore', language)}</Text>
+                        <Text style={[styles.modalTitle, { color: textColor }]}>{language === 'sq' ? 'Zgjidhni degën' : 'Select branch'}</Text>
                             <TouchableOpacity testID="invoice-close-pickup-store-picker-button" accessibilityRole="button" onPress={() => setShowPickupBranchPicker(false)}>
                                 <Text style={{ color: primaryColor, fontSize: 16 }}>{t('close', language)}</Text>
                             </TouchableOpacity>
                         </View>
-                        <ScrollView contentContainerStyle={{ padding: 12 }}>
+                        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 12 }}>
                             {storeLocations.map((location) => {
                                 const address = [location.registered_address, location.municipality].filter(Boolean).join(', ');
                                 return (
@@ -1554,10 +1781,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                         key={location.id}
                                         testID={`invoice-pickup-store-option-${location.id}`}
                                         accessibilityRole="radio"
-                                        accessibilityState={{ selected: pickupBranchId === location.id }}
+                                        accessibilityState={{ selected: (invoiceBranchId || pickupBranchId) === location.id }}
                                         style={[styles.modalItem, { borderBottomColor: borderColor }]}
                                         onPress={() => {
                                             setPickupBranchId(location.id);
+                                            setInvoiceBranchId(location.id);
+                                            if (activeCompanyId) void listProductBranchStock(supabase, activeCompanyId, location.id).then((rows) => setBranchStockByProduct(Object.fromEntries(rows.map((row) => [row.product_id, Number(row.stock_quantity) || 0])))).catch(() => setBranchStockByProduct({}));
                                             setDeliveryDetails('');
                                             setShowPickupBranchPicker(false);
                                         }}
@@ -1569,7 +1798,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                             <Text style={[styles.modalItemTitle, { color: textColor }]}>{location.name}</Text>
                                             {address ? <Text style={{ color: mutedColor, fontSize: 12 }}>{address}</Text> : null}
                                         </View>
-                                        {pickupBranchId === location.id ? <Check color={primaryColor} size={20} /> : null}
+                                        {(invoiceBranchId || pickupBranchId) === location.id ? <Check color={primaryColor} size={20} /> : null}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -1577,10 +1806,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     </View>
                 </View>
             </Modal>
-
             {/* Related commercial document picker */}
             <Modal visible={showLinkedDocumentPicker} animationType="slide" transparent onRequestClose={() => setShowLinkedDocumentPicker(false)}>
-                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
                     <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <View>
@@ -1592,7 +1820,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             </TouchableOpacity>
                         </View>
                         {loadingLinkedDocuments ? <ActivityIndicator style={{ marginTop: 28 }} color={primaryColor} /> : (
-                            <ScrollView contentContainerStyle={{ padding: 12 }}>
+                            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 12 }}>
                                 {linkedDocuments.length ? linkedDocuments.map((document) => {
                                     const linkedType = resolveCommercialDocumentType(document);
                                     return (
@@ -1619,29 +1847,29 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     </View>
                 </View>
             </Modal>
-
             {/* Product Picker Modal */}
-            <Modal visible={showProductPicker} animationType="slide" transparent>
-                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
-                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
+            <Modal visible={showProductPicker} animationType="slide" transparent onRequestClose={closeProductPicker}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                                        <View style={[styles.modalContent, { backgroundColor: isDark ? '#14243A' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('addItem', language)}</Text>
-                            <TouchableOpacity testID="invoice-close-product-picker-button" accessibilityRole="button" onPress={() => setShowProductPicker(false)}>
+                            <TouchableOpacity testID="invoice-close-product-picker-button" accessibilityRole="button" onPress={closeProductPicker}>
                                 <Text style={{ color: primaryColor, fontSize: 16 }}>{t('close', language)}</Text>
                             </TouchableOpacity>
                         </View>
-                        <View style={{ padding: 12 }}>
-                            <Input
-                                placeholder={t('searchProducts', language)}
-                                testID="invoice-product-search-input"
-                                value={productSearch}
-                                onChangeText={setProductSearch}
-                            />
-                        </View>
                         <ScrollView
+                            style={{ flex: 1 }}
                             contentContainerStyle={{ padding: 12 }}
                             keyboardShouldPersistTaps="handled"
                         >
+                            <View style={{ paddingBottom: 12 }}>
+                                <Input
+                                    placeholder={t('searchProducts', language)}
+                                    testID="invoice-product-search-input"
+                                    value={productSearch}
+                                    onChangeText={setProductSearch}
+                                />
+                            </View>
                             <TouchableOpacity
                                 testID="invoice-custom-item-option"
                                 style={[styles.modalItem, { borderBottomColor: borderColor }]}
@@ -1652,7 +1880,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 </View>
                                 <Text style={[styles.modalItemTitle, { color: textColor }]}>{t('customItem', language)}</Text>
                             </TouchableOpacity>
-
                             {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(product => (
                                 <TouchableOpacity
                                     testID={`invoice-product-option-${product.id}`}
@@ -1670,6 +1897,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                                 ? Number(product.unit_price || 0)
                                                 : Number(product.unit_price || 0) * (1 + (Number(product.tax_rate) || 0) / 100)
                                             )}
+                                            {product.track_stock && invoiceBranchId ? ` · ${language === 'sq' ? 'Stok' : 'Stock'}: ${branchStockByProduct[product.id] ?? Number(product.stock_quantity || 0)}` : ''}
                                         </Text>
                                     </View>
                                 </TouchableOpacity>
@@ -1678,7 +1906,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     </View>
                 </View>
             </Modal>
-
             <SignaturePadModal
                 visible={showCustomerSignaturePad}
                 primaryColor={primaryColor}
@@ -1690,7 +1917,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     setCustomerSignature(signature);
                 }}
             />
-
             {showDueDateOptions ? (
                 <Modal visible transparent animationType="fade" onRequestClose={() => setShowDueDateOptions(false)}>
                     <View style={[styles.dueDateOptionsOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}>
@@ -1704,7 +1930,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     onPress={() => selectDueDatePreset(preset)}
                                     style={[styles.dueDateOption, { borderColor: dueDatePreset === preset ? primaryColor : borderColor, backgroundColor: dueDatePreset === preset ? `${primaryColor}18` : cardBg }]}
                                 >
-                                    <Text style={[styles.deliveryOptionText, { color: dueDatePreset === preset ? primaryColor : textColor }]}>{t(preset, language)}</Text>
+                                    <Text style={[styles.dueDateOptionText, { color: dueDatePreset === preset ? primaryColor : textColor }]}>{t(preset, language)}</Text>
                                 </TouchableOpacity>
                             ))}
                             <TouchableOpacity testID="invoice-due-date-options-cancel" onPress={() => setShowDueDateOptions(false)} style={styles.dueDateOptionsCancel}>
@@ -1714,7 +1940,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     </View>
                 </Modal>
             ) : null}
-
             {showDatePicker && Platform.OS === 'ios' ? (
                 <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
                     <View style={[styles.datePickerOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}>
@@ -1742,7 +1967,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         </View>
     );
 }
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
@@ -1751,16 +1975,42 @@ const styles = StyleSheet.create({
     subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
     saveButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', elevation: 2 },
     contextHelpButton: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-
     scroll: { flex: 1 },
     scrollContent: { padding: 20, paddingBottom: 40 },
-
     sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, marginTop: 16 },
     card: { padding: 16, borderRadius: 16, marginBottom: 8 },
-
+    invoicePaymentMethodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    invoicePaymentMethod: { width: '31.5%', minHeight: 84, position: 'relative', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 6, paddingVertical: 11, borderRadius: 16, borderWidth: 1.2 },
+    invoicePaymentMethodIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    invoicePaymentMethodCheck: { position: 'absolute', top: 7, right: 7, width: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+    invoicePaymentMethodText: { width: '100%', textAlign: 'center', fontWeight: '700', fontSize: 11.5, lineHeight: 15 },
+    cashPaymentPanel: { marginTop: 16, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(127, 145, 170, 0.25)', backgroundColor: 'rgba(127, 145, 170, 0.06)' },
+    paymentAmountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 },
+    paymentAmountLabel: { fontSize: 14, fontWeight: '700' },
+    paymentAmountHint: { fontSize: 11, marginTop: 2, letterSpacing: 0.4 },
+    exactAmountButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 11, borderRadius: 11, borderWidth: 1 },
+    exactAmountText: { fontSize: 11.5, fontWeight: '800' },
+    paymentAmountInput: { height: 52, minHeight: 52, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, fontSize: 17, fontWeight: '700' },
+    changeSummary: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 13, borderWidth: 1 },
+    changeSummaryCopy: { flex: 1, minWidth: 0 },
+    changeSummaryLabel: { fontSize: 13, fontWeight: '700' },
+    changeSummaryHint: { fontSize: 10.5, marginTop: 2 },
+    changeSummaryValue: { fontSize: 16, fontWeight: '800' },
+    paymentLimitHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9 },
+    paymentLimitHintText: { flex: 1, fontSize: 10.5, lineHeight: 15 },
+    documentTypeSelector: { marginBottom: 4 },
+    documentTypeButton: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
+    documentTypeButtonCopy: { flex: 1, minWidth: 0 },
+    documentTypeButtonLabel: { fontSize: 15, fontWeight: '700' },
+    documentTypeButtonHint: { fontSize: 11, marginTop: 3, letterSpacing: 0.4 },
+    documentTypeOptions: { marginTop: 8, borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+    documentTypeOption: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(127, 145, 170, 0.24)' },
+    documentTypeOptionSelect: { flex: 1, minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    documentTypeOptionCopy: { flex: 1, minWidth: 0 },
+    documentTypeOptionTitle: { fontSize: 14, fontWeight: '600' },
+    documentTypeOptionMeta: { fontSize: 10, marginTop: 3, letterSpacing: 0.3 },
     row: { flexDirection: 'row' },
     label: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
-
     dateButton: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, gap: 8 },
     dateText: { fontSize: 14, fontWeight: '500' },
     datePickerOverlay: { flex: 1, justifyContent: 'center', padding: 20 },
@@ -1770,7 +2020,8 @@ const styles = StyleSheet.create({
     datePickerTitle: { fontSize: 16, fontWeight: '700' },
     dueDateOptionsOverlay: { flex: 1, justifyContent: 'flex-end' },
     dueDateOptionsCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
-    dueDateOption: { paddingVertical: 13, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, marginTop: 9 },
+    dueDateOption: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, marginTop: 9 },
+    dueDateOptionText: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
     dueDateOptionsCancel: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
     advancedToggle: { minHeight: 44, marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     advancedToggleText: { fontSize: 13, fontWeight: '700' },
@@ -1778,7 +2029,6 @@ const styles = StyleSheet.create({
     invoicePictureOptionText: { flex: 1, minWidth: 0 },
     invoicePictureOptionTitle: { fontSize: 14, fontWeight: '700' },
     invoicePictureOptionDescription: { fontSize: 12, lineHeight: 17, marginTop: 2 },
-
     // Client
     selectedClient: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     clientIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -1789,7 +2039,6 @@ const styles = StyleSheet.create({
     removeClient: { padding: 8 },
     addClientButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderWidth: 1, borderRadius: 12, gap: 8 },
     addClientText: { fontSize: 15, fontWeight: '600' },
-
     // Items
     itemsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 },
     emptyItems: { padding: 30, alignItems: 'center', justifyContent: 'center' },
@@ -1800,29 +2049,28 @@ const styles = StyleSheet.create({
     smallInput: { borderWidth: 1, borderRadius: 8, padding: 8, fontSize: 14, marginTop: 4 },
     inputLabel: { fontSize: 11, textTransform: 'uppercase' },
     itemRowTotal: { fontSize: 15, fontWeight: '700', textAlign: 'right', marginTop: 12 },
-
     summaryFooter: { padding: 16, borderTopWidth: 1 },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-
     // Notes
     notesInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 100 },
     deliveryOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    deliveryOption: { minWidth: '46%', flexGrow: 1, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
-    deliveryOptionText: { fontSize: 13, fontWeight: '600' },
+    deliveryOption: { minWidth: '46%', flexGrow: 1, minHeight: 58, flexDirection: 'row', justifyContent: 'flex-start', gap: 8, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 15, borderWidth: 1.2, alignItems: 'center' },
+    deliveryOptionIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    deliveryOptionText: { flex: 1, textAlign: 'center', fontSize: 12.5, fontWeight: '700' },
+    deliveryOptionCheck: { width: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
     transportInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, fontSize: 14, minHeight: 48 },
     transportMultilineInput: { minHeight: 88, textAlignVertical: 'top' },
     transportHint: { fontSize: 12, marginTop: 6 },
-
     // Modals
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-    modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '80%', paddingBottom: 40 },
+    modalContent: { width: '100%', alignSelf: 'stretch', borderTopLeftRadius: 24, borderTopRightRadius: 24, minHeight: 260, maxHeight: '80%', paddingBottom: 40, overflow: 'hidden' },
+    branchPickerContent: { height: 'auto', minHeight: 250, maxHeight: '58%', paddingBottom: 20 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
     modalTitle: { fontSize: 18, fontWeight: '700' },
     modalItem: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16, borderBottomWidth: 1 },
     modalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     modalItemTitle: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
     modalAddNew: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, marginTop: 12, borderWidth: 1, borderRadius: 12, borderStyle: 'dashed' },
-
     // Footer & Preview
     footer: {
         flexDirection: 'row',
@@ -1855,7 +2103,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
     },
     saveText: { flexShrink: 1, color: '#fff', fontSize: 15, fontWeight: '700', textAlign: 'center' },
-
     previewContainer: { flex: 1 },
     previewHeader: {
         flexDirection: 'row',

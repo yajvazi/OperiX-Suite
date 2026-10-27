@@ -14,7 +14,7 @@ import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { generateTransactionPdfHtml } from '../../services/pdf/transactionPdf';
 import { dateRangeZipFileName, documentPdfFileName } from '../../services/pdf/fileNaming';
 import { createPdfZip, generateBulkPdf, sharePdfZip, type BulkPdfFile } from '../../services/bulkPdfExport';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { normalizeBrandColor, brand, getPalette } from '../../theme/brand';
 import type { RootStackParamList } from '../../navigation/types';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
@@ -124,6 +124,8 @@ export function buildInvoicePdfData(row: BulkDocumentRow, company: PdfCompany, l
             notes: row.notes || '',
             terms: company.terms_conditions || '',
             paymentMethod: row.payment_method,
+            status: row.status,
+            paymentStatus: row.payment_status,
             amountReceived: Number(row.amount_received) || 0,
             changeAmount: Number(row.change_amount) || 0,
             type: row.type === 'offer' ? 'offer' : 'invoice',
@@ -177,11 +179,17 @@ export function buildTransactionPdfData(kind: 'expenses' | 'payments', row: Bulk
     const isPayment = kind === 'payments';
     const number = numberFor(kind, row);
     const party = partyFor(kind, row);
+    const totalAmount = amountFor(kind, row);
+    const vatAmount = Number(row.tax_amount) || 0;
     return {
-        title: isPayment ? t('incomingPayments', language) : t('expense', language),
+        title: isPayment ? t('incomingPayments', language) : party ? t('expensePayment', language) : t('expense', language),
         number,
-        amount: amountFor(kind, row),
+        amount: totalAmount,
+        netAmount: !isPayment && row.tax_amount != null ? Math.round((totalAmount - vatAmount) * 100) / 100 : undefined,
+        vatRate: !isPayment && row.vat_rate != null ? Number(row.vat_rate) : undefined,
+        vatAmount: !isPayment && row.tax_amount != null ? vatAmount : undefined,
         date: dateFor(kind, row),
+        article: !isPayment ? row.article || undefined : undefined,
         description: row.description || '',
         notes: row.notes || '',
         category: row.category || '',
@@ -192,10 +200,10 @@ export function buildTransactionPdfData(kind: 'expenses' | 'payments', row: Bulk
         counterpartyPhone: row.client?.phone || undefined,
         counterpartyAddress: row.client?.address || undefined,
         relatedDocumentNumber: isPayment ? row.invoice?.invoice_number : row.invoice_number,
-        relatedDocumentLabel: t('invoiceNumber', language),
+        relatedDocumentLabel: isPayment ? t('invoiceNumber', language) : t('vendorInvoice', language),
         reference: row.bank_reference || '',
-        transactionType: isPayment ? 'payment' as const : 'expense' as const,
-        documentStatusLabel: isPayment ? t('paymentReceipt', language) : t('expense', language),
+        transactionType: isPayment || party ? 'payment' as const : 'expense' as const,
+        documentStatusLabel: isPayment ? t('paymentReceipt', language) : party ? t('expensePayment', language) : t('expense', language),
         barcodeValue: `${isPayment ? 'PAYMENT' : 'EXPENSE'}:${row.id}`,
         language,
         company: {
@@ -243,6 +251,9 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
         setError(null);
         try {
             const scope = await getWorkspaceScope(user.id);
+            if (!hasWorkspacePermission(scope, 'financial.export')) {
+                throw new Error('FINANCIAL_EXPORT_PERMISSION_REQUIRED');
+            }
             const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
             let tenantData: Record<string, any> = (scope.company || {}) as Record<string, any>;
             const activeCompanyId = profileData?.active_company_id || scope.companyId;
@@ -274,7 +285,7 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
             setSelected(new Set());
         } catch (loadError) {
             console.error('Bulk document export load error:', loadError);
-            setError(getLocalizedErrorMessage(loadError, language, 'unableToLoad'));
+            setError(loadError instanceof Error && loadError.message === 'FINANCIAL_EXPORT_PERMISSION_REQUIRED' ? t('permissionDenied', language) : getLocalizedErrorMessage(loadError, language, 'unableToLoad'));
         } finally {
             setLoading(false);
         }
@@ -312,6 +323,12 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
     const pageTitle = kind === 'invoices' ? t('bulkInvoices', language) : kind === 'expenses' ? t('bulkExpenses', language) : t('bulkIncomePayments', language);
 
     const handleExport = async () => {
+        if (!user) return;
+        const scope = await getWorkspaceScope(user.id);
+        if (!hasWorkspacePermission(scope, 'financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         const selectedRows = filteredRows.filter((row) => selected.has(String(row.id)));
         if (!selectedRows.length) {
             Alert.alert(t('info', language), t('noDocumentsMatch', language));
@@ -373,7 +390,8 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
 
     return (
         <MobileScreen>
-            <MobileHeader title={pageTitle} subtitle={t('bulkDocumentDownloads', language)} onBack={() => navigation.goBack()} />
+            <View style={styles.screenContent}>
+                <MobileHeader title={pageTitle} subtitle={t('bulkDocumentDownloads', language)} onBack={() => navigation.goBack()} />
             <View style={styles.content}>
                 <View style={[styles.filterCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                     <View style={styles.filterTitleRow}><Search color={brand.colors.primary} size={18} /><Text style={[styles.filterTitle, { color: palette.text }]}>{t('filter', language)}</Text></View>
@@ -388,7 +406,7 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
                     <TouchableOpacity onPress={handleExport} disabled={exporting || selected.size === 0} style={[styles.exportButton, { backgroundColor: exporting || selected.size === 0 ? palette.border : brand.colors.primary }]}><Download color="#fff" size={17} /><Text style={styles.exportText}>{exporting ? `${t('exporting', language)} ${exportProgress}/${selected.size}` : t('downloadZip', language)}</Text></TouchableOpacity>
                 </View>
                 <Text style={[styles.countText, { color: palette.muted }]}>{t('selectedCount', language).replace('{count}', String(selected.size))} · {filteredRows.length} {pageTitle.toLocaleLowerCase(locale)}</Text>
-                <FlatList
+                <FlatList keyboardShouldPersistTaps="handled"
                     data={filteredRows}
                     renderItem={renderRow}
                     keyExtractor={(item) => String(item.id)}
@@ -397,11 +415,13 @@ export function BulkDocumentExportScreen({ route }: { route: { params?: { kind?:
                     ListEmptyComponent={<View style={styles.empty}><FileText color={palette.muted} size={38} /><Text style={[styles.emptyText, { color: palette.muted }]}>{t('noDocumentsMatch', language)}</Text></View>}
                 />
             </View>
+            </View>
         </MobileScreen>
     );
 }
 
 const styles = StyleSheet.create({
+    screenContent: { flex: 1 },
     content: { flex: 1, paddingHorizontal: 20 },
     filterCard: { borderWidth: 1, borderRadius: 17, padding: 14, marginBottom: 12 },
     filterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 11 },

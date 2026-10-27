@@ -58,7 +58,7 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
 
                     <ScrollView
                         style={styles.scroll}
-                        keyboardShouldPersistTaps="always"
+                        keyboardShouldPersistTaps="handled"
                         keyboardDismissMode="none"
                     >
                         {fields.map((field, index) => (

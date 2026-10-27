@@ -90,6 +90,7 @@ export function SalesScreen() {
     const locale = language === 'sq' ? 'sq' : 'en';
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const route = useRoute<any>();
+    const contractView = route.params?.mode === 'contracts';
     const [documents, setDocuments] = useState<DocumentRow[]>([]);
     const [customers, setCustomers] = useState<CustomerRow[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
@@ -102,6 +103,7 @@ export function SalesScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [canManageContracts, setCanManageContracts] = useState(false);
     useEffect(() => {
         const invoiceSearch = route.params?.invoiceSearch as string | undefined;
         if (!invoiceSearch) return;
@@ -126,8 +128,31 @@ export function SalesScreen() {
         setLoading(true);
         setError(null);
         try {
-            const { companyIds } = await getWorkspaceScope(user.id);
+            const workspace = await getWorkspaceScope(user.id);
+            const { companyIds } = workspace;
+            const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
+            setCanManageContracts(allowedContracts);
+            if (contractView && !allowedContracts) {
+                setDocuments([]);
+                setPayments([]);
+                setExpenses([]);
+                setError('You do not have permission to view contracts.');
+                return;
+            }
             const scope = scopedResource(user.id, companyIds);
+            if (contractView) {
+                const contractResult = await supabase
+                    .from('contracts')
+                    .select('id,title,status,type,created_at,client:clients(id,name)')
+                    .or(scope)
+                    .order('created_at', { ascending: false })
+                    .limit(150);
+                if (contractResult.error) throw contractResult.error;
+                setDocuments((contractResult.data || []) as DocumentRow[]);
+                setPayments([]);
+                setExpenses([]);
+                return;
+            }
             let query: any = supabase
                 .from('invoices')
                 .select('id,client_id,invoice_number,total_amount,status,commercial_document_type,commercial_status,issue_date,due_date,created_at,notes,client:clients(id,name)')
@@ -169,7 +194,7 @@ export function SalesScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [language, search, user]);
+    }, [contractView, language, search, user]);
 
     useFocusEffect(useCallback(() => {
         void fetchDocuments();
@@ -213,6 +238,11 @@ export function SalesScreen() {
     };
 
     const createForFilter = () => {
+        if (contractView) {
+            if (!canManageContracts) return;
+            navigation.navigate('ContractForm');
+            return;
+        }
         if (filter === 'PAYMENTS') {
             navigation.navigate('PaymentForm');
             return;
@@ -306,21 +336,41 @@ export function SalesScreen() {
     );
 
     const renderSalesItem = ({ item }: { item: Record<string, any> }) => {
+        if (contractView) {
+            return (
+                <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('ContractDetail', { contractId: item.id })} style={[styles.documentCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                    <View style={styles.documentTopLine}>
+                        <View style={[styles.documentIcon, { backgroundColor: primaryColor + '14' }]}><FileText color={primaryColor} size={18} /></View>
+                        <View style={styles.documentCopy}>
+                            <Text style={[styles.documentNumber, { color: palette.text }]} numberOfLines={1}>{item.title}</Text>
+                            <Text style={[styles.documentCustomer, { color: palette.muted }]} numberOfLines={1}>{item.client?.name || t('noClient', language)}</Text>
+                        </View>
+                    </View>
+                    <View style={styles.documentBottomLine}>
+                        <Text style={[styles.typeText, { color: primaryColor }]}>{t('contracts', language)}</Text>
+                        <Text style={[styles.documentMeta, { color: palette.muted }]}>{formatDate(item.created_at, language)}</Text>
+                    </View>
+                </TouchableOpacity>
+            );
+        }
         if (filter === 'PAYMENTS') return renderPayment({ item });
         if (filter === 'EXPENSES') return renderExpense({ item });
         return renderDocument({ item });
     };
 
-    const activeListLabel = filter === 'PAYMENTS' ? t('incomePayments', language) : filter === 'EXPENSES' ? t('expenses', language) : t('sharedDocumentTrail', language);
-    const activeEmptyTitle = filter === 'PAYMENTS' ? t('noPaymentsRecorded', language) : filter === 'EXPENSES' ? t('noExpensesYet', language) : t('noDocuments', language);
-    const activeEmptyDescription = filter === 'PAYMENTS' ? t('noPaymentsRecordedYet', language) : filter === 'EXPENSES' ? t('noExpensesYet', language) : filter === 'ALL' ? t('createFirstSalesDocument', language) : t('noDocumentsOfType', language);
-    const activeActionLabel = filter === 'PAYMENTS' ? t('newIncomePayment', language) : filter === 'EXPENSES' ? t('addExpense', language) : t('createDocument', language);
+    const activeListLabel = contractView ? t('contracts', language) : filter === 'PAYMENTS' ? t('incomePayments', language) : filter === 'EXPENSES' ? t('expenses', language) : t('sharedDocumentTrail', language);
+    const activeEmptyTitle = contractView ? t('contracts', language) : filter === 'PAYMENTS' ? t('noPaymentsRecorded', language) : filter === 'EXPENSES' ? t('noExpensesYet', language) : t('noDocuments', language);
+    const activeEmptyDescription = contractView ? t('contractsAndAgreements', language) : filter === 'PAYMENTS' ? t('noPaymentsRecordedYet', language) : filter === 'EXPENSES' ? t('noExpensesYet', language) : filter === 'ALL' ? t('createFirstSalesDocument', language) : t('noDocumentsOfType', language);
+    const activeActionLabel = contractView ? t('contracts', language) : filter === 'PAYMENTS' ? t('newIncomePayment', language) : filter === 'EXPENSES' ? t('addExpense', language) : t('createDocument', language);
+    const closeCustomerPicker = () => {
+        setShowCustomerPicker(false);
+    };
 
     return (
         <MobileScreen testID="sales-screen">
             <MobileHeader
-                title={t('sales', language)}
-                subtitle={t('commercialDocuments', language)}
+                title={contractView ? t('contracts', language) : t('sales', language)}
+                subtitle={contractView ? t('contractsAndAgreements', language) : t('commercialDocuments', language)}
                 right={(
                     <TouchableOpacity
                         accessibilityRole="button"
@@ -363,7 +413,7 @@ export function SalesScreen() {
                     />
                 </View>
 
-                <ScrollView
+                {!contractView ? <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
@@ -374,7 +424,7 @@ export function SalesScreen() {
                         const selected = filter === chip.key;
                         return <TouchableOpacity key={chip.key} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setFilter(chip.key)} style={[styles.filterChip, { backgroundColor: selected ? primaryColor : palette.surface, borderColor: selected ? primaryColor : palette.border }]}><Text style={[styles.filterText, { color: selected ? '#fff' : palette.muted }]}>{t(chip.labelKey, language)}</Text></TouchableOpacity>;
                     })}
-                </ScrollView>
+                </ScrollView> : null}
 
                 <View style={styles.listHeading}><Text style={[styles.listHint, { color: palette.muted }]}>{activeListLabel}</Text><Text style={[styles.listHint, { color: palette.muted }]}>{activeRows.length}</Text></View>
                 {loading ? <LoadingState label={`${t('loading', language)} ${t('documents', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}`} /> : error ? <ErrorState onRetry={() => void fetchDocuments()} message={error} /> : (
@@ -394,13 +444,13 @@ export function SalesScreen() {
                 )}
             </View>
             </KeyboardAvoidingView>
-            <Modal visible={showCustomerPicker} transparent animationType="slide" onRequestClose={() => setShowCustomerPicker(false)}>
+            <Modal visible={showCustomerPicker} transparent animationType="slide" onRequestClose={closeCustomerPicker}>
                 <View style={[styles.clientModalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.5)' }]}>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('close', language)} onPress={() => setShowCustomerPicker(false)} style={StyleSheet.absoluteFill} />
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('close', language)} onPress={closeCustomerPicker} style={StyleSheet.absoluteFill} />
                     <View style={[styles.clientModalSheet, { backgroundColor: palette.surface }]}>
                         <View style={[styles.clientModalHeader, { borderBottomColor: palette.border }]}>
                             <Text style={[styles.clientModalTitle, { color: palette.text }]}>{t('selectCustomer', language)}</Text>
-                            <TouchableOpacity testID="sales-close-client-picker-button" accessibilityRole="button" accessibilityLabel={t('close', language)} onPress={() => setShowCustomerPicker(false)} style={styles.clientModalClose}>
+                            <TouchableOpacity testID="sales-close-client-picker-button" accessibilityRole="button" accessibilityLabel={t('close', language)} onPress={closeCustomerPicker} style={styles.clientModalClose}>
                                 <X color={palette.text} size={20} />
                             </TouchableOpacity>
                         </View>
@@ -412,7 +462,7 @@ export function SalesScreen() {
                                 testID="sales-all-customers-option"
                                 accessibilityRole="radio"
                                 accessibilityState={{ selected: !selectedCustomer }}
-                                onPress={() => { setSelectedCustomer(null); setCustomerSearch(''); setShowCustomerPicker(false); }}
+                                onPress={() => { setSelectedCustomer(null); setCustomerSearch(''); closeCustomerPicker(); }}
                                 style={[styles.clientOption, { borderBottomColor: palette.border }]}
                             >
                                 <View style={[styles.clientOptionIcon, { backgroundColor: palette.iconSurface }]}><UserRound color={primaryColor} size={18} /></View>
@@ -425,7 +475,7 @@ export function SalesScreen() {
                                     accessibilityRole="radio"
                                     accessibilityState={{ selected: selectedCustomer?.id === customer.id }}
                                     key={customer.id}
-                                    onPress={() => { setSelectedCustomer(customer); setCustomerSearch(''); setShowCustomerPicker(false); }}
+                                    onPress={() => { setSelectedCustomer(customer); setCustomerSearch(''); closeCustomerPicker(); }}
                                     style={[styles.clientOption, { borderBottomColor: palette.border }]}
                                 >
                                     <View style={[styles.clientOptionIcon, { backgroundColor: palette.iconSurface }]}><Text style={[styles.clientInitial, { color: primaryColor }]}>{String(customer.name || '?').charAt(0).toUpperCase()}</Text></View>

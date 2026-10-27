@@ -7,6 +7,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import {
     getHelpArticle,
     getHelpCategoryTitle,
+    getHelpdeskArticleUrl,
     rememberHelpArticle,
     resolveDocumentationLanguage,
     type DocumentationLanguage,
@@ -103,6 +104,7 @@ export function HelpArticleScreen({ navigation, route }: Props) {
             .map((articleId) => getHelpArticle(articleId, activeLanguage))
             .filter((related): related is NonNullable<typeof related> => Boolean(related));
     }, [activeLanguage, article]);
+    const helpdeskUrl = getHelpdeskArticleUrl(route.params.articleId, activeLanguage);
 
     const renderMarkdown = (content: string) => {
         const lines = content.split(/\r?\n/);
@@ -169,7 +171,7 @@ export function HelpArticleScreen({ navigation, route }: Props) {
                     index += 1;
                 }
                 nodes.push(
-                    <ScrollView key={`table-${index}`} horizontal showsHorizontalScrollIndicator={false} style={styles.tableScroll}>
+                    <ScrollView keyboardShouldPersistTaps="handled" key={`table-${index}`} horizontal showsHorizontalScrollIndicator={false} style={styles.tableScroll}>
                         <View style={[styles.table, { borderColor: palette.border }]}>
                             {rows.map((row, rowIndex) => (
                                 <View key={`row-${rowIndex}`} style={[styles.tableRow, { borderBottomColor: palette.border, backgroundColor: rowIndex === 0 ? palette.surfaceMuted : palette.surface }]}>
@@ -221,7 +223,7 @@ export function HelpArticleScreen({ navigation, route }: Props) {
                 onBack={() => navigation.goBack()}
                 right={<HelpLanguageToggle language={activeLanguage} onChange={setActiveLanguage} />}
             />
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {article ? (
                     <>
                         <View style={[styles.articleHeader, { backgroundColor: palette.surface, borderColor: palette.border }]}>
@@ -229,6 +231,7 @@ export function HelpArticleScreen({ navigation, route }: Props) {
                             <Text style={[styles.articleDescription, { color: palette.muted }]}>{article.description}</Text>
                             {article.status !== 'production' ? <View style={[styles.status, { backgroundColor: article.status === 'disabled' ? '#FFF0EF' : '#FFF6D9' }]}><Text style={[styles.statusText, { color: article.status === 'disabled' ? brand.colors.error : brand.colors.warning }]}>{STATUS_LABELS[activeLanguage][article.status]}</Text></View> : null}
                         </View>
+                        {helpdeskUrl ? <TouchableOpacity accessibilityRole="link" onPress={() => void openExternalLink(helpdeskUrl, activeLanguage === 'sq' ? 'Hap udhëzuesin në Help Center' : 'Open guide in Help Center')} style={[styles.helpdeskLink, { borderColor: palette.border, backgroundColor: palette.surfaceMuted }]}><ExternalLink color={brand.colors.primary} size={16} /><Text style={[styles.helpdeskLinkText, { color: brand.colors.primary }]}>{activeLanguage === 'sq' ? 'Hap udhëzuesin e plotë në Help Center' : 'Open the full guide in Help Center'}</Text></TouchableOpacity> : null}
                         <View style={styles.markdown}>{renderMarkdown(article.content)}</View>
 
                         {article.links.some((link) => !link.targetId && /^https?:\/\//.test(link.href)) ? (
@@ -261,6 +264,8 @@ const styles = StyleSheet.create({
     articleHeader: { borderWidth: 1, borderRadius: 19, padding: 16, ...brand.shadow.card },
     articleTitle: { fontSize: 21, lineHeight: 28, fontFamily: brand.fonts.semibold },
     articleDescription: { fontSize: 12, lineHeight: 19, fontFamily: brand.fonts.regular, marginTop: 6 },
+    helpdeskLink: { minHeight: 45, borderWidth: 1, borderRadius: 13, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+    helpdeskLinkText: { flex: 1, fontSize: 11, lineHeight: 16, fontFamily: brand.fonts.medium },
     status: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginTop: 10 },
     statusText: { fontSize: 10, fontFamily: brand.fonts.semibold },
     markdown: { marginTop: 22 },

@@ -29,6 +29,12 @@ describe('PDF/document services', () => {
         expect(corporate).toContain('Blerina &amp; Co');
         expect(corporate).toContain('19/08/2026');
         expect(corporate).toContain('18/09/2026');
+        const noDueDate = generateInvoiceHtml({ ...invoiceData, details: { ...invoiceData.details, dueDate: '', language: 'sq' } }, 'corporate');
+        expect(noDueDate).toContain('Pa afat');
+        const paid = generateInvoiceHtml({ ...invoiceData, details: { ...invoiceData.details, dueDate: '2026-09-18', status: 'paid', language: 'sq' } }, 'corporate');
+        expect(paid).toContain('E paguar');
+        const debt = generateInvoiceHtml({ ...invoiceData, details: { ...invoiceData.details, paymentMethod: 'customer_credit', language: 'sq' } }, 'corporate');
+        expect(debt).toContain('Borxh');
         const receipt = generateInvoiceHtml({ ...invoiceData, config: { ...invoiceData.config, pageSize: 'Receipt' } }, 'corporate');
         expect(receipt).toContain('@page { size: 50mm 152mm; margin: 0; }');
         expect(receipt).not.toBe(corporate);

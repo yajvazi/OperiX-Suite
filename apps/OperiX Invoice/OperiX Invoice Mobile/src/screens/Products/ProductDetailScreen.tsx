@@ -8,8 +8,8 @@ import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { supabase } from '@invoice-monorepo/api';
 import { brand, getPalette } from '../../theme/brand';
-import { getActiveProductCompanyIds, getWorkspaceScope } from '../../services/workspace';
-import { getProduct } from '@invoice-monorepo/api/repositories';
+import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getPreferredBranchId, getProduct, listBranches, listProductBranchStock } from '@invoice-monorepo/api/repositories';
 import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
 import type { RootStackParamList } from '../../navigation/types';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
@@ -26,17 +26,45 @@ export function ProductDetailScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [canManageProducts, setCanManageProducts] = useState(false);
+    const [branchStocks, setBranchStocks] = useState<Array<{ id: string; name: string; quantity: number; threshold: number }>>([]);
 
     const fetchProduct = useCallback(async () => {
         if (!user || !productId) return;
         setError(null);
         try {
             const workspaceScope = await getWorkspaceScope(user.id);
-            setCanManageProducts(['super_administrator', 'company_administrator', 'manager'].includes(workspaceScope.roleCode));
+            setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
             const companyIds = getActiveProductCompanyIds(workspaceScope);
             const result = await getProduct(supabase, productId, { userId: user.id, companyIds });
             if (!result) throw new Error('Product not found.');
             setProduct(result as Record<string, any>);
+
+            // Branch stock is supplemental to the product record. If the branch
+            // tables are not available yet, keep the detail screen usable and
+            // fall back to the legacy products.stock_quantity value.
+            const companyId = workspaceScope.company?.id || workspaceScope.companyId;
+            if (companyId && result.track_stock) {
+                const [branches, stockRows, preferredBranchId] = await Promise.all([
+                    listBranches(supabase, companyId).catch(() => []),
+                    listProductBranchStock(supabase, companyId, null, [productId]).catch(() => []),
+                    getPreferredBranchId(supabase, user.id, companyId).catch(() => null),
+                ]);
+                setBranchStocks([...branches].sort((a, b) => {
+                    if (a.id === preferredBranchId) return -1;
+                    if (b.id === preferredBranchId) return 1;
+                    return a.name.localeCompare(b.name);
+                }).map((branch) => {
+                    const row = stockRows.find((stock) => stock.branch_id === branch.id);
+                    return {
+                        id: branch.id,
+                        name: branch.name,
+                        quantity: Number(row?.stock_quantity || 0),
+                        threshold: Number(row?.low_stock_threshold || 5),
+                    };
+                }));
+            } else {
+                setBranchStocks([]);
+            }
         } catch (fetchError: any) {
             console.error('Product detail error:', fetchError);
             setError(getLocalizedErrorMessage(fetchError, language, 'unableToLoad'));
@@ -51,7 +79,7 @@ export function ProductDetailScreen() {
     return (
         <MobileScreen testID="product-detail-screen">
             <MobileHeader title={product?.name || t('product', language)} subtitle={t('productDetail', language)} onBack={() => navigation.goBack()} right={canManageProducts ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('editProduct', language)} onPress={() => navigation.navigate('ProductForm', { productId })}><Edit3 color={brand.colors.primary} size={19} /></TouchableOpacity> : null} />
-            {loading ? <LoadingState label={t('loadingSection', language).replace('{section}', t('product', language))} /> : error ? <ErrorState onRetry={() => { setLoading(true); void fetchProduct(); }} message={error} /> : product ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void fetchProduct(); }} tintColor={brand.colors.primary} />}>
+            {loading ? <LoadingState label={t('loadingSection', language).replace('{section}', t('product', language))} /> : error ? <ErrorState onRetry={() => { setLoading(true); void fetchProduct(); }} message={error} /> : product ? <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void fetchProduct(); }} tintColor={brand.colors.primary} />}>
                 <View style={[styles.hero, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                     {serviceIconNameFromValue(product.image_url) ? <View style={[styles.heroIcon, { backgroundColor: palette.iconSurface }]}><SvgXml xml={serviceIconSvg(serviceIconNameFromValue(product.image_url)!, brand.colors.primary)} width="34" height="34" /></View> : product.image_url ? <Image accessibilityLabel={`${product.name} ${t('productPhoto', language)}`} source={{ uri: String(product.image_url) }} style={styles.heroImage} resizeMode="cover" /> : <View style={[styles.heroIcon, { backgroundColor: palette.iconSurface }]}><Package color={brand.colors.primary} size={25} /></View>}
                     <Text style={[styles.name, { color: palette.text }]}>{product.name}</Text>
@@ -63,10 +91,28 @@ export function ProductDetailScreen() {
                     <Text style={[styles.sectionTitle, { color: palette.text }]}>{t('details', language)}</Text>
                     <View style={styles.detailRow}><Tag color={palette.muted} size={17} /><Text style={[styles.detailLabel, { color: palette.muted }]}>{t('category', language)}</Text><Text style={[styles.detailValue, { color: palette.text }]}>{product.category || '—'}</Text></View>
                     <View style={styles.detailRow}><CircleIcon color={palette.muted} /><Text style={[styles.detailLabel, { color: palette.muted }]}>{t('vatTaxRate', language)}</Text><Text style={[styles.detailValue, { color: palette.text }]}>{product.tax_rate ? `${product.tax_rate}%` : t('notSet', language)}</Text></View>
-                    <View style={styles.detailRow}><Box color={palette.muted} size={17} /><Text style={[styles.detailLabel, { color: palette.muted }]}>{t('currentStock', language)}</Text><Text style={[styles.detailValue, { color: product.track_stock && Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5) ? brand.colors.warning : palette.text }]}>{product.track_stock ? `${Number(product.stock_quantity || 0)} ${product.unit || 'pcs'}` : t('notTracked', language)}</Text></View>
+                    <View style={styles.stockDetailRow}>
+                        <Box color={palette.muted} size={17} />
+                        <Text style={[styles.detailLabel, { color: palette.muted }]}>{t('currentStock', language)}</Text>
+                        {product.track_stock && branchStocks.length > 0 ? (
+                            <View style={styles.stockValues}>
+                                {branchStocks.map((branch) => (
+                                    <Text
+                                        key={branch.id}
+                                        style={[styles.stockValue, { color: branch.quantity <= branch.threshold ? brand.colors.warning : palette.text }]}
+                                    >
+                                        {branch.name}: {branch.quantity} {product.unit || 'pcs'}
+                                    </Text>
+                                ))}
+                            </View>
+                        ) : (
+                            <Text style={[styles.detailValue, { color: product.track_stock && Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5) ? brand.colors.warning : palette.text }]}>
+                                {product.track_stock ? `${Number(product.stock_quantity || 0)} ${product.unit || 'pcs'}` : t('notTracked', language)}
+                            </Text>
+                        )}
+                    </View>
                     <View style={styles.detailRow}><Barcode color={palette.muted} size={17} /><Text style={[styles.detailLabel, { color: palette.muted }]}>{t('skuBarcode', language)}</Text><Text style={[styles.detailValue, { color: palette.text }]} numberOfLines={1}>{product.sku || product.barcode || '—'}</Text></View>
                 </View>
-                {product.track_stock ? <View style={[styles.notice, { backgroundColor: palette.surface, borderColor: palette.border }]}><Box color={brand.colors.warning} size={18} /><Text style={[styles.noticeText, { color: palette.muted }]}>{t('stockTrackingNotice', language)}</Text></View> : <View style={[styles.notice, { backgroundColor: palette.surface, borderColor: palette.border }]}><Box color={palette.muted} size={18} /><Text style={[styles.noticeText, { color: palette.muted }]}>{t('productNotStockTracked', language)}</Text></View>}
                 <View style={{ height: 30 }} />
             </ScrollView> : null}
         </MobileScreen>
@@ -91,8 +137,9 @@ const styles = StyleSheet.create({
     detailsCard: { borderRadius: 19, borderWidth: 1, padding: 17, marginTop: 18 },
     sectionTitle: { fontSize: 17, fontFamily: brand.fonts.semibold, marginBottom: 8 },
     detailRow: { minHeight: 45, flexDirection: 'row', alignItems: 'center', gap: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(148,163,184,0.16)' },
+    stockDetailRow: { minHeight: 45, flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(148,163,184,0.16)' },
     detailLabel: { flex: 1, fontSize: 12, fontFamily: brand.fonts.regular },
     detailValue: { maxWidth: '45%', fontSize: 12, fontFamily: brand.fonts.semibold, textAlign: 'right' },
-    notice: { borderRadius: 16, borderWidth: 1, padding: 14, flexDirection: 'row', gap: 9, alignItems: 'flex-start', marginTop: 12 },
-    noticeText: { flex: 1, fontSize: 11, lineHeight: 17, fontFamily: brand.fonts.regular },
+    stockValues: { maxWidth: '58%', alignItems: 'flex-end', gap: 5 },
+    stockValue: { fontSize: 12, fontFamily: brand.fonts.semibold, textAlign: 'right' },
 });

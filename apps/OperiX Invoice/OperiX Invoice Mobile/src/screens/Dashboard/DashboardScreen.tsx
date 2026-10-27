@@ -319,7 +319,7 @@ export function DashboardScreen({ navigation }: any) {
                 </View>
             </View>
 
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />}

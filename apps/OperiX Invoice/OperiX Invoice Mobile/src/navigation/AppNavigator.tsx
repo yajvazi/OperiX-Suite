@@ -16,7 +16,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
 import { t } from '@invoice-monorepo/i18n';
-import { Button, getOperixBottomNavigationOptions, getOperixNavigationTheme, OperixBottomNavigation } from '@invoice-monorepo/ui';
+import { Button, getOperixBottomNavigationOptions, getOperixNavigationTheme } from '@invoice-monorepo/ui';
 import { OperixLogo } from '../components/OperixLogo';
 import { brand } from '../theme/brand';
 import type {
@@ -28,11 +28,13 @@ import type {
     RootStackParamList,
     SettingsStackParamList,
 } from './types';
+import { invoiceLinking } from './linking';
 
 import { SignInScreen } from '../screens/Auth/SignInScreen';
 import { SignUpScreen } from '../screens/Auth/SignUpScreen';
 import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
+import { WorkspaceRecoveryScreen } from '../screens/Auth/WorkspaceRecoveryScreen';
 
 import { HomeScreen } from '../screens/Home/HomeScreen';
 import { SalesScreen } from '../screens/Sales/SalesScreen';
@@ -44,6 +46,7 @@ import { AccountingScreen } from '../screens/Accounting/AccountingScreen';
 import { AccountantReportScreen } from '../screens/Accounting/AccountantReportScreen';
 import { CustomerDetailScreen } from '../screens/Customers/CustomerDetailScreen';
 import { ProductDetailScreen } from '../screens/Products/ProductDetailScreen';
+import { getWorkspaceScope } from '../services/workspace';
 
 import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
 import { PayrollScreen } from '../screens/Payroll/PayrollScreen';
@@ -69,6 +72,8 @@ import { ReportPreviewScreen } from '../screens/Reports/ReportPreviewScreen';
 import { SalesBookScreen } from '../screens/Reports/SalesBookScreen';
 import { ReportsHubScreen } from '../screens/Reports/ReportsHubScreen';
 import { CashBalancesScreen } from '../screens/Reports/CashBalancesScreen';
+import { OtherIncomeScreen } from '../screens/Income/OtherIncomeScreen';
+import { OtherIncomeFormScreen } from '../screens/Income/OtherIncomeFormScreen';
 import { AgentActivityScreen } from '../screens/Reports/AgentActivityScreen';
 import { TaxCenterScreen } from '../screens/TaxCenter/TaxCenterScreen';
 import { ContractFormScreen } from '../screens/Contracts/ContractFormScreen';
@@ -85,7 +90,9 @@ import { InvoiceTemplateSettingsScreen } from '../screens/Settings/Templates/Inv
 import { PaymentIntegrationsScreen } from '../screens/Settings/PaymentIntegrationsScreen';
 import { StripeDashboardScreen } from '../screens/Settings/StripeDashboardScreen';
 import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
+import { UsersAccessScreen } from '../screens/Settings/UsersAccessScreen';
 import { AdvancedSettingsScreen } from '../screens/Settings/AdvancedSettingsScreen';
+import { SubscriptionScreen } from '../screens/Settings/SubscriptionScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 import { HelpSupportScreen } from '../screens/Support/HelpSupportScreen';
 import { HelpCategoryScreen } from '../screens/Support/HelpCategoryScreen';
@@ -194,17 +201,28 @@ function SettingsNavigator() {
         <SettingsStack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
         <SettingsStack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
         <SettingsStack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
+        <SettingsStack.Screen name="UsersAccess" component={UsersAccessScreen} />
         <SettingsStack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
+        <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
     </SettingsStack.Navigator>;
 }
 
 function MainTabs() {
     const { isDark, primaryColor, language } = useTheme();
-    return <Tab.Navigator id="main-tabs" initialRouteName="Home" tabBar={OperixBottomNavigation} screenOptions={{
+    return <Tab.Navigator id="main-tabs" initialRouteName="Home" screenOptions={{
         ...getOperixBottomNavigationOptions(isDark, primaryColor),
     }}>
         <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('homeTab', language), tabBarAccessibilityLabel: t('homeTab', language), tabBarButtonTestID: 'nav-home-tab', tabBarIcon: ({ color }) => <House color={color} size={21} /> }} />
-        <Tab.Screen name="Sales" component={SalesScreen} options={{ tabBarLabel: t('sales', language), tabBarAccessibilityLabel: t('sales', language), tabBarButtonTestID: 'nav-sales-tab', tabBarIcon: ({ color }) => <ReceiptText color={color} size={21} /> }} />
+        <Tab.Screen name="Sales"
+            component={SalesScreen}
+            listeners={({ navigation }) => ({
+                // Contracts are opened from More using the Sales screen as a
+                // compatibility list. A normal tap on the Shitjet tab must
+                // always return to the regular sales view.
+                tabPress: () => navigation.navigate('Sales', { mode: undefined }),
+            })}
+            options={{ tabBarLabel: t('sales', language), tabBarAccessibilityLabel: t('sales', language), tabBarButtonTestID: 'nav-sales-tab', tabBarIcon: ({ color }) => <ReceiptText color={color} size={21} /> }}
+        />
         <Tab.Screen name="POS" component={POSScreen} options={{ tabBarLabel: t('posTab', language), tabBarAccessibilityLabel: t('posTab', language), tabBarButtonTestID: 'nav-pos-tab', tabBarIcon: ({ color }) => <FileText color={color} size={21} /> }} />
         <Tab.Screen name="Business" component={BusinessScreen} options={{ tabBarLabel: t('business', language), tabBarAccessibilityLabel: t('business', language), tabBarButtonTestID: 'nav-business-tab', tabBarIcon: ({ color }) => <BriefcaseBusiness color={color} size={21} /> }} />
         <Tab.Screen name="More" component={MoreScreen} options={{ tabBarLabel: t('more', language), tabBarAccessibilityLabel: t('more', language), tabBarButtonTestID: 'nav-more-tab', tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={22} /> }} />
@@ -223,6 +241,7 @@ function RootNavigator() {
         <RootStack.Screen name="PayrollSetup" component={PayrollSetupScreen} />
         <RootStack.Screen name="ReportsHub" component={ReportsHubScreen} />
         <RootStack.Screen name="CashBalances" component={CashBalancesScreen} />
+        <RootStack.Screen name="FinancialAccounts" component={CashBalancesScreen} />
         <RootStack.Screen name="AgentActivity" component={AgentActivityScreen} />
         <RootStack.Screen name="TaxCenter" component={TaxCenterScreen} />
         <RootStack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'modal' }} />
@@ -240,6 +259,8 @@ function RootNavigator() {
         <RootStack.Screen name="AllInvoices" component={AllInvoicesScreen} />
         <RootStack.Screen name="PaymentsList" component={PaymentsListScreen} />
         <RootStack.Screen name="PaymentForm" component={PaymentFormScreen} />
+        <RootStack.Screen name="OtherIncome" component={OtherIncomeScreen} />
+        <RootStack.Screen name="OtherIncomeForm" component={OtherIncomeFormScreen} />
         <RootStack.Screen name="ClientForm" component={ClientFormScreen} />
         <RootStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
         <RootStack.Screen name="ProductsList" component={ProductsScreen} />
@@ -275,12 +296,21 @@ function AuthNavigator() {
     </AuthStack.Navigator>;
 }
 
+function isMissingActiveWorkspaceError(error: unknown) {
+    const message = error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: unknown }).message)
+        : String(error || '');
+    return message.toLowerCase().includes('no active company workspace is configured');
+}
+
 export function AppNavigator() {
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, isOnboarding } = useAuth();
     const { isDark, language } = useTheme();
     const [isLocked, setIsLocked] = useState(false);
     const [checkingLock, setCheckingLock] = useState(true);
     const [isPending, setIsPending] = useState(false);
+    const [workspaceState, setWorkspaceState] = useState<'checking' | 'ready' | 'missing'>('checking');
+    const [workspaceRetry, setWorkspaceRetry] = useState(0);
 
     useEffect(() => {
         if (user) {
@@ -291,6 +321,30 @@ export function AppNavigator() {
             setCheckingLock(false);
         }
     }, [user?.id]);
+
+    useEffect(() => {
+        let active = true;
+        if (!user || isOnboarding) {
+            setWorkspaceState('ready');
+            return () => { active = false; };
+        }
+
+        setWorkspaceState('checking');
+        void getWorkspaceScope(user.id)
+            .then(() => {
+                if (active) setWorkspaceState('ready');
+            })
+            .catch((error) => {
+                if (!active) return;
+                // A failed authorization resolution must fail closed.  Rendering
+                // the authenticated navigator here would let stale/cached UI
+                // reach protected screens while the workspace boundary is
+                // unknown.
+                setWorkspaceState('missing');
+            });
+
+        return () => { active = false; };
+    }, [user?.id, isOnboarding, workspaceRetry]);
 
     const checkUserStatus = async () => {
         try {
@@ -307,12 +361,14 @@ export function AppNavigator() {
         }
     };
 
-    if (authLoading || checkingLock) {
+    if (authLoading || checkingLock || (user && workspaceState === 'checking')) {
         return <View style={[styles.loading, { backgroundColor: isDark ? brand.colors.navySoft : brand.colors.background }]}><OperixLogo width={180} reversed={isDark} /><ActivityIndicator size="small" color={brand.colors.primary} style={styles.loadingIndicator} /><Text style={[styles.loadingText, { color: isDark ? '#94a3b8' : brand.colors.muted }]}>{t('openingWorkspace', language)}</Text></View>;
     }
+    if (user && isOnboarding) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><AuthNavigator /></NavigationContainer>;
     if (user && isPending) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><ApprovalPendingScreen /></NavigationContainer>;
+    if (user && workspaceState === 'missing') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><WorkspaceRecoveryScreen onRetry={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && isLocked) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><BiometricOverlay onAuthenticated={() => setIsLocked(false)} /></NavigationContainer>;
-    return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>{user ? <RootNavigator /> : <AuthNavigator />}</NavigationContainer>;
+    return <NavigationContainer linking={user ? invoiceLinking : undefined} theme={isDark ? CustomDarkTheme : CustomLightTheme}>{user ? <RootNavigator /> : <AuthNavigator />}</NavigationContainer>;
 }
 
 const styles = StyleSheet.create({

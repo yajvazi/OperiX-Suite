@@ -146,7 +146,7 @@ export function ScanBillScreen({ navigation }: any) {
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
                 {!image ? (
                     <View style={styles.emptyContainer}>
                         <View style={[styles.iconPlaceholder, { backgroundColor: primaryColor + '10' }]}>

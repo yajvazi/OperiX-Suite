@@ -21,7 +21,10 @@ export async function getWorkspaceScope(userId: string): Promise<WorkspaceScope>
     const cached = workspaceCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) return cached.scope;
 
-    const scope = await resolveWorkspace(supabase, userId);
+    // Invoice is an account-facing client. Resolve only companies the user
+    // owns or actively belongs to (plus their authorized subdivisions), even
+    // when the authenticated user is also a platform administrator.
+    const scope = await resolveWorkspace(supabase, userId, { membershipOnly: true });
     const workspaceScope = {
         ...scope,
         profile: scope.profile as unknown as Profile,
@@ -32,8 +35,12 @@ export async function getWorkspaceScope(userId: string): Promise<WorkspaceScope>
 }
 
 export function invalidateWorkspaceScope(userId?: string) {
-    if (userId) workspaceCache.delete(userId);
-    else workspaceCache.clear();
+  if (userId) workspaceCache.delete(userId);
+  else workspaceCache.clear();
+}
+
+export function hasWorkspacePermission(scope: Pick<WorkspaceScope, 'permissions' | 'platformAdmin'>, permission: string) {
+  return scope.platformAdmin || scope.permissions.includes(permission);
 }
 
 /**

@@ -1,11 +1,22 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { act, fireEvent, waitFor } from '@testing-library/react-native';
 import { SignInScreen } from '../../src/screens/Auth/SignInScreen';
 import { SignUpScreen } from '../../src/screens/Auth/SignUpScreen';
 import { renderWithProviders, flushPromises } from '../test-utils';
 
 describe('authentication screens', () => {
+    it('exposes language and theme controls on the auth screens', async () => {
+        const setLanguage = jest.fn();
+        const setThemeMode = jest.fn();
+        const screen = await renderWithProviders(<SignUpScreen onNavigateToSignIn={jest.fn()} />, { theme: { setLanguage, setThemeMode } });
+
+        await fireEvent.press(screen.getByTestId('auth-language-toggle'));
+        await fireEvent.press(screen.getByTestId('auth-theme-toggle'));
+
+        expect(setLanguage).toHaveBeenCalledWith('sq');
+        expect(setThemeMode).toHaveBeenCalledWith('dark');
+    });
+
     it('does not call authentication for an incomplete sign-in form', async () => {
         const signIn = jest.fn(async () => ({ error: null }));
         const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={jest.fn()} />, { auth: { signIn } });
@@ -52,55 +63,61 @@ describe('authentication screens', () => {
         expect(onNavigateToSignUp).toHaveBeenCalledTimes(1);
     });
 
-    it('validates sign-up required fields, password rules, and sends all account metadata', async () => {
+    it('validates the stronger password policy and sends the verification code after account details', async () => {
         const signUp = jest.fn(async () => ({ error: null }));
         const screen = await renderWithProviders(<SignUpScreen onNavigateToSignIn={jest.fn()} navigation={{ navigate: jest.fn() }} />, { auth: { signUp } });
-        const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
         expect(signUp).not.toHaveBeenCalled();
         expect(screen.getByText('Please fill in all required fields marked with *')).toBeTruthy();
 
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-first-name'), 'Blerinë');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-last-name'), 'Hoxha');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-email'), 'blerine@example.com');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), '123');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), '124');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-phone'), '+383 44 123 456');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
         expect(screen.getByText('Passwords do not match')).toBeTruthy();
 
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), '123');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        expect(screen.getByText('Password must be at least 6 characters')).toBeTruthy();
+        expect(screen.getByText(/Password must be at least 8 characters/)).toBeTruthy();
 
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'sigurtë123');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'sigurtë123');
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'Sigurtë123!');
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'Sigurtë123!');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        await waitFor(() => expect(signUp).toHaveBeenCalledWith('blerine@example.com', 'sigurtë123', expect.objectContaining({
-            data: expect.objectContaining({ first_name: 'Blerinë', last_name: 'Hoxha', phone: '+383 44 123 456' }),
+        await waitFor(() => expect(signUp).toHaveBeenCalledWith('blerine@example.com', 'Sigurtë123!', expect.objectContaining({
+            data: expect.objectContaining({ first_name: '', last_name: '', tenant_name: '', phone: '' }),
         })));
-        expect(screen.getByText('Verify email')).toBeTruthy();
-        alert.mockRestore();
     });
 
-    it('does not verify an empty OTP and navigates to sign-in after a valid OTP', async () => {
+    it('verifies the OTP before creating the tenant workspace', async () => {
         const verifyEmailOtp = jest.fn(async () => ({ error: null }));
+        const completeSignup = jest.fn(async () => ({ companyId: 'company-1', error: null }));
         const onNavigateToSignIn = jest.fn();
         const signUp = jest.fn(async () => ({ error: null }));
-        const screen = await renderWithProviders(<SignUpScreen onNavigateToSignIn={onNavigateToSignIn} />, { auth: { verifyEmailOtp, signUp } });
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-first-name'), 'Ada');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-last-name'), 'Krasniqi');
+        const screen = await renderWithProviders(<SignUpScreen onNavigateToSignIn={onNavigateToSignIn} />, { auth: { verifyEmailOtp, signUp, completeSignup } });
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-email'), 'ada@example.com');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'secret123');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'secret123');
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'Secret123!');
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'Secret123!');
+        await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-first-name'), 'Blerinë');
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-last-name'), 'Krasniqi');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-phone'), '044123456');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
+        await fireEvent.changeText(screen.getByTestId('auth-sign-up-tenant-name'), 'OperiX Test');
+        await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
+        expect(completeSignup).not.toHaveBeenCalled();
         await waitFor(() => expect(screen.getByTestId('auth-otp-input')).toBeTruthy());
         await fireEvent.press(screen.getByTestId('auth-verify-button'));
         expect(verifyEmailOtp).not.toHaveBeenCalled();
         await fireEvent.changeText(screen.getByTestId('auth-otp-input'), '123456');
         await fireEvent.press(screen.getByTestId('auth-verify-button'));
         await waitFor(() => expect(verifyEmailOtp).toHaveBeenCalledWith('ada@example.com', '123456'));
-        expect(onNavigateToSignIn).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(completeSignup).toHaveBeenCalledWith({
+            tenantName: 'OperiX Test',
+            firstName: 'Blerinë',
+            lastName: 'Krasniqi',
+            phone: '044123456',
+            taxId: '',
+        }));
+        expect(onNavigateToSignIn).not.toHaveBeenCalled();
     });
 });

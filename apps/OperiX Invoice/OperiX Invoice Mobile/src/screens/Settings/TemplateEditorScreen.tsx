@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, Alert, ScrollView } from 'react-native';
 import { ArrowLeft, Layout, Columns, Type, Eye, Save, RotateCcw, Palette, Check } from 'lucide-react-native';
 
 import { useTheme } from '@invoice-monorepo/hooks';
@@ -329,4 +329,3 @@ const styles = StyleSheet.create({
     styleName: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
     styleDesc: { fontSize: 12, color: '#667085' },
 });
-

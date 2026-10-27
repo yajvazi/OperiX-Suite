@@ -6,7 +6,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { Button } from '@invoice-monorepo/ui';
 import { ErrorState, LoadingState, MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';
@@ -58,6 +58,14 @@ export const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
 const PRIMARY_LABEL_KEYS = ['invoice_number', 'bill_number', 'entry_number', 'account_name', 'name', 'asset_number', 'supplier_name', 'customer_name', 'declaration_type', 'title', 'file_name', 'sku', 'description', 'tax_type', '__company_name'];
 const REPORT_PAGE_SIZE = 1000;
 const REPORT_PREVIEW_PAGE_SIZE = 100;
+
+function permissionForReport(type: string) {
+    if (type === 'sales_book') return 'sales_book.view';
+    if (['purchase_book', 'withholding', 'declarations', 'tax_calendar'].includes(type)) return 'reports.tax';
+    if (type === 'inventory_register') return 'inventory.view';
+    if (['daily', 'profit_loss'].includes(type)) return 'reports.profit';
+    return 'reports.operational';
+}
 
 function asRows(value: unknown): ReportRow[] {
     return Array.isArray(value) ? value as ReportRow[] : [];
@@ -209,7 +217,11 @@ export function ReportPreviewScreen({ navigation, route }: any) {
             setLoading(true);
             setError(null);
             try {
-                const { companyIds, companies } = await getWorkspaceScope(user.id);
+                const workspace = await getWorkspaceScope(user.id);
+                if (!hasWorkspacePermission(workspace, permissionForReport(type))) {
+                    throw new Error('REPORT_PERMISSION_REQUIRED');
+                }
+                const { companyIds, companies } = workspace;
                 const companyNames = new Map<string, string>(
                     companies.map((company): [string, string] => [company.id, company.company_name || '']),
                 );
@@ -238,7 +250,7 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                 }
             } catch (loadError) {
                 console.error(`Report load error (${type}):`, loadError);
-                if (active) setError(t('reportLoadFailed', language));
+                if (active) setError(loadError instanceof Error && loadError.message === 'REPORT_PERMISSION_REQUIRED' ? 'REPORT_PERMISSION_REQUIRED' : t('reportLoadFailed', language));
             } finally {
                 if (active) setLoading(false);
             }
@@ -269,6 +281,12 @@ export function ReportPreviewScreen({ navigation, route }: any) {
     }, [definition.amountKeys, definition.source, language, rows, type]);
 
     const handleShare = async () => {
+        if (!user) return;
+        const workspace = await getWorkspaceScope(user.id);
+        if (!hasWorkspacePermission(workspace, 'financial.export')) {
+            Alert.alert(t('permissionDenied', language));
+            return;
+        }
         try {
             await Share.share({ message: `${t(definition.titleKey, language)}\n${t(definition.subtitleKey, language)}\n${rows.length} ${t('rows', language)} · OperiX Invoice` });
         } catch (shareError) {
@@ -277,11 +295,16 @@ export function ReportPreviewScreen({ navigation, route }: any) {
     };
 
     const handleExportPdf = async () => {
+        if (!user) return;
         setExporting(true);
         try {
             let exportRows = rows;
-            if (user) {
-                const { companyIds, companies } = await getWorkspaceScope(user.id);
+            {
+                const workspace = await getWorkspaceScope(user.id);
+                if (!hasWorkspacePermission(workspace, permissionForReport(type)) || !hasWorkspacePermission(workspace, 'financial.export')) {
+                    throw new Error('REPORT_PERMISSION_REQUIRED');
+                }
+                const { companyIds, companies } = workspace;
                 const companyNames = new Map<string, string>(
                     companies.map((company): [string, string] => [company.id, company.company_name || '']),
                 );
@@ -308,7 +331,7 @@ export function ReportPreviewScreen({ navigation, route }: any) {
             const printWasCancelled = /printing did not complete|cancelled|canceled|user cancel/i.test(message);
             if (!printWasCancelled) {
                 console.error('Report PDF export error:', exportError);
-                Alert.alert(t('exportUnavailable', language), t('reportPrintFailed', language));
+                Alert.alert(t('exportUnavailable', language), exportError instanceof Error && exportError.message === 'REPORT_PERMISSION_REQUIRED' ? t('permissionDenied', language) : t('reportPrintFailed', language));
             }
         } finally {
             setExporting(false);
@@ -318,8 +341,8 @@ export function ReportPreviewScreen({ navigation, route }: any) {
     return (
         <MobileScreen>
             <MobileHeader title={t(definition.titleKey, language)} subtitle={t(definition.subtitleKey, language)} onBack={() => navigation.goBack()} right={<TouchableOpacity accessibilityRole="button" accessibilityLabel={t('shareReport', language)} onPress={() => void handleShare()} hitSlop={10}><Share2 color={palette.text} size={20} /></TouchableOpacity>} />
-            {loading ? <LoadingState label={t('readingPostedAccounting', language)} /> : error ? <ErrorState message={error} onRetry={() => { setLoading(true); setRetryToken((value) => value + 1); }} /> : (
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            {loading ? <LoadingState label={t('readingPostedAccounting', language)} /> : error ? <ErrorState message={error === 'REPORT_PERMISSION_REQUIRED' ? t('permissionDenied', language) : error} onRetry={() => { setLoading(true); setRetryToken((value) => value + 1); }} /> : (
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                     <View style={styles.metricsRow}>
                         {metrics.map((metric) => (
                             <MetricCard key={metric.label} label={metric.label} value={typeof metric.value === 'number' && metric.label !== t('rows', language) ? formatCurrency(metric.value) : metric.value} tone={metric.tone} />
