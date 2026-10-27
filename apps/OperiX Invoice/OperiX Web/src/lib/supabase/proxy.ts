@@ -1,11 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
+import { isSupabaseConfigured, supabaseAuthCookieName, supabaseKey, supabaseUrl } from "./config";
 
 // The POS completion screen only reads the just-created invoice from the
 // browser's local storage. It must remain reachable after the POS redirect,
 // even if the auth cookie is refreshed between those two navigations.
-const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/pos/complete", "/demo", "/portal", "/qr"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/pos/complete", "/demo", "/portal", "/qr", "/open", "/.well-known", "/privacy", "/terms", "/support"];
 
 function isInvalidRefreshToken(error: unknown) {
   const authError = error as { code?: string; status?: number; message?: string } | null;
@@ -31,6 +31,7 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const serverSupabaseUrl = process.env.SUPABASE_INTERNAL_URL?.trim() || supabaseUrl;
   const supabase = createServerClient(serverSupabaseUrl, supabaseKey, {
+    cookieOptions: { name: supabaseAuthCookieName },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (cookiesToSet) => {
@@ -40,7 +41,7 @@ export async function updateSession(request: NextRequest) {
       },
     },
   });
-  const isPublic = PUBLIC_ROUTES.some((route) => request.nextUrl.pathname.startsWith(route));
+  const isPublic = PUBLIC_ROUTES.some((route) => request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(`${route}/`));
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (isInvalidRefreshToken(authError)) {
     if (isPublic) return clearAuthCookies(NextResponse.next({ request }), request);

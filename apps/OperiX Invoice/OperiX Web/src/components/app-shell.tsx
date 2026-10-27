@@ -34,6 +34,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useBusinessData } from "@/hooks/use-business-data";
 import type { InvoiceRow } from "@/lib/models";
 import { useTheme } from "./theme-provider";
+import { BillingStatusBanner } from "./billing-status-banner";
 import {
   mobileNavigation,
   navigationSections,
@@ -50,13 +51,13 @@ function externalUrl(key: string, fallback: string) {
   return process.env[key] || fallback;
 }
 
-const createActions: Array<{ label: string; description: string; href: string; icon: NavigationItem["icon"] }> = [
-  { label: "Invoice", description: "Create and send an invoice", href: "/invoices/new", icon: FileText },
-  { label: "Quote", description: "Prepare a proposal", href: "/invoices/new?type=offer", icon: FileCheck2 },
-  { label: "Customer", description: "Add a customer record", href: "/customers?create=1", icon: UserRound },
-  { label: "Product", description: "Add a product or service", href: "/products?create=1", icon: Package },
-  { label: "Expense", description: "Record an operating cost", href: "/expenses?create=1", icon: WalletCards },
-  { label: "Payment", description: "Record money received", href: "/payments?create=1", icon: HandCoins },
+const createActions: Array<{ label: string; description: string; href: string; icon: NavigationItem["icon"]; permission: string }> = [
+  { label: "Invoice", description: "Create and send an invoice", href: "/invoices/new", icon: FileText, permission: "invoice.create" },
+  { label: "Quote", description: "Prepare a proposal", href: "/invoices/new?type=offer", icon: FileCheck2, permission: "offer.create" },
+  { label: "Customer", description: "Add a customer record", href: "/customers?create=1", icon: UserRound, permission: "customer.create" },
+  { label: "Product", description: "Add a product or service", href: "/products?create=1", icon: Package, permission: "product.create" },
+  { label: "Expense", description: "Record an operating cost", href: "/expenses?create=1", icon: WalletCards, permission: "expense.create" },
+  { label: "Payment", description: "Record money received", href: "/payments?create=1", icon: HandCoins, permission: "payment.create" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -66,7 +67,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const invoicesQuery = useBusinessData<InvoiceRow>("invoices", "id,invoice_number,total_amount,status,due_date,client:clients(name)");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [controlAccess, setControlAccess] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -79,7 +79,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
   const [companySwitching, setCompanySwitching] = useState(false);
   const [companySwitchError, setCompanySwitchError] = useState("");
+  const [enterpriseProducts, setEnterpriseProducts] = useState({ hr: false, desk: false });
   const mobileCreateMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const client = createClient();
+    if (!client || !workspace.companyId) return;
+    let active = true;
+    void Promise.all(["hr", "desk"].map((product) => client.rpc("get_my_product_access", { p_product: product }))).then((results) => {
+      if (!active) return;
+      setEnterpriseProducts({ hr: Boolean((results[0].data || [])[0]?.allowed), desk: Boolean((results[1].data || [])[0]?.allowed) });
+    }).catch(() => { if (active) setEnterpriseProducts({ hr: false, desk: false }); });
+    return () => { active = false; };
+  }, [workspace.companyId]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -120,6 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (mobileCreateMenuRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest(".operix-shared-sidebar-workspace-wrap")) return;
       setCreateOpen(false);
       setNotificationsOpen(false);
       setCompanyOpen(false);
@@ -129,18 +142,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.addEventListener("pointerdown", handleOutsidePointer);
     return () => document.removeEventListener("pointerdown", handleOutsidePointer);
   }, [companyOpen, createOpen, notificationsOpen, profileOpen]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    if (!supabase || !workspace.companyId) {
-      return;
-    }
-    let active = true;
-    void supabase.rpc("control_has_permission", { p_company_id: workspace.companyId, p_permission: "control.access" }).then(({ data }) => {
-      if (active) setControlAccess(data === true);
-    });
-    return () => { active = false; };
-  }, [workspace.companyId]);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -338,20 +339,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   })), [workspace.companies]);
 
   const appLinks = useMemo(() => [
-    ...(controlAccess ? [{ label: "OperiX Control", href: externalUrl("NEXT_PUBLIC_OPERIX_CONTROL_URL", "https://control.operixsuite.com"), tone: "control", icon: ShieldCheck }] : []),
+    ...(workspace.platformAdmin ? [{ label: "OperiX Control", href: externalUrl("NEXT_PUBLIC_OPERIX_CONTROL_URL", "https://control.operixsuite.com"), tone: "control", icon: ShieldCheck }] : []),
     { label: "OperiX Suite", href: externalUrl("NEXT_PUBLIC_OPERIX_SUITE_URL", "https://suite.operixsuite.com"), tone: "suite", icon: Grid2X2 },
     { label: "OperiX Invoice", href: "/dashboard", current: true, tone: "invoice", icon: ReceiptText },
-    { label: "OperiX HR", href: externalUrl("NEXT_PUBLIC_OPERIX_HR_URL", "https://hr.operixsuite.com"), tone: "hr", icon: UsersRound },
+    { label: "OperiX HR", href: externalUrl("NEXT_PUBLIC_OPERIX_HR_URL", "https://hr.operixsuite.com"), tone: "hr", icon: UsersRound, locked: !enterpriseProducts.hr, lockedHref: "https://suite.operixsuite.com/contact?type=enterprise&product=hr" },
     { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays },
-    { label: "OperiX Desk", href: externalUrl("NEXT_PUBLIC_OPERIX_DESK_URL", "https://desk.operixsuite.com"), tone: "desk", icon: Armchair },
-  ], [controlAccess]);
+    { label: "OperiX Desk", href: externalUrl("NEXT_PUBLIC_OPERIX_DESK_URL", "https://desk.operixsuite.com"), tone: "desk", icon: Armchair, locked: !enterpriseProducts.desk, lockedHref: "https://suite.operixsuite.com/contact?type=enterprise&product=desk" },
+  ], [enterpriseProducts, workspace.platformAdmin]);
 
   const companyName = workspace.company?.company_name || workspace.company?.name || workspace.profile?.company_name || "OperiX workspace";
   const firstName = workspace.profile?.first_name || workspace.user?.email?.split("@")[0] || "there";
-  const invoiceSidebarItems = [...primaryNavigation, ...navigationSections.flatMap((section) => section.items).filter((item) => item.href !== "/settings" && item.href !== "/help")];
+  const canNavigate = (item: NavigationItem) => !item.permission || workspace.can(item.permission);
+  const visiblePrimaryNavigation = primaryNavigation.filter(canNavigate);
+  const visibleNavigationSections = navigationSections.map((section) => ({ ...section, items: section.items.filter((item) => item.href !== "/settings" && item.href !== "/help").filter(canNavigate) })).filter((section) => section.items.length);
+  const invoiceSidebarItems = visibleNavigationSections.flatMap((section) => section.items);
+  const visibleCreateActions = createActions.filter((action) => workspace.can(action.permission));
   const renderSidebarLink = ({ href, className, children, onClick, "aria-current": ariaCurrent }: OperixSidebarLinkProps) => <Link href={href} className={className} onClick={onClick} aria-current={ariaCurrent}>{children}</Link>;
   const renderTopbarLink = ({ href, className, children, onClick, "aria-label": ariaLabel }: { href: string; className: string; children: React.ReactNode; onClick?: () => void; "aria-label"?: string }) => <Link href={href} className={className} onClick={onClick} aria-label={ariaLabel}>{children}</Link>;
-  const topbarApps = appLinks.map((app) => { const Icon = app.icon; return { id: app.tone, label: app.label, href: app.href, current: app.current, icon: <Icon size={14} strokeWidth={2.1} /> }; });
+  const topbarApps = appLinks.map((app) => { const Icon = app.icon; return { id: app.tone, label: app.label, href: app.href, locked: app.locked, lockedHref: app.lockedHref, current: app.current, icon: <Icon size={14} strokeWidth={2.1} /> }; });
 
   async function install() {
     if (!installEvent) return;
@@ -366,10 +371,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         logo={<InvoiceLogo href="/dashboard" />}
         ariaLabel="Invoice navigation"
         navSections={[
-          { label: "Workspace", items: primaryNavigation.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
-          { label: "Manage", items: invoiceSidebarItems.slice(primaryNavigation.length).map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
+          { label: "Workspace", items: visiblePrimaryNavigation.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
+          { label: "Manage", items: invoiceSidebarItems.map((item) => ({ ...item, active: isNavigationItemActive(pathname, item.href) })) },
         ]}
-        settingsItem={{ label: "Settings", href: "/settings", icon: Settings2, active: isNavigationItemActive(pathname, "/settings") }}
+        settingsItem={workspace.can("settings.company") || workspace.can("settings.invoice") || workspace.can("permissions.manage") ? { label: "Settings", href: "/settings", icon: Settings2, active: isNavigationItemActive(pathname, "/settings") } : undefined}
         workspaceName={companyName}
         workspaces={companies.map((company) => ({ id: company.id, name: company.name, initials: initials(company.name) }))}
         activeWorkspaceId={workspace.companyId}
@@ -392,16 +397,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           search={{ value: query, onChange: handleSearchChange, onClick: () => setSearchOpen(true), onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKeyDown, placeholder: "Search invoices, customers, products…", ariaLabel: "Open global search" }}
           help={{ href: "/help", label: "Help" }}
           notifications={{ count: notifications.length, onClick: toggleNotifications, label: "Notifications", slot: notificationsOpen ? <NotificationPopover notifications={notifications} loading={invoicesQuery.loading} onClose={() => setNotificationsOpen(false)} onClear={() => { setDismissedNotificationIds(new Set(notifications.map((item) => item.invoice.id))); setNotificationsOpen(false); }} /> : null }}
-          extraActions={<>{installEvent ? <button type="button" className="operix-icon-button app-install-action" onClick={() => void install()} aria-label="Install OperiX"><Package size={17} /></button> : null}<div className="app-create-desktop" style={{ position: "relative" }}><button type="button" className="operix-button operix-button-primary operix-button-md app-topbar-primary" onClick={toggleCreateMenu} aria-expanded={createOpen} aria-haspopup="dialog"><Plus size={16} /><span>Create</span></button>{createOpen ? <CreateMenu onClose={() => setCreateOpen(false)} /> : null}</div></>}
+          extraActions={<>{installEvent ? <button type="button" className="operix-icon-button app-install-action" onClick={() => void install()} aria-label="Install OperiX"><Package size={17} /></button> : null}{visibleCreateActions.length ? <div className="app-create-desktop" style={{ position: "relative" }}><button type="button" className="operix-button operix-button-primary operix-button-md app-topbar-primary" onClick={toggleCreateMenu} aria-expanded={createOpen} aria-haspopup="dialog"><Plus size={16} /><span>Create</span></button>{createOpen ? <CreateMenu actions={visibleCreateActions} onClose={() => setCreateOpen(false)} /> : null}</div> : null}</>}
           user={{ initials: initials(workspace.user?.email || "You"), onClick: toggleProfile, label: "Open profile menu", slot: profileOpen ? <ProfilePopover email={workspace.user?.email || "Account"} theme={theme} onToggleTheme={toggleTheme} onClose={() => setProfileOpen(false)} onSignOut={() => void signOut()} /> : null }}
           onMobileMenu={() => setMobileOpen(true)}
           renderLink={renderTopbarLink}
         />
+        <BillingStatusBanner />
         <main className="app-main">{children}</main>
       </div>
 
-      <OperixMobileNavigation items={mobileNavigation.slice(0, 4).map((item) => ({ href: item.href, label: item.label, icon: <item.icon size={19} />, active: isNavigationItemActive(pathname, item.href) }))} primaryAction={pathname === "/pos" ? undefined : { href: "/invoices/new", label: "Create invoice", icon: <Plus size={22} /> }} moreAction={{ label: "More", icon: <MoreHorizontal size={19} />, onClick: () => router.push("/more") }} renderLink={renderTopbarLink} />
-      {createOpen && <div className="app-mobile-create-menu" ref={mobileCreateMenuRef}><CreateMenu onClose={() => setCreateOpen(false)} /></div>}
+      <OperixMobileNavigation items={mobileNavigation.filter(canNavigate).map((item) => ({ href: item.href, label: item.label, icon: <item.icon size={19} />, active: isNavigationItemActive(pathname, item.href) }))} primaryAction={workspace.can("invoice.create") && pathname !== "/pos" ? { href: "/invoices/new", label: "Create invoice", icon: <Plus size={22} /> } : undefined} floatingPrimaryAction renderLink={renderTopbarLink} />
+      {createOpen && visibleCreateActions.length ? <div className="app-mobile-create-menu" ref={mobileCreateMenuRef}><CreateMenu actions={visibleCreateActions} onClose={() => setCreateOpen(false)} /></div> : null}
 
       {companySwitchError ? <div className="app-shell-alert" role="alert" aria-live="polite"><span>{companySwitchError}</span><button type="button" onClick={() => setCompanySwitchError("")} aria-label="Dismiss company switch error"><X size={15} /></button></div> : null}
 
@@ -419,10 +425,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CreateMenu({ onClose }: { onClose: () => void }) {
+function CreateMenu({ actions, onClose }: { actions: typeof createActions; onClose: () => void }) {
   return <div className="app-create-menu" role="dialog" aria-label="Create new">
     <div className="app-create-menu-header"><strong>Create new</strong><span>Start a common business task.</span></div>
-    {createActions.map((action) => { const Icon = action.icon; return <Link key={action.label} href={action.href} className="app-create-option" onClick={onClose}><span className="app-create-option-icon"><Icon size={17} /></span><span><strong>{action.label}</strong><small>{action.description}</small></span></Link>; })}
+    {actions.map((action) => { const Icon = action.icon; return <Link key={action.label} href={action.href} className="app-create-option" onClick={onClose}><span className="app-create-option-icon"><Icon size={17} /></span><span><strong>{action.label}</strong><small>{action.description}</small></span></Link>; })}
   </div>;
 }
 

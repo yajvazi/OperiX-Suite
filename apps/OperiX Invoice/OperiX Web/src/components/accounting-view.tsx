@@ -119,6 +119,13 @@ export function AccountingView() {
   const workspace = useWorkspace();
   const locale = workspace.company?.default_language || "en";
   const t = copy[locale] || copy.en;
+  const canInitialize = workspace.can("settings.company");
+  const canManageAccounts = workspace.can("accounting_period.close");
+  const canCreateJournal = workspace.can("accounting_period.close");
+  const canPostJournal = workspace.can("accounting_period.close");
+  const canReverseJournal = workspace.can("accounting_period.reopen");
+  const canClosePeriod = workspace.can("accounting_period.close");
+  const canReopenPeriod = workspace.can("accounting_period.reopen");
   const [tab, setTab] = useState<Tab>("overview");
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
@@ -224,10 +231,10 @@ export function AccountingView() {
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           {t.refresh}
         </button>
-        <button className="btn btn-primary" onClick={() => setTab("journals")} disabled={!accounts.length}>
+        {canCreateJournal ? <button className="btn btn-primary" onClick={() => setTab("journals")} disabled={!accounts.length}>
           <FilePlus2 size={16} />
           {t.createJournal}
-        </button>
+        </button> : null}
       </header>
 
       {error ? <p className="mt-4 rounded-md bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}
@@ -244,10 +251,10 @@ export function AccountingView() {
               <p className="muted mt-2 max-w-2xl text-sm leading-6">{t.initializeText}</p>
               <p className="mt-3 max-w-2xl text-xs font-medium text-[#b54708]">{t.review}</p>
             </div>
-            <button className="btn btn-primary" onClick={initialize} disabled={working}>
+            {canInitialize ? <button className="btn btn-primary" onClick={initialize} disabled={working}>
               {working ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
               {t.initialize}
-            </button>
+            </button> : null}
           </div>
         </section>
       ) : (
@@ -270,11 +277,11 @@ export function AccountingView() {
           ) : tab === "overview" ? (
             <Overview balance={trialBalance} journals={journals} periods={periods} t={t} />
           ) : tab === "accounts" ? (
-            <Accounts accounts={accounts} companyId={workspace.companyId!} reload={load} />
+            <Accounts accounts={accounts} companyId={workspace.companyId!} reload={load} canManage={canManageAccounts} />
           ) : tab === "journals" ? (
-            <Journals accounts={accounts} journals={journals} companyId={workspace.companyId!} reload={load} t={t} />
+            <Journals accounts={accounts} journals={journals} companyId={workspace.companyId!} reload={load} t={t} canCreate={canCreateJournal} canPost={canPostJournal} canReverse={canReverseJournal} />
           ) : tab === "periods" ? (
-            <Periods periods={periods} reload={load} />
+            <Periods periods={periods} reload={load} canClose={canClosePeriod} canReopen={canReopenPeriod} />
           ) : (
             <PostingRules rules={rules} />
           )}
@@ -323,11 +330,12 @@ function Metric({ label, value, icon: Icon }: { label: string; value: string; ic
   return <div className="card flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-md bg-[#edf4ff] text-[#004ffe]"><Icon size={19} /></span><div><span className="muted text-[11px]">{label}</span><strong className="mt-1 block text-lg">{value}</strong></div></div>;
 }
 
-function Accounts({ accounts, companyId, reload }: { accounts: AccountingAccount[]; companyId: string; reload: () => Promise<void> }) {
+function Accounts({ accounts, companyId, reload, canManage }: { accounts: AccountingAccount[]; companyId: string; reload: () => Promise<void>; canManage: boolean }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ code: "", name: "", account_type: "asset", normal_balance: "debit" });
   const [error, setError] = useState("");
   async function save() {
+    if (!canManage) return;
     const supabase = createClient();
     if (!supabase) return;
     const { error: requestError } = await supabase.from("chart_of_accounts").insert({
@@ -338,10 +346,10 @@ function Accounts({ accounts, companyId, reload }: { accounts: AccountingAccount
     if (requestError) setError(requestError.message);
     else { setOpen(false); setForm({ code: "", name: "", account_type: "asset", normal_balance: "debit" }); await reload(); }
   }
-  return <section className="card mt-4 overflow-hidden"><header className="flex items-center justify-between border-b p-4"><div><h2 className="font-semibold">Chart of accounts</h2><p className="muted mt-1 text-xs">Company-specific accounts and statement mappings.</p></div><button className="btn" onClick={() => setOpen((value) => !value)}><Plus size={16} />Add account</button></header>{open ? <div className="grid gap-3 border-b bg-[#f8fafc] p-4 md:grid-cols-5"><input className="input" placeholder="Code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /><input className="input md:col-span-2" placeholder="Account name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /><select className="select" value={form.account_type} onChange={(event) => setForm({ ...form, account_type: event.target.value })}>{["asset","liability","equity","revenue","expense"].map(value => <option key={value}>{value}</option>)}</select><div className="flex gap-2"><select className="select min-w-0 flex-1" value={form.normal_balance} onChange={(event) => setForm({ ...form, normal_balance: event.target.value })}><option value="debit">Debit</option><option value="credit">Credit</option></select><button className="btn btn-primary" onClick={save}>Save</button></div>{error ? <p className="text-xs text-[#d92d20] md:col-span-5">{error}</p> : null}</div> : null}<div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-xs"><thead className="bg-[#f8fafc] text-[#667085]"><tr><th className="p-3">Code</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">Nature</th><th className="p-3">Posting</th><th className="p-3">Status</th></tr></thead><tbody>{accounts.map(account => <tr key={account.id} className="border-t"><td className="p-3 font-semibold">{account.code}</td><td className="p-3">{account.name}</td><td className="p-3 capitalize">{account.account_type}</td><td className="p-3 capitalize">{account.normal_balance}</td><td className="p-3">{account.posting_allowed ? "Allowed" : "Header only"}</td><td className="p-3">{account.active ? "Active" : "Inactive"}</td></tr>)}</tbody></table></div></section>;
+  return <section className="card mt-4 overflow-hidden"><header className="flex items-center justify-between border-b p-4"><div><h2 className="font-semibold">Chart of accounts</h2><p className="muted mt-1 text-xs">Company-specific accounts and statement mappings.</p></div>{canManage ? <button className="btn" onClick={() => setOpen((value) => !value)}><Plus size={16} />Add account</button> : null}</header>{open ? <div className="grid gap-3 border-b bg-[#f8fafc] p-4 md:grid-cols-5"><input className="input" placeholder="Code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /><input className="input md:col-span-2" placeholder="Account name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /><select className="select" value={form.account_type} onChange={(event) => setForm({ ...form, account_type: event.target.value })}>{["asset","liability","equity","revenue","expense"].map(value => <option key={value}>{value}</option>)}</select><div className="flex gap-2"><select className="select min-w-0 flex-1" value={form.normal_balance} onChange={(event) => setForm({ ...form, normal_balance: event.target.value })}><option value="debit">Debit</option><option value="credit">Credit</option></select><button className="btn btn-primary" onClick={save}>Save</button></div>{error ? <p className="text-xs text-[#d92d20] md:col-span-5">{error}</p> : null}</div> : null}<div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-xs"><thead className="bg-[#f8fafc] text-[#667085]"><tr><th className="p-3">Code</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">Nature</th><th className="p-3">Posting</th><th className="p-3">Status</th></tr></thead><tbody>{accounts.map(account => <tr key={account.id} className="border-t"><td className="p-3 font-semibold">{account.code}</td><td className="p-3">{account.name}</td><td className="p-3 capitalize">{account.account_type}</td><td className="p-3 capitalize">{account.normal_balance}</td><td className="p-3">{account.posting_allowed ? "Allowed" : "Header only"}</td><td className="p-3">{account.active ? "Active" : "Inactive"}</td></tr>)}</tbody></table></div></section>;
 }
 
-function Journals({ accounts, journals, companyId, reload, t }: { accounts: AccountingAccount[]; journals: JournalEntry[]; companyId: string; reload: () => Promise<void>; t: (typeof copy)["en"] | (typeof copy)["sq"] | (typeof copy)["sr"] }) {
+function Journals({ accounts, journals, companyId, reload, t, canCreate, canPost, canReverse }: { accounts: AccountingAccount[]; journals: JournalEntry[]; companyId: string; reload: () => Promise<void>; t: (typeof copy)["en"] | (typeof copy)["sq"] | (typeof copy)["sr"]; canCreate: boolean; canPost: boolean; canReverse: boolean }) {
   const today = new Date().toISOString().slice(0, 10);
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState("");
@@ -352,6 +360,7 @@ function Journals({ accounts, journals, companyId, reload, t }: { accounts: Acco
   const totals = useMemo(() => { try { return journalTotals(lines); } catch { return null; } }, [lines]);
   function updateLine(index: number, patch: Partial<JournalLineDraft>) { setLines((current) => current.map((line, position) => position === index ? { ...line, ...patch } : line)); }
   async function save() {
+    if (!canCreate) return;
     const validation = validateJournalDraft(lines);
     if (validation) return setError(validation);
     if (!description.trim()) return setError("Description is required.");
@@ -373,31 +382,34 @@ function Journals({ accounts, journals, companyId, reload, t }: { accounts: Acco
     setShowForm(false); setDescription(""); setReference(""); setLines([emptyLine(), emptyLine()]); setError(""); await reload();
   }
   async function post(id: string) {
+    if (!canPost) return;
     if (!window.confirm("Post this balanced journal? Posted entries can only be corrected by reversal.")) return;
     const supabase = createClient(); if (!supabase) return;
     const { error: requestError } = await supabase.rpc("post_journal_entry", { p_journal_entry_id: id, p_reason: "Posted from accounting workspace" });
     if (requestError) setError(requestError.message); else await reload();
   }
   async function reverse(id: string) {
+    if (!canReverse) return;
     const reason = window.prompt("Reason for reversal:");
     if (!reason?.trim()) return;
     const supabase = createClient(); if (!supabase) return;
     const { error: requestError } = await supabase.rpc("reverse_journal_entry", { p_journal_entry_id: id, p_reversal_date: today, p_reason: reason.trim() });
     if (requestError) setError(requestError.message); else await reload();
   }
-  return <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]"><section className="card overflow-hidden"><header className="flex items-center justify-between border-b p-4"><div><h2 className="font-semibold">Journal entries</h2><p className="muted mt-1 text-xs">Posted records are immutable.</p></div><button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={16} />{t.createJournal}</button></header>{error ? <p className="m-4 rounded bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#f8fafc] text-[#667085]"><tr><th className="p-3">Number</th><th className="p-3">Date</th><th className="p-3">Description</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody>{journals.map(entry => <tr key={entry.id} className="border-t"><td className="p-3 font-semibold">{entry.entry_number}</td><td className="p-3">{entry.posting_date}</td><td className="p-3">{entry.description}</td><td className="p-3 capitalize">{entry.entry_type}</td><td className="p-3"><Status value={entry.status} /></td><td className="p-3 text-right">{entry.status === "draft" ? <button className="text-[#004ffe]" onClick={() => void post(entry.id)}>{t.post}</button> : entry.status === "posted" ? <button className="text-[#b54708]" onClick={() => void reverse(entry.id)}>{t.reverse}</button> : "—"}</td></tr>)}</tbody></table></div></section>{showForm ? <aside className="card h-fit p-4 xl:sticky xl:top-20"><div className="flex items-center justify-between"><h2 className="font-semibold">{t.createJournal}</h2><button onClick={() => setShowForm(false)} className="text-xs text-[#667085]">Close</button></div><div className="mt-4 grid gap-3"><input className="input" placeholder="Description" value={description} onChange={(event) => setDescription(event.target.value)} /><div className="grid grid-cols-2 gap-2"><input className="input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input className="input" placeholder="Reference" value={reference} onChange={(event) => setReference(event.target.value)} /></div>{lines.map((line, index) => <div key={index} className="rounded-lg border p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold">Line {index + 1}</span>{lines.length > 2 ? <button className="text-xs text-[#d92d20]" onClick={() => setLines(current => current.filter((_, position) => position !== index))}>Remove</button> : null}</div><select className="select mt-2" value={line.accountId} onChange={(event) => updateLine(index, { accountId: event.target.value })}><option value="">Select account</option>{accounts.filter(account => account.active && account.posting_allowed).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}</select><input className="input mt-2" placeholder="Line description" value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} /><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-[10px] text-[#667085]">{t.debit}<input className="input mt-1" inputMode="decimal" value={line.debit} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateLine(index, { debit: event.target.value, ...(event.target.value !== "0" ? { credit: "0" } : {}) })} /></label><label className="text-[10px] text-[#667085]">{t.credit}<input className="input mt-1" inputMode="decimal" value={line.credit} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateLine(index, { credit: event.target.value, ...(event.target.value !== "0" ? { debit: "0" } : {}) })} /></label></div></div>)}<button className="btn justify-center" onClick={() => setLines(current => [...current, emptyLine()])}><Plus size={15} />Add line</button><div className="grid grid-cols-2 gap-2 rounded-lg bg-[#f8fafc] p-3 text-xs"><span>{t.debit}<strong className="block text-sm">{totals ? money(Number(totals.debit.toString())) : "—"}</strong></span><span>{t.credit}<strong className="block text-sm">{totals ? money(Number(totals.credit.toString())) : "—"}</strong></span></div><button className="btn btn-primary justify-center" onClick={() => void save()}><FilePlus2 size={16} />Save draft</button></div></aside> : <aside className="card grid min-h-56 place-items-center p-6 text-center"><div><BookOpenCheck className="mx-auto text-[#98a2b3]" /><p className="muted mt-3 text-xs">Select “New journal” to compose a balanced entry.</p></div></aside>}</div>;
+  return <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]"><section className="card overflow-hidden"><header className="flex items-center justify-between border-b p-4"><div><h2 className="font-semibold">Journal entries</h2><p className="muted mt-1 text-xs">Posted records are immutable.</p></div>{canCreate ? <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={16} />{t.createJournal}</button> : null}</header>{error ? <p className="m-4 rounded bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#f8fafc] text-[#667085]"><tr><th className="p-3">Number</th><th className="p-3">Date</th><th className="p-3">Description</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr></thead><tbody>{journals.map(entry => <tr key={entry.id} className="border-t"><td className="p-3 font-semibold">{entry.entry_number}</td><td className="p-3">{entry.posting_date}</td><td className="p-3">{entry.description}</td><td className="p-3 capitalize">{entry.entry_type}</td><td className="p-3"><Status value={entry.status} /></td><td className="p-3 text-right">{entry.status === "draft" && canPost ? <button className="text-[#004ffe]" onClick={() => void post(entry.id)}>{t.post}</button> : entry.status === "posted" && canReverse ? <button className="text-[#b54708]" onClick={() => void reverse(entry.id)}>{t.reverse}</button> : "—"}</td></tr>)}</tbody></table></div></section>{showForm ? <aside className="card h-fit p-4 xl:sticky xl:top-20"><div className="flex items-center justify-between"><h2 className="font-semibold">{t.createJournal}</h2><button onClick={() => setShowForm(false)} className="text-xs text-[#667085]">Close</button></div><div className="mt-4 grid gap-3"><input className="input" placeholder="Description" value={description} onChange={(event) => setDescription(event.target.value)} /><div className="grid grid-cols-2 gap-2"><input className="input" type="date" value={date} onChange={(event) => setDate(event.target.value)} /><input className="input" placeholder="Reference" value={reference} onChange={(event) => setReference(event.target.value)} /></div>{lines.map((line, index) => <div key={index} className="rounded-lg border p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold">Line {index + 1}</span>{lines.length > 2 ? <button className="text-xs text-[#d92d20]" onClick={() => setLines(current => current.filter((_, position) => position !== index))}>Remove</button> : null}</div><select className="select mt-2" value={line.accountId} onChange={(event) => updateLine(index, { accountId: event.target.value })}><option value="">Select account</option>{accounts.filter(account => account.active && account.posting_allowed).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}</select><input className="input mt-2" placeholder="Line description" value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} /><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-[10px] text-[#667085]">{t.debit}<input className="input mt-1" inputMode="decimal" value={line.debit} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateLine(index, { debit: event.target.value, ...(event.target.value !== "0" ? { credit: "0" } : {}) })} /></label><label className="text-[10px] text-[#667085]">{t.credit}<input className="input mt-1" inputMode="decimal" value={line.credit} onFocus={(event) => event.currentTarget.select()} onChange={(event) => updateLine(index, { credit: event.target.value, ...(event.target.value !== "0" ? { debit: "0" } : {}) })} /></label></div></div>)}<button className="btn justify-center" onClick={() => setLines(current => [...current, emptyLine()])}><Plus size={15} />Add line</button><div className="grid grid-cols-2 gap-2 rounded-lg bg-[#f8fafc] p-3 text-xs"><span>{t.debit}<strong className="block text-sm">{totals ? money(Number(totals.debit.toString())) : "—"}</strong></span><span>{t.credit}<strong className="block text-sm">{totals ? money(Number(totals.credit.toString())) : "—"}</strong></span></div><button className="btn btn-primary justify-center" onClick={() => void save()}><FilePlus2 size={16} />Save draft</button></div></aside> : <aside className="card grid min-h-56 place-items-center p-6 text-center"><div><BookOpenCheck className="mx-auto text-[#98a2b3]" /><p className="muted mt-3 text-xs">Select “New journal” to compose a balanced entry.</p></div></aside>}</div>;
 }
 
-function Periods({ periods, reload }: { periods: AccountingPeriod[]; reload: () => Promise<void> }) {
+function Periods({ periods, reload, canClose, canReopen }: { periods: AccountingPeriod[]; reload: () => Promise<void>; canClose: boolean; canReopen: boolean }) {
   const [error, setError] = useState("");
   async function change(period: AccountingPeriod, status: AccountingPeriod["status"]) {
+    if ((status === "open" && !canReopen) || (status !== "open" && !canClose)) return;
     const reason = status === "open" && period.status !== "open" ? window.prompt("Reason for reopening this period:") : window.prompt(`Reason for changing this period to ${status} (optional):`);
     if (status === "open" && !reason?.trim()) return;
     const supabase = createClient(); if (!supabase) return;
     const { error: requestError } = await supabase.rpc("set_accounting_period_status", { p_period_id: period.id, p_status: status, p_reason: reason?.trim() || null });
     if (requestError) setError(requestError.message); else { setError(""); await reload(); }
   }
-  return <section className="card mt-4 overflow-hidden"><header className="border-b p-4"><h2 className="font-semibold">Accounting periods</h2><p className="muted mt-1 text-xs">Locked periods reject all normal posting. Reopening requires elevated permission and a reason.</p></header>{error ? <p className="m-4 rounded bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}<div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">{periods.map(period => <article key={period.id} className="rounded-lg border p-4"><div className="flex items-start justify-between"><div><strong>{period.name}</strong><p className="muted mt-1 text-[11px]">{period.start_date} — {period.end_date}</p></div><Status value={period.status} /></div><div className="mt-4 flex flex-wrap gap-2">{period.status === "open" ? <><button className="btn h-8 text-[11px]" onClick={() => void change(period, "closed")}><CheckCircle2 size={14} />Close</button><button className="btn h-8 text-[11px]" onClick={() => void change(period, "locked")}><LockKeyhole size={14} />Lock</button></> : <button className="btn h-8 text-[11px]" onClick={() => void change(period, "open")}><RotateCcw size={14} />Reopen</button>}{period.status === "closed" ? <button className="btn h-8 text-[11px]" onClick={() => void change(period, "locked")}><LockKeyhole size={14} />Lock</button> : null}</div></article>)}</div></section>;
+  return <section className="card mt-4 overflow-hidden"><header className="border-b p-4"><h2 className="font-semibold">Accounting periods</h2><p className="muted mt-1 text-xs">Locked periods reject all normal posting. Reopening requires elevated permission and a reason.</p></header>{error ? <p className="m-4 rounded bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}<div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">{periods.map(period => <article key={period.id} className="rounded-lg border p-4"><div className="flex items-start justify-between"><div><strong>{period.name}</strong><p className="muted mt-1 text-[11px]">{period.start_date} — {period.end_date}</p></div><Status value={period.status} /></div><div className="mt-4 flex flex-wrap gap-2">{period.status === "open" ? <>{canClose ? <button className="btn h-8 text-[11px]" onClick={() => void change(period, "closed")}><CheckCircle2 size={14} />Close</button> : null}{canClose ? <button className="btn h-8 text-[11px]" onClick={() => void change(period, "locked")}><LockKeyhole size={14} />Lock</button> : null}</> : canReopen ? <button className="btn h-8 text-[11px]" onClick={() => void change(period, "open")}><RotateCcw size={14} />Reopen</button> : null}{period.status === "closed" && canClose ? <button className="btn h-8 text-[11px]" onClick={() => void change(period, "locked")}><LockKeyhole size={14} />Lock</button> : null}</div></article>)}</div></section>;
 }
 
 function PostingRules({ rules }: { rules: PostingRule[] }) {

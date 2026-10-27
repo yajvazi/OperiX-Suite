@@ -12,7 +12,6 @@ import {
     Hash,
     Settings,
     Layout,
-    BrainCircuit,
     Upload,
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
@@ -25,7 +24,6 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
-import { getAISettings, saveAISettings, type AISettings } from '../../services/ai/operixAi';
 
 export function AdvancedSettingsScreen({ navigation, route }: any) {
     const { user } = useAuth();
@@ -37,7 +35,6 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
     const [activeSection, setActiveSection] = useState<string | null>(route?.params?.section || null);
     const [transferEntity, setTransferEntity] = useState<DataTransferEntity>('clients');
     const [transferBusy, setTransferBusy] = useState(false);
-    const [intelligenceSettings, setIntelligenceSettings] = useState<AISettings>({ ai_enabled: true, preferred_language: 'auto', daily_briefing_enabled: true, history_enabled: true, intelligence_enabled: true, invoice_alerts_enabled: true, customer_insights_enabled: true, inventory_alerts_enabled: true, sales_insights_enabled: true, payment_alerts_enabled: true, push_notifications_enabled: true, show_amounts_in_notifications: true });
     const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
 
@@ -50,28 +47,7 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
 
     useEffect(() => {
         fetchProfile();
-        void fetchIntelligenceSettings();
     }, []);
-
-    const fetchIntelligenceSettings = async () => {
-        try {
-            const loaded = await getAISettings(language === 'sq' ? 'sq' : 'en');
-            setIntelligenceSettings((current) => ({ ...current, ...loaded }));
-        } catch {
-            // Intelligence remains deterministic when optional settings are unavailable.
-        }
-    };
-
-    const updateIntelligenceSetting = async (key: keyof AISettings, value: boolean) => {
-        if (!can('settings.company')) return;
-        setIntelligenceSettings((current) => ({ ...current, [key]: value }));
-        try {
-            const saved = await saveAISettings({ [key]: value } as Partial<AISettings>, language === 'sq' ? 'sq' : 'en');
-            setIntelligenceSettings((current) => ({ ...current, ...saved }));
-        } catch {
-            // Keep the optimistic value; the next settings load will reconcile it.
-        }
-    };
 
     const fetchProfile = async () => {
         if (!user) return;
@@ -401,30 +377,6 @@ export function AdvancedSettingsScreen({ navigation, route }: any) {
                     </Card>
                 )}
 
-                {renderHeader(t('operixIntelligence', language), t('operixIntelligenceSettingsDescription', language), BrainCircuit, 'intelligence', primaryColor)}
-                {activeSection === 'intelligence' && (
-                    <Card style={styles.sectionContent}>
-                        <Text style={[styles.subLabel, { color: mutedColor }]}>{t('operixIntelligenceSettings', language)}</Text>
-                        <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>{t('operixIntelligenceSettingsDescription', language)}</Text>
-                        {[
-                            ['intelligence_enabled', 'operixIntelligenceEnabled'],
-                            ['daily_briefing_enabled', 'operixIntelligenceDailyBriefing'],
-                            ['invoice_alerts_enabled', 'operixIntelligenceInvoiceAlerts'],
-                            ['customer_insights_enabled', 'operixIntelligenceCustomerInsights'],
-                            ['inventory_alerts_enabled', 'operixIntelligenceInventoryAlerts'],
-                            ['sales_insights_enabled', 'operixIntelligenceSalesInsights'],
-                            ['payment_alerts_enabled', 'operixIntelligencePaymentAlerts'],
-                            ['push_notifications_enabled', 'operixIntelligencePushNotifications'],
-                            ['show_amounts_in_notifications', 'operixIntelligenceShowAmounts'],
-                        ].map(([key, labelKey]) => (
-                            <View key={key} style={[styles.intelligenceSettingRow, { borderBottomColor: borderColor }]}>
-                                <Text style={[styles.intelligenceSettingLabel, { color: textColor }]}>{t(labelKey as any, language)}</Text>
-                                <Switch value={Boolean(intelligenceSettings[key as keyof AISettings])} onValueChange={(value) => void updateIntelligenceSetting(key as keyof AISettings, value)} trackColor={{ false: '#cbd5e1', true: `${primaryColor}55` }} thumbColor={intelligenceSettings[key as keyof AISettings] ? primaryColor : '#f4f3f4'} />
-                            </View>
-                        ))}
-                    </Card>
-                )}
-
                 {/* Stripe/PayPal Integration */}
                 {renderHeader(t('paymentIntegrations', language), t('stripePayPalDescription', language), CreditCard, 'integrations', primaryColor)}
                 {activeSection === 'integrations' && (
@@ -617,6 +569,4 @@ const styles = StyleSheet.create({
     sequenceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, borderBottomWidth: 1 },
     sequenceCopy: { flex: 1, paddingRight: 12 },
     sequencePreview: { fontSize: 12, fontWeight: '800', maxWidth: 150, textAlign: 'right' },
-    intelligenceSettingRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottomWidth: 1 },
-    intelligenceSettingLabel: { flex: 1, fontSize: 13, fontWeight: '600' },
 });

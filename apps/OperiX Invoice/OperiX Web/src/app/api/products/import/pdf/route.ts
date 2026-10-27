@@ -1,6 +1,8 @@
 import {NextResponse} from "next/server";
 import puppeteer from "puppeteer-core";
 import {z} from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission, resolveWorkspace } from "@invoice-monorepo/api/workspace";
 
 export const runtime="nodejs";
 
@@ -60,6 +62,14 @@ export function renderProductCalculation(payload:Payload){
 export async function POST(request:Request){
   let browser:Awaited<ReturnType<typeof puppeteer.launch>>|null=null;
   try{
+    const supabase = await createClient();
+    if (!supabase) return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    let workspace;
+    try { workspace = await resolveWorkspace(supabase, user.id); }
+    catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
+    if (!hasWorkspacePermission(workspace, "product.edit")) return NextResponse.json({ error: "Product management permission is required." }, { status: 403 });
     const payload=schema.parse(await request.json());
     browser=await puppeteer.launch({executablePath:process.env.CHROME_EXECUTABLE_PATH||"/usr/bin/chromium",args:["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage"],headless:true});
     const page=await browser.newPage();await page.setContent(renderProductCalculation(payload),{waitUntil:"networkidle0"});

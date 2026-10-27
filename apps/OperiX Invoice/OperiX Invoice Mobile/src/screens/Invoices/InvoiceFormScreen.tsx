@@ -46,7 +46,7 @@ import { WebView } from 'react-native-webview';
 import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { isCashPaymentAllowed } from '@invoice-monorepo/api/domain';
+import { isCashPaymentAllowed, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel } from '@invoice-monorepo/api/domain';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input, SignaturePadModal } from '@invoice-monorepo/ui';
 import { Invoice, InvoiceItem, Client, Product, Profile, PaymentMethod } from '@invoice-monorepo/types';
@@ -147,6 +147,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod | null>(null);
     const [deliveryDetails, setDeliveryDetails] = useState('');
     const [postCod, setPostCod] = useState(false);
+    const [taxReportingCategory, setTaxReportingCategory] = useState('');
+    const [showTaxCategoryPicker, setShowTaxCategoryPicker] = useState(false);
     const [pickupBranchId, setPickupBranchId] = useState<string | null>(null);
     const [invoiceBranchId, setInvoiceBranchId] = useState<string | null>(null);
     const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
@@ -370,6 +372,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 setDeliveryMethod((invoice.delivery_method as DeliveryMethod | null) || null);
                 setDeliveryDetails(invoice.delivery_details || '');
                 setPostCod(Boolean(invoice.post_cod));
+                setTaxReportingCategory(String(invoice.tax_reporting_category || ''));
                 setPickupBranchId(invoice.pickup_branch_id || null);
                 setInvoiceBranchId(invoice.branch_id || invoice.pickup_branch_id || null);
                 if (invoice.branch_id && resolvedCompanyId) {
@@ -644,6 +647,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 dueDate: dueDateOnly,
                 documentType,
                 postCod: deliveryMethod === 'delivery' && postCod,
+                taxReportingCategory: taxReportingCategory || null,
                 status: status === 'paid' ? 'sent' : status,
                 // A cash invoice filled with the exact amount is paid at the
                 // point of creation. The payment ledger entry is registered
@@ -1121,6 +1125,51 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     </Text>
                                     <ChevronDown color={mutedColor} size={18} />
                                 </TouchableOpacity>
+                            </View>
+                            <View style={{ marginTop: 14 }}>
+                                <Text style={[styles.label, { color: mutedColor }]}>{t('taxReportingCategory', language)}</Text>
+                                <TouchableOpacity
+                                    testID="invoice-tax-treatment-button"
+                                    accessibilityRole="button"
+                                    accessibilityState={{ expanded: showTaxCategoryPicker }}
+                                    onPress={() => setShowTaxCategoryPicker((current) => !current)}
+                                    style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                >
+                                    <FileText color={mutedColor} size={18} />
+                                    <Text numberOfLines={2} style={[styles.dateText, { color: taxReportingCategory ? textColor : mutedColor, flex: 1 }]}>
+                                        {taxReportingCategory ? taxReportingCategoryLabel(taxReportingCategory, language === 'sq' ? 'sq' : 'en') : t('taxReportingCategoryAuto', language)}
+                                    </Text>
+                                    <ChevronDown color={mutedColor} size={18} />
+                                </TouchableOpacity>
+                                {showTaxCategoryPicker ? (
+                                    <View style={[styles.documentTypeOptions, { backgroundColor: cardBg, borderColor }]}>
+                                        {[{ value: '', label: { en: t('taxReportingCategoryAuto', 'en'), sq: t('taxReportingCategoryAuto', 'sq') } }, ...TAX_REPORTING_CATEGORIES].map((option) => {
+                                            const selected = taxReportingCategory === option.value;
+                                            return (
+                                                <View key={option.value || 'automatic'} style={[styles.documentTypeOption, selected && { backgroundColor: `${primaryColor}18` }]}>
+                                                    <TouchableOpacity
+                                                        testID={`invoice-tax-treatment-option-${option.value || 'automatic'}`}
+                                                        accessibilityRole="button"
+                                                        accessibilityState={{ selected }}
+                                                        onPress={() => {
+                                                            setTaxReportingCategory(option.value);
+                                                            setShowTaxCategoryPicker(false);
+                                                        }}
+                                                        style={styles.documentTypeOptionSelect}
+                                                    >
+                                                        <View style={styles.documentTypeOptionCopy}>
+                                                            <Text style={[styles.documentTypeOptionTitle, { color: selected ? primaryColor : textColor }]}>
+                                                                {option.label[language === 'sq' ? 'sq' : 'en']}
+                                                            </Text>
+                                                        </View>
+                                                        {selected ? <Check color={primaryColor} size={18} /> : null}
+                                                    </TouchableOpacity>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                ) : null}
+                                <Text style={[styles.documentTypeButtonHint, { color: mutedColor, marginTop: 6 }]}>{t('taxReportingCategoryHelp', language)}</Text>
                             </View>
                             <View style={{ marginTop: 14 }}>
                                 <Text style={[styles.label, { color: mutedColor }]}>{t('dueDate', language)}</Text>

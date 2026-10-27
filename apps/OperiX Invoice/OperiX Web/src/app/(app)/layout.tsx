@@ -1,2 +1,3 @@
 import { AppShell } from "@/components/app-shell";
-export default function DashboardLayout({ children }: { children: React.ReactNode }) { return <AppShell>{children}</AppShell>; }
+import { MobileWebGate } from "@/components/mobile-web-gate";
+export default function DashboardLayout({ children }: { children: React.ReactNode }) { return <MobileWebGate><AppShell>{children}</AppShell></MobileWebGate>; }

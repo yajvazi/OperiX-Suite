@@ -23,6 +23,7 @@ import {
 import { useBusinessData } from "@/hooks/use-business-data";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { addDays, isoToday, money } from "@/lib/format";
+import { POS_NOTICE } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
 import type {
   ClientRow,
@@ -104,7 +105,7 @@ function categoryLabel(value: string) {
 
 function paymentMethod(value: PosPayment): PaymentMethod {
   if (value === "cash") return "cash";
-  if (value === "debt") return "bank";
+  if (value === "debt") return "customer_credit";
   return "card";
 }
 
@@ -630,6 +631,7 @@ export function PosView() {
         <label className="relative order-2 min-w-0 flex-1 lg:order-none lg:w-[430px] lg:flex-none"><span className="sr-only">Search products</span><Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"/><input ref={searchRef} className="input pl-9 pr-14" placeholder="Search products, SKU or barcode…" value={search} onChange={(event) => setSearch(event.target.value)}/><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[#e4e9f0] px-1.5 py-0.5 text-[10px] muted">Ctrl K</kbd></label>
         <Link className="btn btn-primary order-3 shrink-0" href="/products"><Plus size={16}/>Add product</Link>
       </header>
+      {POS_NOTICE ? <p role="note" className="mb-4 rounded-lg border border-[#fedf89] bg-[#fffaeb] px-3 py-2 text-xs text-[#b54708]">{POS_NOTICE}</p> : null}
       {dataError && <p className="mb-4 rounded border border-[#fecdca] bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{dataError}</p>}
       {message && <div className={`mb-4 flex items-center gap-2 rounded border p-3 text-xs ${messageTone === "success" ? "border-[#abefc6] bg-[#ecfdf3] text-[#087443]" : "border-[#fecdca] bg-[#fff3f2] text-[#d92d20]"}`} role="status"><span className="flex-1">{message}</span><button onClick={() => setMessage("")} aria-label="Dismiss message"><X size={15}/></button></div>}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(460px,.92fr)]">

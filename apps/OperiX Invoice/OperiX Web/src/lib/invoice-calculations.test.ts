@@ -35,4 +35,22 @@ describe("invoice calculations",()=>{
     expect(markup).not.toContain("NUI-SECRET-123");
     expect(markup).not.toContain("BUYER-SECRET-456");
   });
+  it("keeps one shared layout while adapting the document presentation",()=>{
+    const base: InvoiceData = {
+      company: { name: "OperiX", address: "" },
+      client: { name: "Buyer", address: "", email: "" },
+      details: { number: "DOC-1", issueDate: "2026-01-01", dueDate: "2026-01-31", currency: "EUR" },
+      items: [{ description: "Service", quantity: 1, price: 100, taxable: 100, tax: 18, total: 118, taxRate: 18 }],
+      summary: { subtotal: 100, discount: 0, tax: 18, total: 118 },
+    };
+    const quote = corporateInvoiceMarkup({ ...base, details: { ...base.details, commercialDocumentType: "QUOTE" } });
+    const creditNote = corporateInvoiceMarkup({ ...base, details: { ...base.details, commercialDocumentType: "CREDIT_NOTE", originalDocumentNumber: "INV-1" } });
+    expect(quote).toContain("This document is a quotation");
+    expect(quote).toContain("Quoted total");
+    expect(creditNote).toContain("This credit note reduces");
+    expect(creditNote).toContain("Credit to customer");
+    expect(creditNote).toContain("Original document");
+    expect(quote).toContain("invoice-items");
+    expect(creditNote).toContain("invoice-items");
+  });
 });

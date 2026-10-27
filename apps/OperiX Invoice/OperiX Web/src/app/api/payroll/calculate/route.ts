@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { calculatePayroll, type PayrollComponent } from "@invoice-monorepo/payroll";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission, resolveWorkspace } from "@invoice-monorepo/api/workspace";
 
 type Row = Record<string, unknown>;
 
@@ -9,6 +10,10 @@ export async function POST(request: Request) {
   if (!supabase) return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  let workspace;
+  try { workspace = await resolveWorkspace(supabase, auth.user.id); }
+  catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
+  if (!hasWorkspacePermission(workspace, "users.manage")) return NextResponse.json({ error: "Payroll administration permission is required." }, { status: 403 });
 
   const body = (await request.json().catch(() => ({}))) as { runId?: string };
   if (!body.runId) return NextResponse.json({ error: "runId is required." }, { status: 400 });

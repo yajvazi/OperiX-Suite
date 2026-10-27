@@ -6,6 +6,7 @@ import {
   ArrowRight, BookOpen, CheckCircle2, ChevronDown, CircleHelp, FileText,
   Mail, MessageCircle, Phone, Search, ShieldCheck, Sparkles, WalletCards,
 } from "lucide-react";
+import { invoiceHelpUrl } from "@/lib/documentation-links";
 
 type Category = "All topics" | "Getting started" | "Invoices" | "Payments" | "Account & settings";
 type Faq = { question: string; answer: string; category: Exclude<Category, "All topics"> };
@@ -48,6 +49,7 @@ export default function HelpPage() {
         <h1 className="text-3xl font-semibold tracking-[-.03em] sm:text-4xl">How can we help?</h1>
         <p className="mt-3 max-w-xl text-sm leading-6 text-white/70 sm:text-base">Find answers, learn the essentials, and get in touch with the OperiX Invoice support team.</p>
         <label className="mt-7 flex h-12 max-w-xl items-center gap-3 rounded-xl bg-white px-4 text-[#667085] shadow-[0_10px_35px_rgba(0,0,0,.18)]"><Search size={19} className="shrink-0 text-[#004ffe]"/><input aria-label="Search help articles" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search questions and topics…" className="min-w-0 flex-1 bg-transparent text-sm text-[#101828] outline-none placeholder:text-[#98a2b3]"/>{query && <button type="button" onClick={() => setQuery("")} className="text-xs font-medium text-[#004ffe]">Clear</button>}</label>
+        <div className="mt-4 flex flex-wrap gap-2"><a href={invoiceHelpUrl("invoice.invoices.create", "en", "web") || "https://helpdesk.operixsuite.com/en"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20">Full Web guide <BookOpen size={14}/></a><a href={invoiceHelpUrl("invoice.invoices.create", "en", "mobile") || "https://helpdesk.operixsuite.com/en"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20">Mobile guide <BookOpen size={14}/></a></div>
       </div>
       <div className="help-hero-orb" aria-hidden="true"/>
     </section>

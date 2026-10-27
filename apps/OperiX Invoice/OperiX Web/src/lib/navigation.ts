@@ -1,3 +1,4 @@
+import { POS_ENABLED } from "@/lib/features";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -5,6 +6,7 @@ import {
   Boxes,
   Building2,
   CircleHelp,
+  Code2,
   CreditCard,
   FileCheck2,
   FileText,
@@ -27,6 +29,7 @@ export type NavigationItem = {
   label: string;
   icon: LucideIcon;
   description?: string;
+  permission?: string;
 };
 
 export type NavigationSection = {
@@ -36,48 +39,50 @@ export type NavigationSection = {
 
 export const primaryNavigation: NavigationItem[] = [
   { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/pos", label: "POS", icon: ShoppingCart, description: "Sell products and take payment" },
+  ...(POS_ENABLED ? [{ href: "/pos", label: "POS", icon: ShoppingCart, description: "Sell products and take payment", permission: "payment.create" }] : []),
 ];
 
 export const navigationSections: NavigationSection[] = [
   {
     label: "Sales",
     items: [
-      { href: "/invoices", label: "Invoices", icon: FileText },
-      { href: "/quotes", label: "Quotes", icon: FileCheck2 },
-      { href: "/customers", label: "Customers", icon: Users },
-      { href: "/payments", label: "Payments", icon: CreditCard },
-      { href: "/contracts", label: "Contracts", icon: ScrollText },
+      { href: "/invoices", label: "Invoices", icon: FileText, permission: "invoice.view" },
+      { href: "/quotes", label: "Quotes", icon: FileCheck2, permission: "offer.create" },
+      { href: "/customers", label: "Customers", icon: Users, permission: "customer.view" },
+      { href: "/payments", label: "Payments", icon: CreditCard, permission: "payment.view" },
+      { href: "/contracts", label: "Contracts", icon: ScrollText, permission: "contracts.manage" },
     ],
   },
   {
     label: "Business",
     items: [
-      { href: "/products", label: "Products", icon: Package },
-      { href: "/inventory", label: "Inventory", icon: Boxes },
-      { href: "/expenses", label: "Expenses", icon: WalletCards },
-      { href: "/vendors", label: "Vendors", icon: Store },
-      { href: "/income", label: "Income", icon: HandCoins },
+      { href: "/products", label: "Products", icon: Package, permission: "product.view" },
+      { href: "/inventory", label: "Inventory", icon: Boxes, permission: "inventory.view" },
+      { href: "/expenses", label: "Expenses", icon: WalletCards, permission: "expense.view_own" },
+      { href: "/vendors", label: "Vendors", icon: Store, permission: "expense.view_own" },
+      { href: "/income", label: "Income", icon: HandCoins, permission: "payment.create" },
     ],
   },
-  {
-    label: "Finance",
-    items: [
-      { href: "/accounting", label: "Accounting", icon: BookOpenCheck },
-      { href: "/reports", label: "Reports", icon: BarChart3 },
-      { href: "/tax-reports", label: "VAT / Tax", icon: ReceiptText },
-      { href: "/payroll", label: "Payroll", icon: WalletCards },
-      { href: "/settings?tab=compliance", label: "Fiscalization", icon: Landmark },
+    {
+      label: "Finance",
+      items: [
+      { href: "/cash-bank", label: "Cash & Bank", icon: Landmark, description: "Cash, bank accounts, transfers and reconciliation", permission: "settings.bank" },
+      { href: "/accounting", label: "Accounting", icon: BookOpenCheck, permission: "accounting_period.view" },
+      { href: "/reports", label: "Reports", icon: BarChart3, permission: "reports.operational" },
+      { href: "/tax-reports", label: "VAT / Tax", icon: ReceiptText, permission: "reports.tax" },
+      { href: "/payroll", label: "Payroll", icon: WalletCards, permission: "users.view" },
+      { href: "/settings?tab=compliance", label: "Fiscalization", icon: Landmark, permission: "settings.tax" },
     ],
   },
   {
     label: "More",
     items: [
-      { href: "/settings?tab=templates", label: "Templates", icon: FileCheck2 },
-      { href: "/settings?tab=company", label: "Company", icon: Building2 },
-      { href: "/settings?tab=team", label: "Team / Users", icon: Users },
-      { href: "/settings?tab=payments", label: "Integrations", icon: Plug },
-      { href: "/settings", label: "Settings", icon: Settings2 },
+      { href: "/settings?tab=templates", label: "Templates", icon: FileCheck2, permission: "settings.invoice" },
+      { href: "/settings?tab=company", label: "Company", icon: Building2, permission: "settings.company" },
+      { href: "/settings?tab=team", label: "Team / Users", icon: Users, permission: "users.view" },
+      { href: "/settings?tab=payments", label: "Integrations", icon: Plug, permission: "settings.integrations" },
+      { href: "/settings?tab=developers", label: "Developers", icon: Code2, permission: "settings.integrations" },
+      { href: "/settings", label: "Settings", icon: Settings2, permission: "settings.company" },
       { href: "/help", label: "Help", icon: CircleHelp },
     ],
   },
@@ -86,24 +91,24 @@ export const navigationSections: NavigationSection[] = [
 export const mobileNavigation: NavigationItem[] = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/sales", label: "Sales", icon: FileText },
-  { href: "/pos", label: "POS", icon: ShoppingCart },
+  ...(POS_ENABLED ? [{ href: "/pos", label: "POS", icon: ShoppingCart }] : []),
   { href: "/business", label: "Business", icon: Boxes },
   { href: "/more", label: "More", icon: Settings2 },
 ];
 
 export const salesNavigation: NavigationItem[] = [
-  { href: "/invoices", label: "Invoices", icon: FileText, description: "Create, send, and track invoices" },
-  { href: "/quotes", label: "Quotes", icon: FileCheck2, description: "Turn proposals into work" },
-  { href: "/customers", label: "Customers", icon: Users, description: "Keep customer history together" },
-  { href: "/payments", label: "Payments", icon: CreditCard, description: "Record money received" },
+  { href: "/invoices", label: "Invoices", icon: FileText, description: "Create, send, and track invoices", permission: "invoice.view" },
+  { href: "/quotes", label: "Quotes", icon: FileCheck2, description: "Turn proposals into work", permission: "offer.create" },
+  { href: "/customers", label: "Customers", icon: Users, description: "Keep customer history together", permission: "customer.view" },
+  { href: "/payments", label: "Payments", icon: CreditCard, description: "Record money received", permission: "payment.view" },
 ];
 
 export const businessNavigation: NavigationItem[] = [
-  { href: "/products", label: "Products", icon: Package, description: "Products and services" },
-  { href: "/inventory", label: "Inventory", icon: Boxes, description: "See stock information" },
-  { href: "/expenses", label: "Expenses", icon: WalletCards, description: "Track operating costs" },
-  { href: "/vendors", label: "Vendors", icon: Store, description: "Manage suppliers" },
-  { href: "/income", label: "Income", icon: HandCoins, description: "Record other income" },
+  { href: "/products", label: "Products", icon: Package, description: "Products and services", permission: "product.view" },
+  { href: "/inventory", label: "Inventory", icon: Boxes, description: "See stock information", permission: "inventory.view" },
+  { href: "/expenses", label: "Expenses", icon: WalletCards, description: "Track operating costs", permission: "expense.view_own" },
+  { href: "/vendors", label: "Vendors", icon: Store, description: "Manage suppliers", permission: "expense.view_own" },
+  { href: "/income", label: "Income", icon: HandCoins, description: "Record other income", permission: "payment.create" },
 ];
 
 export const moreNavigation: Array<{ title: string; items: NavigationItem[] }> = [
@@ -114,17 +119,19 @@ export const moreNavigation: Array<{ title: string; items: NavigationItem[] }> =
   {
     title: "Documents",
     items: [
-      { href: "/contracts", label: "Contracts", icon: ScrollText, description: "Customer agreements" },
-      { href: "/settings?tab=templates", label: "Templates", icon: FileCheck2, description: "Invoice and contract templates" },
+      { href: "/contracts", label: "Contracts", icon: ScrollText, description: "Customer agreements", permission: "contracts.manage" },
+      { href: "/settings?tab=templates", label: "Templates", icon: FileCheck2, description: "Invoice and contract templates", permission: "settings.invoice" },
     ],
   },
   {
     title: "Administration",
     items: [
-      { href: "/settings?tab=company", label: "Company", icon: Building2, description: "Company profile and switching" },
-      { href: "/settings?tab=team", label: "Team / Users", icon: Users, description: "Workspace access" },
-      { href: "/settings?tab=payments", label: "Integrations", icon: Plug, description: "Connected services" },
-      { href: "/settings", label: "Settings", icon: Settings2, description: "Preferences and security" },
+      { href: "/settings?tab=company", label: "Company", icon: Building2, description: "Company profile and switching", permission: "settings.company" },
+      { href: "/settings?tab=team", label: "Team / Users", icon: Users, description: "Workspace access", permission: "users.view" },
+      { href: "/settings?tab=billing", label: "Billing & Subscription", icon: CreditCard, description: "Trial, plan, usage, and subscription management", permission: "subscription.manage" },
+      { href: "/settings?tab=payments", label: "Integrations", icon: Plug, description: "Connected services", permission: "settings.integrations" },
+      { href: "/settings?tab=developers", label: "Developers", icon: Code2, description: "API keys, webhooks, usage, and docs", permission: "settings.integrations" },
+      { href: "/settings", label: "Settings", icon: Settings2, description: "Preferences and security", permission: "settings.company" },
     ],
   },
   {

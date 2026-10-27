@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calculateInvoice } from '@invoice-monorepo/money';
-import { buildInvoicePersistencePayload, DomainValidationError, isCashPaymentAllowed, type InvoiceDraftInput } from './domain.ts';
+import { buildInvoicePersistencePayload, DomainValidationError, dueDateForPreset, isCashPaymentAllowed, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel, type InvoiceDraftInput } from './domain.ts';
+import { existsSync, readFileSync } from 'node:fs';
 
 function invoiceDraft(overrides: Partial<InvoiceDraftInput> = {}): InvoiceDraftInput {
   return {
@@ -108,4 +109,27 @@ test('shares the strict cash threshold used by Web and Mobile', () => {
     () => buildInvoicePersistencePayload(input, calculateInvoice({ lines: input.lines, paidAmount: input.amountReceived }), 'FAT-2026-0007'),
     (error: unknown) => error instanceof DomainValidationError,
   );
+});
+
+const taxFieldsMigration = new URL('../../../supabase/migrations/20260727160000_kosovo_tax_reporting_fields.sql', import.meta.url);
+
+// The migrations are not part of the public export, so this check only runs in the full repository.
+test('tax reporting categories match the database check constraint', { skip: !existsSync(taxFieldsMigration) && 'migrations not present' }, () => {
+  const sql = readFileSync(taxFieldsMigration, 'utf8');
+  const block = /tax_reporting_category in \(([^)]*)\)/.exec(sql);
+  assert.ok(block, 'constraint not found');
+  const allowed = [...block[1].matchAll(/'([a-z0-9_]+)'/g)].map((match) => match[1]).sort();
+  assert.deepEqual(TAX_REPORTING_CATEGORIES.map((category) => category.value).slice().sort(), allowed);
+  assert.equal(taxReportingCategoryLabel('export', 'sq'), 'Eksport · kolona 11');
+  assert.equal(taxReportingCategoryLabel('', 'en'), '');
+});
+
+test('due date presets add days or clamped months to the issue date', () => {
+  assert.equal(dueDateForPreset('2026-01-31', 'one_week'), '2026-02-07');
+  assert.equal(dueDateForPreset('2026-02-20', 'two_weeks'), '2026-03-06');
+  assert.equal(dueDateForPreset('2026-01-31', 'one_month'), '2026-02-28');
+  assert.equal(dueDateForPreset('2028-01-31', 'one_month'), '2028-02-29');
+  assert.equal(dueDateForPreset('2026-03-15', 'two_months'), '2026-05-15');
+  assert.equal(dueDateForPreset('2026-11-30', 'three_months'), '2027-02-28');
+  assert.throws(() => dueDateForPreset('31/01/2026', 'one_week'));
 });

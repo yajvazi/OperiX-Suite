@@ -5,6 +5,8 @@ import {
   isLandscapeTransactionReport,
   renderTransactionReportHtml,
 } from "@invoice-monorepo/report-templates";
+import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission, resolveWorkspace } from "@invoice-monorepo/api/workspace";
 
 export const runtime = "nodejs";
 
@@ -47,6 +49,19 @@ const schema = z.object({
 export async function POST(request: Request) {
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
+    const supabase = await createClient();
+    if (!supabase) return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    let workspace;
+    try {
+      workspace = await resolveWorkspace(supabase, user.id);
+    } catch (workspaceError) {
+      return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 });
+    }
+    if (!hasWorkspacePermission(workspace, "financial.export")) {
+      return NextResponse.json({ error: "Financial export permission is required." }, { status: 403 });
+    }
     const payload = schema.parse(await request.json());
     const html = renderTransactionReportHtml(payload);
     browser = await puppeteer.launch({

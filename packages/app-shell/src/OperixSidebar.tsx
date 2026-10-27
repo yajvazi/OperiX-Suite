@@ -33,7 +33,7 @@ export type OperixSidebarProps = {
   logo: ReactNode;
   ariaLabel: string;
   navSections: Array<{ label: string; items: OperixSidebarItem[] }>;
-  settingsItem: OperixSidebarItem;
+  settingsItem?: OperixSidebarItem;
   workspaceName: string;
   workspaces?: OperixSidebarWorkspace[];
   activeWorkspaceId?: string | null;
@@ -120,7 +120,7 @@ export function OperixSidebar({
       </nav>
 
       <div className="operix-shared-sidebar-bottom">
-        {link(settingsItem)}
+        {settingsItem ? link(settingsItem) : null}
         <a className="operix-shared-sidebar-help" href={helpHref} target={helpHref.startsWith("http") ? "_blank" : undefined} rel={helpHref.startsWith("http") ? "noreferrer" : undefined}>
           <CircleHelp size={17} aria-hidden="true" />
           <span><strong>Need a hand?</strong><small>{helpSubtitle}</small></span>

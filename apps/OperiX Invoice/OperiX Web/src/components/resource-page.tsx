@@ -17,11 +17,15 @@ import {
   deleteExpense,
   deleteProduct,
   deleteScopedResource,
+  getPreferredBranchId,
+  listBranches,
+  listProductBranchStock,
   reverseCustomerPayment,
   saveCustomer,
   saveCustomerPayment,
   saveExpense,
   saveProduct,
+  saveProductBranchStock,
   saveScopedResource,
 } from "@invoice-monorepo/api/repositories";
 
@@ -51,10 +55,18 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   const [sortBy, setSortBy] = useState("name");
   const [customerRevenue, setCustomerRevenue] = useState<Record<string, number>>({});
   const [relationOptions, setRelationOptions] = useState<Record<string, Array<{ id: string; label: string }>>>({});
+  const [branchOptions, setBranchOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const [productBranchStock, setProductBranchStock] = useState<Record<string, number>>({});
   const paymentIdempotencyKey = useRef<string | null>(null);
   const createRequested = searchParams.get("create") === "1";
   const companyScopeKey = workspace.companyIds.join(",");
-  const canManage = config.table !== "products" || ["super_administrator", "company_administrator", "manager"].includes(workspace.roleCode);
+  const access = resourceAccess(resourceKey, config.table);
+  const canRead = workspace.can(access.read);
+  const canCreate = workspace.can(access.create);
+  const canEdit = workspace.can(access.edit);
+  const canDelete = workspace.can(access.delete);
+  const canExport = workspace.can("financial.export");
 
   useEffect(() => {
     if (createRequested) queueMicrotask(() => setModal(true));
@@ -74,6 +86,28 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }, [companyScopeKey, config.fields, workspace.companyIds]);
 
   useEffect(() => {
+    if (config.table !== "products" || !workspace.companyId || !workspace.user) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    void listBranches(supabase, workspace.companyId).then(async (branches) => {
+      setBranchOptions(branches.map((branch) => ({ id: branch.id, name: branch.name })));
+      const preferred = await getPreferredBranchId(supabase, workspace.user!.id, workspace.companyId!).catch(() => null);
+      setSelectedBranchId(preferred && branches.some((branch) => branch.id === preferred) ? preferred : branches.length === 1 ? branches[0].id : null);
+    }).catch(() => setBranchOptions([]));
+  }, [config.table, workspace.companyId, workspace.user]);
+
+  useEffect(() => {
+    if (config.table !== "products" || !workspace.companyId || !selectedBranchId) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    void listProductBranchStock(supabase, workspace.companyId, selectedBranchId).then((rows) => setProductBranchStock(Object.fromEntries(rows.map((row) => [row.product_id, Number(row.stock_quantity) || 0])))).catch(() => setProductBranchStock({}));
+  }, [config.table, selectedBranchId, workspace.companyId, data.length]);
+
+  const displayData = useMemo(() => config.table === "products"
+    ? data.map((row) => productBranchStock[String(row.id)] === undefined ? row : { ...row, stock_quantity: productBranchStock[String(row.id)] })
+    : data, [config.table, data, productBranchStock]);
+
+  useEffect(() => {
     if (config.table !== "clients" || !workspace.companyIds.length) return;
     const supabase = createClient();
     if (!supabase) return;
@@ -87,7 +121,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }, [companyScopeKey, config.table, workspace.companyIds]);
 
   const rows = useMemo(() => {
-    const filtered = data.filter((row) => {
+    const filtered = displayData.filter((row) => {
     const matchesType = !config.fixed?.type || !row.type || row.type === config.fixed.type;
     const matchesSecondary = config.table === "products"
       ? (!secondaryFilter || String(row.category || "") === secondaryFilter)
@@ -102,14 +136,14 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
       if (config.table === "clients" && sortBy === "value") return (customerRevenue[String(right.id)] || 0) - (customerRevenue[String(left.id)] || 0);
       return String(left[config.primary] || "").localeCompare(String(right[config.primary] || ""));
     });
-  }, [config.fixed, config.primary, config.table, customerRevenue, data, query, secondaryFilter, sortBy]);
+  }, [config.fixed, config.primary, config.table, customerRevenue, displayData, query, secondaryFilter, sortBy]);
   const categories = useMemo(() => Array.from(new Set(data.map((row) => String(row.category || "")).filter(Boolean))).sort(), [data]);
   const cities = useMemo(() => Array.from(new Set(data.map((row) => String(row.city || "")).filter(Boolean))).sort(), [data]);
   const productStats = config.table === "products" ? {
-    total: data.length,
-    value: data.reduce((sum, row) => sum + Number(row.unit_price || 0) * Number(row.stock_quantity || 0), 0),
-    low: data.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= Number(row.low_stock_threshold || 5)).length,
-    out: data.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= 0).length,
+    total: displayData.length,
+    value: displayData.reduce((sum, row) => sum + Number(row.unit_price || 0) * Number(row.stock_quantity || 0), 0),
+    low: displayData.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= Number(row.low_stock_threshold || 5)).length,
+    out: displayData.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= 0).length,
   } : null;
   const customerStats = config.table === "clients" ? {
     total: data.length,
@@ -119,7 +153,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   } : null;
 
   async function save(formData: FormData) {
-    if (!canManage) { setMessage("Your role can view products but cannot change the product catalogue."); return; }
+    if (editing ? !canEdit : !canCreate) { setMessage("You do not have permission to change this resource."); return; }
     setSaving(true);
     setMessage("");
     const payload: Record<string, unknown> = { ...config.fixed };
@@ -140,6 +174,8 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     if (!companyId) { setMessage("No active company workspace is configured."); setSaving(false); return; }
     payload.user_id = authData.user.id;
     payload.company_id = companyId;
+    const branchId = config.table === "products" ? String(payload.branch_id || selectedBranchId || "") : "";
+    delete payload.branch_id;
     let resultData: ResourceRow;
     if (config.table === "payments") {
       if (!payload.client_id) { setMessage("Select a customer for this payment."); setSaving(false); return; }
@@ -151,7 +187,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
         paymentNumber: payload.payment_number ? String(payload.payment_number) : null,
         amount: Number(payload.amount || 0),
         paymentDate: String(payload.payment_date || ""),
-        paymentMethod: String(payload.payment_method || "bank") as "cash" | "bank" | "card",
+        paymentMethod: String(payload.payment_method || "bank") as "cash" | "bank" | "card" | "online_payment" | "cheque" | "other",
         bankReference: payload.bank_reference ? String(payload.bank_reference) : null,
         notes: payload.notes ? String(payload.notes) : null,
         existingPaymentId: editing?.id || null,
@@ -164,6 +200,9 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
       resultData = await saveCustomer(supabase, payload as Record<string, unknown> & { user_id: string; company_id: string }, editing?.id) as ResourceRow;
     } else if (config.table === "products") {
       resultData = await saveProduct(supabase, payload as Record<string, unknown> & { user_id: string; company_id: string }, editing?.id) as ResourceRow;
+      if (branchId && Boolean(payload.track_stock)) {
+        await saveProductBranchStock(supabase, { companyId, productId: resultData.id, branchId, stockQuantity: Number(payload.stock_quantity || 0), lowStockThreshold: Number(payload.low_stock_threshold || 5) });
+      }
     } else if (config.table === "expenses") {
       resultData = await saveExpense(supabase, payload as Record<string, unknown> & { user_id: string; company_id: string }, editing?.id, {
         postExpense: !editing && config.fixed?.type === "expense",
@@ -181,7 +220,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }
 
   async function remove(id: string) {
-    if (!canManage) { setMessage("Your role can view products but cannot delete them."); return; }
+    if (!canDelete) { setMessage("You do not have permission to delete or reverse this resource."); return; }
     if (!window.confirm(`Delete this ${config.singular.toLowerCase()}?`)) return;
     const supabase = createClient();
     if (supabase) {
@@ -200,6 +239,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }
 
   function exportCsv() {
+    if (!canExport) { setMessage("Financial export permission is required."); return; }
     const csv = [config.columns.map((column) => column.label), ...rows.map((row) => config.columns.map((column) => String(readValue(row, column.key) ?? "")))];
     const blob = new Blob([csv.map((line) => line.map((cell) => `"${cell.replaceAll("\"", "\"\"")}"`).join(",")).join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -211,6 +251,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }
 
   async function exportPdf() {
+    if (!canExport) { setMessage("Financial export permission is required."); return; }
     setExporting(true);
     setMessage("");
     try {
@@ -254,40 +295,59 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }
 
   function closeModal() { setModal(false); setEditing(null); setMessage(""); }
+  function openEdit(row: ResourceRow) {
+    setEditing(config.table === "products" ? { ...row, stock_quantity: productBranchStock[String(row.id)] ?? row.stock_quantity } : row);
+    setModal(true);
+  }
   const pdfExport = Boolean(config.pdfTemplate);
   const rootClass = embedded ? "resource-page resource-page-embedded" : "ux-page resource-page";
 
+  if (!canRead) return <div className={rootClass}><PageHeader title={config.title} description={config.description} /><SectionCard><p className="muted">You do not have permission to view this resource.</p></SectionCard></div>;
+
   return <div className={rootClass}>
-    <PageHeader title={config.title} description={config.description} actions={<>{resourceKey === "products" && canManage ? <button type="button" className="btn" onClick={() => setImportModal(true)}><FileUp size={16} /> Import calculations</button> : null}{canManage ? <button type="button" className="btn btn-primary" onClick={() => { setEditing(null); setModal(true); }}><Plus size={16} /> New {config.singular}</button> : null}</>} />
+    <PageHeader title={config.title} description={config.description} actions={<>{resourceKey === "products" && canEdit ? <button type="button" className="btn" onClick={() => setImportModal(true)}><FileUp size={16} /> Import calculations</button> : null}{canCreate ? <button data-testid={resourceKey === "customers" ? "customer.create" : resourceKey === "products" ? "product.create" : resourceKey === "expenses" ? "expense.create" : "resource.create"} type="button" className="btn btn-primary" onClick={() => { setEditing(null); setModal(true); }}><Plus size={16} /> New {config.singular}</button> : null}</>} />
     {productStats ? <section className="invoice-list-summary resource-stats-grid"><MetricCard label="Products" value={String(productStats.total)} icon={Boxes} /><MetricCard label="Stock value" value={money(productStats.value, workspace.company?.currency || workspace.profile?.currency)} icon={TrendingUp} tone="green" /><MetricCard label="Low stock" value={String(productStats.low)} icon={AlertTriangle} tone="amber" /><MetricCard label="Out of stock" value={String(productStats.out)} icon={XCircle} tone="red" /></section> : null}
     {customerStats ? <section className="invoice-list-summary resource-stats-grid"><MetricCard label="Customers" value={String(customerStats.total)} icon={Users} /><MetricCard label="Paid invoice value" value={money(customerStats.revenue, workspace.company?.currency || workspace.profile?.currency)} icon={TrendingUp} tone="green" /><MetricCard label="Active customers" value={String(customerStats.active)} icon={Users} tone="green" /><MetricCard label="With default discount" value={String(customerStats.discounts)} icon={FileSpreadsheet} tone="amber" /></section> : null}
-    <div className="resource-toolbar"><SearchField value={query} onChange={setQuery} placeholder={`Search ${config.title.toLowerCase()}…`} />{resourceKey === "products" ? <select aria-label="Filter products by category" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}{resourceKey === "customers" ? <select aria-label="Filter customers by city" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select> : null}{resourceKey === "products" || resourceKey === "customers" ? <select aria-label={`Sort ${config.title.toLowerCase()}`} className="select resource-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>{resourceKey === "products" ? <><option value="name">Sort: name</option><option value="price">Sort: price</option><option value="stock">Sort: stock</option></> : <><option value="name">Sort: name</option><option value="value">Sort: paid value</option></>}</select> : null}{config.pdfTemplate === "sales-ledger" ? <label className="field resource-month-field"><span className="sr-only">Reporting month</span><input aria-label="Reporting month" className="input" type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label> : null}<button type="button" className="btn resource-export" onClick={pdfExport ? exportPdf : exportCsv} disabled={exporting}><Download size={16} />{exporting ? "Preparing…" : pdfExport ? "Export PDF" : "Export"}</button></div>
+    <div className="resource-toolbar"><SearchField value={query} onChange={setQuery} placeholder={`Search ${config.title.toLowerCase()}…`} />{resourceKey === "products" ? <select aria-label="Filter products by category" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}{resourceKey === "customers" ? <select aria-label="Filter customers by city" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select> : null}{resourceKey === "products" || resourceKey === "customers" ? <select aria-label={`Sort ${config.title.toLowerCase()}`} className="select resource-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>{resourceKey === "products" ? <><option value="name">Sort: name</option><option value="price">Sort: price</option><option value="stock">Sort: stock</option></> : <><option value="name">Sort: name</option><option value="value">Sort: paid value</option></>}</select> : null}{config.pdfTemplate === "sales-ledger" ? <label className="field resource-month-field"><span className="sr-only">Reporting month</span><input aria-label="Reporting month" className="input" type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label> : null}{canExport ? <button type="button" className="btn resource-export" onClick={pdfExport ? exportPdf : exportCsv} disabled={exporting}><Download size={16} />{exporting ? "Preparing…" : pdfExport ? "Export PDF" : "Export"}</button> : null}</div>
     {message ? <p className="resource-message">{message}</p> : null}
     {error ? <ErrorState message={error} onRetry={() => void refresh()} /> : null}
     {loading ? <SectionCard><LoadingSkeleton rows={6} /></SectionCard> : null}
-    {!loading && !error && !rows.length ? <SectionCard><EmptyState title={`No ${config.title.toLowerCase()} yet`} description={canManage ? `Create the first ${config.singular.toLowerCase()} to start keeping this area up to date.` : `There are no ${config.title.toLowerCase()} available in this workspace.`} actionLabel={canManage ? `New ${config.singular}` : undefined} onAction={canManage ? () => setModal(true) : undefined} icon={resourceKey === "customers" ? FileSpreadsheet : MoreHorizontal} /></SectionCard> : null}
+    {!loading && !error && !rows.length ? <SectionCard><EmptyState title={`No ${config.title.toLowerCase()} yet`} description={canCreate ? `Create the first ${config.singular.toLowerCase()} to start keeping this area up to date.` : `There are no ${config.title.toLowerCase()} available in this workspace.`} actionLabel={canCreate ? `New ${config.singular}` : undefined} onAction={canCreate ? () => setModal(true) : undefined} icon={resourceKey === "customers" ? FileSpreadsheet : MoreHorizontal} /></SectionCard> : null}
     {!loading && !error && rows.length ? <>
-      <section className="ux-section-card resource-desktop-table"><div className="table-wrap"><table className="data-table"><thead><tr>{config.columns.map((column) => <th key={column.key}>{column.label}</th>)}<th className="actions-column">Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{config.columns.map((column) => <td key={column.key} className={column.key === config.primary ? "font-medium" : ""}>{column.key === "status" ? <StatusBadge status={String(row[column.key] || "draft")} /> : column.render ? column.render(row) : String(row[column.key] ?? "—")}</td>)}<td className="actions-column"><div className="resource-row-actions">{resourceKey === "customers" ? <button type="button" onClick={() => setLedgerCustomer(row)} title="Open customer ledger"><FileSpreadsheet size={14} /> <span>Ledger</span></button> : null}{canManage ? <><button type="button" onClick={() => { setEditing(row); setModal(true); }} title="Edit"><Edit3 size={14} /> <span>Edit</span></button><button type="button" className="is-danger" onClick={() => void remove(row.id)} title="Delete"><Trash2 size={14} /> <span>Delete</span></button></> : <span className="muted text-xs">View only</span>}</div></td></tr>)}</tbody></table></div><footer className="resource-footer">Showing {rows.length} records</footer></section>
-      <section className="resource-mobile-list">{rows.map((row) => <ResourceCard key={row.id} row={row} config={config} canManage={canManage} onLedger={resourceKey === "customers" ? () => setLedgerCustomer(row) : undefined} onEdit={() => { setEditing(row); setModal(true); }} onDelete={() => void remove(row.id)} />)}</section>
+      <section className="ux-section-card resource-desktop-table"><div className="table-wrap"><table className="data-table"><thead><tr>{config.columns.map((column) => <th key={column.key}>{column.label}</th>)}<th className="actions-column">Actions</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{config.columns.map((column) => <td key={column.key} className={column.key === config.primary ? "font-medium" : ""}>{column.key === "status" ? <StatusBadge status={String(row[column.key] || "draft")} /> : column.render ? column.render(row) : String(row[column.key] ?? "—")}</td>)}<td className="actions-column"><div className="resource-row-actions">{resourceKey === "customers" ? <button type="button" onClick={() => setLedgerCustomer(row)} title="Open customer ledger"><FileSpreadsheet size={14} /> <span>Ledger</span></button> : null}{canEdit ? <button type="button" onClick={() => openEdit(row)} title="Edit"><Edit3 size={14} /> <span>Edit</span></button> : null}{canDelete ? <button type="button" className="is-danger" onClick={() => void remove(row.id)} title="Delete"><Trash2 size={14} /> <span>Delete</span></button> : null}{!canEdit&&!canDelete ? <span className="muted text-xs">View only</span> : null}</div></td></tr>)}</tbody></table></div><footer className="resource-footer">Showing {rows.length} records</footer></section>
+      <section className="resource-mobile-list">{rows.map((row) => <ResourceCard key={row.id} row={row} config={config} canEdit={canEdit} canDelete={canDelete} onLedger={resourceKey === "customers" ? () => setLedgerCustomer(row) : undefined} onEdit={() => openEdit(row)} onDelete={() => void remove(row.id)} />)}</section>
     </> : null}
     {resourceKey === "customers" && <PortalLinksView embedded />}
     {ledgerCustomer ? <CustomerLedgerDialog customer={ledgerCustomer} onClose={() => setLedgerCustomer(null)} /> : null}
     {importModal ? <ProductImportDialog onClose={() => setImportModal(false)} onImported={refresh} /> : null}
-    {modal ? <ResourceModal config={config} editing={editing} relationOptions={relationOptions} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
+    {modal ? <ResourceModal config={config} editing={editing} relationOptions={relationOptions} branchOptions={branchOptions} selectedBranchId={selectedBranchId} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
   </div>;
 }
 
-function ResourceCard({ row, config, canManage, onLedger, onEdit, onDelete }: { row: ResourceRow; config: ResourceConfig; canManage: boolean; onLedger?: () => void; onEdit: () => void; onDelete: () => void }) {
+function ResourceCard({ row, config, canEdit, canDelete, onLedger, onEdit, onDelete }: { row: ResourceRow; config: ResourceConfig; canEdit: boolean; canDelete: boolean; onLedger?: () => void; onEdit: () => void; onDelete: () => void }) {
   const primary = String(readValue(row, config.primary) ?? row[config.columns[0]?.key] ?? "—");
   const secondary = config.columns.filter((column) => column.key !== config.primary).slice(0, 2).map((column) => `${column.label}: ${String(column.render ? column.render(row) : readValue(row, column.key) ?? "—")}`).join(" · ");
   const statusColumn = config.columns.find((column) => column.key === "status");
   const amountColumn = config.columns.find((column) => /amount|price|total|cost/i.test(column.key));
   const amount = amountColumn ? String(amountColumn.render ? amountColumn.render(row) : readValue(row, amountColumn.key) ?? "") : "";
-  return <article className="resource-mobile-card"><div className="resource-mobile-card-leading"><span className="resource-mobile-card-icon"><MoreHorizontal size={17} /></span><div><strong>{primary}</strong><small>{secondary}</small></div></div><div className="resource-mobile-card-trailing">{amount ? <strong>{amount}</strong> : null}{statusColumn ? <StatusBadge status={String(row.status || "draft")} /> : null}<details className="relative"><summary className="icon-btn list-none" aria-label={`Actions for ${primary}`}><MoreHorizontal size={16} /></summary><div className="action-menu">{onLedger ? <button type="button" onClick={onLedger}>Open ledger</button> : null}{canManage ? <><button type="button" onClick={onEdit}>Edit</button><button type="button" onClick={onDelete}>Delete</button></> : <span className="muted block px-2 py-1 text-xs">View only</span>}</div></details></div></article>;
+  return <article className="resource-mobile-card"><div className="resource-mobile-card-leading"><span className="resource-mobile-card-icon"><MoreHorizontal size={17} /></span><div><strong>{primary}</strong><small>{secondary}</small></div></div><div className="resource-mobile-card-trailing">{amount ? <strong>{amount}</strong> : null}{statusColumn ? <StatusBadge status={String(row.status || "draft")} /> : null}<details className="relative"><summary className="icon-btn list-none" aria-label={`Actions for ${primary}`}><MoreHorizontal size={16} /></summary><div className="action-menu">{onLedger ? <button type="button" onClick={onLedger}>Open ledger</button> : null}{canEdit ? <button type="button" onClick={onEdit}>Edit</button> : null}{canDelete ? <button type="button" onClick={onDelete}>Delete</button> : null}{!canEdit&&!canDelete ? <span className="muted block px-2 py-1 text-xs">View only</span> : null}</div></details></div></article>;
 }
 
-function ResourceModal({ config, editing, relationOptions, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; relationOptions: Record<string, Array<{ id: string; label: string }>>; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
-  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? field.defaultValue ?? ""; if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; return <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions[field.key]?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} />}</label>; })}</div>{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
+function resourceAccess(resourceKey: string, table: string) {
+  if (resourceKey === "customers" || table === "clients") return { read: "customer.view", create: "customer.create", edit: "customer.edit", delete: "customer.delete" };
+  if (resourceKey === "products" || table === "products") return { read: "product.view", create: "product.create", edit: "product.edit", delete: "product.delete" };
+  if (resourceKey === "expenses") return { read: "expense.view_own", create: "expense.create", edit: "expense.edit", delete: "expense.manage" };
+  if (resourceKey === "payments" || table === "payments") return { read: "payment.view", create: "payment.create", edit: "payment.create", delete: "payment.refund" };
+  if (resourceKey === "income") return { read: "payment.view", create: "payment.create", edit: "payment.create", delete: "payment.refund" };
+  if (resourceKey === "vendors" || resourceKey === "supplier-bills" || resourceKey === "vendor-payments") return { read: "expense.view_own", create: "expense.manage", edit: "expense.manage", delete: "expense.manage" };
+  if (resourceKey === "tax-reports") return { read: "reports.tax", create: "settings.tax", edit: "settings.tax", delete: "settings.tax" };
+  if (resourceKey === "payment-links") return { read: "payment.view", create: "payment.create", edit: "payment.create", delete: "payment.refund" };
+  if (resourceKey === "contracts" || table === "contracts") return { read: "contracts.manage", create: "contracts.manage", edit: "contracts.manage", delete: "contracts.manage" };
+  return { read: "invoice.view", create: "invoice.create", edit: "invoice.edit", delete: "invoice.delete_draft" };
+}
+
+function ResourceModal({ config, editing, relationOptions, branchOptions, selectedBranchId, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; relationOptions: Record<string, Array<{ id: string; label: string }>>; branchOptions: Array<{ id: string; name: string }>; selectedBranchId: string | null; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
+  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.table === "products" && branchOptions.length ? <label className="field"><span>Stock branch</span><select className="select" name="branch_id" defaultValue={selectedBranchId || ""}><option value="">Global stock</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label> : null}{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? field.defaultValue ?? ""; if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; return <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions[field.key]?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} />}</label>; })}</div>{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
 }
 
 function readValue(row: Record<string, unknown>, key: string) { return key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" ? (current as Record<string, unknown>)[part] : undefined, row); }

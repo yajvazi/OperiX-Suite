@@ -84,7 +84,7 @@ export type SettingsStackParamList = {
     StripeDashboard: undefined;
     ManageCompanies: undefined;
     UsersAccess: undefined;
-    AdvancedSettings: { section?: 'intelligence' } | undefined;
+    AdvancedSettings: undefined;
     Subscription: undefined;
 };
 
@@ -99,8 +99,6 @@ export type MainTabParamList = {
 export type RootStackParamList = {
     MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
     GlobalSearch: { scannedSearch?: string } | undefined;
-    OperixAI: undefined;
-    Notifications: undefined;
     QRScanner: { mode?: string; returnTo?: string; currentData?: unknown } | undefined;
     Settings: NavigatorScreenParams<SettingsStackParamList> | undefined;
     ContractTemplates: undefined;

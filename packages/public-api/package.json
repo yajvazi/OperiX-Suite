@@ -1,0 +1,30 @@
+{
+  "name": "@invoice-monorepo/public-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./security": "./src/security.ts",
+    "./contracts": "./src/contracts.ts",
+    "./response": "./src/response.ts",
+    "./openapi": "./src/openapi.ts",
+    "./server": "./src/server.ts",
+    "./webhooks": "./src/webhooks.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "~5.9.2"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx src/security.test.ts src/response.test.ts src/platform.test.ts"
+  }
+}

@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, Plus } from "lucide-react";
 import { businessNavigation, moreNavigation, salesNavigation, type NavigationItem } from "@/lib/navigation";
 import { PageHeader } from "./ui";
+import { useWorkspace } from "@/hooks/use-workspace";
 
 export function SalesHub() {
   return <HubPage title="Sales" description="Invoices, customers, quotes, and payments in one place." items={salesNavigation} />;
@@ -21,6 +24,8 @@ function HubPage({ title, description, items }: { title: string; description: st
 
 function HubLink({ item, card = false }: { item: NavigationItem; card?: boolean }) {
   const Icon = item.icon;
+  const workspace = useWorkspace();
+  if (item.permission && !workspace.can(item.permission)) return null;
   if (!card) return <Link href={item.href} className="ux-more-link"><span className="ux-more-link-icon"><Icon size={17} /></span><span><strong>{item.label}</strong>{item.description ? <small>{item.description}</small> : null}</span><ArrowRight size={15} className="ml-auto text-[#98a2b3]" /></Link>;
   return <Link href={item.href} className="ux-hub-card"><span className="ux-hub-icon"><Icon size={19} /></span><span><h2>{item.label}</h2>{item.description ? <p>{item.description}</p> : null}</span><ArrowRight className="ux-hub-arrow" size={16} /></Link>;
 }

@@ -15,7 +15,6 @@ import {
     Landmark,
     LogOut,
     SlidersHorizontal,
-    Sparkles,
     Trash2,
     Users,
 } from 'lucide-react-native';
@@ -95,8 +94,6 @@ export function MoreScreen() {
         <MobileScreen testID="more-screen">
             <MobileHeader title={t('more', language)} subtitle={t('advancedToolsAndSettings', language)} />
             {loading ? <LoadingState label={t('checkingWorkspaceAccess', language)} /> : error ? <View style={styles.errorRecovery}><ErrorState onRetry={() => { setLoading(true); setError(null); setRetryToken((value) => value + 1); }} message={error} />{deleteAccountButton}<TouchableOpacity testID="more-error-logout-button" accessibilityRole="button" onPress={() => { void signOut(); }} style={[styles.signOut, { borderColor: palette.border }]}><LogOut color={brand.colors.error} size={18} /><Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('signOut', language)}</Text></TouchableOpacity></View> : <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-                <SectionTitle title={t('operixIntelligence', language)} />
-                <ShortcutRow testID="more-operix-ai-button" icon={Sparkles} title={t('operixIntelligence', language)} description={t('operixIntelligenceOpenDescription', language)} onPress={() => navigation.navigate('OperixAI')} trailing={<ChevronRight color={palette.muted} size={18} />} />
                 <SectionTitle title={t('finance', language)} />
                 {can('accounting_period.view') ? <ShortcutRow testID="more-accounting-button" icon={Landmark} title={t('accounting', language)} description={t('journalPeriodsAccountTools', language)} onPress={() => navigation.navigate('Accounting')} trailing={<ChevronRight color={palette.muted} size={18} />} /> : null}
                 {can('reports.operational') || can('reports.profit') || can('reports.sales') ? <ShortcutRow testID="more-reports-button" icon={BarChart3} title={t('reports', language)} description={t('statementsLedgersAgingReconciliation', language)} onPress={() => navigation.navigate('ReportsHub')} trailing={<ChevronRight color={palette.muted} size={18} />} /> : null}

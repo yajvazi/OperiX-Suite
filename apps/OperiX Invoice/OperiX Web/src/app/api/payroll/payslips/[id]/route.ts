@@ -5,6 +5,7 @@ import {
   type PayslipSnapshot,
 } from "@invoice-monorepo/payroll";
 import { createClient } from "@/lib/supabase/server";
+import { hasWorkspacePermission, resolveWorkspace } from "@invoice-monorepo/api/workspace";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,10 @@ export async function GET(
     if (!supabase) return NextResponse.json({ error: "Payroll service unavailable." }, { status: 503 });
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
+    let workspace;
+    try { workspace = await resolveWorkspace(supabase, user.id); }
+    catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
+    if (!hasWorkspacePermission(workspace, "users.view")) return NextResponse.json({ error: "Payroll view permission is required." }, { status: 403 });
 
     const { id } = await context.params;
     const url = new URL(request.url);

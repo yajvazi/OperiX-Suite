@@ -98,8 +98,6 @@ import { HelpSupportScreen } from '../screens/Support/HelpSupportScreen';
 import { HelpCategoryScreen } from '../screens/Support/HelpCategoryScreen';
 import { HelpArticleScreen } from '../screens/Support/HelpArticleScreen';
 import { AboutScreen } from '../screens/About/AboutScreen';
-import { OperixAIScreen } from '../screens/AI/OperixAIScreen';
-import { NotificationsScreen } from '../screens/Notifications/NotificationsScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -233,8 +231,6 @@ function RootNavigator() {
     return <RootStack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="MainTabs" component={MainTabs} />
         <RootStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ presentation: 'modal' }} />
-        <RootStack.Screen name="OperixAI" component={OperixAIScreen} />
-        <RootStack.Screen name="Notifications" component={NotificationsScreen} />
         <RootStack.Screen name="Accounting" component={AccountingScreen} />
         <RootStack.Screen name="AccountantReport" component={AccountantReportScreen} />
         <RootStack.Screen name="Payroll" component={PayrollScreen} />

@@ -1,4 +1,5 @@
 import { calculateInvoice } from "@invoice-monorepo/money";
+import { isCashPaymentAllowed } from "@invoice-monorepo/api/domain";
 import type { InvoiceDraft } from "./models";
 
 export function invoiceTotals(draft: Pick<InvoiceDraft, "items"> & Partial<Pick<InvoiceDraft, "amount_received" | "currency" | "discount_percent">>) {
@@ -31,7 +32,7 @@ export function invoiceTotals(draft: Pick<InvoiceDraft, "items"> & Partial<Pick<
 }
 
 export function cashAllowed(total: number) {
-  return total < 300;
+  return isCashPaymentAllowed(total);
 }
 
 export function paymentState(total: number, received: number) {

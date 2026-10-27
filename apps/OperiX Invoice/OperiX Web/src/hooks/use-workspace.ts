@@ -83,7 +83,11 @@ export function useWorkspace() {
   const [company, setCompany] = useState<WorkspaceCompany | null>(null);
   const [companies, setCompanies] = useState<WorkspaceCompany[]>([]);
   const [companyIds, setCompanyIds] = useState<string[]>([]);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [roleCode, setRoleCode] = useState<"super_administrator" | "company_administrator" | "manager" | "employee">("employee");
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [scopes, setScopes] = useState<Record<string, "OWN" | "ASSIGNED" | "ALL">>({});
+  const [platformAdmin, setPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -111,7 +115,11 @@ export function useWorkspace() {
       setCompany(resolved.company as WorkspaceCompany | null);
       setCompanies(resolved.companies as WorkspaceCompany[]);
       setCompanyIds(resolved.companyIds);
+      setCompanyId(resolved.companyId);
       setRoleCode(resolved.roleCode);
+      setPermissions(resolved.permissions);
+      setScopes(resolved.scopes);
+      setPlatformAdmin(resolved.platformAdmin);
     } catch {
       setError("We couldn't load your organization workspace. Please try again.");
     } finally {
@@ -129,9 +137,14 @@ export function useWorkspace() {
     company,
     companies,
     companyIds,
+    companyId,
     roleCode,
+    permissions,
+    scopes,
+    platformAdmin,
+    can: (permission: string) => platformAdmin || permissions.includes(permission),
+    scope: (resource: string) => scopes[resource] || "OWN",
     isGroup: companyIds.length > 1,
-    companyId: profile?.active_company_id || profile?.company_id || null,
     loading,
     error,
     refresh,

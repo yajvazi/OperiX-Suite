@@ -323,6 +323,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             details: {
                 number: invoice.invoice_number,
                 qrReference: (invoice as any).public_qr_token || undefined,
+                qrBaseUrl: process.env.EXPO_PUBLIC_INVOICE_APP_URL?.trim() || 'https://invoice.operixsuite.com',
                 issueDate: invoice.issue_date,
                 dueDate: invoice.due_date || '',
                 deliveryMethod: invoice.delivery_method

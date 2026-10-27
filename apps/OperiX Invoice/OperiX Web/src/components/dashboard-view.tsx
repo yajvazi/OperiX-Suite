@@ -1,5 +1,6 @@
 "use client";
 
+import { POS_ENABLED } from "@/lib/features";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -87,7 +88,7 @@ export function DashboardView() {
             <div className="ux-quick-actions">
               <QuickAction label="New Invoice" icon={FileText} href="/invoices/new" />
               <QuickAction label="New Quote" icon={FileCheck2} href="/invoices/new?type=offer" />
-              <QuickAction label="POS Sale" icon={ShoppingCart} href="/pos" />
+              {POS_ENABLED ? <QuickAction label="POS Sale" icon={ShoppingCart} href="/pos" /> : null}
               <QuickAction label="New Customer" icon={UserPlus} href="/customers?create=1" />
               <QuickAction label="New Product" icon={PackagePlus} href="/products?create=1" />
               <QuickAction label="Add Expense" icon={Plus} href="/expenses?create=1" />

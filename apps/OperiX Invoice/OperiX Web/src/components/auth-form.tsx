@@ -3,13 +3,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { InvoiceLogo } from "./product-logo";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
-  const router = useRouter();
   const search = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,7 +44,6 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
 
     try {
-      if (mode === "login") await supabase.auth.signOut({ scope: "local" }).catch(() => {});
       const result = mode === "login"
         ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
         : await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${location.origin}/auth/callback` } });
@@ -66,8 +64,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         if (rememberMe) window.localStorage.setItem("operix-login-email", email.trim());
         else window.localStorage.removeItem("operix-login-email");
       }
-      router.push(search.get("next") || "/dashboard");
-      router.refresh();
+      const requestedPath = search.get("next");
+      const nextPath = requestedPath && requestedPath.startsWith("/") && !requestedPath.startsWith("//")
+        ? requestedPath
+        : "/dashboard";
+      window.location.assign(nextPath);
     } catch {
       setMessage("Authentication is temporarily unavailable. Please try again in a moment.");
       setLoading(false);

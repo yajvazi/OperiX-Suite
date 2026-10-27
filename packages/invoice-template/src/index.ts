@@ -371,8 +371,9 @@ export function corporateInvoiceMarkup(data: InvoiceData): string {
   const noticeMarkup = notice
     ? `<div class="document-notice"><strong>${albanian ? "Shënim" : "Document note"}</strong>${escapeHtml(notice)}</div>`
     : '';
-  const qrTarget = data.details.qrReference
-    ? `https://invoice.operixsuite.com/qr/${encodeURIComponent(data.details.qrReference)}`
+  const qrBaseUrl = (data.details.qrBaseUrl || "").replace(/\/+$/, "");
+  const qrTarget = data.details.qrReference && qrBaseUrl
+    ? `${qrBaseUrl}/qr/${encodeURIComponent(data.details.qrReference)}`
     : "";
   const qr = !protectedDocument && config.showQrCode !== false && qrTarget
     ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrTarget)}&color=000000`

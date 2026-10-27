@@ -31,6 +31,68 @@ export function isCashPaymentAllowed(value: number | string | null | undefined) 
   }
 }
 
+/**
+ * Explicit TAK sales-book classifications accepted by `invoices.tax_reporting_category`
+ * (see supabase/migrations/20260727160000_kosovo_tax_reporting_fields.sql). An empty
+ * selection means "classify automatically from the invoice VAT rates".
+ * Web and Mobile render the same list. The Albanian wording should be reviewed by
+ * an accountant before it is treated as official terminology.
+ */
+export const TAX_REPORTING_CATEGORIES = [
+  { value: 'domestic_standard_18', label: { en: 'Domestic supply · 18%', sq: 'Furnizim i brendshëm · 18%' } },
+  { value: 'domestic_reduced_8', label: { en: 'Domestic supply · 8%', sq: 'Furnizim i brendshëm · 8%' } },
+  { value: 'exempt_no_credit', label: { en: 'Exempt without input-credit right · column 9', sq: 'E përjashtuar pa të drejtë kreditimi · kolona 9' } },
+  { value: 'foreign_services', label: { en: 'Services outside Kosovo · column 10a', sq: 'Shërbime jashtë Kosovës · kolona 10a' } },
+  { value: 'domestic_reverse_charge', label: { en: 'Domestic reverse charge · column 10b', sq: 'Tatim i kundërt i brendshëm · kolona 10b' } },
+  { value: 'exempt_with_credit', label: { en: 'Other exempt with input-credit right · column 10c', sq: 'Të tjera të përjashtuara me të drejtë kreditimi · kolona 10c' } },
+  { value: 'export', label: { en: 'Export · column 11', sq: 'Eksport · kolona 11' } },
+  { value: 'debit_credit_18', label: { en: 'Debit/credit adjustment · 18%', sq: 'Rregullim debit/kredit · 18%' } },
+  { value: 'debit_credit_8', label: { en: 'Debit/credit adjustment · 8%', sq: 'Rregullim debit/kredit · 8%' } },
+  { value: 'bad_debt_18', label: { en: 'Bad-debt adjustment · 18%', sq: 'Rregullim borxhi të keq · 18%' } },
+  { value: 'bad_debt_8', label: { en: 'Bad-debt adjustment · 8%', sq: 'Rregullim borxhi të keq · 8%' } },
+  { value: 'vat_adjustment_18', label: { en: 'VAT increase adjustment · 18%', sq: 'Rregullim i rritjes së TVSH-së · 18%' } },
+  { value: 'vat_adjustment_8', label: { en: 'VAT increase adjustment · 8%', sq: 'Rregullim i rritjes së TVSH-së · 8%' } },
+  { value: 'reverse_charge_purchase_18', label: { en: 'Reverse-charge purchase · 18%', sq: 'Blerje me tatim të kundërt · 18%' } },
+  { value: 'international_organization', label: { en: 'International organization', sq: 'Organizatë ndërkombëtare' } },
+] as const;
+
+export type TaxReportingCategory = (typeof TAX_REPORTING_CATEGORIES)[number]['value'];
+
+export function taxReportingCategoryLabel(value: string | null | undefined, language: 'en' | 'sq' = 'en'): string {
+  return TAX_REPORTING_CATEGORIES.find((category) => category.value === value)?.label[language] ?? '';
+}
+
+/** Quick due-date choices offered next to the due date field on both apps. */
+export const DUE_DATE_PRESETS = ['one_week', 'two_weeks', 'one_month', 'two_months', 'three_months'] as const;
+export type DueDatePreset = (typeof DUE_DATE_PRESETS)[number];
+
+const DUE_DATE_PRESET_DAYS: Partial<Record<DueDatePreset, number>> = { one_week: 7, two_weeks: 14 };
+const DUE_DATE_PRESET_MONTHS: Partial<Record<DueDatePreset, number>> = { one_month: 1, two_months: 2, three_months: 3 };
+
+/**
+ * Due date (YYYY-MM-DD) for an issue date (YYYY-MM-DD). Month presets keep the day of
+ * the month and clamp to the end of shorter months (31 Jan + 1 month = 28/29 Feb),
+ * matching the Mobile invoice form.
+ */
+export function dueDateForPreset(issueDate: string, preset: DueDatePreset): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(issueDate);
+  if (!match) throw new Error('Issue date must be formatted as YYYY-MM-DD.');
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const days = DUE_DATE_PRESET_DAYS[preset];
+  let result: Date;
+  if (days) {
+    result = new Date(Date.UTC(year, month, day + days));
+  } else {
+    const months = DUE_DATE_PRESET_MONTHS[preset] ?? 0;
+    const target = new Date(Date.UTC(year, month + months, 1));
+    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    result = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(day, lastDay)));
+  }
+  return result.toISOString().slice(0, 10);
+}
+
 export interface InvoiceLineDraft {
   id?: string;
   productId?: string | null;

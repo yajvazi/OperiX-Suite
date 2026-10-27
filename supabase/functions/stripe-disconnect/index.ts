@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { userHasCompanyPermission } from '../_shared/rbac.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,8 +16,7 @@ function response(body: Record<string, unknown>, status = 200) {
 }
 
 async function userCanAccessCompany(admin: ReturnType<typeof createClient>, userId: string, companyId: string) {
-  const [{ data: profile }, { data: memberships }, { data: companies }] = await Promise.all([
-    admin.from('profiles').select('company_id,active_company_id').eq('id', userId).maybeSingle(),
+  const [{ data: memberships }, { data: companies }] = await Promise.all([
     admin.from('memberships').select('company_id,status').eq('user_id', userId),
     admin.from('companies').select('id,parent_company_id,owner_id'),
   ])
@@ -25,7 +25,6 @@ async function userCanAccessCompany(admin: ReturnType<typeof createClient>, user
   const grants = new Set<string>([
     ...(memberships || []).filter((row) => (row.status || 'active') === 'active').map((row) => row.company_id),
     ...rows.filter((row) => row.owner_id === userId).map((row) => row.id),
-    ...[profile?.company_id, profile?.active_company_id].filter(Boolean) as string[],
   ])
   let current = companyId
   const visited = new Set<string>()
@@ -59,6 +58,8 @@ serve(async (req) => {
     if (!store || !(await userCanAccessCompany(admin, authData.user.id, store.company_id))) {
       return response({ error: 'You do not have access to this Stripe store' }, 403)
     }
+    const permission = await userHasCompanyPermission(supabaseUrl, token, store.company_id, 'settings.integrations')
+    if (!permission.allowed) return response({ error: 'Integration administration permission is required' }, 403)
 
     if (clientId && clientSecret && store.stripe_account_id) {
       const deauthorize = await fetch('https://connect.stripe.com/oauth/deauthorize', {
@@ -88,4 +89,3 @@ serve(async (req) => {
     return response({ error: error instanceof Error ? error.message : 'Could not disconnect Stripe' }, 500)
   }
 })
-

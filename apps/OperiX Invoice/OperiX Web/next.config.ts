@@ -14,6 +14,8 @@ if (process.env.NODE_ENV === "production" && (!supabaseUrl || !supabasePublishab
   );
 }
 
+const imageHosts = (process.env.IMAGE_REMOTE_HOSTS ?? "").split(",").map((host) => host.trim()).filter(Boolean);
+
 const publicEnv = {
   NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
@@ -30,15 +32,12 @@ const publicEnv = {
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   env: publicEnv,
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "b2b.hidroterm.net",
-        pathname: "/products/catalog/**",
-      },
-    ],
+    // Hosts that next/image may optimize. Set IMAGE_REMOTE_HOSTS (comma-separated,
+    // e.g. "cdn.example.com,images.example.org") at build time.
+    remotePatterns: imageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts"],
@@ -66,4 +65,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

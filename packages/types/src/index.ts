@@ -680,6 +680,8 @@ export interface InvoiceData {
         showStampOnInvoice?: boolean;
         /** Opaque public QR reference; never use an invoice number as a bearer token. */
         qrReference?: string;
+        /** Absolute public base URL used to build the QR link (e.g. https://invoice.example.com). Omit to hide the QR code. */
+        qrBaseUrl?: string;
     };
     items: Array<{
         description: string;

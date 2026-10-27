@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { loadStripeStore, syncStripeStore, type StripeStore } from '../_shared/stripeSync.ts'
+import { userHasCompanyPermission } from '../_shared/rbac.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,8 +17,7 @@ function response(body: Record<string, unknown>, status = 200) {
 }
 
 async function userCanAccessCompany(admin: ReturnType<typeof createClient>, userId: string, companyId: string) {
-  const [{ data: profile }, { data: memberships }, { data: companies }] = await Promise.all([
-    admin.from('profiles').select('company_id,active_company_id').eq('id', userId).maybeSingle(),
+  const [{ data: memberships }, { data: companies }] = await Promise.all([
     admin.from('memberships').select('company_id,status').eq('user_id', userId),
     admin.from('companies').select('id,parent_company_id,owner_id'),
   ])
@@ -26,7 +26,6 @@ async function userCanAccessCompany(admin: ReturnType<typeof createClient>, user
   const grants = new Set<string>([
     ...(memberships || []).filter((row) => (row.status || 'active') === 'active').map((row) => row.company_id),
     ...rows.filter((row) => row.owner_id === userId).map((row) => row.id),
-    ...[profile?.company_id, profile?.active_company_id].filter(Boolean) as string[],
   ])
   let current = companyId
   const visited = new Set<string>()
@@ -93,6 +92,8 @@ serve(async (req) => {
     if (!(await userCanAccessCompany(admin, authData.user.id, loaded.store.company_id))) {
       return response({ error: 'You do not have access to this Stripe store' }, 403)
     }
+    const permission = await userHasCompanyPermission(supabaseUrl, token, loaded.store.company_id, 'settings.integrations')
+    if (!permission.allowed) return response({ error: 'Integration administration permission is required' }, 403)
     const result = await syncStripeStore(admin, loaded.store, loaded.accessToken, { force: Boolean(payload.force) })
     return response({ success: true, ...result })
   } catch (error) {

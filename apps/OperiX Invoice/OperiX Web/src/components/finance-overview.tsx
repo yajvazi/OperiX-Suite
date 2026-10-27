@@ -1,0 +1,66 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ArrowDownToLine, Landmark, Plus, RefreshCw } from "lucide-react";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { createClient } from "@/lib/supabase/client";
+import { money } from "@/lib/format";
+
+type Row = Record<string, unknown>;
+
+export function FinanceOverview({ initialTab = "accounts" }: { initialTab?: "accounts" | "income" }) {
+  const workspace = useWorkspace();
+  const [tab, setTab] = useState(initialTab);
+  const canViewIncome = workspace.can("payment.view");
+  const canRecordIncome = workspace.can("payment.create");
+  const activeTab = tab === "income" && !canViewIncome ? "accounts" : tab;
+  const [accounts, setAccounts] = useState<Row[]>([]);
+  const [income, setIncome] = useState<Row[]>([]);
+  const [categories, setCategories] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({ categoryId: "", date: new Date().toISOString().slice(0, 10), payer: "", description: "", net: "", vat: "", accountId: "", reference: "" });
+
+  const load = useCallback(async () => {
+    if (!workspace.companyIds.length) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setLoading(true);
+    const [accountResult, incomeResult, categoryResult] = await Promise.all([
+      supabase.from("operix_financial_account_balances").select("*").in("company_id", workspace.companyIds).order("account_type").order("name"),
+      supabase.from("other_income").select("*,category:other_income_categories(name_en,name_sq)").in("company_id", workspace.companyIds).order("income_date", { ascending: false }),
+      supabase.from("other_income_categories").select("*").eq("active", true).or(`company_id.is.null,company_id.eq.${workspace.companyId}`),
+    ]);
+    setAccounts((accountResult.data || []) as Row[]);
+    setIncome((incomeResult.data || []) as Row[]);
+    setCategories((categoryResult.data || []) as Row[]);
+    setForm((current) => ({ ...current, categoryId: current.categoryId || String(categoryResult.data?.[0]?.id || ""), accountId: current.accountId || String(accountResult.data?.[0]?.id || "") }));
+    setMessage(accountResult.error?.message || incomeResult.error?.message || "");
+    setLoading(false);
+  }, [workspace.companyId, workspace.companyIds]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!canRecordIncome) { setMessage("Payment permission is required to record other income."); return; }
+    if (!workspace.companyId || !form.categoryId || !form.accountId || !form.description || Number(form.net) <= 0) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    setWorking(true); setMessage("");
+    const { error } = await supabase.rpc("record_other_income", { p_company_id: workspace.companyId, p_category_id: form.categoryId, p_income_date: form.date, p_payer_source: form.payer || null, p_description: form.description, p_currency: "EUR", p_net_amount: Number(form.net), p_vat_amount: Number(form.vat || 0), p_tax_treatment: "review_required", p_payment_method: "bank", p_fund_account_id: form.accountId, p_reference: form.reference || null, p_notes: null, p_attachment_id: null, p_idempotency_key: crypto.randomUUID() });
+    if (error) setMessage(error.message); else { setMessage("Other income recorded. Tax treatment remains Review Required until confirmed."); setForm((current) => ({ ...current, payer: "", description: "", net: "", vat: "", reference: "" })); await load(); }
+    setWorking(false);
+  }
+
+  return <div className="mx-auto max-w-[1500px] p-4 lg:p-6">
+    <header className="flex flex-wrap items-end gap-3"><div className="min-w-[240px] flex-1"><h1 className="page-title">{activeTab === "income" ? "Other Income" : "Cash & Bank"}</h1><p className="muted mt-1.5 text-xs">{activeTab === "income" ? "Non-invoice income is kept separate from sales revenue and customer settlements." : "Actual account movements, current balances, and reconciliation visibility."}</p></div><button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={16} className={loading ? "animate-spin" : ""}/>Refresh</button></header>
+    <div className="card mt-5 flex gap-1 p-1.5"><button className={`btn ${activeTab === "accounts" ? "btn-primary" : ""}`} onClick={() => setTab("accounts")}><Landmark size={15}/>Cash & Bank</button>{canViewIncome ? <button className={`btn ${activeTab === "income" ? "btn-primary" : ""}`} onClick={() => setTab("income")}><Plus size={15}/>Other Income</button> : null}</div>
+    {message ? <p className="mt-4 rounded-md bg-[#fff8eb] p-3 text-xs text-[#b54708]">{message}</p> : null}
+    {activeTab === "accounts" ? <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{accounts.map((account) => <article className="card p-5" key={String(account.id)}><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-lg bg-[#edf4ff] text-[#004ffe]"><Landmark size={19}/></span><div><h2 className="font-semibold">{String(account.name)}</h2><p className="muted mt-1 text-xs">{String(account.account_type || account.fund_type)} · {String(account.currency)}</p></div></div><strong className="mt-5 block text-2xl">{money(Number(account.current_balance || 0), String(account.currency || "EUR"))}</strong><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><span className="rounded-md bg-[#f7f9fc] p-2">Reconciled<br/><b>{money(Number(account.reconciled_balance || 0), String(account.currency || "EUR"))}</b></span><span className="rounded-md bg-[#f7f9fc] p-2">Unreconciled<br/><b>{money(Number(account.unreconciled_balance || 0), String(account.currency || "EUR"))}</b></span></div></article>)}{!accounts.length && !loading ? <p className="muted">No financial accounts are configured.</p> : null}</section> : <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]"><form className="card grid gap-3 p-5" onSubmit={submit}><h2 className="font-semibold">Record Other Income</h2><label className="field"><span>Category</span><select className="select" value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}>{categories.map((category) => <option key={String(category.id)} value={String(category.id)}>{String(category.name_en)}</option>)}</select></label><label className="field"><span>Payer / Source</span><input className="input" value={form.payer} onChange={(event) => setForm({ ...form, payer: event.target.value })}/></label><label className="field"><span>Description</span><input className="input" required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}/></label><div className="grid grid-cols-2 gap-3"><label className="field"><span>Net amount</span><input className="input" required type="number" min="0.01" step="0.0001" value={form.net} onChange={(event) => setForm({ ...form, net: event.target.value })}/></label><label className="field"><span>VAT amount</span><input className="input" type="number" min="0" step="0.0001" value={form.vat} onChange={(event) => setForm({ ...form, vat: event.target.value })}/></label></div><label className="field"><span>Income date</span><input className="input" type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })}/></label><label className="field"><span>Destination account</span><select className="select" value={form.accountId} onChange={(event) => setForm({ ...form, accountId: event.target.value })}>{accounts.map((account) => <option key={String(account.id)} value={String(account.id)}>{String(account.name)} · {String(account.currency)}</option>)}</select></label><label className="field"><span>Reference</span><input className="input" value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })}/></label><p className="text-xs text-[#b54708]">Tax treatment: Review Required. Confirm the Kosovo treatment before filing.</p><button className="btn btn-primary" disabled={working || !canRecordIncome}><Plus size={15}/>{working ? "Saving…" : canRecordIncome ? "Save Other Income" : "Payment permission required"}</button></form><section className="card overflow-hidden"><div className="border-b p-5 font-semibold">Other Income History</div>{income.map((row) => <div className="flex flex-wrap items-center gap-3 border-b p-4 text-sm last:border-0" key={String(row.id)}><span className="grid h-8 w-8 place-items-center rounded-md bg-[#ecfdf3] text-[#027a48]"><ArrowDownToLine size={15}/></span><span className="min-w-0 flex-1"><b className="block">{String(row.description)}</b><small className="muted">{String(row.income_number)} · {String(row.income_date)} · {String((row.category as Row | null)?.name_en || "Other Income")}</small></span><b>{money(Number(row.gross_amount || 0), String(row.currency || "EUR"))}</b></div>)}{!income.length ? <p className="muted p-5">No other income records yet.</p> : null}</section></div>}
+  </div>;
+}

@@ -11,7 +11,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
     AlertTriangle,
-    Bell,
     ChevronRight,
     CircleDollarSign,
     FileText,
@@ -19,9 +18,9 @@ import {
     Package,
     Receipt,
     Search,
-    Sparkles,
     UserPlus,
     WalletCards,
+    Sparkles,
 } from 'lucide-react-native';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, formatDate as formatLocalizedDate, t } from '@invoice-monorepo/i18n';
@@ -311,7 +310,6 @@ export function HomeScreen() {
                 </TouchableOpacity>
                 <View style={styles.headerActions}>
                     <IconButton testID="home-global-search-button" label={t('searchYourBusiness', language)} onPress={() => navigation.navigate('GlobalSearch')}><Search color={palette.text} size={20} /></IconButton>
-                    <IconButton label={t('notifications', language)} onPress={() => navigation.navigate('Notifications') }><Bell color={palette.text} size={20} /></IconButton>
                 </View>
             </View>
 
@@ -384,10 +382,7 @@ export function HomeScreen() {
                                 </TouchableOpacity> : null}
                             </View>
 
-                            <TouchableOpacity testID="home-intelligence-card" accessibilityRole="button" onPress={() => navigation.navigate('OperixAI')} style={[styles.intelligenceCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-                                <View style={[styles.intelligenceIcon, { backgroundColor: palette.iconSurface }]}><Sparkles color={brand.colors.primary} size={18} /></View>
-                                <View style={styles.intelligenceCopy}><Text style={[styles.intelligenceTitle, { color: palette.text }]}>{t('operixIntelligence', language)}</Text><Text style={[styles.intelligenceDetail, { color: palette.muted }]}>{data.overdue > 0 || data.lowStockCount > 0 ? `${data.overdue > 0 ? `${t('operixIntelligenceOverdueTotal', language)} ${formatCurrency(data.overdue)}` : ''}${data.overdue > 0 && data.lowStockCount > 0 ? ' · ' : ''}${data.lowStockCount > 0 ? `${data.lowStockCount} ${t('operixIntelligenceLowStock', language)}` : ''}` : t('operixIntelligenceNoActiveAlerts', language)}</Text></View><ChevronRight color={palette.muted} size={18} />
-                            </TouchableOpacity>
+                            
 
                             <SectionTitle title={t('quickActions', language)} action={t('viewAll', language)} onPress={() => navigation.navigate('GlobalSearch')} />
                             <View style={styles.quickGrid}>
@@ -451,11 +446,6 @@ const styles = StyleSheet.create({
     quickAction: { width: '48.5%', minHeight: 72, borderRadius: 16, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 9 },
     quickIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     quickText: { fontSize: 13, fontFamily: brand.fonts.semibold },
-    intelligenceCard: { minHeight: 70, borderRadius: 17, borderWidth: 1, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 21 },
-    intelligenceIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    intelligenceCopy: { flex: 1 },
-    intelligenceTitle: { fontSize: 13, fontFamily: brand.fonts.semibold },
-    intelligenceDetail: { fontSize: 11, lineHeight: 16, marginTop: 3, fontFamily: brand.fonts.regular },
     activityRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, gap: 11 },
     activityIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     activityCopy: { flex: 1 },

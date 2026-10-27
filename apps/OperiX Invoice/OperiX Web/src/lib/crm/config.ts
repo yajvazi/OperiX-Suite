@@ -18,7 +18,8 @@ export function getCrmUrl(env: Record<string, string | undefined> = process.env)
 }
 
 export function getInvoiceUrl(env: Record<string, string | undefined> = process.env): string {
-  return safeCrmUrl(env.NEXT_PUBLIC_INVOICE_APP_URL, "https://invoice.operixsuite.com");
+  const configured = env.NEXT_PUBLIC_INVOICE_APP_URL?.trim();
+  return configured ? safeCrmUrl(configured) : "";
 }
 
 export function crmLink(path: string, env: Record<string, string | undefined> = process.env): string {

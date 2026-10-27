@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
+import { isSupabaseConfigured, supabaseAuthCookieName, supabaseKey, supabaseUrl } from "./config";
 
 export async function createClient() {
   if (!isSupabaseConfigured) return null;
   const cookieStore = await cookies();
   const serverSupabaseUrl = process.env.SUPABASE_INTERNAL_URL?.trim() || supabaseUrl;
   return createServerClient(serverSupabaseUrl, supabaseKey, {
+    cookieOptions: { name: supabaseAuthCookieName },
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (cookiesToSet) => {

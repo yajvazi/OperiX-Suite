@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured, supabaseKey, supabaseUrl } from "./config";
+import { isSupabaseConfigured, supabaseAuthCookieName, supabaseKey, supabaseUrl } from "./config";
 
 let client: SupabaseClient | null = null;
 
@@ -17,7 +17,9 @@ function redirectToCleanLogin() {
 export function createClient() {
   if (!isSupabaseConfigured) return null;
   if (!client) {
-    client = createBrowserClient(supabaseUrl, supabaseKey);
+    client = createBrowserClient(supabaseUrl, supabaseKey, {
+      cookieOptions: { name: supabaseAuthCookieName },
+    });
     client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") redirectToCleanLogin();
     });
