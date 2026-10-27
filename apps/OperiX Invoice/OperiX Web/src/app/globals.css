@@ -1545,3 +1545,45 @@ html[data-theme="dark"] .invoice-flow-stepper button span { background: #1d2c47;
 html[data-theme="dark"] .invoice-flow-stepper button.is-active span { background: var(--operix-blue); color: #fff; }
 html[data-theme="dark"] .icon-btn { background: #17233a; color: var(--operix-ink); border-color: var(--operix-border-strong); }
 html[data-theme="dark"] .invoice-flow-stepper button[aria-current], html[data-theme="dark"] .invoice-flow-stepper .is-active { background: #17315f; color: #8fb4ff; }
+
+/* Design normalization: one control size, one table style, readable small text */
+.input, .select, .textarea { font-size: 13px; border-color: var(--operix-border); border-radius: 9px; }
+.select { padding-right: 32px; }
+.btn { min-height: 40px; font-size: 13px; border-radius: 9px; }
+.ux-search-field { min-height: 40px; border-radius: 9px; }
+.ux-search-field input { font-size: 13px; }
+.invoice-list-toolbar > *, .resource-toolbar > * { align-self: center; }
+.invoice-list-toolbar .select, .resource-toolbar .select { height: 40px; min-height: 40px; font-size: 13px; }
+.invoice-list-page { padding-left: 34px; padding-right: 34px; }
+.data-table th, .ux-table th, .invoice-table th { color: var(--operix-muted); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; background: transparent; }
+.data-table td, .ux-table td { font-size: 13px; }
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.ux-metric-card-top { font-size: 12px; }
+.ux-metric-card small { font-size: 11px; }
+.invoice-row-copy strong { font-size: 13px; }
+.invoice-row-copy small { font-size: 11px; }
+.invoice-row-amount { font-size: 13px; }
+.resource-row-actions button { font-size: 12px; }
+.invoice-status-tab { font-size: 12px; }
+.expense-metrics .ux-metric-card { min-height: 0; }
+.expenses-tabs button { font-size: 13px; }
+.invoice-list-page .invoice-more, .invoice-list-page td > details > summary, .invoice-list-page td .icon-btn { width: 34px; height: 34px; min-height: 34px; border-color: transparent; background: transparent; }
+.invoice-list-page td .icon-btn:hover, .invoice-list-page td > details > summary:hover { background: #eef3fb; }
+html[data-theme="dark"] .invoice-list-page td .icon-btn:hover { background: #1b2740; }
+.invoice-list-table th { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.invoice-list-table td { font-size: 13px; }
+.invoice-list-table tbody tr:last-child td { border-bottom: 0; }
+.ux-status { min-height: 26px; padding: 0 10px; font-size: 11px; font-weight: 600; }
+.invoice-editor-page { width: min(100%, 1700px); padding: 28px 34px 48px; }
+@media (max-width: 1100px) { .invoice-editor-page { padding-inline: 22px; } }
+.operix-badge { min-height: 24px; padding: 0 9px; font-size: 11px; font-weight: 600; border-radius: 99px; }
+.expense-quick-add button, .expense-quick-grid button { display: inline-flex; align-items: center; gap: 8px; }
+.quick-add-card { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 48px; padding: 0 14px; text-align: left; font-size: 13px; }
+.quick-add-card svg { flex: none; color: var(--operix-blue); }
+.operix-shared-sidebar-nav { scrollbar-width: thin; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); padding-bottom: 18px; }
+.operix-shared-sidebar-link { min-height: 38px; }
+.ux-quick-actions { gap: 10px; padding: 8px 20px 20px; align-content: start; }
+.ux-quick-actions .operix-quick-action { min-height: 56px; padding: 0 12px; border: 1px solid var(--operix-border); border-radius: 11px; font-size: 13px; font-weight: 500; transition: border-color .15s, background .15s; }
+.ux-quick-actions .operix-quick-action:hover { border-color: #a9c3fc; background: #f8fbff; }
+html[data-theme="dark"] .ux-quick-actions .operix-quick-action:hover { background: #17233a; border-color: #35508a; }
+.ux-quick-actions { padding: 8px 0 0; }

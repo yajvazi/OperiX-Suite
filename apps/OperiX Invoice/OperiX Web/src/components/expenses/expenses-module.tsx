@@ -5,7 +5,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Plus } from "lucide-react";
+import { CheckCircle2, Clock3, Plus, ReceiptText, Wallet } from "lucide-react";
 import { calculateExpenseEligibility, calculateExpenseTotals, exactSum, EXPENSE_CATEGORIES, type ExpenseCategoryId } from "@invoice-monorepo/api";
 import { saveExpense } from "@invoice-monorepo/api/repositories";
 import { DecimalAmount } from "@invoice-monorepo/money";
@@ -146,10 +146,10 @@ export function ExpensesModule() {
     <nav className="expenses-tabs" aria-label="Expense areas">{(["overview", "expenses", "suppliers", "reports"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "overview" ? (sq ? "Përmbledhje" : "Overview") : item === "expenses" ? (sq ? "Shpenzime" : "Expenses") : item === "suppliers" ? (sq ? "Furnitorët" : "Suppliers") : (sq ? "Raportet" : "Reports")}</button>)}</nav>
 
     <div className="expense-metrics">
-      <MetricCard label={sq ? "Shpenzime totale" : "Total expenses"} value={amount(totals.gross)} />
-      <MetricCard label={sq ? "Të paguara" : "Paid expenses"} value={amount(totals.paid)} />
-      <MetricCard label={sq ? "Të papaguara" : "Outstanding"} value={amount(totals.outstanding)} />
-      <MetricCard label={sq ? "TVSH e rikuperueshme" : "Recoverable input VAT"} value={amount(totals.recoverableVat)} />
+      <MetricCard label={sq ? "Shpenzime totale" : "Total expenses"} value={amount(totals.gross)} icon={ReceiptText} />
+      <MetricCard label={sq ? "Të paguara" : "Paid expenses"} value={amount(totals.paid)} icon={CheckCircle2} tone="green" />
+      <MetricCard label={sq ? "Të papaguara" : "Outstanding"} value={amount(totals.outstanding)} icon={Clock3} tone="amber" />
+      <MetricCard label={sq ? "TVSH e rikuperueshme" : "Recoverable input VAT"} value={amount(totals.recoverableVat)} icon={Wallet} tone="green" />
     </div>
 
     {error ? <div className="error-banner">{error}</div> : null}
