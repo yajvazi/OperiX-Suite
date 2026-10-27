@@ -1,0 +1,23 @@
+{
+  "name": "invoice-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.4",
+  "workspaces": [
+    "apps/OperiX Invoice/OperiX Invoice Mobile",
+    "packages/api",
+    "packages/billing",
+    "packages/commercial-documents",
+    "packages/context",
+    "packages/hooks",
+    "packages/i18n",
+    "packages/invoice-template",
+    "packages/money",
+    "packages/report-templates",
+    "packages/types",
+    "packages/ui"
+  ],
+  "devDependencies": {
+    "typescript": "~5.9.2"
+  }
+}
