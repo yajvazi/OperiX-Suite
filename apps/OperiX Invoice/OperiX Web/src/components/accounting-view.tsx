@@ -28,6 +28,7 @@ import {
 import { useWorkspace } from "@/hooks/use-workspace";
 import { money } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/ui";
 
 type Tab = "overview" | "accounts" | "journals" | "periods" | "rules";
 type PostingRule = {
@@ -221,12 +222,8 @@ export function AccountingView() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1700px] p-4 lg:p-6">
-      <header className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[230px] flex-1">
-          <h1 className="page-title">{t.title}</h1>
-          <p className="muted mt-1.5 text-xs">{t.subtitle}</p>
-        </div>
+    <div className="ux-page">
+      <PageHeader title={t.title} description={t.subtitle} actions={<>
         <button className="btn" onClick={() => void load()} disabled={loading}>
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           {t.refresh}
@@ -235,7 +232,7 @@ export function AccountingView() {
           <FilePlus2 size={16} />
           {t.createJournal}
         </button> : null}
-      </header>
+      </>} />
 
       {error ? <p className="mt-4 rounded-md bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}
       {notice ? <p className="mt-4 rounded-md bg-[#ecfdf3] p-3 text-xs text-[#027a48]">{notice}</p> : null}

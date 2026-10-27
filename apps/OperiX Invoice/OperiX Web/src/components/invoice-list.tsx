@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, FileText, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { Clock3, Download, FileText, MoreHorizontal, Plus, Search, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import type { InvoiceRow } from "@/lib/models";
 import { money, shortDate } from "@/lib/format";
 import { EmptyState, ErrorState, LoadingSkeleton, MetricCard, MobileListCard, PageHeader, StatusBadge } from "./ui";
@@ -114,14 +114,14 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
     <section className="invoice-list-summary" aria-label={`${title} summary`}>
       <MetricCard label={`Total ${type === "invoice" ? "invoiced" : "quoted"}`} value={money(total)} icon={FileText} />
       <MetricCard label="Paid" value={money(paid)} icon={FileText} tone="green" />
-      <MetricCard label="Outstanding" value={money(outstanding)} icon={MoreHorizontal} tone="amber" />
-      <MetricCard label="Overdue" value={money(overdue)} icon={MoreHorizontal} tone="red" />
+      <MetricCard label="Outstanding" value={money(outstanding)} icon={Clock3} tone="amber" />
+      <MetricCard label="Overdue" value={money(overdue)} icon={TriangleAlert} tone="red" />
     </section>
     <div className="invoice-list-toolbar">
       <label className="ux-search-field"><Search size={17} aria-hidden="true" /><span className="sr-only">Search {title.toLowerCase()}</span><input data-testid="invoice.search" value={query} onChange={(event) => { setQuery(event.target.value); updateFilters(); }} placeholder={`Search ${title.toLowerCase()}…`} /></label>
       <select data-testid="invoice.type-filter" aria-label={`Filter ${title.toLowerCase()} type`} className="select invoice-type-filter" value={invoiceType} onChange={(event) => { setInvoiceType(event.target.value); updateFilters(); }}><option value="all">All types</option><option value="invoice">Invoices</option><option value="offer">Quotes</option><option value="proforma">Proforma</option><option value="order">Orders</option><option value="recurring">Recurring</option></select>
       <select data-testid="invoice.sort" aria-label={`Sort ${title.toLowerCase()}`} className="select invoice-sort-filter" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "desc" | "asc")}><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
-      <button data-testid="invoice.filters" type="button" className={`ux-filter-button invoice-filter-trigger ${filtersOpen ? "is-active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}>{filtersOpen ? <X size={16} /> : <MoreHorizontal size={16} />} Filters{active !== "all" || from || to || minimum ? " · Active" : ""}</button>
+      <button data-testid="invoice.filters" type="button" className={`ux-filter-button invoice-filter-trigger ${filtersOpen ? "is-active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}>{filtersOpen ? <X size={16} /> : <SlidersHorizontal size={16} />} Filters{active !== "all" || from || to || minimum ? " · Active" : ""}</button>
       {canExport ? <button type="button" className="ux-filter-button invoice-export-trigger" onClick={exportCsv}><Download size={16} /> Export</button> : null}
       <div className="invoice-status-tabs" aria-label={`${title} status`}>
         {tabs.map((tab) => <button type="button" key={tab} className={`invoice-status-tab ${active === tab ? "is-active" : ""}`} onClick={() => { setActive(tab); setPage(1); }}>{tab === "all" ? "All" : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}

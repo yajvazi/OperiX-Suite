@@ -302,7 +302,7 @@ export function UsersAccessPanel() {
 
   if (!canManage) return <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Only a tenant Admin with Users &amp; Access permission can manage company users. Managers and Employees cannot reach this workflow.</div>;
   if (loading && !data) return <div className="mt-6 grid gap-3"><div className="skeleton h-28 rounded-xl" /><div className="skeleton h-64 rounded-xl" /></div>;
-  if (!data) return <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-800"><strong>Users &amp; Access unavailable</strong><p className="mt-1">{message || "Try again."}</p><button type="button" className="btn mt-4" onClick={() => void load()}><RefreshCw size={15} /> Try again</button></div>;
+  if (!data || !data.billing) return <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-800"><strong>Users &amp; Access unavailable</strong><p className="mt-1">{message || "Try again."}</p><button type="button" className="btn mt-4" onClick={() => void load()}><RefreshCw size={15} /> Try again</button></div>;
 
   const billing = data.billing;
   const annual = billing.billing_interval === "annual";

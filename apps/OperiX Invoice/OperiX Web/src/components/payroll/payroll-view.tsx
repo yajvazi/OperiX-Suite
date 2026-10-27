@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { money } from "@/lib/format";
+import { PageHeader } from "@/components/ui";
 
 export type PayrollSection =
   | "dashboard" | "employees" | "compensation" | "periods" | "runs" | "review"
@@ -131,22 +132,15 @@ export function PayrollView({ section = "dashboard", runId }: { section?: Payrol
 
   if (loading || workspace.loading) return <div className="grid min-h-[55vh] place-items-center"><Loader2 className="animate-spin text-[#004ffe]" /></div>;
 
-  return <div className="mx-auto max-w-[1700px] p-4 lg:p-6">
-    <header className="flex flex-wrap items-end gap-3">
-      <div className="min-w-[250px] flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-[#004ffe]">OperiX Invoice</p>
-        <h1 className="page-title mt-1">Payroll</h1>
-        <p className="muted mt-1 text-xs">Kosovo-ready, versioned payroll with immutable accounting and payment outputs.</p>
-      </div>
-      <button className="btn" onClick={() => void load()}><RefreshCw size={16}/>Refresh</button>
-    </header>
+  return <div className="ux-page">
+    <PageHeader title="Payroll" description="Kosovo-ready, versioned payroll with immutable accounting and payment outputs." actions={<><button className="btn" onClick={() => void load()}><RefreshCw size={16}/>Refresh</button></>} />
 
     {error ? <p className="mt-4 rounded-md bg-[#fff3f2] p-3 text-xs text-[#d92d20]">{error}</p> : null}
     {notice ? <p className="mt-4 rounded-md bg-[#ecfdf3] p-3 text-xs text-[#027a48]">{notice}</p> : null}
     {!enabled ? <FeatureGate companyId={workspace.companyId!} onComplete={load} /> : null}
     {enabled && !activeConfig ? <p className="mt-4 flex items-center gap-2 rounded-md bg-[#fffaeb] p-3 text-xs text-[#b54708]"><AlertTriangle size={16}/>Payroll is enabled, but no legally reviewed configuration is approved. Calculation and finalization remain blocked.</p> : null}
 
-    <nav className="mt-5 flex gap-1 overflow-x-auto rounded-lg border bg-white p-1 scrollbar-none">
+    <nav className="mt-5 flex gap-1 overflow-x-auto rounded-lg border border-[#e4e9f1] bg-white p-1 scrollbar-none">
       {sections.map((item) => { const Icon = item.icon; const active = section === item.key; return <Link key={item.key} href={item.key === "dashboard" ? "/payroll" : `/payroll/${item.key}`} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-[11px] font-medium ${active ? "bg-[#004ffe] text-white" : "text-[#667085] hover:bg-[#f7f9fc]"}`}><Icon size={15}/>{item.label}</Link>; })}
     </nav>
 
