@@ -1,5 +1,6 @@
 import {
   calculateInvoice,
+  decimalToAtoms,
   type CalculatedInvoiceLine,
   type InvoiceCalculationResult,
 } from '@invoice-monorepo/money';
@@ -9,7 +10,26 @@ import {
   type CommercialDocumentType,
 } from '@invoice-monorepo/commercial-documents';
 
-export type DomainPaymentMethod = 'cash' | 'bank' | 'card' | 'pos' | 'other';
+export type DomainPaymentMethod = 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'customer_credit' | 'pos' | 'other';
+
+/** Cash payments must remain strictly below the Kosovo cash threshold. */
+export const CASH_PAYMENT_LIMIT_ATOMS = decimalToAtoms('300', 2);
+
+/**
+ * Keep the cash threshold in the shared domain layer so Web and Mobile do
+ * not implement slightly different floating-point checks.
+ *
+ * Empty values represent an unfilled form field and are treated as zero;
+ * malformed values fail closed for callers that are validating a payment.
+ */
+export function isCashPaymentAllowed(value: number | string | null | undefined) {
+  if (value === null || value === undefined || String(value).trim() === '') return true;
+  try {
+    return decimalToAtoms(String(value), 2) < CASH_PAYMENT_LIMIT_ATOMS;
+  } catch {
+    return false;
+  }
+}
 
 export interface InvoiceLineDraft {
   id?: string;
@@ -27,11 +47,13 @@ export interface InvoiceLineDraft {
 export interface InvoiceDraftInput {
   userId: string;
   companyId: string;
+  branchId?: string | null;
   lines: readonly InvoiceLineDraft[];
   clientId?: string | null;
   invoiceNumber?: string | null;
   issueDate: string;
   dueDate?: string | null;
+  postCod?: boolean;
   documentType: CommercialDocumentType;
   status?: string;
   commercialStatus?: string;
@@ -52,6 +74,7 @@ export interface InvoiceDraftInput {
   sourceDocumentType?: string | null;
   sourceDocumentId?: string | null;
   originalInvoiceId?: string | null;
+  externalReference?: string | null;
   buyerSignatureUrl?: string | null;
   customerSignatureRequested?: boolean;
   customerSignatureStatus?: 'not_requested' | 'pending' | 'signed' | 'declined';
@@ -64,10 +87,12 @@ export interface InvoiceDraftInput {
 export interface InvoicePersistencePayload {
   user_id: string;
   company_id: string;
+  branch_id: string | null;
   client_id: string | null;
   invoice_number: string;
   issue_date: string;
   due_date: string | null;
+  post_cod: boolean;
   status: string;
   type: string;
   subtype: string;
@@ -85,6 +110,7 @@ export interface InvoicePersistencePayload {
   source_document_type: string | null;
   source_document_id: string | null;
   original_invoice_id: string | null;
+  external_reference?: string | null;
   tax_reporting_category: string | null;
   currency: string;
   exchange_rate: number | string;
@@ -175,7 +201,10 @@ export function validateInvoiceDraft(input: InvoiceDraftInput, totals?: InvoiceC
   }
 
   if (input.paymentMethod === 'cash' && totals) {
-    if (totals.total >= 300) throw new DomainValidationError('Cash payments are available only below 300.');
+    const submittedCashAmount = finiteNumber(input.amountReceived);
+    if (!isCashPaymentAllowed(submittedCashAmount)) {
+      throw new DomainValidationError('Cash payments are available only below 300.');
+    }
     if (totals.paid < totals.total) throw new DomainValidationError('Cash received must cover the invoice total.');
   }
 }
@@ -236,10 +265,12 @@ export function buildInvoicePersistencePayload(input: InvoiceDraftInput, totals:
   const invoice: InvoicePersistencePayload = {
     user_id: input.userId,
     company_id: input.companyId,
+    branch_id: input.branchId || null,
     client_id: input.clientId || null,
     invoice_number: invoiceNumber,
     issue_date: normalizeDateOnly(input.issueDate, 'issueDate'),
     due_date: input.dueDate ? normalizeDateOnly(input.dueDate, 'dueDate') : null,
+    post_cod: Boolean(input.postCod),
     status: shouldPost ? 'draft' : input.status || 'draft',
     type: legacy.type,
     subtype: legacy.subtype,
@@ -257,6 +288,7 @@ export function buildInvoicePersistencePayload(input: InvoiceDraftInput, totals:
     source_document_type: input.sourceDocumentType || null,
     source_document_id: input.sourceDocumentId || null,
     original_invoice_id: input.originalInvoiceId || null,
+    external_reference: input.externalReference,
     tax_reporting_category: input.taxReportingCategory || null,
     currency: totals.currency,
     exchange_rate: input.exchangeRate === undefined ? 1 : input.exchangeRate,

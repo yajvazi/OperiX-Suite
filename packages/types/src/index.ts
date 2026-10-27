@@ -190,6 +190,8 @@ export interface FundBalance {
     opening_balance: number;
     transaction_total: number;
     balance: number;
+    pending_balance?: number;
+    available_balance?: number;
     provider_available_balance?: number | null;
     provider_pending_balance?: number | null;
     provider_balance_as_of?: string | null;
@@ -210,14 +212,90 @@ export interface FundTransfer {
     created_at: string;
 }
 
+export interface AgentSettlement {
+    id: string;
+    company_id: string;
+    agent_user_id: string;
+    fund_account_id: string;
+    amount: number;
+    currency: string;
+    settlement_date: string;
+    description?: string | null;
+    idempotency_key?: string | null;
+    status: 'active' | 'reversed';
+    created_at: string;
+    created_by?: string | null;
+}
+
+export interface AgentAdvance {
+    id: string;
+    company_id: string;
+    agent_user_id: string;
+    fund_account_id: string;
+    amount: number;
+    currency: string;
+    advance_date: string;
+    description?: string | null;
+    idempotency_key?: string | null;
+    status: 'active' | 'reversed';
+    created_at: string;
+    created_by?: string | null;
+}
+
+
+export interface PostCodSettlement {
+    id: string;
+    company_id: string;
+    fund_account_id: string;
+    amount: number;
+    currency: string;
+    settlement_date: string;
+    description?: string | null;
+    idempotency_key?: string | null;
+    status: 'active' | 'reversed';
+    created_at: string;
+    created_by?: string | null;
+}
+
+export interface StripePayoutSettlement {
+    id: string;
+    company_id: string;
+    stripe_fund_account_id: string;
+    bank_fund_account_id: string;
+    payout_amount: number;
+    bank_fee: number;
+    net_received: number;
+    currency: string;
+    settlement_date: string;
+    description?: string | null;
+    idempotency_key?: string | null;
+    status: 'active' | 'reversed';
+    created_at: string;
+    created_by?: string | null;
+}
+
 export interface Expense {
     id: string;
     user_id: string;
     company_id?: string;
     amount: number;
     category: ExpenseCategory;
+    category_code?: string | null;
+    expense_number?: string | null;
+    subcategory?: string | null;
+    article?: string | null;
     vendor_name?: string;
+    vendor_id?: string | null;
     invoice_number?: string;
+    document_type?: string | null;
+    document_number?: string | null;
+    issue_date?: string | null;
+    net_amount?: number | string | null;
+    vat_amount?: number | string | null;
+    gross_amount?: number | string | null;
+    vat_rate?: number | null;
+    tax_amount?: number | null;
+    tax_recoverable_amount?: number | null;
     description?: string;
     date: string;
     receipt_url?: string;
@@ -225,12 +303,51 @@ export interface Expense {
     company_bank_account_id?: string | null;
     bank_reference?: string | null;
     notes?: string | null;
+    payment_status?: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | null;
+    paid_amount?: number | string | null;
+    outstanding_amount?: number | string | null;
+    due_date?: string | null;
+    documentation_status?: 'complete' | 'missing_information' | 'missing_supporting_document' | null;
+    tax_treatment?: string | null;
+    tax_recommended_treatment?: string | null;
+    tax_deductible_percentage?: number | string | null;
+    tax_deductible_amount?: number | string | null;
+    tax_non_deductible_amount?: number | string | null;
+    vat_treatment?: string | null;
+    vat_recommended_treatment?: string | null;
+    vat_deductible_percentage?: number | string | null;
+    vat_deductible_amount?: number | string | null;
+    vat_non_deductible_amount?: number | string | null;
+    capital_classification?: string | null;
+    business_use_percentage?: number | string | null;
+    vehicle_id?: string | null;
+    vehicle_label?: string | null;
+    registration_plate?: string | null;
+    fuel_type?: string | null;
+    litres?: number | string | null;
+    price_per_litre?: number | string | null;
+    odometer_reading?: number | string | null;
+    business_purpose?: string | null;
+    driver_employee_id?: string | null;
+    fuel_station?: string | null;
+    billing_period_start?: string | null;
+    billing_period_end?: string | null;
+    utility_account_reference?: string | null;
+    meter_reference?: string | null;
+    property_location?: string | null;
+    contract_reference?: string | null;
+    purchase_book_eligible?: boolean;
+    purchase_book_excluded_reason?: string | null;
+    archived_at?: string | null;
+    created_by?: string | null;
+    updated_by?: string | null;
+    updated_at?: string | null;
     created_at: string;
     type?: 'expense' | 'income';
 }
 
 export type InvoiceStatus = 'draft' | 'sent' | 'pending' | 'paid' | 'overdue' | 'cancelled';
-export type PaymentMethod = 'cash' | 'bank' | 'card';
+export type PaymentMethod = 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'other' | 'customer_credit';
 
 export interface Invoice {
     id: string;
@@ -244,6 +361,7 @@ export interface Invoice {
     delivery_method?: string | null;
     pickup_branch_id?: string | null;
     delivery_details?: string | null;
+    post_cod?: boolean;
     status: InvoiceStatus;
     type: 'invoice' | 'offer';
     subtype?: string;
@@ -536,6 +654,7 @@ export interface InvoiceData {
         /** Canonical commercial identity; never infer this from the PDF title. */
         commercialDocumentType?: string;
         documentTypeLabel?: string;
+        originalDocumentNumber?: string;
         supplyDate?: string;
         customerPoNumber?: string;
         fiscalizationStatus?: string;
@@ -543,6 +662,8 @@ export interface InvoiceData {
         vatReference?: string;
         showBuyerSignature?: boolean;
         paymentMethod?: PaymentMethod;
+        status?: string;
+        paymentStatus?: string;
         amountReceived?: number;
         changeAmount?: number;
         // Kosovo invoice fields

@@ -1,4 +1,5 @@
 import type { InvoiceData, TemplateConfig } from "@invoice-monorepo/types";
+import { DOCUMENT_DEFINITIONS, type CommercialDocumentType } from "@invoice-monorepo/commercial-documents";
 
 export const SERVICE_ICON_OPTIONS = [
   { name: "briefcase", labelKey: "serviceIconBusiness" },
@@ -90,8 +91,8 @@ const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (
   "'": "&#39;",
 }[character] || character));
 
-const date = (value?: string) => {
-  if (!value) return "—";
+const date = (value?: string, emptyValue = "—") => {
+  if (!value) return emptyValue;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return escapeHtml(value);
   return `${String(parsed.getDate()).padStart(2, "0")}.${String(parsed.getMonth() + 1).padStart(2, "0")}.${parsed.getFullYear()}`;
@@ -124,6 +125,8 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .invoice-balance-label { font-size: 9px; font-weight: 700; }
 .invoice-balance-value { margin-top: 3px; font-size: 18px; font-weight: 800; }
 .invoice-status { display: inline-block; margin-top: 5px; padding: 3px 9px; border: 1px solid #777; border-radius: 2px; font-size: 9px; font-weight: 700; }
+.document-notice { margin-top: 8px; padding: 7px 9px; border: 1px solid #9ca3af; border-left: 3px solid #111; background: #f8fafc; font-size: 8.5px; line-height: 1.35; }
+.document-notice strong { display: block; margin-bottom: 2px; font-size: 8px; text-transform: uppercase; letter-spacing: .35px; }
 .invoice-people { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 8px 0 9px; border-bottom: 1px solid #aaa; }
 .person-block { min-width: 0; }
 .person-title { padding-bottom: 3px; border-bottom: 1px solid #bbb; font-size: 9px; font-weight: 700; }
@@ -156,10 +159,10 @@ html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: 
 .invoice-foot { margin-top: auto; padding-top: 9px; }
 .signature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 14px; align-items: end; }
 .signature-cell { text-align: center; font-size: 8px; }
-.signature-line { height: 62px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #111; }
-.signature-line > img:not(.stamp-overlay) { max-width: 100%; max-height: 58px; object-fit: contain; filter: brightness(0) saturate(100%) invert(26%) sepia(87%) saturate(2046%) hue-rotate(194deg) brightness(87%) contrast(101%); }
+.signature-line { height: 87px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #111; }
+.signature-line > img:not(.stamp-overlay) { max-width: 100%; max-height: 81px; object-fit: contain; filter: brightness(0) saturate(100%) invert(25%) sepia(99%) saturate(4164%) hue-rotate(218deg) brightness(98%) contrast(104%); -webkit-filter: brightness(0) saturate(100%) invert(25%) sepia(99%) saturate(4164%) hue-rotate(218deg) brightness(98%) contrast(104%); }
 .stamped-line { position: relative; }
-.stamped-line .stamp-overlay { position: absolute; right: 5%; bottom: -8px; width: 78px; height: 78px; object-fit: contain; opacity: .86; transform: rotate(-10deg); }
+.stamped-line .stamp-overlay { position: absolute; right: 5%; bottom: -8px; width: 30mm; height: 30mm; object-fit: contain; opacity: .86; transform: rotate(-10deg); }
 .signature-caption { padding-top: 4px; font-weight: 600; }
 .company-footer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px; padding-top: 6px; border-top: 1px solid #111; font-size: 7.5px; line-height: 1.3; }
 .company-footer > div:nth-child(2) { text-align: center; }
@@ -192,16 +195,92 @@ const labelsFor = (data: InvoiceData) => {
     department: "Njësia", reference: "Ref.", yourReference: "Referenti", terms: "Kusht.", number: "Nr.", sku: "Shifra",
     description: "Përshkrimi", quantity: "Sasia", unit: "Njësia", price: "Çmimi pa TVSH", discount: "Rabati", tax: "TVSH %",
     netPrice: "Çmimi me rabat", salePrice: "Çmimi shitës", lineTotal: "Vlera shitëse", beforeDiscount: "Vlera pa rabat", extraDiscount: "Rabati shtesë",
-    beforeTax: "Vlera pa TVSH", taxTotal: "TVSH", amountDue: "Totali për pagesë", remaining: "", paid: "",
+    beforeTax: "Vlera pa TVSH", taxTotal: "TVSH", amountDue: "Totali për pagesë", remaining: "", paid: "E paguar",
     billedBy: "Faturoi", sentBy: "Dërgoi", checkedBy: "Kontrolloi", acceptedBy: "Pranoi", fullName: "Emri i plotë", bank: "Banka",
   } : {
     invoice: "Invoice", billTo: "Billed to", shipTo: "Delivered to", issue: "Issue", due: "Due", deliveryMethod: "Delivery method", department: "Unit",
     reference: "Ref.", yourReference: "Your ref.", terms: "Terms", number: "No.", sku: "SKU", description: "Description", quantity: "Qty",
     unit: "Unit", price: "Price excl. VAT", discount: "Discount", tax: "VAT %", netPrice: "Price after discount", salePrice: "Sale price",
     lineTotal: "Line total", beforeDiscount: "Subtotal", extraDiscount: "Additional discount", beforeTax: "Net amount", taxTotal: "VAT", amountDue: "Total to pay",
-    remaining: "", paid: "", billedBy: "Prepared by", sentBy: "Sent by", checkedBy: "Checked by", acceptedBy: "Accepted by", fullName: "Full name", bank: "Bank",
+    remaining: "", paid: "Paid", billedBy: "Prepared by", sentBy: "Sent by", checkedBy: "Checked by", acceptedBy: "Accepted by", fullName: "Full name", bank: "Bank",
   };
   return { ...labels, ...(data.config?.labels || {}) };
+};
+
+type DocumentPresentation = {
+  notice: { sq: string; en: string };
+  amountLabel: { sq: string; en: string };
+  scheduleLabel: { sq: string; en: string };
+  acceptedLabel: { sq: string; en: string };
+};
+
+const DOCUMENT_PRESENTATION: Partial<Record<CommercialDocumentType, DocumentPresentation>> = {
+  QUOTE: {
+    notice: { sq: "Ky dokument është ofertë dhe nuk regjistron shitje ose detyrim për pagesë.", en: "This document is a quotation and does not record a sale or payment obligation." },
+    amountLabel: { sq: "Totali i ofertës", en: "Quoted total" },
+    scheduleLabel: { sq: "E vlefshme deri më", en: "Valid until" },
+    acceptedLabel: { sq: "Pranoi ofertën", en: "Accepted by" },
+  },
+  PROFORMA: {
+    notice: { sq: "Pro-fatura është dokument paraprak; nuk është faturë përfundimtare e shitjes.", en: "A proforma is a preliminary document; it is not the final sales invoice." },
+    amountLabel: { sq: "Shuma e pro-faturës", en: "Proforma amount" },
+    scheduleLabel: { sq: "E vlefshme deri më", en: "Valid until" },
+    acceptedLabel: { sq: "Pranoi", en: "Accepted by" },
+  },
+  SALES_ORDER: {
+    notice: { sq: "Kjo porosi konfirmon kërkesën e klientit, por nuk regjistron të ardhura.", en: "This sales order confirms the customer's request but does not record revenue." },
+    amountLabel: { sq: "Totali i porosisë", en: "Order total" },
+    scheduleLabel: { sq: "Data e kërkuar", en: "Requested date" },
+    acceptedLabel: { sq: "Konfirmoi", en: "Confirmed by" },
+  },
+  DELIVERY_NOTE: {
+    notice: { sq: "Kjo fletë dokumenton dërgimin ose pranimin e mallrave; nuk është dokument pagese.", en: "This delivery note records dispatched or received goods; it is not a payment document." },
+    amountLabel: { sq: "Vlera e dërgesës", en: "Delivery value" },
+    scheduleLabel: { sq: "Data e dorëzimit", en: "Delivery date" },
+    acceptedLabel: { sq: "Pranoi mallrat", en: "Goods received by" },
+  },
+  ADVANCE_INVOICE: {
+    notice: { sq: "Kjo faturë përdoret për paradhënie para furnizimit përfundimtar.", en: "This invoice records an advance before the final supply is completed." },
+    amountLabel: { sq: "Totali i paradhënies", en: "Advance total" },
+    scheduleLabel: { sq: "Afati i pagesës", en: "Payment due" },
+    acceptedLabel: { sq: "Pranoi", en: "Accepted by" },
+  },
+  FINAL_INVOICE: {
+    notice: { sq: "Kjo faturë përfundimtare pasqyron furnizimin dhe zbrit çdo paradhënie të lidhur.", en: "This final invoice records the completed supply and settles any linked advance." },
+    amountLabel: { sq: "Totali për pagesë", en: "Total to pay" },
+    scheduleLabel: { sq: "Afati i pagesës", en: "Payment due" },
+    acceptedLabel: { sq: "Pranoi", en: "Accepted by" },
+  },
+  CREDIT_NOTE: {
+    notice: { sq: "Kjo notë krediti zvogëlon ose anulon pjesërisht një dokument origjinal.", en: "This credit note reduces or partially reverses an original document." },
+    amountLabel: { sq: "Krediti për klientin", en: "Credit to customer" },
+    scheduleLabel: { sq: "Data e korrigjimit", en: "Adjustment date" },
+    acceptedLabel: { sq: "Pranoi korrigjimin", en: "Accepted by" },
+  },
+  DEBIT_NOTE: {
+    notice: { sq: "Kjo notë debiti rrit ose korrigjon shumën e një dokumenti origjinal.", en: "This debit note increases or corrects the amount of an original document." },
+    amountLabel: { sq: "Shtesa për pagesë", en: "Additional amount" },
+    scheduleLabel: { sq: "Afati i pagesës", en: "Payment due" },
+    acceptedLabel: { sq: "Pranoi korrigjimin", en: "Accepted by" },
+  },
+  SIMPLIFIED_INVOICE: {
+    notice: { sq: "Format i shkurtuar i faturës për transaksione ku lejohet faturimi i thjeshtuar.", en: "A shorter invoice format for transactions where simplified invoicing is permitted." },
+    amountLabel: { sq: "Totali për pagesë", en: "Total to pay" },
+    scheduleLabel: { sq: "Data e pagesës", en: "Payment date" },
+    acceptedLabel: { sq: "Pranoi", en: "Accepted by" },
+  },
+  FISCAL_RECEIPT: {
+    notice: { sq: "Kupon fiskal për shitje në pikën e shitjes dhe konsumatorin final.", en: "A fiscal receipt for point-of-sale sales to the end customer." },
+    amountLabel: { sq: "Totali i kuponit", en: "Receipt total" },
+    scheduleLabel: { sq: "Data e transaksionit", en: "Transaction date" },
+    acceptedLabel: { sq: "Klienti", en: "Customer" },
+  },
+  BAD_DEBT_INVOICE: {
+    notice: { sq: "Përdoreni vetëm për trajtim të kontrolluar të borxhit të keq dhe me dokument origjinal të lidhur.", en: "Use only for a controlled bad-debt treatment linked to an original document." },
+    amountLabel: { sq: "Shuma e borxhit të keq", en: "Bad-debt amount" },
+    scheduleLabel: { sq: "Data e korrigjimit", en: "Correction date" },
+    acceptedLabel: { sq: "Pranoi", en: "Accepted by" },
+  },
 };
 
 const value = (input: unknown) => escapeHtml(input || "—");
@@ -227,17 +306,37 @@ export function corporateInvoiceMarkup(data: InvoiceData): string {
   const legacyDiscount = items.reduce((sum, item) => sum + item.quantity * item.price * ((item.discount || 0) / 100), 0);
   const legacyNet = items.reduce((sum, item) => sum + item.total, 0);
   const legacyTax = items.reduce((sum, item) => sum + item.total * ((item.taxRate || 0) / 100), 0);
-  const subtotal = hasCanonicalLineTotals ? Number(data.summary.subtotal || 0) : legacySubtotal;
-  const discount = hasCanonicalLineTotals ? Number(data.summary.discount || 0) : legacyDiscount;
-  const net = hasCanonicalLineTotals ? Math.max(0, Number(data.summary.total || 0) - Number(data.summary.tax || 0)) : legacyNet;
-  const tax = hasCanonicalLineTotals ? Number(data.summary.tax || 0) : legacyTax;
-  const total = hasCanonicalLineTotals ? Number(data.summary.total || 0) : net + tax;
   const commercialType = String(data.details.commercialDocumentType || '').toUpperCase();
-  const protectedDocument = ['QUOTE', 'PROFORMA', 'SALES_ORDER', 'DELIVERY_NOTE'].includes(commercialType);
+  const documentDefinition = DOCUMENT_DEFINITIONS[commercialType as CommercialDocumentType];
+  const presentation = DOCUMENT_PRESENTATION[commercialType as CommercialDocumentType];
+  const isCreditNote = commercialType === 'CREDIT_NOTE';
+  const amountSign = isCreditNote ? -1 : 1;
+  const subtotal = amountSign * (hasCanonicalLineTotals ? Number(data.summary.subtotal || 0) : legacySubtotal);
+  const discount = amountSign * (hasCanonicalLineTotals ? Number(data.summary.discount || 0) : legacyDiscount);
+  const net = amountSign * (hasCanonicalLineTotals ? Math.max(0, Number(data.summary.total || 0) - Number(data.summary.tax || 0)) : legacyNet);
+  const tax = amountSign * (hasCanonicalLineTotals ? Number(data.summary.tax || 0) : legacyTax);
+  const total = amountSign * (hasCanonicalLineTotals ? Number(data.summary.total || 0) : Math.abs(net + tax));
+  const protectedDocument = documentDefinition
+    ? documentDefinition.mustHideFiscalIdentifiers
+    : ['QUOTE', 'PROFORMA', 'SALES_ORDER', 'DELIVERY_NOTE'].includes(commercialType);
   const showFiscalIdentifiers = !protectedDocument;
   const received = protectedDocument ? 0 : Number(data.details.amountReceived ?? data.summary.amountReceived ?? 0);
-  const due = Math.max(0, total - received);
-  const paid = received >= total && total > 0;
+  const due = isCreditNote ? -Math.abs(total) : Math.max(0, total - received);
+  const explicitlyPaid = [data.details.status, data.details.paymentStatus]
+    .some((status) => String(status || '').toLowerCase() === 'paid');
+  const paid = !isCreditNote && (explicitlyPaid || (received >= total && total > 0));
+  const albanian = data.details.language === 'sq' || data.details.language === 'al';
+  const paymentMethod = String(data.details.paymentMethod || '').toLowerCase();
+  const paymentMethodLabels: Record<string, string> = {
+    cash: albanian ? 'Para të Gatshme' : 'Cash',
+    bank: albanian ? 'Transfer Bankar' : 'Bank Transfer',
+    card: albanian ? 'Kartelë / POS' : 'Card / POS',
+    online_payment: albanian ? 'Pagesë Online' : 'Online Payment',
+    cheque: albanian ? 'Çek' : 'Cheque',
+    other: albanian ? 'Tjetër' : 'Other',
+    customer_credit: albanian ? 'Borxh' : 'Debt',
+  };
+  const paymentMethodLabel = escapeHtml(paymentMethodLabels[paymentMethod] || data.details.paymentMethod || '—');
   const currency = data.details.currency || "EUR";
   const typeLabels: Record<string, string> = {
     QUOTE: data.details.language === "sq" ? "Ofertë" : "Quote",
@@ -254,6 +353,24 @@ export function corporateInvoiceMarkup(data: InvoiceData): string {
     BAD_DEBT_INVOICE: data.details.language === "sq" ? "Faturë për borxh të keq" : "Bad-debt invoice",
   };
   const type = typeLabels[commercialType] || data.details.documentTypeLabel || (data.details.subtype === "offer" || data.details.type === "offer" ? (data.details.language === "sq" ? "Ofertë" : "Offer") : labels.invoice);
+  const typeCopy = presentation || {
+    notice: { sq: "", en: "" },
+    amountLabel: { sq: labels.amountDue, en: labels.amountDue },
+    scheduleLabel: { sq: labels.due, en: labels.due },
+    acceptedLabel: { sq: labels.acceptedBy, en: labels.acceptedBy },
+  };
+  const localizedTypeCopy = (copy: { sq: string; en: string }) => copy[albanian ? "sq" : "en"];
+  const notice = localizedTypeCopy(typeCopy.notice);
+  const amountLabel = localizedTypeCopy(typeCopy.amountLabel);
+  const scheduleLabel = localizedTypeCopy(typeCopy.scheduleLabel);
+  const acceptedLabel = localizedTypeCopy(typeCopy.acceptedLabel);
+  const scheduleDate = ['FINAL_INVOICE', 'SALES_ORDER', 'DELIVERY_NOTE'].includes(commercialType)
+    ? data.details.supplyDate || data.details.dueDate
+    : data.details.dueDate;
+  const originalDocument = data.details.originalDocumentNumber || '';
+  const noticeMarkup = notice
+    ? `<div class="document-notice"><strong>${albanian ? "Shënim" : "Document note"}</strong>${escapeHtml(notice)}</div>`
+    : '';
   const qrTarget = data.details.qrReference
     ? `https://invoice.operixsuite.com/qr/${encodeURIComponent(data.details.qrReference)}`
     : "";
@@ -273,15 +390,15 @@ export function corporateInvoiceMarkup(data: InvoiceData): string {
     const discountRate = Number(item.discount || 0);
     const legacyTaxable = item.total;
     const legacyTax = legacyTaxable * taxRate / 100;
-    const taxable = Number(item.taxable ?? (hasCanonicalLineTotals ? item.total - Number(item.tax || 0) : legacyTaxable));
-    const lineTotal = hasCanonicalLineTotals ? Number(item.total) : taxable + legacyTax;
-    const netPrice = item.quantity > 0 ? taxable / item.quantity : item.price * (1 - discountRate / 100);
+    const taxable = amountSign * Number(item.taxable ?? (hasCanonicalLineTotals ? item.total - Number(item.tax || 0) : legacyTaxable));
+    const lineTotal = amountSign * (hasCanonicalLineTotals ? Number(item.total) : Math.abs(taxable) + legacyTax);
+    const netPrice = item.quantity > 0 ? taxable / item.quantity : amountSign * item.price * (1 - discountRate / 100);
     const salePrice = item.quantity > 0 ? lineTotal / item.quantity : netPrice * (1 + taxRate / 100);
     const productImageUrl = serviceIconDataUrl(item.imageUrl);
     const productImage = config.showProductPictures && productImageUrl
       ? `<img class="invoice-product-image" src="${safeUrl(productImageUrl)}" alt=""/>`
       : "";
-    return `<tr>${columns.rowNumber ? `<td class="number">${index + 1}</td>` : ""}${columns.sku ? `<td>${value(item.sku)}</td>` : ""}${columns.description ? `<td class="description">${productImage}${value(item.description)}</td>` : ""}${columns.quantity ? `<td class="numeric">${item.quantity}</td>` : ""}${columns.unit ? `<td class="center">${value(item.unit || "pcs")}</td>` : ""}${columns.unitPrice ? `<td class="numeric">${money(item.price, currency)}</td>` : ""}${columns.discount ? `<td class="numeric">${percent(discountRate)}%</td>` : ""}${columns.taxRate ? `<td class="numeric">${percent(taxRate)}%</td>` : ""}${columns.grossPrice ? `<td class="numeric">${money(salePrice, currency)}</td>` : ""}${columns.lineTotal ? `<td class="numeric"><strong>${money(lineTotal, currency)}</strong></td>` : ""}</tr>`;
+    return `<tr>${columns.rowNumber ? `<td class="number">${index + 1}</td>` : ""}${columns.sku ? `<td>${value(item.sku)}</td>` : ""}${columns.description ? `<td class="description">${productImage}${value(item.description)}</td>` : ""}${columns.quantity ? `<td class="numeric">${item.quantity}</td>` : ""}${columns.unit ? `<td class="center">${value(item.unit || "pcs")}</td>` : ""}${columns.unitPrice ? `<td class="numeric">${money(amountSign * item.price, currency)}</td>` : ""}${columns.discount ? `<td class="numeric">${percent(discountRate)}%</td>` : ""}${columns.taxRate ? `<td class="numeric">${percent(taxRate)}%</td>` : ""}${columns.grossPrice ? `<td class="numeric">${money(salePrice, currency)}</td>` : ""}${columns.lineTotal ? `<td class="numeric"><strong>${money(lineTotal, currency)}</strong></td>` : ""}</tr>`;
   };
   const header = `${columns.rowNumber ? `<th class="number">${labels.number}</th>` : ""}${columns.sku ? `<th>${labels.sku}</th>` : ""}${columns.description ? `<th class="description">${labels.description}</th>` : ""}${columns.quantity ? `<th>${labels.quantity}</th>` : ""}${columns.unit ? `<th>${labels.unit}</th>` : ""}${columns.unitPrice ? `<th>${labels.price}</th>` : ""}${columns.discount ? `<th>${labels.discount}</th>` : ""}${columns.taxRate ? `<th>${labels.tax}</th>` : ""}${columns.grossPrice ? `<th>${labels.salePrice}</th>` : ""}${columns.lineTotal ? `<th>${labels.lineTotal}</th>` : ""}`;
   const person = (title: string, name: string, address: string, contact: string, taxId = "") => { const albanian = data.details.language === "sq" || data.details.language === "al"; const fields = [[albanian ? "NUI:" : "Tax ID:", showFiscalIdentifiers ? taxId || data.client.taxId : ""], [albanian ? "Kontakt:" : "Contact:", contact], [albanian ? "Adresa:" : "Address:", address]].filter(([, field]) => Boolean(field)); return `<section class="person-block"><div class="person-title">${title}</div><div class="person-name">${value(name)}</div>${fields.length ? `<div class="person-grid">${fields.map(([label, field]) => `<span class="person-label">${label}</span><span>${value(field)}</span>`).join("")}</div>` : ""}</section>`; };
@@ -293,7 +410,22 @@ export function corporateInvoiceMarkup(data: InvoiceData): string {
     : "";
   const signWithStamp = (caption: string, image?: string) => `<div class="signature-cell"><div class="signature-line stamped-line">${image ? `<img src="${safeUrl(image)}" alt="${escapeHtml(caption)}"/>` : ""}${stamp}</div><div class="signature-caption">${caption}</div></div>`;
   const companyAddress = [data.company.address, data.company.city, data.company.country].filter(Boolean).join(", ");
-  return `<style>${style}</style><article class="operix-invoice"><header class="invoice-header"><div>${config.showLogo !== false && data.company.logoUrl ? `<img class="invoice-brand invoice-brand-logo" src="${safeUrl(data.company.logoUrl)}" alt="${value(data.company.name)}"/>` : `<div class="invoice-brand">${value(data.company.name || "OperiX")}</div>`}<div class="invoice-type">${escapeHtml(type)}: ${value(data.details.number)}</div></div><div class="invoice-balance">${qr ? `<img class="invoice-qr" src="${qr}" alt="Invoice QR code"/>` : ""}<div class="invoice-balance-label">${labels.remaining}</div><div class="invoice-balance-value">${money(paid ? 0 : due, currency)}</div><div class="invoice-status">${paid ? labels.paid : value(data.details.paymentMethod || "—")}</div></div></header><div class="invoice-people">${person(labels.billTo, data.client.name, clientAddress, data.client.email, data.client.taxId || data.client.nui)}${person(labels.shipTo, deliveryName, deliveryAddress, deliveryContact, data.client.vatNumber || data.client.fiscalNumber)}</div><div class="invoice-meta"><div class="meta-cell"><span class="meta-label">${labels.department}</span><span class="meta-value">${value(data.details.department)}</span></div><div class="meta-cell"><span class="meta-label">${labels.issue}</span><span class="meta-value">${date(data.details.issueDate)}</span></div><div class="meta-cell"><span class="meta-label">${labels.due}</span><span class="meta-value">${date(data.details.dueDate)}</span></div>${data.details.deliveryMethod ? `<div class="meta-cell"><span class="meta-label">${labels.deliveryMethod}</span><span class="meta-value">${value(data.details.deliveryMethod)}</span></div>` : ""}<div class="meta-cell"><span class="meta-label">${labels.reference}</span><span class="meta-value">${value(data.details.reference)}</span></div><div class="meta-cell"><span class="meta-label">${labels.yourReference}</span><span class="meta-value">${value(data.details.yourReference)}</span></div><div class="meta-cell"><span class="meta-label">${labels.terms}</span><span class="meta-value">${value(data.details.paymentTerms || "NET 10")}</span></div></div><table class="invoice-items"><thead><tr>${header}</tr></thead><tbody>${items.map(row).join("")}</tbody></table><div class="invoice-summary"><div class="invoice-note">${config.showNotes && (data.details.notes || data.details.terms) ? `<strong>${labels.terms}</strong><br/>${value(data.details.notes || data.details.terms)}` : ""}${paid && config.showStamp !== false ? `<div class="paid-stamp">${labels.paid}<small>${date(new Date().toISOString())}</small></div>` : ""}</div><table class="invoice-totals"><tr><td>${labels.beforeDiscount}:</td><td>${money(subtotal, currency)}</td></tr>${config.showDiscount !== false ? `<tr><td>${labels.discount}:</td><td>-${money(discount, currency)}</td></tr><tr><td>${labels.extraDiscount}:</td><td>${money(0, currency)}</td></tr>` : ""}<tr><td>${labels.beforeTax}:</td><td>${money(net, currency)}</td></tr>${config.showTax !== false ? `<tr><td>${labels.taxTotal}:</td><td>${money(tax, currency)}</td></tr>` : ""}<tr class="grand"><td>${labels.amountDue}:</td><td>${money(paid ? 0 : due, currency)}</td></tr></table></div><footer class="invoice-foot">${config.showSignature !== false || config.showBuyerSignature !== false || stamp ? `<div class="signature-grid">${config.showSignature !== false || stamp ? signWithStamp(labels.billedBy, config.showSignature !== false ? data.company.signatureUrl : undefined) : ""}${config.showSignature !== false ? sign(labels.sentBy) : ""}${config.showSignature !== false ? sign(labels.checkedBy) : ""}${config.showBuyerSignature !== false ? sign(labels.acceptedBy, data.details.buyerSignatureUrl) : ""}</div>` : ""}<div class="company-footer"><div>${config.showBankDetails !== false ? `<strong>${labels.bank}:</strong> ${value(data.company.bankName)}<br/><strong>IBAN:</strong> ${value(data.company.bankIban)}${showFiscalIdentifiers ? `<br/><strong>ID:</strong> ${value(data.company.taxId || data.company.businessId)}` : ""}` : ""}</div><div>${value(companyAddress)}<br/>${value(data.company.phone)}<br/>${value(data.company.website)}</div><div>${value(data.company.email)}<br/>${value(data.company.website)}<br/>© OperiX Invoice</div></div></footer></article>`;
+  const linkedDocumentMarkup = originalDocument
+    ? `<div class="meta-cell"><span class="meta-label">${albanian ? "Dokumenti origjinal" : "Original document"}</span><span class="meta-value">${value(originalDocument)}</span></div>`
+    : '';
+  const fiscalReferenceMarkup = commercialType === 'FISCAL_RECEIPT' && (data.details.fiscalNumber || data.details.vatReference)
+    ? `<div class="meta-cell"><span class="meta-label">${albanian ? "Referenca fiskale" : "Fiscal reference"}</span><span class="meta-value">${value(data.details.fiscalNumber || data.details.vatReference)}</span></div>`
+    : '';
+  const notesMarkup = config.showNotes && (data.details.notes || data.details.terms)
+    ? `<strong>${labels.terms}</strong><br/>${value(data.details.notes || data.details.terms)}`
+    : '';
+  const paidStampMarkup = paid && config.showStamp !== false
+    ? `<div class="paid-stamp">${labels.paid}<small>${date(new Date().toISOString())}</small></div>`
+    : '';
+  const signatureMarkup = config.showSignature !== false || config.showBuyerSignature !== false || stamp
+    ? `<div class="signature-grid">${config.showSignature !== false || stamp ? signWithStamp(labels.billedBy, config.showSignature !== false ? data.company.signatureUrl : undefined) : ""}${config.showSignature !== false ? sign(labels.sentBy) : ""}${config.showSignature !== false ? sign(labels.checkedBy) : ""}${config.showBuyerSignature !== false ? sign(acceptedLabel, data.details.buyerSignatureUrl) : ""}</div>`
+    : '';
+  return `<style>${style}</style><article class="operix-invoice"><header class="invoice-header"><div>${config.showLogo !== false && data.company.logoUrl ? `<img class="invoice-brand invoice-brand-logo" src="${safeUrl(data.company.logoUrl)}" alt="${value(data.company.name)}"/>` : `<div class="invoice-brand">${value(data.company.name || "OperiX")}</div>`}<div class="invoice-type">${escapeHtml(type)}: ${value(data.details.number)}</div></div><div class="invoice-balance">${qr ? `<img class="invoice-qr" src="${qr}" alt="Invoice QR code"/>` : ""}<div class="invoice-balance-label">${labels.remaining}</div><div class="invoice-balance-value">${money(paid ? 0 : due, currency)}</div><div class="invoice-status">${paid ? labels.paid : paymentMethodLabel}</div></div></header>${noticeMarkup}<div class="invoice-people">${person(labels.billTo, data.client.name, clientAddress, data.client.email, data.client.taxId || data.client.nui)}${person(labels.shipTo, deliveryName, deliveryAddress, deliveryContact, data.client.vatNumber || data.client.fiscalNumber)}</div><div class="invoice-meta"><div class="meta-cell"><span class="meta-label">${labels.department}</span><span class="meta-value">${value(data.details.department)}</span></div><div class="meta-cell"><span class="meta-label">${labels.issue}</span><span class="meta-value">${date(data.details.issueDate)}</span></div><div class="meta-cell"><span class="meta-label">${scheduleLabel}</span><span class="meta-value">${date(scheduleDate, albanian ? "Pa afat" : "No due date")}</span></div>${data.details.deliveryMethod ? `<div class="meta-cell"><span class="meta-label">${labels.deliveryMethod}</span><span class="meta-value">${value(data.details.deliveryMethod)}</span></div>` : ""}${linkedDocumentMarkup}${fiscalReferenceMarkup}<div class="meta-cell"><span class="meta-label">${labels.reference}</span><span class="meta-value">${value(data.details.reference)}</span></div><div class="meta-cell"><span class="meta-label">${labels.yourReference}</span><span class="meta-value">${value(data.details.yourReference)}</span></div><div class="meta-cell"><span class="meta-label">${labels.terms}</span><span class="meta-value">${value(data.details.paymentTerms || "NET 10")}</span></div></div><table class="invoice-items"><thead><tr>${header}</tr></thead><tbody>${items.map(row).join("")}</tbody></table><div class="invoice-summary"><div class="invoice-note">${notesMarkup}${paidStampMarkup}</div><table class="invoice-totals"><tr><td>${labels.beforeDiscount}:</td><td>${money(subtotal, currency)}</td></tr>${config.showDiscount !== false ? `<tr><td>${labels.discount}:</td><td>-${money(Math.abs(discount), currency)}</td></tr><tr><td>${labels.extraDiscount}:</td><td>${money(0, currency)}</td></tr>` : ""}<tr><td>${labels.beforeTax}:</td><td>${money(net, currency)}</td></tr>${config.showTax !== false ? `<tr><td>${labels.taxTotal}:</td><td>${money(tax, currency)}</td></tr>` : ""}<tr class="grand"><td>${escapeHtml(amountLabel)}:</td><td>${money(paid ? 0 : due, currency)}</td></tr></table></div><footer class="invoice-foot">${signatureMarkup}<div class="company-footer"><div>${config.showBankDetails !== false ? `<strong>${labels.bank}:</strong> ${value(data.company.bankName)}<br/><strong>IBAN:</strong> ${value(data.company.bankIban)}${showFiscalIdentifiers ? `<br/><strong>ID:</strong> ${value(data.company.taxId || data.company.businessId)}` : ""}` : ""}</div><div>${value(companyAddress)}<br/>${value(data.company.phone)}<br/>${value(data.company.website)}</div><div>${value(data.company.email)}<br/>${value(data.company.website)}<br/>© OperiX Invoice</div></div></footer></article>`;
 }
 
 /** Full HTML document used by native print/PDF services. */

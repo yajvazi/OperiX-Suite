@@ -2,3 +2,6 @@ export { clearLocalSupabaseSession, isStaleSupabaseSessionError, isSupabaseConfi
 export * from './domain';
 export * from './repositories';
 export * from './workspace';
+export * from './financial';
+export * from './expense-domain';
+export * from './data-transfer';

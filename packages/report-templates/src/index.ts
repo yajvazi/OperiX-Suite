@@ -7,6 +7,7 @@ export interface CustomerLedgerInvoice {
   status?: string | null;
   type?: string | null;
   subtype?: string | null;
+  commercial_document_type?: string | null;
   total_amount?: number | null;
   payment_method?: string | null;
   notes?: string | null;
@@ -160,14 +161,18 @@ export function buildCustomerLedger({
 }: BuildCustomerLedgerOptions): CustomerLedger {
   const invoiceEvents = invoices
     .filter((invoice) => invoiceIsPosted(invoice, includeDrafts))
-    .map((invoice) => ({
+    .map((invoice) => {
+      const documentType = String(invoice.commercial_document_type || invoice.subtype || invoice.type || '').toUpperCase();
+      const isCreditNote = documentType === 'CREDIT_NOTE';
+      const invoiceAmountCents = Math.abs(cents(invoice.total_amount));
+      return {
       id: invoice.id,
       kind: "invoice" as const,
       document: invoice.invoice_number,
       number: invoice.invoice_number,
       date: normalizedDate(invoice.issue_date),
       account: invoice.account_code || "—",
-      documentType: "Faturë",
+      documentType: isCreditNote ? "Notë Krediti" : "Faturë",
       previousDocument: invoice.previous_document || "—",
       linkedDocument: "—",
       supplierInvoice: "—",
@@ -179,11 +184,12 @@ export function buildCustomerLedger({
       organizationalUnit: invoice.organization_unit || organizationUnit,
       currency: invoice.currency || "EUR",
       user: invoice.created_by_name || userName,
-      debitCents: cents(invoice.total_amount),
-      creditCents: 0,
+      debitCents: isCreditNote ? 0 : invoiceAmountCents,
+      creditCents: isCreditNote ? invoiceAmountCents : 0,
       paymentCents: 0,
       createdAt: invoice.created_at || invoice.issue_date,
-    }));
+      };
+    });
 
   const paymentEvents = payments.map((payment) => ({
     id: payment.id,

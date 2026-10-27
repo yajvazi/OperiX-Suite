@@ -14,13 +14,12 @@
         "@invoice-monorepo/commercial-documents": "*",
         "@invoice-monorepo/money": "*",
         "@invoice-monorepo/types": "*",
-        "@react-native-async-storage/async-storage": "^2.2.0",
     "@supabase/supabase-js": "^2.89.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/domain.test.ts src/workspace.test.ts"
-  },
+    "test": "node --test src/domain.test.ts src/workspace.test.ts src/financial.test.ts src/expense-domain.test.ts src/data-transfer.test.ts"
+    },
     "peerDependencies": {
         "react": "*"
     }

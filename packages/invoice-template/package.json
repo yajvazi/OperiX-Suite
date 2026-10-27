@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@invoice-monorepo/commercial-documents": "*",
     "@invoice-monorepo/types": "*"
   }
 }

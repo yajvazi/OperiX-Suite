@@ -1,13 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Expo injects these browser-safe values from the app environment in native
-// builds. Keep a placeholder for local static previews, but never allow a
-// production export to quietly point authentication at it.
-const configuredSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() || '';
+// Native app workspaces declare AsyncStorage directly. Keeping it out of this
+// shared package's dependency graph prevents server-only consumers (including
+// the public API) from installing the React Native/Metro toolchain.
+// Expo injects these browser-safe values in native builds. Next injects the
+// equivalent NEXT_PUBLIC values in Web builds. Keep this shared client
+// constructible during SSR/static generation; the native app config performs
+// the hard production-environment validation before an Expo build starts.
+const configuredSupabaseUrl = (
+    process.env.EXPO_PUBLIC_SUPABASE_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_URL
+    || ''
+).trim();
 const configuredSupabaseKey = (
     process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
     || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     || ''
 ).trim();
 
@@ -19,14 +29,12 @@ export const isSupabaseConfigured = Boolean(
     && configuredSupabaseKey !== 'sb_publishable_...'
 );
 
-if (process.env.NODE_ENV === 'production' && !isSupabaseConfigured) {
-    throw new Error(
-        'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY for the mobile production build.'
-    );
-}
-
 export const supabaseUrl = configuredSupabaseUrl || 'http://127.0.0.1:54321';
 const supabaseAnonKey = configuredSupabaseKey || 'sb_publishable_placeholder';
+// The shared API package is imported by server-rendered Web routes as well as
+// the native app. AsyncStorage touches `window` while Supabase initializes, so
+// leave storage unset during SSR and let Supabase use its in-memory adapter.
+const authStorage = typeof window === 'undefined' ? undefined : AsyncStorage;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
@@ -34,7 +42,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: false,
         flowType: 'pkce',
-        storage: AsyncStorage,
+        ...(authStorage ? { storage: authStorage } : {}),
     },
 });
 

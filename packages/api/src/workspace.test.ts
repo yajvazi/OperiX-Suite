@@ -32,6 +32,8 @@ test('workspace resolution falls back to an active membership when the legacy pr
       const chain = () => query;
       query.select = chain;
       query.eq = chain;
+      query.in = chain;
+      query.is = chain;
       query.order = chain;
       query.limit = chain;
       query.maybeSingle = () => Promise.resolve(result);
@@ -47,4 +49,51 @@ test('workspace resolution falls back to an active membership when the legacy pr
   assert.equal(scope.companyId, 'company-a');
   assert.deepEqual(scope.companyIds, ['company-a']);
   assert.equal(scope.profile.company_id, 'company-a');
+});
+
+test('membership-only workspace resolution excludes unrelated companies even for platform admins', async () => {
+  const results: Record<string, { data: unknown; error: unknown }> = {
+    profiles: { data: { id: 'user-a', active_company_id: 'unrelated' }, error: null },
+    memberships: {
+      data: [
+        { company_id: 'company-a', role: 'owner', status: 'active' },
+        { company_id: 'unrelated', role: 'owner', status: 'revoked' },
+      ],
+      error: null,
+    },
+    companies: {
+      data: [
+        { id: 'company-a', company_name: 'Allowed Company', owner_id: 'user-a', parent_company_id: null },
+        { id: 'child', company_name: 'Allowed Zeta Child', owner_id: 'user-b', parent_company_id: 'company-a' },
+        { id: 'unrelated', company_name: 'Unrelated Company', owner_id: 'user-b', parent_company_id: null },
+      ],
+      error: null,
+    },
+  };
+  const client = {
+    from(table: string) {
+      const result = results[table] || { data: [], error: null };
+      const query: Record<string, unknown> = {};
+      const chain = () => query;
+      query.select = chain;
+      query.eq = chain;
+      query.in = chain;
+      query.is = chain;
+      query.order = chain;
+      query.limit = chain;
+      query.maybeSingle = () => Promise.resolve(result);
+      query.then = (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject);
+      return query;
+    },
+    rpc(name: string) {
+      return Promise.resolve(name === 'rbac_get_workspace_access'
+        ? { data: { permissions: [], scopes: {}, platform_admin: true, role_code: 'company_administrator' }, error: null }
+        : { data: 'company_administrator', error: null });
+    },
+  } as any;
+
+  const scope = await resolveWorkspace(client, 'user-a', { includeSensitiveFields: false, membershipOnly: true });
+  assert.equal(scope.companyId, 'company-a');
+  assert.deepEqual(scope.companies.map((company) => company.id), ['company-a', 'child']);
+  assert.deepEqual(scope.companyIds, ['company-a', 'child']);
 });

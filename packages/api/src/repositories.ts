@@ -11,7 +11,7 @@ import {
 } from './domain';
 import type { WorkspaceScope } from './workspace';
 import { scopedResource } from './workspace';
-import type { CompanyAgent, CompanyBankAccountShare, FundBalance, FundTransfer } from '@invoice-monorepo/types';
+import type { AgentAdvance, AgentSettlement, CompanyAgent, CompanyBankAccountShare, FundBalance, FundTransfer, PostCodSettlement, StripePayoutSettlement } from '@invoice-monorepo/types';
 
 export interface InvoiceRecord extends Record<string, unknown> {
   id: string;
@@ -31,6 +31,113 @@ export interface SavedInvoice {
   totals: InvoiceCalculationResult;
 }
 
+export interface BranchRecord {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  registered_address?: string | null;
+  municipality?: string | null;
+  is_head_office?: boolean;
+  is_active?: boolean;
+}
+
+export interface ProductBranchStockRecord {
+  id: string;
+  company_id: string;
+  branch_id: string;
+  product_id: string;
+  stock_quantity: number | string;
+  low_stock_threshold: number | string;
+}
+
+export async function listBranches(client: SupabaseClient, companyId: string) {
+  return unwrap<BranchRecord[]>(client.from('branches')
+    .select('id,company_id,code,name,registered_address,municipality,is_head_office,is_active')
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+    .order('name'));
+}
+
+export async function getPreferredBranchId(client: SupabaseClient, userId: string, companyId: string) {
+  const row = await unwrap<{ preferred_branch_id: string | null } | null>(client.from('company_user_preferences')
+    .select('preferred_branch_id')
+    .eq('user_id', userId)
+    .eq('company_id', companyId)
+    .maybeSingle());
+  return row?.preferred_branch_id || null;
+}
+
+export async function setPreferredBranch(client: SupabaseClient, companyId: string, branchId: string | null) {
+  return unwrap<Row>(client.rpc('set_preferred_branch', { p_company_id: companyId, p_branch_id: branchId }));
+}
+
+export async function listProductBranchStock(client: SupabaseClient, companyId: string, branchId?: string | null, productIds?: readonly string[]) {
+  let request = client.from('product_branch_stock').select('id,company_id,branch_id,product_id,stock_quantity,low_stock_threshold').eq('company_id', companyId);
+  if (branchId) request = request.eq('branch_id', branchId);
+  if (productIds?.length) request = request.in('product_id', [...productIds]);
+  return unwrap<ProductBranchStockRecord[]>(request);
+}
+
+export async function saveProductBranchStock(client: SupabaseClient, input: { companyId: string; productId: string; branchId: string; stockQuantity: number | string; lowStockThreshold?: number | string }) {
+  const { data, error } = await client.rpc('set_product_branch_stock', {
+    p_company_id: input.companyId,
+    p_product_id: input.productId,
+    p_branch_id: input.branchId,
+    p_stock_quantity: input.stockQuantity,
+    p_low_stock_threshold: input.lowStockThreshold ?? 5,
+  });
+
+  // Keep product creation/editing compatible while an environment is still
+  // running before the branch-scoped inventory migration. The legacy
+  // products.stock_quantity value has already been saved by this point, so a
+  // missing RPC must not make the whole product save appear to fail.
+  if (error?.code === 'PGRST202') return null;
+  if (error) throw error;
+  return data as ProductBranchStockRecord;
+}
+
+export async function setInvoiceBranch(client: SupabaseClient, invoiceId: string, branchId: string | null) {
+  return unwrap<InvoiceRecord | null>(client.rpc('set_invoice_operating_branch', {
+    p_invoice_id: invoiceId,
+    p_branch_id: branchId,
+  }));
+}
+
+export interface BranchStockTransferResult {
+  transfer_id: string;
+  product_id: string;
+  from_branch_id: string;
+  to_branch_id: string;
+  quantity: number | string;
+  source_stock: number | string;
+  destination_stock: number | string;
+  note?: string | null;
+}
+
+export async function transferProductBranchStock(
+  client: SupabaseClient,
+  input: {
+    companyId: string;
+    productId: string;
+    fromBranchId: string;
+    toBranchId: string;
+    quantity: number | string;
+    transferId?: string | null;
+    note?: string | null;
+  },
+) {
+  return unwrap<BranchStockTransferResult>(client.rpc('transfer_product_branch_stock', {
+    p_company_id: input.companyId,
+    p_product_id: input.productId,
+    p_from_branch_id: input.fromBranchId,
+    p_to_branch_id: input.toBranchId,
+    p_quantity: input.quantity,
+    p_transfer_id: input.transferId || null,
+    p_note: input.note || null,
+  }));
+}
+
 export interface PaymentDraftInput {
   userId: string;
   companyId: string;
@@ -39,9 +146,12 @@ export interface PaymentDraftInput {
   paymentNumber?: string | null;
   amount: number | string;
   paymentDate: string;
-  paymentMethod: 'cash' | 'bank' | 'card';
+  paymentMethod: 'cash' | 'bank' | 'bank_transfer' | 'card' | 'online_payment' | 'cheque' | 'other';
   bankReference?: string | null;
   companyBankAccountId?: string | null;
+  fundAccountId?: string | null;
+  payerName?: string | null;
+  attachmentId?: string | null;
   notes?: string | null;
   existingPaymentId?: string | null;
   currency?: string;
@@ -67,6 +177,7 @@ export interface PosSaleLineInput {
 export interface PosSaleInput {
   userId: string;
   companyId: string;
+  branchId?: string | null;
   terminalId?: string | null;
   customerId?: string | null;
   lines: readonly PosSaleLineInput[];
@@ -225,6 +336,9 @@ export async function saveInvoiceDocument(client: SupabaseClient, options: SaveI
     return { invoice: asInvoiceRecord(Array.isArray(stockResult) ? stockResult[0] : stockResult), totals };
   }
 
+  const saveRpc = draft.externalReference !== undefined
+    ? 'save_invoice_document_with_external_reference'
+    : 'save_invoice_document';
   const saved = options.replacePostedInvoice && existingInvoiceId
     ? await unwrap<unknown>(client.rpc('replace_posted_invoice_document', {
       p_invoice: persistence.invoice,
@@ -232,7 +346,7 @@ export async function saveInvoiceDocument(client: SupabaseClient, options: SaveI
       p_invoice_id: existingInvoiceId,
       p_idempotency_key: idempotencyKey,
     }))
-    : await unwrap<unknown>(client.rpc('save_invoice_document', {
+    : await unwrap<unknown>(client.rpc(saveRpc, {
       p_invoice: persistence.invoice,
       p_items: persistence.items,
       p_invoice_id: existingInvoiceId,
@@ -240,6 +354,17 @@ export async function saveInvoiceDocument(client: SupabaseClient, options: SaveI
       p_idempotency_key: idempotencyKey,
     }));
   return { invoice: asInvoiceRecord(Array.isArray(saved) ? saved[0] : saved), totals };
+}
+
+export async function postCreditNote(
+  client: SupabaseClient,
+  invoiceId: string,
+  reason = 'Customer product return',
+) {
+  return unwrap<Row>(client.rpc('post_credit_note', {
+    p_invoice_id: invoiceId,
+    p_reason: reason,
+  }));
 }
 
 export async function setInvoiceDeliveryMethod(
@@ -260,6 +385,7 @@ export async function setInvoiceDeliveryDetails(
     deliveryMethod: string | null;
     pickupBranchId?: string | null;
     deliveryDetails?: string | null;
+    postCod?: boolean;
   },
 ): Promise<InvoiceRecord | null> {
   return unwrap<InvoiceRecord | null>(client.rpc('set_invoice_delivery_details', {
@@ -267,6 +393,7 @@ export async function setInvoiceDeliveryDetails(
     p_delivery_method: input.deliveryMethod,
     p_pickup_branch_id: input.pickupBranchId || null,
     p_delivery_details: input.deliveryDetails || null,
+    p_post_cod: Boolean(input.postCod),
   }));
 }
 
@@ -381,6 +508,7 @@ export async function completePosSale(client: SupabaseClient, input: PosSaleInpu
   const draft: InvoiceDraftInput = {
     userId: input.userId,
     companyId: input.companyId,
+    branchId: input.branchId || null,
     clientId: customerId,
     invoiceNumber: null,
     issueDate: new Date().toISOString().slice(0, 10),
@@ -459,24 +587,30 @@ export async function listInvoicePayments(
   client: SupabaseClient,
   scope: { userId: string; companyIds: readonly string[] },
   invoiceId: string,
+  options?: { limit?: number },
 ) {
   const paymentSelect = 'id,payment_number,amount,payment_date,payment_method,bank_reference,created_at';
+  const queryLimit = options?.limit ? options.limit + 1 : undefined;
+  let directQuery = client.from('payments')
+    .select(paymentSelect)
+    .eq('invoice_id', invoiceId)
+    .or(scopedResource(scope.userId, scope.companyIds))
+    .order('payment_date', { ascending: false });
+  if (queryLimit) directQuery = directQuery.limit(queryLimit);
+  let allocationQuery = client.from('payment_allocations')
+    .select('payment_id,allocated_amount,allocation_date')
+    .eq('invoice_id', invoiceId)
+    .eq('status', 'active')
+    .in('company_id', scope.companyIds)
+    .order('allocation_date', { ascending: false });
+  if (queryLimit) allocationQuery = allocationQuery.limit(queryLimit);
   const [directPayments, allocationRows] = await Promise.all([
-    unwrap<Row[]>(client.from('payments')
-      .select(paymentSelect)
-      .eq('invoice_id', invoiceId)
-      .or(scopedResource(scope.userId, scope.companyIds))
-      .order('payment_date', { ascending: false })),
-    unwrap<Array<{ payment_id: string; allocated_amount: number | string; allocation_date: string }>>(client.from('payment_allocations')
-      .select('payment_id,allocated_amount,allocation_date')
-      .eq('invoice_id', invoiceId)
-      .eq('status', 'active')
-      .in('company_id', scope.companyIds)
-      .order('allocation_date', { ascending: false })),
+    unwrap<Row[]>(directQuery),
+    unwrap<Array<{ payment_id: string; allocated_amount: number | string; allocation_date: string }>>(allocationQuery),
   ]);
 
   const allocationPaymentIds = [...new Set(allocationRows.map((row) => String(row.payment_id)))];
-  if (!allocationPaymentIds.length) return directPayments;
+  if (!allocationPaymentIds.length) return options?.limit ? directPayments.slice(0, options.limit + 1) : directPayments;
 
   const allocationPayments = await unwrap<Row[]>(client.from('payments')
     .select(paymentSelect)
@@ -494,35 +628,42 @@ export async function listInvoicePayments(
     }];
   });
   const directPaymentIds = new Set(allocationPaymentIds);
-  return [...allocatedPayments, ...directPayments.filter((payment) => !directPaymentIds.has(String(payment.id)))].sort((left, right) =>
+  const rows = [...allocatedPayments, ...directPayments.filter((payment) => !directPaymentIds.has(String(payment.id)))].sort((left, right) =>
     String(right.payment_date || right.created_at || '').localeCompare(String(left.payment_date || left.created_at || '')),
   );
+  return options?.limit ? rows.slice(0, options.limit + 1) : rows;
 }
 
 export async function listCustomerPayments(
   client: SupabaseClient,
   scope: { userId: string; companyIds: readonly string[] },
   customerId: string,
+  options?: { limit?: number },
 ) {
+  const queryLimit = options?.limit ? options.limit + 1 : undefined;
+  let directQuery = client.from('payments')
+    .select('id,payment_number,amount,payment_date,created_at,payment_method,bank_reference,notes,invoice_id')
+    .eq('client_id', customerId)
+    .or(scopedResource(scope.userId, scope.companyIds))
+    .order('payment_date', { ascending: false });
+  if (queryLimit) directQuery = directQuery.limit(queryLimit);
   const [directPayments, customerInvoices] = await Promise.all([
-    unwrap<Row[]>(client.from('payments')
-      .select('id,payment_number,amount,payment_date,created_at,payment_method,bank_reference,notes,invoice_id')
-      .eq('client_id', customerId)
-      .or(scopedResource(scope.userId, scope.companyIds))
-      .order('payment_date', { ascending: false })),
+    unwrap<Row[]>(directQuery),
     listCustomerInvoices(client, scope, customerId),
   ]);
   const invoiceIds = customerInvoices.map((invoice) => String(invoice.id));
-  if (!invoiceIds.length) return directPayments.slice(0, 50);
+  if (!invoiceIds.length) return options?.limit ? directPayments.slice(0, options.limit + 1) : directPayments.slice(0, 50);
 
-  const allocationRows = await unwrap<Array<{ payment_id: string; invoice_id: string; allocated_amount: number | string; allocation_date: string }>>(client.from('payment_allocations')
+  let allocationQuery = client.from('payment_allocations')
     .select('payment_id,invoice_id,allocated_amount,allocation_date')
     .in('invoice_id', invoiceIds)
     .eq('status', 'active')
     .in('company_id', scope.companyIds)
-    .order('allocation_date', { ascending: false }));
+    .order('allocation_date', { ascending: false });
+  if (queryLimit) allocationQuery = allocationQuery.limit(queryLimit);
+  const allocationRows = await unwrap<Array<{ payment_id: string; invoice_id: string; allocated_amount: number | string; allocation_date: string }>>(allocationQuery);
   const allocationPaymentIds = [...new Set(allocationRows.map((row) => String(row.payment_id)))];
-  if (!allocationPaymentIds.length) return directPayments.slice(0, 50);
+  if (!allocationPaymentIds.length) return options?.limit ? directPayments.slice(0, options.limit + 1) : directPayments.slice(0, 50);
 
   const allocationPayments = await unwrap<Row[]>(client.from('payments')
     .select('id,payment_number,amount,payment_date,created_at,payment_method,bank_reference,notes,invoice_id')
@@ -543,9 +684,9 @@ export async function listCustomerPayments(
     }];
   });
   const allocatedPaymentIds = new Set(allocationPaymentIds);
-  return [...allocatedPayments, ...directPayments.filter((payment) => !allocatedPaymentIds.has(String(payment.id)))]
+  const rows = [...allocatedPayments, ...directPayments.filter((payment) => !allocatedPaymentIds.has(String(payment.id)))]
     .sort((left, right) => String(right.payment_date || right.created_at || '').localeCompare(String(left.payment_date || left.created_at || '')))
-    .slice(0, 50);
+  return options?.limit ? rows.slice(0, options.limit + 1) : rows.slice(0, 50);
 }
 
 export async function listCustomerInvoices(
@@ -824,7 +965,7 @@ export async function listFundBalances(client: SupabaseClient, companyIds: strin
   const ids = Array.isArray(companyIds) ? companyIds : [companyIds];
   if (ids.length === 0) return [];
   const rows = await unwrap<FundBalance[]>(client.from('operix_fund_balances')
-    .select('id,company_id,owner_company_id,fund_type,company_bank_account_id,stripe_store_id,name,currency,opening_balance,transaction_total,balance,provider_available_balance,provider_pending_balance,provider_balance_as_of,is_active,is_shared')
+    .select('id,company_id,owner_company_id,fund_type,company_bank_account_id,stripe_store_id,name,currency,opening_balance,transaction_total,balance,pending_balance,available_balance,provider_available_balance,provider_pending_balance,provider_balance_as_of,is_active,is_shared')
     .in('company_id', ids)
     .eq('is_active', true)
     .order('fund_type')
@@ -869,6 +1010,99 @@ export async function createFundTransfer(
   }));
 }
 
+export async function createAgentSettlement(
+  client: SupabaseClient,
+  input: {
+    companyId: string;
+    agentUserId: string;
+    fundAccountId: string;
+    amount: number | string;
+    settlementDate: string;
+    description?: string | null;
+    idempotencyKey?: string | null;
+  },
+): Promise<AgentSettlement> {
+  return unwrap<AgentSettlement>(client.rpc('create_agent_settlement', {
+    p_company_id: input.companyId,
+    p_agent_user_id: input.agentUserId,
+    p_fund_account_id: input.fundAccountId,
+    p_amount: Number(input.amount),
+    p_settlement_date: input.settlementDate,
+    p_description: input.description || null,
+    p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+  }));
+}
+
+export async function createAgentAdvance(
+  client: SupabaseClient,
+  input: {
+    companyId: string;
+    agentUserId: string;
+    fundAccountId: string;
+    amount: number | string;
+    advanceDate: string;
+    description?: string | null;
+    idempotencyKey?: string | null;
+  },
+): Promise<AgentAdvance> {
+  return unwrap<AgentAdvance>(client.rpc('create_agent_advance', {
+    p_company_id: input.companyId,
+    p_agent_user_id: input.agentUserId,
+    p_fund_account_id: input.fundAccountId,
+    p_amount: Number(input.amount),
+    p_advance_date: input.advanceDate,
+    p_description: input.description || null,
+    p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+  }));
+}
+
+
+export async function createPostCodSettlement(
+  client: SupabaseClient,
+  input: {
+    companyId: string;
+    fundAccountId: string;
+    amount: number | string;
+    settlementDate: string;
+    description?: string | null;
+    idempotencyKey?: string | null;
+  },
+): Promise<PostCodSettlement> {
+  return unwrap<PostCodSettlement>(client.rpc('create_post_cod_settlement', {
+    p_company_id: input.companyId,
+    p_fund_account_id: input.fundAccountId,
+    p_amount: Number(input.amount),
+    p_settlement_date: input.settlementDate,
+    p_description: input.description || null,
+    p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+  }));
+}
+
+export async function createStripePayoutSettlement(
+  client: SupabaseClient,
+  input: {
+    companyId: string;
+    stripeFundAccountId: string;
+    bankFundAccountId: string;
+    payoutAmount: number | string;
+    bankFee?: number | string;
+    settlementDate: string;
+    description?: string | null;
+    idempotencyKey?: string | null;
+  },
+): Promise<StripePayoutSettlement> {
+  return unwrap<StripePayoutSettlement>(client.rpc('create_stripe_payout_settlement', {
+    p_company_id: input.companyId,
+    p_stripe_fund_account_id: input.stripeFundAccountId,
+    p_bank_fund_account_id: input.bankFundAccountId,
+    p_payout_amount: Number(input.payoutAmount),
+    p_bank_fee: Number(input.bankFee || 0),
+    p_settlement_date: input.settlementDate,
+    p_description: input.description || null,
+    p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+  }));
+}
+
 export async function listExpenses(client: SupabaseClient, scope: { userId: string; companyIds: readonly string[] }) {
   return unwrap<Row[]>(client.from('expenses').select('*').or(scopedResource(scope.userId, scope.companyIds)).order('date', { ascending: false }));
 }
@@ -884,7 +1118,7 @@ export async function saveExpense(
   options: SaveExpenseOptions = {},
 ) {
   if (existingId && options.correctPostedExpense) {
-    return unwrap<Row>(client.rpc('correct_expense', {
+    const correctionParams = {
       p_expense_id: existingId,
       p_amount: Number(input.amount),
       p_category: input.category == null ? null : String(input.category),
@@ -900,7 +1134,19 @@ export async function saveExpense(
       p_company_bank_account_id: input.company_bank_account_id == null ? null : String(input.company_bank_account_id),
       p_correction_id: options.idempotencyKey || generatedIdempotencyKey(),
       p_reason: 'Expense edited',
-    }));
+    };
+    const hasVatDetails = 'vat_rate' in input || 'tax_amount' in input || 'article' in input || 'vendor_id' in input;
+    if (hasVatDetails) {
+      return unwrap<Row>(client.rpc('correct_expense_with_vat', {
+        ...correctionParams,
+        p_article: input.article == null ? null : String(input.article),
+        p_vendor_id: input.vendor_id == null ? null : String(input.vendor_id),
+        p_vat_rate: Number(input.vat_rate || 0),
+        p_tax_amount: Number(input.tax_amount || 0),
+        p_tax_recoverable_amount: Number(input.tax_recoverable_amount ?? input.tax_amount ?? 0),
+      }));
+    }
+    return unwrap<Row>(client.rpc('correct_expense', correctionParams));
   }
 
   const request = existingId
@@ -918,16 +1164,128 @@ export async function saveExpense(
 }
 
 export async function deleteExpense(client: SupabaseClient, expenseId: string, companyId: string, userId?: string) {
-  void companyId;
-  void userId;
+  if (!userId) throw new Error('An authenticated user is required to delete an expense.');
+  const existing = await getExpense(client, expenseId, { userId, companyIds: [companyId] });
+  if (!existing || String(existing.company_id || '') !== companyId) {
+    throw new Error('The expense is not available in this workspace.');
+  }
   await unwrap<unknown>(client.rpc('delete_expense', { p_expense_id: expenseId }));
 }
 
-export async function listPayments(client: SupabaseClient, scope: { userId: string; companyIds: readonly string[] }) {
-  return unwrap<Row[]>(client.from('payments').select('*, client:clients(*), invoice:invoices(*)')
+/** Records through the existing supplier-payment journal, then allocates the
+ * posted payment to an expense. This is deliberately not a second payment
+ * engine. */
+export async function recordExpensePayment(
+  client: SupabaseClient,
+  input: { companyId: string; supplierId: string; expenseId: string; paymentDate: string; amount: string | number; paymentMethod: string; settlementAccountId: string; reference?: string | null; notes?: string | null; bankAccountId?: string | null },
+) {
+  const amount = String(input.amount);
+  const payment = await unwrap<Row>(input.bankAccountId
+    ? client.rpc('record_supplier_payment_with_bank_account', {
+      p_company_id: input.companyId, p_supplier_id: input.supplierId, p_payment_date: input.paymentDate, p_amount: amount,
+      p_payment_method: input.paymentMethod, p_settlement_account_id: input.settlementAccountId, p_reference: input.reference || null,
+      p_notes: input.notes || null, p_branch_id: null, p_currency: 'EUR', p_idempotency_key: generatedIdempotencyKey(), p_company_bank_account_id: input.bankAccountId,
+    })
+    : client.rpc('record_supplier_payment', {
+      p_company_id: input.companyId, p_supplier_id: input.supplierId, p_payment_date: input.paymentDate, p_amount: amount,
+      p_payment_method: input.paymentMethod, p_settlement_account_id: input.settlementAccountId, p_reference: input.reference || null,
+      p_notes: input.notes || null, p_branch_id: null, p_currency: 'EUR', p_idempotency_key: generatedIdempotencyKey(),
+    }));
+  const allocation = await unwrap<Row>(client.rpc('allocate_expense_payment', { p_expense_id: input.expenseId, p_vendor_payment_id: payment.id, p_amount: amount, p_allocation_date: input.paymentDate }));
+  return { payment, allocation };
+}
+
+export async function listExpenseAttachments(client: SupabaseClient, expenseId: string, companyIds: readonly string[]) {
+  return unwrap<Row[]>(client.from('financial_document_attachments').select('*').eq('document_type', 'expense').eq('document_id', expenseId).in('company_id', companyIds).is('deleted_at', null).order('uploaded_at', { ascending: false }));
+}
+
+export async function createExpenseAttachmentUrl(client: SupabaseClient, attachment: { storage_bucket: string; storage_path: string }, expiresIn = 600) {
+  const result = await client.storage.from(attachment.storage_bucket).createSignedUrl(attachment.storage_path, expiresIn);
+  if (result.error) throw result.error;
+  return result.data.signedUrl;
+}
+
+export async function listPayments(
+  client: SupabaseClient,
+  scope: { userId: string; companyIds: readonly string[] },
+  options?: { limit?: number; customerId?: string; invoiceId?: string; externalReference?: string; createdBefore?: string; createdAfter?: string },
+) {
+  let request = client.from('payments').select('*, client:clients(*), invoice:invoices(*)')
     .or(scopedResource(scope.userId, scope.companyIds))
     .neq('accounting_state', 'reversed')
-    .order('payment_date', { ascending: false }));
+    .order(options?.limit ? 'created_at' : 'payment_date', { ascending: false });
+  if (options?.limit) request = request.limit(options.limit + 1);
+  if (options?.customerId) request = request.eq('client_id', options.customerId);
+  if (options?.invoiceId) request = request.eq('invoice_id', options.invoiceId);
+  if (options?.externalReference) request = request.eq('bank_reference', options.externalReference);
+  if (options?.createdBefore) request = request.lt('created_at', options.createdBefore);
+  if (options?.createdAfter) request = request.gte('created_at', options.createdAfter);
+  return unwrap<Row[]>(request);
+}
+
+export async function listFinancialAccountBalances(client: SupabaseClient, scope: { userId: string; companyIds: readonly string[] }) {
+  return unwrap<Row[]>(client.from('operix_financial_account_balances').select('*').in('company_id', scope.companyIds).order('account_type').order('name'));
+}
+
+export async function listFinancialAccountTransactions(client: SupabaseClient, scope: { userId: string; companyIds: readonly string[] }, accountId?: string | null) {
+  let request = client.from('operix_financial_account_transactions').select('*').in('company_id', scope.companyIds).order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+  if (accountId) request = request.eq('fund_account_id', accountId);
+  return unwrap<Row[]>(request);
+}
+
+export async function listOtherIncomeCategories(client: SupabaseClient, companyId?: string | null) {
+  let request = client.from('other_income_categories').select('*').eq('active', true).order('name_en');
+  if (companyId) request = request.or(`company_id.is.null,company_id.eq.${companyId}`);
+  else request = request.is('company_id', null);
+  return unwrap<Row[]>(request);
+}
+
+export interface OtherIncomeDraftInput {
+  companyId: string;
+  categoryId: string;
+  incomeDate: string;
+  payerSource?: string | null;
+  description: string;
+  currency?: string;
+  netAmount: number | string;
+  vatAmount?: number | string;
+  taxTreatment?: string;
+  paymentMethod: 'cash' | 'bank' | 'bank_transfer' | 'card' | 'online_payment' | 'cheque' | 'other';
+  fundAccountId: string;
+  reference?: string | null;
+  notes?: string | null;
+  attachmentId?: string | null;
+  idempotencyKey?: string | null;
+}
+
+export async function listOtherIncome(client: SupabaseClient, scope: { userId: string; companyIds: readonly string[] }) {
+  return unwrap<Row[]>(client.from('other_income').select('*, category:other_income_categories(*)').in('company_id', scope.companyIds).order('income_date', { ascending: false }));
+}
+
+export async function saveOtherIncome(client: SupabaseClient, input: OtherIncomeDraftInput) {
+  const netAmount = Number(input.netAmount);
+  const vatAmount = Number(input.vatAmount || 0);
+  if (!Number.isFinite(netAmount) || netAmount <= 0) throw new Error('Other income net amount must be greater than zero.');
+  if (!Number.isFinite(vatAmount) || vatAmount < 0) throw new Error('Other income VAT amount must be zero or greater.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.incomeDate)) throw new Error('Income date must be an ISO date.');
+  if (!input.description.trim()) throw new Error('Other income description is required.');
+  return unwrap<Row>(client.rpc('record_other_income', {
+    p_company_id: input.companyId,
+    p_category_id: input.categoryId,
+    p_income_date: input.incomeDate,
+    p_payer_source: input.payerSource || null,
+    p_description: input.description.trim(),
+    p_currency: (input.currency || 'EUR').toUpperCase(),
+    p_net_amount: netAmount,
+    p_vat_amount: vatAmount,
+    p_tax_treatment: input.taxTreatment || 'review_required',
+    p_payment_method: input.paymentMethod,
+    p_fund_account_id: input.fundAccountId,
+    p_reference: input.reference || null,
+    p_notes: input.notes || null,
+    p_attachment_id: input.attachmentId || null,
+    p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+  }));
 }
 
 export async function getPayment(client: SupabaseClient, paymentId: string, scope: { userId: string; companyIds: readonly string[] }) {
@@ -954,8 +1312,8 @@ export async function saveCustomerPayment(client: SupabaseClient, input: Payment
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) throw new Error('Payment date must be an ISO date.');
 
   const settlementCode = input.paymentMethod === 'cash' ? '1010' : '1020';
-  const selectedBankAccountId = input.paymentMethod === 'bank' ? input.companyBankAccountId || null : null;
-  if (input.paymentMethod === 'bank' && !selectedBankAccountId) {
+  const selectedBankAccountId = ['bank', 'bank_transfer'].includes(input.paymentMethod) ? input.companyBankAccountId || null : null;
+  if (['bank', 'bank_transfer'].includes(input.paymentMethod) && !selectedBankAccountId && !input.fundAccountId) {
     throw new Error('A bank account must be selected for a bank payment.');
   }
   let settlementAccount = await unwrap<Row | null>(client.from('chart_of_accounts').select('id').eq('company_id', input.companyId).eq('code', settlementCode).maybeSingle());
@@ -979,6 +1337,42 @@ export async function saveCustomerPayment(client: SupabaseClient, input: Payment
     }
   }
   if (!settlementAccount?.id) throw new Error(`Settlement account ${settlementCode} is not configured.`);
+
+  // New financial accounts support cash, bank, card-clearing, online-clearing,
+  // cheque, and other receipts. The server command still delegates invoice
+  // settlement to allocate_customer_payment, so revenue is not rewritten.
+  if (input.fundAccountId && !input.existingPaymentId) {
+    const payment = await unwrap<Row>(client.rpc('record_customer_payment_financial', {
+      p_company_id: input.companyId,
+      p_customer_id: input.customerId,
+      p_payment_date: input.paymentDate,
+      p_amount: amount,
+      p_payment_method: input.paymentMethod,
+      p_fund_account_id: input.fundAccountId,
+      p_reference: input.bankReference || null,
+      p_notes: input.notes || null,
+      p_payer_name: input.payerName || null,
+      p_currency: (input.currency || 'EUR').toUpperCase(),
+      p_idempotency_key: input.idempotencyKey || generatedIdempotencyKey(),
+      p_attachment_id: input.attachmentId || null,
+    }));
+    let allocation: Record<string, unknown> | null = null;
+    let allocationError: PostgrestError | null = null;
+    if (input.invoiceId && payment.id) {
+      const existingAllocation = await unwrap<Record<string, unknown> | null>(client.from('payment_allocations')
+        .select('*').eq('payment_id', payment.id).eq('invoice_id', input.invoiceId).eq('status', 'active').maybeSingle());
+      if (existingAllocation) return { payment, allocation: existingAllocation, allocationError: null };
+      const result = await client.rpc('allocate_customer_payment', {
+        p_payment_id: payment.id,
+        p_invoice_id: input.invoiceId,
+        p_amount: amount,
+        p_allocation_date: input.paymentDate,
+      });
+      allocationError = result.error;
+      allocation = result.data as Record<string, unknown> | null;
+    }
+    return { payment, allocation, allocationError };
+  }
 
   if (input.existingPaymentId) {
     const payment = await unwrap<Row>(client.rpc('update_customer_payment_with_bank_account', {

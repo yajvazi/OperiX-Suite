@@ -10,10 +10,20 @@ interface AuthContextType {
     user: User | null;
     session: Session | null;
     loading: boolean;
+    isOnboarding: boolean;
+    beginOnboarding: () => void;
     signUp: (email: string, password: string, options?: { data: any }) => Promise<{ error: Error | null }>;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signInWithGoogle: () => Promise<{ error: Error | null }>;
     verifyEmailOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+    completeSignup: (input: {
+        tenantName: string;
+        firstName: string;
+        lastName: string;
+        phone: string;
+        taxId: string;
+    }) => Promise<{ companyId: string | null; error: Error | null }>;
+    deleteAccount: () => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
 }
 
@@ -31,6 +41,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isOnboarding, setIsOnboarding] = useState(false);
 
     useEffect(() => {
         let mounted = true;
@@ -130,6 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             email,
             password,
         });
+        if (!error) setIsOnboarding(false);
         return { error: error as Error | null };
     };
 
@@ -164,6 +176,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
                 if (sessionError) throw sessionError;
             }
+            setIsOnboarding(false);
             return { error: null };
         } catch (error) {
             console.error('Google Sign-In Error:', error);
@@ -176,15 +189,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { error } = await supabase.auth.verifyOtp({
             email,
             token,
-            type: 'signup',
+            type: 'email',
         });
         return { error: error as Error | null };
+    };
+
+    const beginOnboarding = () => {
+        setIsOnboarding(true);
+    };
+
+    const completeSignup = async (input: {
+        tenantName: string;
+        firstName: string;
+        lastName: string;
+        phone: string;
+        taxId: string;
+    }) => {
+        if (!isSupabaseConfigured) return { companyId: null, error: missingSupabaseConfiguration() };
+
+        const { data, error } = await supabase.rpc('complete_signup_onboarding', {
+            p_tenant_name: input.tenantName,
+            p_first_name: input.firstName,
+            p_last_name: input.lastName,
+            p_phone: input.phone,
+            p_tax_id: input.taxId,
+        });
+
+        if (error) return { companyId: null, error: error as Error };
+
+        const companyId = data && typeof data === 'object' && 'id' in data ? String((data as { id: unknown }).id) : null;
+        if (!companyId) return { companyId: null, error: new Error('Workspace creation did not return a company.') };
+
+        setIsOnboarding(false);
+        return { companyId, error: null };
     };
 
     const signOut = async () => {
         await clearLocalSupabaseSession();
         setSession(null);
         setUser(null);
+        setIsOnboarding(false);
+    };
+
+    const deleteAccount = async () => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
+
+        const { error } = await supabase.rpc('delete_my_account');
+        if (error) return { error: error as Error };
+
+        await clearLocalSupabaseSession();
+        setSession(null);
+        setUser(null);
+        setIsOnboarding(false);
+        return { error: null };
     };
 
     return (
@@ -193,10 +250,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 user,
                 session,
                 loading,
+                isOnboarding,
+                beginOnboarding,
                 signUp,
                 signIn,
                 signInWithGoogle,
                 verifyEmailOtp,
+                completeSignup,
+                deleteAccount,
                 signOut,
             }}
         >

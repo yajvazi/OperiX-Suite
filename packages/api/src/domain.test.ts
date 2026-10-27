@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calculateInvoice } from '@invoice-monorepo/money';
-import { buildInvoicePersistencePayload, DomainValidationError, type InvoiceDraftInput } from './domain.ts';
+import { buildInvoicePersistencePayload, DomainValidationError, isCashPaymentAllowed, type InvoiceDraftInput } from './domain.ts';
 
 function invoiceDraft(overrides: Partial<InvoiceDraftInput> = {}): InvoiceDraftInput {
   return {
@@ -95,5 +95,17 @@ test('rejects decimal discount percentages', () => {
   assert.throws(
     () => buildInvoicePersistencePayload(documentDiscount, calculateInvoice({ lines: documentDiscount.lines }), 'FAT-2026-0006'),
     (error: unknown) => error instanceof DomainValidationError && error.field === 'documentDiscountPercent',
+  );
+});
+
+test('shares the strict cash threshold used by Web and Mobile', () => {
+  assert.equal(isCashPaymentAllowed('299.99'), true);
+  assert.equal(isCashPaymentAllowed('300.00'), false);
+  assert.equal(isCashPaymentAllowed(300), false);
+
+  const input = invoiceDraft({ paymentMethod: 'cash', amountReceived: '300.00' });
+  assert.throws(
+    () => buildInvoicePersistencePayload(input, calculateInvoice({ lines: input.lines, paidAmount: input.amountReceived }), 'FAT-2026-0007'),
+    (error: unknown) => error instanceof DomainValidationError,
   );
 });
