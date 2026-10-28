@@ -204,6 +204,17 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     });
   }
 
+  /** Next number of a device series such as INC-K7QZ-2026-000001, for records that are not sales documents. */
+  async reserveSeriesNumber(prefix: string, period: string): Promise<string> {
+    const seriesKey = `${prefix}:${period}`;
+    return this.driver.transaction(async () => {
+      const row = (await this.driver.all<{ next_value: number }>('select next_value from sequences where series_key = ?', [seriesKey]))[0];
+      const value = row?.next_value ?? 1;
+      await this.driver.run('insert into sequences(series_key, next_value) values (?, ?) on conflict(series_key) do update set next_value = excluded.next_value', [seriesKey, value + 1]);
+      return `${prefix}-${this.deviceCode}-${period}-${String(value).padStart(6, '0')}`;
+    });
+  }
+
   async saveInvoiceDocument(input: InvoiceInput): Promise<DataRecord> {
     if (!isoDate(input.issueDate)) throw new Error('The issue date must be an ISO date (YYYY-MM-DD).');
     if (!input.lines.length) throw new Error('Add at least one line.');

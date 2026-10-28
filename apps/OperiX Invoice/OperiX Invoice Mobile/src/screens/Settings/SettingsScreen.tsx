@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Image, Swi
 import Constants from 'expo-constants';
 import {
     ChevronRight, Moon, Sun, Smartphone, Camera, Upload, X,
-    Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages,
+    Image as ImageIcon, PenTool, Stamp, Palette, FileText, CreditCard, Languages,
     ShieldCheck, Briefcase, Users, Building, MapPin, Zap, LogOut, Plus, Edit2, Trash2, Share2, HardDrive
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -654,6 +654,13 @@ export function SettingsScreen({ navigation }: any) {
                         onPress={() => navigation.navigate('InvoiceTemplateSettings')}
                         trailing={<ChevronRight color={palette.muted} size={18} />}
                     />
+                    {can('contracts.manage') ? <ShortcutRow
+                        icon={FileText}
+                        title={t('contractTemplates', language)}
+                        description={t('contractTemplates', language)}
+                        onPress={() => navigation.navigate('ContractTemplates')}
+                        trailing={<ChevronRight color={palette.muted} size={18} />}
+                    /> : null}
                 </> : null}
                 {!localMode && can('subscription.manage') ? <ShortcutRow
                     icon={CreditCard}

@@ -8,6 +8,7 @@ export const LOCAL_TABLES = [
   'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'supplier_bill_items', 'vendor_payments', 'branches',
   'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
   'document_source_links', 'commercial_document_events', 'invoice_templates',
+  'contracts', 'contract_templates', 'contract_events', 'other_income',
 ] as const;
 export type StoreTable = (typeof LOCAL_TABLES)[number];
 
@@ -134,3 +135,16 @@ export interface BackupCapable {
   exportBackup(): Promise<BackupFile>;
   importBackup(file: BackupFile): Promise<ImportResult>;
 }
+
+/** The built-in other-income categories (the same keys the cloud ships), usable without a server. */
+export const OTHER_INCOME_CATEGORIES = [
+  { category_key: 'asset_sale', name_en: 'Asset Sale', name_sq: 'Shitje e Asetit' },
+  { category_key: 'commission_income', name_en: 'Commission Income', name_sq: 'Të Hyra nga Komisionet' },
+  { category_key: 'grants_subsidies', name_en: 'Grants / Subsidies', name_sq: 'Grante / Subvencione' },
+  { category_key: 'insurance_compensation', name_en: 'Insurance Compensation', name_sq: 'Kompensim nga Sigurimi' },
+  { category_key: 'interest_income', name_en: 'Interest Income', name_sq: 'Të Hyra nga Interesi' },
+  { category_key: 'other_income', name_en: 'Other Income', name_sq: 'Të Hyra Tjera' },
+  { category_key: 'other_operating_income', name_en: 'Other Operating Income', name_sq: 'Të Hyra Tjera Operative' },
+  { category_key: 'reimbursements', name_en: 'Reimbursements', name_sq: 'Rimbursime' },
+  { category_key: 'rental_income', name_en: 'Rental Income', name_sq: 'Të Hyra nga Qiraja' },
+] as const;

@@ -17,6 +17,7 @@ import { FAB, Card } from '@invoice-monorepo/ui';
 import { ContractTemplate } from '@invoice-monorepo/types';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope } from '../../../services/workspace';
+import { activeLocalStore } from '../../../services/localMode';
 import { brand, getPalette } from '../../../theme/brand';
 import { EmptyState, MobileHeader, MobileScreen, MobileStatusBadge } from '../../../components/mobile/MobileUI';
 
@@ -56,6 +57,12 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
             setLoading(false);
             return;
         }
+        const localStore = await activeLocalStore();
+        if (localStore) {
+            setTemplates((await localStore.list('contract_templates')) as any);
+            setLoading(false);
+            return;
+        }
         const { data, error } = await supabase
             .from('contract_templates')
             .select('*')
@@ -78,6 +85,8 @@ export function ContractTemplatesScreen({ navigation }: ContractTemplatesScreenP
                     text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
+                        const localStore = await activeLocalStore();
+                        if (localStore) { await localStore.remove('contract_templates', id); fetchTemplates(); return; }
                         const { error } = await supabase.from('contract_templates').delete().eq('id', id);
                         if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                         else fetchTemplates();

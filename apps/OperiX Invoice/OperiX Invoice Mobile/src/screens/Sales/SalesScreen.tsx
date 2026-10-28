@@ -25,7 +25,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { listCustomers, listPayments } from '@invoice-monorepo/api/repositories';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, scopedResource, scopedSearch } from '../../services/workspace';
-import { activeLocalStore } from '../../services/localMode';
+import { activeLocalStore, localContractRows } from '../../services/localMode';
 import type { RootStackParamList } from '../../navigation/types';
 import {
     EmptyState,
@@ -145,7 +145,7 @@ export function SalesScreen() {
             const scope = scopedResource(user.id, companyIds);
             const local = await activeLocalStore();
             if (local) {
-                if (contractView) { setDocuments([]); setPayments([]); setExpenses([]); return; }
+                if (contractView) { setDocuments(await localContractRows(150) as DocumentRow[]); setPayments([]); setExpenses([]); return; }
                 const needle = search.trim().toLowerCase();
                 const localDocuments = (await local.listInvoices({ limit: 150 })).filter((invoice) => !needle || String(invoice.invoice_number ?? '').toLowerCase().includes(needle) || String(invoice.notes ?? '').toLowerCase().includes(needle));
                 setDocuments(localDocuments as unknown as DocumentRow[]);

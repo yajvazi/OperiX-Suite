@@ -10,6 +10,7 @@ import type { ContractBlock, ContractParty, ContractSigner, ContractTemplate, Co
 import { getLocalizedErrorMessage } from '@invoice-monorepo/i18n';
 import { extractVariables, renderBlocks, validateTemplate, VARIABLE_GROUPS } from '../../../services/contracts/contractBuilder';
 import { getWorkspaceScope } from '../../../services/workspace';
+import { activeLocalStore } from '../../../services/localMode';
 import { brand, getPalette } from '../../../theme/brand';
 import { IconButton, MobileHeader, MobileScreen } from '../../../components/mobile/MobileUI';
 const STEPS = ['details', 'parties', 'fields', 'contract', 'signatures', 'settings', 'preview'] as const;
@@ -82,7 +83,15 @@ export function ContractTemplateEditorScreen({ navigation, route }: any) {
         if (canManageContracts !== true) return;
         if (!templateId) return;
         let active = true;
-        supabase.from('contract_templates').select('*').eq('id', templateId).single().then(({ data, error }) => {
+        const loadTemplate = async () => {
+            const localStore = await activeLocalStore();
+            if (localStore) {
+                const found = await localStore.get('contract_templates', templateId);
+                return found ? { data: found as any, error: null } : { data: null, error: new Error(t('notFound', language)) };
+            }
+            return supabase.from('contract_templates').select('*').eq('id', templateId).single();
+        };
+        loadTemplate().then(({ data, error }: any) => {
             if (!active) return;
             if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
             if (data) setDraftValue({ ...data, fields: data.fields || [], blocks: legacyBlocks(data), parties: data.parties?.length ? data.parties : [{ id: 'company', role: 'company', source: 'company' }], signers: data.signers || [{ id: 'company-signer', role: 'Company representative', partyId: 'company', required: true, order: 1 }] });
@@ -107,9 +116,12 @@ export function ContractTemplateEditorScreen({ navigation, route }: any) {
         if (errors.length) return Alert.alert(t('error', language), errors[0] || t('contractTemplateValidation', language));
         setLoading(true);
         try {
-            const { data: profile } = await supabase.from('profiles').select('active_company_id,company_id').eq('id', user?.id).single();
+            const localStore = await activeLocalStore();
+            const { data: profile } = localStore ? { data: null } : await supabase.from('profiles').select('active_company_id,company_id').eq('id', user?.id).single();
             const payload = { user_id: user?.id, company_id: profile?.active_company_id || profile?.company_id || null, name: current.name, description: current.description || '', category: current.category, language: current.language, tags: current.tags || [], numbering: current.numbering || {}, parties, fields, blocks, settings: current.settings || {}, financial_terms: current.financial_terms || {}, signers, appearance: current.appearance || {}, updated_by: user?.id };
-            const result = templateId ? await supabase.from('contract_templates').update(payload).eq('id', templateId).select('id').single() : await supabase.from('contract_templates').insert(payload).select('id').single();
+            const result: any = localStore
+                ? await localStore.save('contract_templates', { ...payload, id: templateId || undefined }).then((row) => ({ data: row, error: null }))
+                : templateId ? await supabase.from('contract_templates').update(payload).eq('id', templateId).select('id').single() : await supabase.from('contract_templates').insert(payload).select('id').single();
             if (result.error) throw result.error;
             setDirty(false);
             if (leave) { Alert.alert(t('success', language), t('templateSaved', language)); navigation.goBack(); }

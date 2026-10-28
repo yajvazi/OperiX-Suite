@@ -9,6 +9,7 @@ import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { getPalette, brand } from '../../theme/brand';
 import { getWorkspaceScope } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import type { RootStackParamList } from '../../navigation/types';
 import { MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
 
@@ -21,6 +22,8 @@ export function OtherIncomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const load = useCallback(async () => {
     if (!user) return;
+    const localStore = await activeLocalStore();
+    if (localStore) { setRows(await localStore.list('other_income', { orderBy: '-income_date' }) as Record<string, unknown>[]); return; }
     const scope = await getWorkspaceScope(user.id);
     setRows(await listOtherIncome(supabase, { userId: user.id, companyIds: scope.companyIds }));
   }, [user]);

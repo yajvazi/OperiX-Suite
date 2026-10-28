@@ -20,6 +20,7 @@ import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { getDataStore } from '../../services/dataStore';
+import { localContractRows } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface AllInvoicesScreenProps {
@@ -105,7 +106,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
         let data: ListItem[] = [];
         const store = await getDataStore(user.id);
         if (selectedType === 'contract' && store.mode === 'local') {
-            data = []; // Contracts are not part of the on-device tier yet.
+            data = await localContractRows(0, sortOrder === 'asc');
         } else if (selectedType === 'contract') {
             const { data: result, error } = await supabase
                 .from('contracts')

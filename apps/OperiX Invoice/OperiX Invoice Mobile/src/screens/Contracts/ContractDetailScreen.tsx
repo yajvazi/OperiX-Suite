@@ -24,6 +24,7 @@ import { generateContractHTML } from '../../services/pdf/contractTemplates';
 import { documentPdfFileName, namePdfFile } from '../../services/pdf/fileNaming';
 import { formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 interface ContractDetailScreenProps {
     navigation: any;
@@ -57,6 +58,12 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
         const workspace = await getWorkspaceScope(user.id);
         setCanManageContracts(workspace.platformAdmin || workspace.permissions.includes('contracts.manage'));
         const { profile: workspaceProfile, company } = workspace;
+        const localStore = await activeLocalStore();
+        if (localStore) {
+            const localCompany = await localStore.getCompany();
+            setProfile({ ...(workspaceProfile as any), ...localCompany, company_name: String(localCompany.company_name || ''), id: user.id } as any);
+            return;
+        }
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) {
             setProfile({
@@ -68,6 +75,18 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
 
     const fetchContract = async () => {
         setLoading(true);
+        const localStore = await activeLocalStore();
+        if (localStore) {
+            const found = await localStore.get('contracts', String(contractId));
+            if (!found) Alert.alert(t('error', language), t('notFound', language));
+            else {
+                const localClient = found.client_id ? await localStore.get('clients', String(found.client_id)) : null;
+                setContract(found as any);
+                setClient(localClient as any);
+            }
+            setLoading(false);
+            return;
+        }
         const { data, error } = await supabase
             .from('contracts')
             .select('*, client:clients(*)')
@@ -97,6 +116,8 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
                     text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
+                        const localStore = await activeLocalStore();
+                        if (localStore) { await localStore.remove('contracts', String(contractId)); navigation.goBack(); return; }
                         const { error } = await supabase.from('contracts').delete().eq('id', contractId);
                         if (error) Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                         else navigation.goBack();

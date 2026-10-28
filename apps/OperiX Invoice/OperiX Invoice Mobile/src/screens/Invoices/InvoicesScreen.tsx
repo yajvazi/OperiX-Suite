@@ -20,6 +20,7 @@ import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
 import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { getDataStore } from '../../services/dataStore';
+import { localContractRows } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface InvoicesScreenProps {
@@ -112,7 +113,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             const store = await getDataStore(user.id);
             data = await store.listInvoices({ documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE', limit: 5 }) as any[];
         } else if (selectedType === 'contract' && (await getDataStore(user.id)).mode === 'local') {
-            data = []; // Contracts are not part of the on-device tier yet.
+            data = await localContractRows(5);
         } else if (selectedType === 'contract') {
             console.log('Fetching contracts for user:', user.id);
             const { data: contractData, error } = await supabase

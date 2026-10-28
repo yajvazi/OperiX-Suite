@@ -43,9 +43,10 @@ export async function localReportSummary(store: LocalDataStore) {
     const sales = (await store.listInvoices()).filter(isIssuedSale);
     const revenue = round(sales.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0) - Number(invoice.tax_amount || 0), 0));
     const expenses = round((await store.list('expenses')).filter((expense) => expense.type !== 'income').reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+    const otherIncome = round((await store.list('other_income')).reduce((sum, income) => sum + Number(income.net_amount || 0), 0));
     return {
         gross_sales: round(sales.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)),
-        revenue, expenses, net_profit: round(revenue - expenses),
+        revenue: round(revenue + otherIncome), expenses, net_profit: round(revenue + otherIncome - expenses),
         ar_outstanding: round((await receivables(store)).reduce((sum, entry) => sum + entry.outstanding, 0)),
         ap_outstanding: round((await payables(store)).reduce((sum, entry) => sum + entry.outstanding, 0)),
     };
@@ -85,6 +86,7 @@ export async function localReportRows(store: LocalDataStore, source: string): Pr
             buckets.set(key, round((buckets.get(key) ?? 0) + amount));
         };
         (await store.listPayments()).forEach((payment) => add(payment.payment_date, payment.payment_method, Number(payment.amount || 0)));
+        (await store.list('other_income')).forEach((income) => add(income.income_date, income.payment_method, Number(income.gross_amount || 0)));
         (await store.list('expenses')).filter((expense) => expense.type !== 'income').forEach((expense) => add(expense.date, expense.payment_method, -Number(expense.amount || 0)));
         (await store.list('vendor_payments')).forEach((payment) => add(payment.payment_date, payment.payment_method, -Number(payment.amount || 0)));
         return [...buckets.entries()].map(([key, net]) => { const [period_start, cash_account_type] = key.split('|'); return { company_id, period_start, cash_account_type, net_change: net }; })
@@ -99,6 +101,7 @@ export async function localReportRows(store: LocalDataStore, source: string): Pr
             rows.set(key, current);
         };
         (await store.listInvoices()).filter(isIssuedSale).forEach((invoice) => add(month(invoice.issue_date), 'Sales revenue', 'revenue', Number(invoice.total_amount || 0) - Number(invoice.tax_amount || 0)));
+        (await store.list('other_income')).forEach((income) => add(month(income.income_date), 'Other income', 'revenue', Number(income.net_amount || 0)));
         (await store.list('expenses')).filter((expense) => expense.type !== 'income').forEach((expense) => add(month(expense.date), String(expense.category || 'Other expenses'), 'expense', Number(expense.amount || 0)));
         return [...rows.values()].map((row) => ({ company_id, account_code: '', account_name: row.account_name, account_type: row.account_type, period_start: row.period_start, presentation_amount: row.amount }))
             .sort((a, b) => String(b.period_start).localeCompare(String(a.period_start)));

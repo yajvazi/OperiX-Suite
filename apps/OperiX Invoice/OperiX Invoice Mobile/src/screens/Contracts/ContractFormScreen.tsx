@@ -21,6 +21,7 @@ import { getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import type { ContractTemplate } from '@invoice-monorepo/types';
 import { formatContractNumber, renderBlocks } from '../../services/contracts/contractBuilder';
+import { activeLocalStore } from '../../services/localMode';
 
 interface ContractFormScreenProps {
     navigation: any;
@@ -92,6 +93,15 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                 }
                 const companyIds = workspace.companyIds;
 
+                const localStore = await activeLocalStore();
+                if (localStore) {
+                    const [localClients, localTemplates] = await Promise.all([localStore.list('clients', { orderBy: 'name' }), localStore.list('contract_templates', { orderBy: '-updated_at' })]);
+                    if (cancelled) return;
+                    setClients(localClients as unknown as Client[]);
+                    setTemplates(localTemplates as unknown as ContractTemplate[]);
+                    return;
+                }
+
                 const clientsQuery = companyIds.length
                     ? supabase.from('clients').select('*').or(scopedResource(user.id, companyIds))
                     : supabase.from('clients').select('*').eq('user_id', user.id);
@@ -147,13 +157,23 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
                 'customer.email': selectedClient?.email,
                 'contract.title': title,
             };
+            const localStore = await activeLocalStore();
             const numbering = selectedTemplate?.numbering || {};
             const prefix = String(numbering.prefix || 'CTR');
             const safePrefix = prefix.replace(/[^A-Za-z0-9_-]/g, '') || 'CTR';
             const year = new Date().getFullYear();
             const manualNumber = String(numbering.manual || numbering.manualNumber || numbering.manual_number || '').trim();
             let number = manualNumber || undefined;
-            if (selectedTemplate && !number) {
+            if (localStore && !number) {
+                // On the device each phone has its own series, marked with the device code like invoice numbers.
+                const deviceSeries = `${safePrefix}-${localStore.deviceCode}`;
+                const existingLocal = await localStore.list('contracts');
+                const nextLocal = existingLocal.reduce((highest, row) => {
+                    const match = String(row.contract_number || '').match(new RegExp(`^${deviceSeries}-${year}-(\\d+)$`));
+                    return Math.max(highest, match ? Number(match[1]) : 0);
+                }, 0) + 1;
+                number = formatContractNumber(deviceSeries, year, nextLocal, Number(numbering.padding) || 4);
+            } else if (selectedTemplate && !number) {
                 if (companyId) {
                     const { data: reservedNumber, error: numberingError } = await supabase.rpc('reserve_contract_number', {
                         p_company_id: companyId,
@@ -179,6 +199,25 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
             }
             if (number) templateVariables['contract.number'] = number;
             const rendered = selectedTemplate?.blocks?.length ? renderBlocks(selectedTemplate.blocks, templateVariables) : { html: '', missing: [] };
+            const contractRow = {
+                template_id: selectedTemplate?.id || null,
+                contract_number: number,
+                client_id: clientId,
+                title,
+                type,
+                content: answers,
+                variables: templateVariables,
+                html_body: rendered.html || null,
+                status: signature && counterpartySignature ? 'signed' : 'draft',
+                signature_url: signature,
+                counterparty_signature_url: counterpartySignature,
+            };
+            if (localStore) {
+                const savedLocal = await localStore.save('contracts', { ...contractRow, user_id: user.id });
+                await localStore.save('contract_events', { contract_id: savedLocal.id, actor_id: user.id, event_type: 'contract_created', metadata: { template_id: selectedTemplate?.id || null } });
+                Alert.alert(t('success', language), t('contractCreated', language), [{ text: t('done', language), onPress: () => navigation.navigate('ContractDetail', { contractId: savedLocal.id }) }]);
+                return;
+            }
             const { data: created, error } = await supabase.from('contracts').insert({
                 user_id: user.id,
                 company_id: companyId,

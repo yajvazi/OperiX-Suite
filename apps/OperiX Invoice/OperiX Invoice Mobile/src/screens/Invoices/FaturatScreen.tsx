@@ -147,10 +147,11 @@ export function FaturatScreen({ navigation }: any) {
                     const salesDocuments = localInvoices.filter((invoice) => invoice.type === 'invoice');
                     const localTotal = salesDocuments.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
                     const localPaid = salesDocuments.filter((invoice) => invoice.status === 'paid').reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+                    const localContracts = allowedContracts ? await store.list('contracts') : [];
                     setCounts({
                         regularInvoice: countOf('invoice', 'regular'), deliveryNote: countOf('invoice', 'delivery_note'), offer: countOf('offer', 'offer'),
                         order: countOf('offer', 'order'), proInvoice: countOf('offer', 'pro_invoice'),
-                        expense: (await store.list('vendor_payments')).length, employmentContract: 0, collaborationContract: 0, nda: 0,
+                        expense: (await store.list('vendor_payments')).length, employmentContract: localContracts.filter((c) => c.type === 'employment').length, collaborationContract: localContracts.filter((c) => c.type === 'service_agreement' || c.type === 'collaboration').length, nda: localContracts.filter((c) => c.type === 'nda').length,
                     });
                     setStats({ totalInvoices: salesDocuments.length, totalAmount: localTotal, paidAmount: localPaid, pendingAmount: localTotal - localPaid });
                     const localPayments = await store.listPayments({ limit: 10 });
