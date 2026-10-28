@@ -88,7 +88,7 @@ export function buildFixtures() {
     const totalAmount = round2(subtotal + tax);
     const received = status === 'paid' ? totalAmount : status === 'partial' ? round2(totalAmount * 0.4) : 0;
     invoices.push({
-      id, company_id: C1, user_id: USER.id, client_id: client.id, invoice_number: `FAT-2026-${String(index + 1).padStart(6, '0')}`, public_qr_token: `qa-token-${index + 1}`,
+      id, company_id: C1, user_id: USER.id, client_id: client.id, invoice_number: `FAT-2026-${String(index + 1).padStart(6, '0')}`, public_qr_token: `${"0".repeat(46)}${String(index + 1).padStart(2, "0")}`,
       issue_date: day(offset), due_date: day(offset + 14), status, type: 'invoice', subtype: 'regular', commercial_document_type: 'INVOICE', commercial_status: commercial, accounting_state: status === 'draft' ? 'draft' : 'posted',
       payment_status: status === 'paid' ? 'paid' : status === 'partial' ? 'partial' : 'unpaid', discount_amount: 0, discount_percent: 0, tax_amount: round2(tax), subtotal: round2(subtotal), total_amount: totalAmount,
       payment_method: pick(['bank', 'cash', 'card']), amount_received: received, notes: index % 4 === 0 ? 'Thank you for your business.' : '', currency: 'EUR', branch_id: index % 3 ? B1 : B2, delivery_method: index % 5 === 0 ? 'delivery' : null,
