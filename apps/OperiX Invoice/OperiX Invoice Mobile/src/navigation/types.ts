@@ -101,6 +101,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
     MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
     GlobalSearch: { scannedSearch?: string } | undefined;
+    Notifications: undefined;
     QRScanner: { mode?: string; returnTo?: string; currentData?: unknown } | undefined;
     Settings: NavigatorScreenParams<SettingsStackParamList> | undefined;
     ContractTemplates: undefined;

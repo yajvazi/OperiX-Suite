@@ -12,6 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
     AlertTriangle,
+    Bell,
     ChevronRight,
     CircleDollarSign,
     FileText,
@@ -32,6 +33,7 @@ import type { Profile } from '@invoice-monorepo/types';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
+import { loadNotifications } from '../../services/notifications';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -119,6 +121,11 @@ export function HomeScreen() {
     const [hideAmounts, setHideAmounts] = useState(false);
     useEffect(() => { void AsyncStorage.getItem(HIDE_AMOUNTS_KEY).then((value) => setHideAmounts(value === '1')).catch(() => undefined); }, []);
     const toggleHideAmounts = () => setHideAmounts((current) => { const next = !current; void AsyncStorage.setItem(HIDE_AMOUNTS_KEY, next ? '1' : '0').catch(() => undefined); return next; });
+    const [notificationCount, setNotificationCount] = useState(0);
+    useFocusEffect(useCallback(() => {
+        if (!user) return;
+        void loadNotifications(user.id, { overdue: '', dueSoon: '', bill: '' }).then((list) => setNotificationCount(list.length)).catch(() => setNotificationCount(0));
+    }, [user]));
     const money = (value: number) => hideAmounts ? '••••' : formatCurrency(value);
 
     const fetchData = useCallback(async () => {
@@ -351,6 +358,10 @@ export function HomeScreen() {
                 </TouchableOpacity>
                 <View style={styles.headerActions}>
                     <IconButton testID="home-hide-amounts-button" label={hideAmounts ? t('showAmounts', language) : t('hideAmounts', language)} onPress={toggleHideAmounts}>{hideAmounts ? <EyeOff color={palette.text} size={20} /> : <Eye color={palette.text} size={20} />}</IconButton>
+                    <View>
+                        <IconButton testID="home-notifications-button" label={t('notifications', language)} onPress={() => navigation.navigate('Notifications')}><Bell color={palette.text} size={20} /></IconButton>
+                        {notificationCount > 0 ? <View pointerEvents="none" style={[styles.bellBadge, { backgroundColor: brand.colors.error }]}><Text style={styles.bellBadgeText}>{notificationCount > 9 ? '9+' : notificationCount}</Text></View> : null}
+                    </View>
                     <IconButton testID="home-global-search-button" label={t('searchYourBusiness', language)} onPress={() => navigation.navigate('GlobalSearch')}><Search color={palette.text} size={20} /></IconButton>
                 </View>
             </View>
@@ -468,6 +479,8 @@ const styles = StyleSheet.create({
     companyCopy: { flex: 1, marginLeft: 10, marginRight: 4 },
     greeting: { fontSize: 11, fontFamily: brand.fonts.medium },
     companyName: { fontSize: 14, fontFamily: brand.fonts.semibold, marginTop: 2 },
+    bellBadge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center' },
+    bellBadgeText: { color: '#fff', fontSize: 10, fontFamily: brand.fonts.semibold },
     headerActions: { flexDirection: 'row', gap: 8 },
     content: { paddingHorizontal: 20, paddingBottom: 20 },
     revenueCard: { borderRadius: 20, padding: 19, marginBottom: 12, ...brand.shadow.floating },

@@ -21,6 +21,7 @@ import {
     Calendar,
     User,
     Plus,
+    ScanLine,
     Trash2,
     FileText,
     CreditCard,
@@ -42,6 +43,7 @@ import {
     Eye,
     X
 } from 'lucide-react-native';
+import { BarcodeScannerModal } from '../../components/mobile/BarcodeScannerModal';
 import { WebView } from 'react-native-webview';
 import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { useAuth } from '@invoice-monorepo/hooks';
@@ -169,6 +171,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     // Pickers
     const [showClientPicker, setShowClientPicker] = useState(false);
     const [showProductPicker, setShowProductPicker] = useState(false);
+    const [scanningProduct, setScanningProduct] = useState(false);
     const [showLinkedDocumentPicker, setShowLinkedDocumentPicker] = useState(false);
     const [linkedDocuments, setLinkedDocuments] = useState<Array<Record<string, any>>>([]);
     const [loadingLinkedDocuments, setLoadingLinkedDocuments] = useState(false);
@@ -429,6 +432,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         Keyboard.dismiss();
         setShowClientPicker(true);
     }, []);
+
+    // A scanned barcode adds the matching product to the invoice; with no match it is searched for instead.
+    const handleProductScanned = (rawCode: string) => {
+        setScanningProduct(false);
+        const code = rawCode.trim().toLowerCase();
+        const matches = products.filter((product) => [(product as any).barcode, (product as any).sku].some((value) => String(value ?? '').trim().toLowerCase() === code));
+        if (matches.length === 1) { handleAddItem(matches[0]); return; }
+        setProductSearch(rawCode);
+        if (!matches.length) Alert.alert(t('scanBarcode', language), t('noProductForBarcode', language).replace('{code}', rawCode));
+    };
 
     const handleAddItem = (product?: Product) => {
         const currentGlobalDiscount = wholePercentageValue(discount);
@@ -1933,7 +1946,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 </View>
             </Modal>
             {/* Product Picker Modal */}
-            <Modal visible={showProductPicker} animationType="slide" transparent onRequestClose={closeProductPicker}>
+            <BarcodeScannerModal visible={scanningProduct} onScanned={handleProductScanned} onClose={() => setScanningProduct(false)} />
+            <Modal visible={showProductPicker && !scanningProduct} animationType="slide" transparent onRequestClose={closeProductPicker}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
                                         <View style={[styles.modalContent, styles.modalContentTall, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
@@ -1947,13 +1961,24 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             contentContainerStyle={{ padding: 12, paddingBottom: 64 }}
                             keyboardShouldPersistTaps="handled"
                         >
-                            <View style={{ paddingBottom: 12 }}>
-                                <Input
-                                    placeholder={t('searchProducts', language)}
-                                    testID="invoice-product-search-input"
-                                    value={productSearch}
-                                    onChangeText={setProductSearch}
-                                />
+                            <View style={{ paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ flex: 1 }}>
+                                    <Input
+                                        placeholder={t('searchProducts', language)}
+                                        testID="invoice-product-search-input"
+                                        value={productSearch}
+                                        onChangeText={setProductSearch}
+                                    />
+                                </View>
+                                <TouchableOpacity
+                                    testID="invoice-product-scan-button"
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('scanBarcode', language)}
+                                    onPress={() => { Keyboard.dismiss(); setScanningProduct(true); }}
+                                    style={{ width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: primaryColor }}
+                                >
+                                    <ScanLine color="#fff" size={22} />
+                                </TouchableOpacity>
                             </View>
                             <TouchableOpacity
                                 testID="invoice-custom-item-option"
@@ -1965,7 +1990,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                 </View>
                                 <Text style={[styles.modalItemTitle, { color: textColor }]}>{t('customItem', language)}</Text>
                             </TouchableOpacity>
-                            {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(product => (
+                            {products.filter(p => [p.name, (p as any).sku, (p as any).barcode].filter(Boolean).join(' ').toLowerCase().includes(productSearch.toLowerCase())).map(product => (
                                 <TouchableOpacity
                                     testID={`invoice-product-option-${product.id}`}
                                     key={product.id}

@@ -42,6 +42,7 @@ import { POSScreen } from '../screens/POS/POSScreen';
 import { BusinessScreen } from '../screens/Business/BusinessScreen';
 import { MoreScreen } from '../screens/More/MoreScreen';
 import { GlobalSearchScreen } from '../screens/Search/GlobalSearchScreen';
+import { NotificationsScreen } from '../screens/Notifications/NotificationsScreen';
 import { AccountingScreen } from '../screens/Accounting/AccountingScreen';
 import { AccountantReportScreen } from '../screens/Accounting/AccountantReportScreen';
 import { CustomerDetailScreen } from '../screens/Customers/CustomerDetailScreen';
@@ -250,6 +251,7 @@ function RootNavigator() {
     return <RootStack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="MainTabs" component={MainTabs} />
         <RootStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ presentation: 'modal' }} />
+        <RootStack.Screen name="Notifications" component={NotificationsScreen} />
         <RootStack.Screen name="Accounting" component={GatedAccountingScreen} />
         <RootStack.Screen name="AccountantReport" component={GatedAccountantReportScreen} />
         <RootStack.Screen name="Payroll" component={GatedPayrollScreen} />
