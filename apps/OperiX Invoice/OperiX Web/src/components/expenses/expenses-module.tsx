@@ -11,6 +11,7 @@ import { saveExpense } from "@invoice-monorepo/api/repositories";
 import { DecimalAmount } from "@invoice-monorepo/money";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { PurchasesNav } from "@/components/purchases-nav";
 import { MetricCard, PageHeader, SectionCard, StatusBadge } from "@/components/ui";
 
 type Row = Record<string, any>;
@@ -142,6 +143,7 @@ export function ExpensesModule() {
   if (workspaceLoading) return <div className="ux-page"><SectionCard title="Shpenzimet / Expenses"><p>Loading workspace…</p></SectionCard></div>;
 
   return <div className="ux-page expenses-module">
+    <PurchasesNav />
     <PageHeader title={sq ? "Shpenzimet" : "Expenses"} description={sq ? "Regjistroni dhe analizoni shpenzimet e biznesit." : "Record, document and review business expenses."} action={<button className="btn btn-primary" onClick={() => openNew()}>{sq ? "Shpenzim i ri" : "New expense"}</button>} />
     <nav className="expenses-tabs" aria-label="Expense areas">{(["overview", "expenses", "suppliers", "reports"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "overview" ? (sq ? "Përmbledhje" : "Overview") : item === "expenses" ? (sq ? "Shpenzime" : "Expenses") : item === "suppliers" ? (sq ? "Furnitorët" : "Suppliers") : (sq ? "Raportet" : "Reports")}</button>)}</nav>
 

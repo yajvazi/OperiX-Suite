@@ -1717,3 +1717,29 @@ html[data-theme="dark"] .help-page [class*="bg-[#f5f8ff]"] { background-color: #
 html[data-theme="dark"] .help-page [class*="border-[#dbe7ff]"] { border-color: #263449; }
 html[data-theme="dark"] .help-page [class*="text-[#475467]"] { color: #d0d5dd; }
 html[data-theme="dark"] .help-page [class*="text-[#004ffe]"] { color: #6ea0ff; }
+
+/* Purchases: shared section switcher */
+.purchases-nav { display: flex; gap: 4px; margin: 0 0 18px; padding: 4px; width: max-content; max-width: 100%; overflow-x: auto; border: 1px solid var(--operix-border); border-radius: 12px; background: #fff; scrollbar-width: none; }
+.purchases-nav::-webkit-scrollbar { display: none; }
+.purchases-nav-item { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border-radius: 9px; color: #475467; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.purchases-nav-item:hover:not(.is-active) { background: #f2f6fc; color: var(--operix-ink); }
+.purchases-nav-item.is-active { background: var(--operix-blue); color: #fff; box-shadow: 0 2px 8px rgba(0,79,254,.25); }
+html[data-theme="dark"] .purchases-nav { background: #101a2d; }
+html[data-theme="dark"] .purchases-nav-item { color: #d0d5dd; }
+html[data-theme="dark"] .purchases-nav-item:hover:not(.is-active) { background: #1d2c47; color: #fff; }
+html[data-theme="dark"] .purchases-nav-item.is-active { color: #fff; }
+@media (max-width: 767px) { .purchases-nav { width: 100%; } .purchases-nav-item { flex: 1 0 auto; justify-content: center; padding: 0 12px; } }
+
+/* Phone widths: the web app is fully usable on a phone */
+@media (max-width: 767px) {
+  .operix-shared-topbar { gap: 6px; padding: 0 10px; }
+  .operix-shared-topbar-leading { flex: 1; min-width: 0; }
+  .operix-shared-topbar-search { min-width: 0; }
+  .operix-shared-topbar-search kbd { display: none; }
+  .operix-shared-topbar-actions { flex: 0 0 auto; gap: 4px; }
+  .operix-shared-topbar-actions .app-create-desktop, .operix-shared-topbar-help { display: none; }
+  .operix-shared-app-switcher-button > span, .operix-shared-app-switcher-button > svg:last-child { display: none; }
+  .resource-stats-grid { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; scrollbar-width: none; }
+  .resource-stats-grid::-webkit-scrollbar { display: none; }
+  .resource-stats-grid > * { flex: 0 0 72%; scroll-snap-align: start; }
+}

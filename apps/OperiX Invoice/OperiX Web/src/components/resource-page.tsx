@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { resourceConfigs, type ResourceConfig } from "@/lib/resource-config";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { PurchasesNav } from "@/components/purchases-nav";
 import { PortalLinksView } from "@/components/portal-links-view";
 import { ProductImportDialog } from "@/components/product-import-dialog";
 import { CustomerLedgerDialog } from "@/components/customer-ledger-dialog";
@@ -185,6 +186,36 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     low: displayData.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= Number(row.low_stock_threshold || 5)).length,
     out: displayData.filter((row) => Boolean(row.track_stock) && Number(row.stock_quantity || 0) <= 0).length,
   } : null;
+  const purchaseStats = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const month = today.slice(0, 7);
+    const currency = workspace.company?.currency || workspace.profile?.currency;
+    const sum = (rows: ResourceRow[], key: string) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+    if (resourceKey === "supplier-bills") {
+      const open = data.filter((row) => String(row.status || "").toLowerCase() !== "paid");
+      const overdue = open.filter((row) => row.due_date && String(row.due_date) < today);
+      return [
+        { label: "Open bills", value: String(open.length), icon: Boxes, tone: undefined },
+        { label: "Outstanding", value: money(sum(open, "total_amount"), currency), icon: TrendingUp, tone: "green" as const },
+        { label: "Overdue", value: String(overdue.length), icon: AlertTriangle, tone: "red" as const },
+      ];
+    }
+    if (resourceKey === "vendor-payments") {
+      return [
+        { label: "Payments", value: String(data.length), icon: Boxes, tone: undefined },
+        { label: "Total paid", value: money(sum(data, "amount"), currency), icon: TrendingUp, tone: "green" as const },
+        { label: "This month", value: money(sum(data.filter((row) => String(row.payment_date || "").startsWith(month)), "amount"), currency), icon: TrendingUp, tone: undefined },
+      ];
+    }
+    if (resourceKey === "vendors") {
+      return [
+        { label: "Vendors", value: String(data.length), icon: Users, tone: undefined },
+        { label: "With email", value: String(data.filter((row) => row.email).length), icon: Users, tone: "green" as const },
+        { label: "With phone", value: String(data.filter((row) => row.phone).length), icon: Users, tone: undefined },
+      ];
+    }
+    return null;
+  })();
   const customerStats = config.table === "clients" ? {
     total: data.length,
     revenue: data.reduce((sum, row) => sum + (customerRevenue[String(row.id)] || 0), 0),
@@ -360,7 +391,9 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   if (!canRead) return <div className={rootClass}><PageHeader title={config.title} description={config.description} /><SectionCard><p className="muted">You do not have permission to view this resource.</p></SectionCard></div>;
 
   return <div className={rootClass}>
+    {!embedded && ["vendors", "supplier-bills", "vendor-payments"].includes(resourceKey) ? <PurchasesNav /> : null}
     <PageHeader title={config.title} description={config.description} actions={<>{resourceKey === "products" && canEdit ? <button type="button" className="btn" onClick={() => setImportModal(true)}><FileUp size={16} /> Import calculations</button> : null}{canCreate ? <button data-testid={resourceKey === "customers" ? "customer.create" : resourceKey === "products" ? "product.create" : resourceKey === "expenses" ? "expense.create" : "resource.create"} type="button" className="btn btn-primary" onClick={() => { setEditing(null); setModal(true); }}><Plus size={16} /> New {config.singular}</button> : null}</>} />
+    {purchaseStats && !loading ? <section className="invoice-list-summary resource-stats-grid">{purchaseStats.map((stat) => <MetricCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} tone={stat.tone} />)}</section> : null}
     {productStats ? <section className="invoice-list-summary resource-stats-grid"><MetricCard label="Products" value={String(productStats.total)} icon={Boxes} /><MetricCard label="Stock value" value={money(productStats.value, workspace.company?.currency || workspace.profile?.currency)} icon={TrendingUp} tone="green" /><MetricCard label="Low stock" value={String(productStats.low)} icon={AlertTriangle} tone="amber" /><MetricCard label="Out of stock" value={String(productStats.out)} icon={XCircle} tone="red" /></section> : null}
     {customerStats ? <section className="invoice-list-summary resource-stats-grid"><MetricCard label="Customers" value={String(customerStats.total)} icon={Users} /><MetricCard label="Paid invoice value" value={money(customerStats.revenue, workspace.company?.currency || workspace.profile?.currency)} icon={TrendingUp} tone="green" /><MetricCard label="Active customers" value={String(customerStats.active)} icon={Users} tone="green" /><MetricCard label="With default discount" value={String(customerStats.discounts)} icon={FileSpreadsheet} tone="amber" /></section> : null}
     <div className="resource-toolbar"><SearchField value={query} onChange={setQuery} placeholder={`Search ${config.title.toLowerCase()}…`} />{resourceKey === "products" ? <select aria-label="Filter products by category" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select> : null}{resourceKey === "customers" ? <select aria-label="Filter customers by city" className="select resource-filter-select" value={secondaryFilter} onChange={(event) => setSecondaryFilter(event.target.value)}><option value="">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select> : null}{resourceKey === "products" || resourceKey === "customers" ? <select aria-label={`Sort ${config.title.toLowerCase()}`} className="select resource-sort-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>{resourceKey === "products" ? <><option value="name">Sort: name</option><option value="price">Sort: price</option><option value="stock">Sort: stock</option></> : <><option value="name">Sort: name</option><option value="value">Sort: paid value</option></>}</select> : null}{config.pdfTemplate === "sales-ledger" ? <label className="field resource-month-field"><span className="sr-only">Reporting month</span><input aria-label="Reporting month" className="input" type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label> : null}{canExport ? <button type="button" className="btn resource-export" onClick={pdfExport ? exportPdf : exportCsv} disabled={exporting}><Download size={16} />{exporting ? "Preparing…" : pdfExport ? "Export PDF" : "Export"}</button> : null}</div>
