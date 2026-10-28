@@ -7,6 +7,7 @@ import {
 } from '@invoice-monorepo/api/workspace';
 import type { Company, Profile } from '@invoice-monorepo/types';
 import { getLocalStore } from './localStore';
+import { LOCAL_PERMISSIONS } from './localPermissions';
 import { getStorageMode } from './storageMode';
 
 export type WorkspaceCompany = Pick<Company, 'id' | 'company_name' | 'parent_company_id'> &
@@ -19,11 +20,6 @@ export interface WorkspaceScope extends Omit<SharedWorkspaceScope, 'profile' | '
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 const workspaceCache = new Map<string, { scope: WorkspaceScope; expiresAt: number }>();
 
-/** Every permission check passes: on the device the signed-in user owns the only company. */
-class AllPermissions extends Array<string> {
-    override includes(): boolean { return true; }
-}
-
 async function getLocalWorkspaceScope(userId: string): Promise<WorkspaceScope> {
     const store = await getLocalStore();
     const company = await store.getCompany() as unknown as Record<string, unknown>;
@@ -33,8 +29,8 @@ async function getLocalWorkspaceScope(userId: string): Promise<WorkspaceScope> {
         profile: { ...company, id: userId, company_id: store.companyId, active_company_id: store.companyId } as unknown as Profile,
         companyId: store.companyId,
         roleCode: 'company_administrator',
-        permissions: new AllPermissions(),
-        scopes: new Proxy({}, { get: () => 'ALL' }) as WorkspaceScope['scopes'],
+        permissions: [...LOCAL_PERMISSIONS],
+        scopes: Object.fromEntries(LOCAL_PERMISSIONS.map((permission) => [permission, 'ALL'])) as WorkspaceScope['scopes'],
         platformAdmin: false,
         companyIds: [store.companyId],
         company: workspaceCompany,
