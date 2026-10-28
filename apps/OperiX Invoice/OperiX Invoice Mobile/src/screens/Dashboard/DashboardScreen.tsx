@@ -20,6 +20,7 @@ import { stripeService } from '../../services/stripeService';
 import { t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { syncDailySalesWidget } from '../../services/iosWidgetService';
 
 const { width } = Dimensions.get('window');
@@ -89,26 +90,35 @@ export function DashboardScreen({ navigation }: any) {
             const scope = scopedResource(user.id, companyIds);
             const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
 
-            const { data: invoicesData } = await supabase
-                .from('invoices')
-                .select(`*, client:clients(name), items:invoice_items(*)`)
-                .or(scope)
-                .order('created_at', { ascending: false });
+            const local = await activeLocalStore();
+            const { data: invoicesData } = local
+                ? { data: await local.listInvoices({ fullItems: true }) as any[] }
+                : await supabase
+                    .from('invoices')
+                    .select(`*, client:clients(name), items:invoice_items(*)`)
+                    .or(scope)
+                    .order('created_at', { ascending: false });
 
-            const { data: expensesData } = await supabase
-                .from('expenses')
-                .select('*')
-                .or(scope);
+            const { data: expensesData } = local
+                ? { data: await local.list('expenses') as any[] }
+                : await supabase
+                    .from('expenses')
+                    .select('*')
+                    .or(scope);
 
-            const { data: clientsData } = await supabase
-                .from('clients')
-                .select('*')
-                .or(scope);
+            const { data: clientsData } = local
+                ? { data: await local.list('clients') as any[] }
+                : await supabase
+                    .from('clients')
+                    .select('*')
+                    .or(scope);
 
-            const { data: allProducts } = await supabase
-                .from('products')
-                .select('*')
-                .or(productScope);
+            const { data: allProducts } = local
+                ? { data: await local.list('products') as any[] }
+                : await supabase
+                    .from('products')
+                    .select('*')
+                    .or(productScope);
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);

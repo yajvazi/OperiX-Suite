@@ -24,6 +24,7 @@ import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import type { CompanyBankAccount, Vendor } from '@invoice-monorepo/types';
 import { generateTransactionPdf, generateTransactionPdfHtml, printTransactionPdf, shareTransactionPdf } from '../../services/pdf/transactionPdf';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import { TransactionDocumentActions, TransactionPreviewModal } from '../../components/mobile/TransactionDocumentActions';
 import { documentPdfFileName } from '../../services/pdf/fileNaming';
@@ -160,6 +161,11 @@ export function ExpenseFormScreen({ navigation, route }: any) {
     const fetchVendors = useCallback(async () => {
         if (!user) return;
         try {
+            const local = await activeLocalStore();
+            if (local) {
+                setVendors(await local.list('vendors', { orderBy: 'name' }) as unknown as Vendor[]);
+                return;
+            }
             const { companyIds } = await getWorkspaceScope(user.id);
             const { data, error } = await supabase
                 .from('vendors')
@@ -182,8 +188,10 @@ export function ExpenseFormScreen({ navigation, route }: any) {
 
     const fetchCategories = async () => {
         if (!user) return;
-        const scope = await getWorkspaceScope(user.id);
-        const data = await listExpenses(supabase, { userId: user.id, companyIds: scope.companyIds });
+        const local = await activeLocalStore();
+        const data = local
+            ? await local.list('expenses')
+            : await listExpenses(supabase, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         if (data) {
             const unique = Array.from(new Set(data
                 .filter((item: any) => item.type !== 'income')
@@ -196,6 +204,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
     const fetchBankAccounts = async () => {
         if (!user) return;
         try {
+            if (await activeLocalStore()) return; // Shared bank accounts are a cloud feature.
             const { companyId } = await getWorkspaceScope(user.id);
             const data = await listCompanyBankAccounts(supabase, companyId);
             setBankAccounts(data as unknown as CompanyBankAccount[]);
@@ -210,8 +219,10 @@ export function ExpenseFormScreen({ navigation, route }: any) {
 
     const fetchExpense = async () => {
         if (!user || !expenseId) return;
-        const scope = await getWorkspaceScope(user.id);
-        const data = await getExpense(supabase, expenseId, { userId: user.id, companyIds: scope.companyIds });
+        const local = await activeLocalStore();
+        const data: any = local
+            ? await local.get('expenses', expenseId)
+            : await getExpense(supabase, expenseId, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         if (data) {
             setFormData({
                 amount: String(data.amount),
@@ -429,7 +440,8 @@ export function ExpenseFormScreen({ navigation, route }: any) {
             Alert.alert(t('error', language), t('validAmount', language));
             return;
         }
-        if (formData.payment_method === 'bank' && !formData.company_bank_account_id) {
+        const localStore = await activeLocalStore();
+        if (formData.payment_method === 'bank' && !formData.company_bank_account_id && !localStore) {
             Alert.alert(t('error', language), t('selectBankAccountRequired', language));
             return;
         }
@@ -480,6 +492,13 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 user_id: user.id,
                 company_id: companyId,
             };
+            if (localStore) {
+                // On the device the record is stored as entered (no ledger posting); the receipt photo stays with it.
+                const { user_id: _user, company_id: _company, ...localExpense } = dataToSave;
+                await localStore.save('expenses', { ...localExpense, receipt_url: formData.receipt_url.trim() || null, ...(isEditing ? { id: expenseId } : {}) });
+                navigation.goBack();
+                return;
+            }
             const correctPostedExpense = isEditing && accountingState === 'posted';
             const expenseIdempotencyKey = (!isEditing || correctPostedExpense)
                 ? await generateExpenseIdempotencyKey()

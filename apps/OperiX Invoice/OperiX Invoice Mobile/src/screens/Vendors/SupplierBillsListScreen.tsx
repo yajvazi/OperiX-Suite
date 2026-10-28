@@ -16,6 +16,7 @@ import { Card, Button } from '@invoice-monorepo/ui';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { SupplierBill } from '@invoice-monorepo/types';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { MobileHeader, MobileScreen, SearchField } from '../../components/mobile/MobileUI';
 
 function supplierBillStatusLabel(status: string, language: string): string {
@@ -50,6 +51,13 @@ export function SupplierBillsListScreen({ navigation }: any) {
         if (!user) return;
         setLoading(true);
         try {
+            const local = await activeLocalStore();
+            if (local) {
+                const vendorsById = new Map((await local.list('vendors')).map((vendor) => [vendor.id, vendor]));
+                const localBills = (await local.list('supplier_bills', { orderBy: '-issue_date' })).map((bill) => ({ ...bill, vendor: vendorsById.get(String(bill.vendor_id)) ? { name: String(vendorsById.get(String(bill.vendor_id))!.name) } : null }));
+                setBills(localBills as any);
+                return;
+            }
             const { companyIds } = await getWorkspaceScope(user.id);
             const scope = scopedResource(user.id, companyIds);
 
@@ -81,8 +89,14 @@ export function SupplierBillsListScreen({ navigation }: any) {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const { error } = await supabase.from('supplier_bills').delete().eq('id', id);
-                            if (error) throw error;
+                            const local = await activeLocalStore();
+                            if (local) {
+                                for (const item of await local.list('supplier_bill_items', { where: { bill_id: id } })) await local.remove('supplier_bill_items', item.id);
+                                await local.remove('supplier_bills', id);
+                            } else {
+                                const { error } = await supabase.from('supplier_bills').delete().eq('id', id);
+                                if (error) throw error;
+                            }
                             setBills(bills.filter(b => b.id !== id));
                         } catch (error: any) {
                             Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));

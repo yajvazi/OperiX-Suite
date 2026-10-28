@@ -30,6 +30,7 @@ import { Profile } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 const { width } = Dimensions.get('window');
 
@@ -97,11 +98,14 @@ export function ExpensesDashboardScreen({ navigation }: any) {
             const now = new Date();
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
+            const local = await activeLocalStore();
             // Fetch all expenses
-            const { data: expenses } = await supabase
-                .from('expenses')
-                .select('*')
-                .or(scope);
+            const { data: expenses } = local
+                ? { data: await local.list('expenses') as any[] }
+                : await supabase
+                    .from('expenses')
+                    .select('*')
+                    .or(scope);
 
             // Calculate totals from expense records only. Income records are
             // represented by paid invoices in this dashboard.
@@ -113,11 +117,13 @@ export function ExpensesDashboardScreen({ navigation }: any) {
                 .reduce((sum, exp) => sum + Number(exp.amount || 0), 0) || 0;
 
             // Fetch invoices for income (paid invoices)
-            const { data: paidInvoices } = await supabase
-                .from('invoices')
-                .select('*')
-                .or(scope)
-                .eq('status', 'paid');
+            const { data: paidInvoices } = local
+                ? { data: (await local.list('invoices', { where: { status: 'paid' } })) as any[] }
+                : await supabase
+                    .from('invoices')
+                    .select('*')
+                    .or(scope)
+                    .eq('status', 'paid');
 
             const totalIncomes = paidInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
 

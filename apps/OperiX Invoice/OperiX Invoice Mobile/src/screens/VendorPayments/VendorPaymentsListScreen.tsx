@@ -17,6 +17,7 @@ import { Card } from '@invoice-monorepo/ui';
 import { VendorPayment, Vendor } from '@invoice-monorepo/types';
 import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 export function VendorPaymentsListScreen({ navigation }: any) {
     const { user } = useAuth();
@@ -42,6 +43,13 @@ export function VendorPaymentsListScreen({ navigation }: any) {
         if (!user) return;
         setLoading(true);
 
+        const local = await activeLocalStore();
+        if (local) {
+            const vendorsById = new Map((await local.list('vendors')).map((vendor) => [vendor.id, vendor]));
+            setPayments((await local.list('vendor_payments', { orderBy: '-payment_date' })).map((payment) => ({ ...payment, vendor: vendorsById.get(String(payment.vendor_id)) ?? null })) as any);
+            setLoading(false);
+            return;
+        }
         const { companyIds } = await getWorkspaceScope(user.id);
         const scope = scopedResource(user.id, companyIds);
 
@@ -71,7 +79,9 @@ export function VendorPaymentsListScreen({ navigation }: any) {
                     text: t('delete', language),
                     style: 'destructive',
                     onPress: async () => {
-                        await supabase.from('vendor_payments').delete().eq('id', paymentId);
+                        const local = await activeLocalStore();
+                        if (local) await local.remove('vendor_payments', paymentId);
+                        else await supabase.from('vendor_payments').delete().eq('id', paymentId);
                         fetchPayments();
                     }
                 }

@@ -21,6 +21,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 export function ManagementScreen({ navigation }: any) {
     const { isDark, language, primaryColor } = useTheme();
@@ -53,6 +54,18 @@ export function ManagementScreen({ navigation }: any) {
             const { companyIds } = workspaceScope;
             const scope = scopedResource(user.id, companyIds);
             const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
+            const local = await activeLocalStore();
+            if (local) {
+                const localProducts = await local.list('products');
+                setStats({
+                    totalClients: (await local.list('clients')).length,
+                    totalProducts: localProducts.length,
+                    totalVendors: (await local.list('vendors')).length,
+                    totalRevenue: (await local.list('invoices', { where: { status: 'paid' } })).reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
+                    inventoryValue: localProducts.reduce((sum, product) => sum + Number(product.unit_price || 0) * Number(product.stock_quantity || 0), 0),
+                });
+                return;
+            }
             // Fetch clients count
             const { count: clientsCount } = await supabase
                 .from('clients')

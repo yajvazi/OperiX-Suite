@@ -25,6 +25,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { listCustomers, listPayments } from '@invoice-monorepo/api/repositories';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, scopedResource, scopedSearch } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import type { RootStackParamList } from '../../navigation/types';
 import {
     EmptyState,
@@ -114,8 +115,10 @@ export function SalesScreen() {
     const fetchCustomers = useCallback(async () => {
         if (!user) return;
         try {
-            const { companyIds } = await getWorkspaceScope(user.id);
-            const rows = await listCustomers(supabase, { userId: user.id, companyIds });
+            const local = await activeLocalStore();
+            const rows = local
+                ? await local.list('clients', { orderBy: 'name' })
+                : await listCustomers(supabase, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
             setCustomers((rows || []) as CustomerRow[]);
         } catch (fetchError) {
             console.error('Sales customers error:', fetchError);
@@ -140,6 +143,16 @@ export function SalesScreen() {
                 return;
             }
             const scope = scopedResource(user.id, companyIds);
+            const local = await activeLocalStore();
+            if (local) {
+                if (contractView) { setDocuments([]); setPayments([]); setExpenses([]); return; }
+                const needle = search.trim().toLowerCase();
+                const localDocuments = (await local.listInvoices({ limit: 150 })).filter((invoice) => !needle || String(invoice.invoice_number ?? '').toLowerCase().includes(needle) || String(invoice.notes ?? '').toLowerCase().includes(needle));
+                setDocuments(localDocuments as unknown as DocumentRow[]);
+                setPayments((await local.listPayments({ limit: 150 })) as Record<string, any>[]);
+                setExpenses((await local.list('expenses', { orderBy: '-date', limit: 150 })) as Record<string, any>[]);
+                return;
+            }
             if (contractView) {
                 const contractResult = await supabase
                     .from('contracts')

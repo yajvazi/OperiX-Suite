@@ -28,6 +28,7 @@ import { repairUnpostedExpenses, supabase } from '@invoice-monorepo/api';
 import type { Profile } from '@invoice-monorepo/types';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -116,8 +117,9 @@ export function HomeScreen() {
         try {
             const workspaceScope = await getWorkspaceScope(user.id);
             const { profile: workspaceProfile, companyIds, company: activeCompany } = workspaceScope;
+            const local = await activeLocalStore();
             try {
-                await repairUnpostedExpenses(supabase, companyIds);
+                if (!local) await repairUnpostedExpenses(supabase, companyIds);
             } catch (repairError) {
                 // Keep the dashboard available on older deployments before the
                 // expense repair function has been applied.
@@ -128,6 +130,35 @@ export function HomeScreen() {
             setProfile({ ...workspaceProfile, company_name: activeCompany?.company_name || workspaceProfile.company_name });
             const scope = scopedResource(user.id, companyIds);
             const productScope = scopedResource(user.id, getActiveProductCompanyIds(workspaceScope));
+            if (local) {
+                // Everything is computed from the records on the device.
+                const salesInvoices = (await local.listInvoices({ documentType: 'INVOICE' })).slice(0, 80);
+                const localPayments = await local.listPayments({ limit: 30 });
+                const localExpenses = (await local.list('expenses', { orderBy: '-date', limit: 30 })).filter((expense) => expense.type !== 'income');
+                const trackedProducts = (await local.list('products')).filter((product) => product.track_stock);
+                const todayDate = new Date().toISOString().slice(0, 10);
+                const todaysInvoices = salesInvoices.filter((invoice) => String(invoice.issue_date).slice(0, 10) === todayDate && invoice.status !== 'cancelled');
+                const receivable = salesInvoices.filter((invoice) => ['posted', 'partially_paid', 'overdue', 'sent'].includes(String(invoice.status)) && invoice.payment_status !== 'NOT_APPLICABLE');
+                const cash = (await local.listPayments()).reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+                    - (await local.list('expenses')).filter((expense) => expense.type !== 'income').reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+                setData({
+                    revenueToday: todaysInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
+                    salesToday: todaysInvoices.length,
+                    outstanding: receivable.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.amount_received || 0)), 0),
+                    overdue: salesInvoices.filter((invoice) => invoice.status === 'overdue').reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
+                    cashFlow: cash,
+                    totalAvailableFunds: cash,
+                    paymentsReceived: localPayments.filter((payment) => String(payment.payment_date).slice(0, 10) === todayDate).reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+                    lowStockCount: trackedProducts.filter((product) => Number(product.stock_quantity || 0) <= Number(product.low_stock_threshold || 5)).length,
+                    recentActivity: [
+                        ...salesInvoices.slice(0, 6).map((invoice) => ({ id: `invoice-${invoice.id}`, title: `${t('invoice', language)} ${invoice.invoice_number || ''}`.trim(), detail: (invoice.client as { name?: string } | null)?.name || t('noClientAssigned', language), amount: Number(invoice.total_amount || 0), kind: 'invoice' as const, date: String(invoice.created_at || invoice.issue_date), invoiceId: invoice.id })),
+                        ...localPayments.slice(0, 4).map((payment) => ({ id: `payment-${payment.id}`, title: t('paymentReceived', language), detail: (payment.client as { name?: string } | null)?.name || t('incomePayment', language), amount: Number(payment.amount || 0), kind: 'payment' as const, date: String(payment.created_at || payment.payment_date), paymentId: payment.id })),
+                        ...localExpenses.slice(0, 4).map((expense) => ({ id: `expense-${expense.id}`, title: String(expense.category || t('expense', language)), detail: String(expense.description || t('businessExpense', language)), amount: Number(expense.amount || 0), kind: 'expense' as const, date: String(expense.created_at || expense.date), expenseId: expense.id })),
+                    ].filter((item) => item.date).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8),
+                });
+                setLoading(false);
+                return;
+            }
             const cacheKey = mobileCacheKey('home', user.id, companyIds);
             const cachedData = await readMobileCache<HomeData>(cacheKey);
             if (cachedData) {

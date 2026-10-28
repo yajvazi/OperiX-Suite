@@ -20,6 +20,7 @@ import { Vendor } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 interface VendorsScreenProps {
     navigation: any;
@@ -62,6 +63,17 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     const fetchVendors = async () => {
         if (!user) return;
         try {
+            const local = await activeLocalStore();
+            if (local) {
+                const localVendors = await local.list('vendors', { orderBy: 'name' });
+                setVendors(localVendors as any);
+                const totals: { [key: string]: number } = {};
+                (await local.list('expenses')).forEach((expense) => {
+                    if (expense.vendor_id) totals[String(expense.vendor_id)] = (totals[String(expense.vendor_id)] || 0) + Number(expense.amount || 0);
+                });
+                setVendorStats(totals);
+                return;
+            }
             const { companyIds } = await getWorkspaceScope(user.id);
             const scope = scopedResource(user.id, companyIds);
 
@@ -149,7 +161,9 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 text: t('delete', language),
                 style: 'destructive',
                 onPress: async () => {
-                    await supabase.from('vendors').delete().eq('id', id);
+                    const local = await activeLocalStore();
+                    if (local) await local.remove('vendors', id);
+                    else await supabase.from('vendors').delete().eq('id', id);
                     fetchVendors();
                 },
             },

@@ -8,6 +8,7 @@ import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i
 import { supabase } from '@invoice-monorepo/api';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource, scopedSearch } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import type { RootStackParamList } from '../../navigation/types';
 import { EmptyState, ErrorState, MobileScreen, MobileStatusBadge, SearchField } from '../../components/mobile/MobileUI';
 
@@ -54,6 +55,20 @@ export function GlobalSearchScreen() {
             setLoading(true);
             setError(null);
             try {
+                const local = await activeLocalStore();
+                if (local) {
+                    const needle = debouncedQuery.toLowerCase();
+                    const matches = (record: Record<string, unknown>, fields: string[]) => fields.some((field) => String(record[field] ?? '').toLowerCase().includes(needle));
+                    const localGroups = [
+                        { key: 'invoices', title: t('invoices', language), icon: FileText, items: (await local.listInvoices()).filter((invoice) => matches(invoice, ['invoice_number', 'notes'])).slice(0, 8) },
+                        { key: 'customers', title: t('clients', language), icon: UserRound, items: (await local.list('clients', { orderBy: 'name' })).filter((client) => matches(client, ['name', 'email', 'phone'])).slice(0, 8) },
+                        { key: 'products', title: t('products', language), icon: Package, items: (await local.list('products', { orderBy: 'name' })).filter((product) => matches(product, ['name', 'sku', 'barcode'])).slice(0, 8) },
+                        { key: 'payments', title: t('payments', language), icon: Banknote, items: (await local.listPayments()).filter((payment) => matches(payment, ['payment_number'])).slice(0, 8) },
+                        { key: 'vendors', title: t('vendors', language), icon: Building2, items: (await local.list('vendors', { orderBy: 'name' })).filter((vendor) => matches(vendor, ['name', 'email', 'phone'])).slice(0, 8) },
+                    ] as unknown as ResultGroup[];
+                    if (active) setGroups(localGroups.filter((group) => group.items.length));
+                    return;
+                }
                 const workspaceScope = await getWorkspaceScope(user.id);
                 const { companyIds } = workspaceScope;
                 const scope = scopedResource(user.id, companyIds);

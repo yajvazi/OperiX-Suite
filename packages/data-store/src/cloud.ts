@@ -117,7 +117,7 @@ export class CloudDataStore implements DocumentStore {
     const documentType = options.documentType?.toUpperCase();
     const legacyType = documentType === 'QUOTE' ? 'offer' : documentType === 'INVOICE' ? 'invoice' : undefined;
     const rows = await listInvoices(this.client, { userId: this.scope.userId, companyIds: this.scope.companyIds }, {
-      select: '*, client:clients(*), items:invoice_items(id)',
+      select: options.fullItems ? '*, client:clients(*), items:invoice_items(*)' : '*, client:clients(*), items:invoice_items(id)',
       documentType: documentType as InvoiceDraftInput['documentType'] | undefined,
       legacyType,
       clientId: options.clientId,

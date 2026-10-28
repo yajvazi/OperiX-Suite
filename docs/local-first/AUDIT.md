@@ -188,3 +188,15 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
 - Not yet on the device: invoice actions on the detail screen (status change, delete, convert, credit note,
   PDF generation uses the local company profile but is untested), POS, company profile editing in Settings,
   editing a recorded payment, payments without an invoice, expenses, vendors, bills, reports, dashboard.
+
+## Progress (mobile, round 3)
+
+- Invoice actions (status change, delete draft, convert, credit note) and company profile editing now work on
+  the device (store: `transitionDocumentStatus`, `deleteInvoice`, `convertDocument`, `postCreditNote`).
+- Moved with an on-device path: vendors, supplier bills (and their lines), vendor payments, expenses (list,
+  dashboard, form), Home, Business hub, Dashboard, Sales, global search and POS (sale + payment). Bill scanning
+  shows a "cloud plan" notice. Settings hides branches, shared bank accounts, teams, subscription and
+  Advanced in local mode.
+- Still cloud-only on mobile: reports and tax book, accounting, contracts, customer ledger, bulk export,
+  payroll, Stripe, payment reminders, agents and COD, editing a recorded customer payment, payments with no
+  invoice, shared bank accounts, branch stock, document PDFs (untested for on-device companies).

@@ -20,6 +20,7 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Input, Button } from '@invoice-monorepo/ui';
 import { Profile, Vendor, SupplierBill, SupplierBillItem } from '@invoice-monorepo/types';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 
 interface SupplierBillFormScreenProps {
     navigation: any;
@@ -102,6 +103,12 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
     const fetchInitialData = async () => {
         if (!user) return;
         const { profile: workspaceProfile, companyIds } = await getWorkspaceScope(user.id);
+        const local = await activeLocalStore();
+        if (local) {
+            setProfile(workspaceProfile);
+            setVendors(await local.list('vendors', { orderBy: 'name' }) as any);
+            return;
+        }
         if (workspaceProfile) {
             setProfile(workspaceProfile);
             const scope = scopedResource(user.id, companyIds);
@@ -118,7 +125,10 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
     const fetchBill = async () => {
         setLoading(true);
         try {
-            const { data: bill } = await supabase.from('supplier_bills').select('*, items:supplier_bill_items(*)').eq('id', billId).single();
+            const local = await activeLocalStore();
+            const { data: bill } = local
+                ? { data: await local.get('supplier_bills', billId).then(async (row) => row ? { ...row, items: await local.list('supplier_bill_items', { where: { bill_id: billId } }) } : null) as any }
+                : await supabase.from('supplier_bills').select('*, items:supplier_bill_items(*)').eq('id', billId).single();
             if (bill) {
                 setFormData({
                     vendor_id: bill.vendor_id,
@@ -196,6 +206,16 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
             };
 
             let billIdToUse = billId;
+
+            const local = await activeLocalStore();
+            if (local) {
+                const { user_id: _user, company_id: _company, ...localBill } = billData;
+                const savedBill = await local.save('supplier_bills', { ...localBill, ...(isEditing ? { id: billId } : {}) });
+                for (const item of await local.list('supplier_bill_items', { where: { bill_id: savedBill.id } })) await local.remove('supplier_bill_items', item.id);
+                for (const item of lineItems) await local.save('supplier_bill_items', { bill_id: savedBill.id, description: item.description, quantity: item.quantity, unit_price: item.unit_price, amount: item.amount });
+                navigation.goBack();
+                return;
+            }
 
             if (isEditing) {
                 const { error } = await supabase.from('supplier_bills').update(billData).eq('id', billId);

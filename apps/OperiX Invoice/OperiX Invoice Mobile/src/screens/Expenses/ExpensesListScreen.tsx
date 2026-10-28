@@ -18,6 +18,7 @@ import { Profile } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency, formatDate } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { deleteExpense } from '@invoice-monorepo/api/repositories';
 
 interface ExpensesListScreenProps {
@@ -53,6 +54,19 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
         if (workspaceProfile) {
             setProfile(workspaceProfile);
             const scope = scopedResource(user.id, companyIds);
+            const local = await activeLocalStore();
+            if (local) {
+                if (type === 'income') {
+                    setExpenses((await local.listInvoices({ documentType: 'INVOICE' })).filter((inv) => inv.status === 'paid').map((inv) => ({
+                        id: inv.id,
+                        description: `${inv.invoice_number} - ${(inv.client as { name?: string } | null)?.name || t('client', language)}`,
+                        amount: inv.total_amount, date: inv.issue_date, category: 'incomePayment', type: 'income',
+                    })) as any);
+                } else {
+                    setExpenses((await local.list('expenses', { orderBy: '-date' })).filter((exp) => exp.type !== 'income').map((exp) => ({ ...exp, type: 'expense' })) as any);
+                }
+                return;
+            }
 
             if (type === 'income') {
                 // Fetch paid invoices as income
@@ -105,8 +119,12 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
                     onPress: async () => {
                         try {
                             if (!user) throw new Error('Your session has expired.');
-                            const { companyId } = await getWorkspaceScope(user.id);
-                            await deleteExpense(supabase, expense.id, companyId, user.id);
+                            const local = await activeLocalStore();
+                            if (local) await local.remove('expenses', expense.id);
+                            else {
+                                const { companyId } = await getWorkspaceScope(user.id);
+                                await deleteExpense(supabase, expense.id, companyId, user.id);
+                            }
                             await fetchData();
                         } catch (error) {
                             Alert.alert(

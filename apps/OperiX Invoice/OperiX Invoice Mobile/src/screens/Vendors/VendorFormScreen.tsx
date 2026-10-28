@@ -12,6 +12,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, Building2, MapPin, Globe, FileText } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
+import { activeLocalStore } from '../../services/localMode';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
@@ -51,7 +52,8 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
     }, [vendorId]);
 
     const fetchVendor = async () => {
-        const { data } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
+        const local = await activeLocalStore();
+        const { data } = local ? { data: await local.get('vendors', vendorId) as any } : await supabase.from('vendors').select('*').eq('id', vendorId).single();
         if (data) setFormData({
             name: data.name || '',
             email: data.email || '',
@@ -78,6 +80,18 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
 
         setLoading(true);
         try {
+            const local = await activeLocalStore();
+            if (local) {
+                const { name, email, phone, address, city, zip_code, country, tax_id, notes } = formData;
+                const saved = await local.save('vendors', { name, email: email || null, phone: phone || null, address: address || null, city: city || null, zip_code: zip_code || null, country: country || null, tax_id: tax_id || null, notes: notes || null, ...(isEditing ? { id: vendorId } : {}) });
+                if (!isEditing && route.params?.returnToExpense) {
+                    navigation.navigate('ExpenseForm', { selectedVendorId: saved.id, selectedVendorName: formData.name });
+                    setLoading(false);
+                    return;
+                }
+                navigation.goBack();
+                return;
+            }
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
                 .select('company_id, active_company_id')

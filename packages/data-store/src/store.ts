@@ -5,7 +5,7 @@ export type DataRecord = { id: string } & Record<string, unknown>;
 
 /** Collections the free (local) tier supports. The cloud store maps these to database tables. */
 export const LOCAL_TABLES = [
-  'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'vendor_payments', 'branches',
+  'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'supplier_bill_items', 'vendor_payments', 'branches',
   'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
   'document_source_links', 'commercial_document_events',
 ] as const;
@@ -102,6 +102,8 @@ export interface InvoiceListOptions {
   limit?: number;
   /** Oldest first instead of newest first. */
   ascending?: boolean;
+  /** Attach whole line records as `items` instead of just their ids. */
+  fullItems?: boolean;
 }
 
 export interface PaymentListOptions { customerId?: string; invoiceId?: string; limit?: number }

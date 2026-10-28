@@ -22,6 +22,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { listCustomers, listProducts } from '@invoice-monorepo/api/repositories';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveTenantCompanyIds, getWorkspaceScope } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import type { PosCartItem, RootStackParamList } from '../../navigation/types';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen, SearchField, mobileStyles } from '../../components/mobile/MobileUI';
@@ -75,6 +76,12 @@ export function POSScreen() {
         setLoading(true);
         setError(null);
         try {
+            const local = await activeLocalStore();
+            if (local) {
+                setProducts((await local.list('products', { orderBy: 'name' })) as unknown as ProductItem[]);
+                setCustomers((await local.list('clients', { orderBy: 'name' })) as unknown as CustomerItem[]);
+                return;
+            }
             const workspaceScope = await getWorkspaceScope(user.id);
             const activeTenantCompanyIds = getActiveTenantCompanyIds(workspaceScope);
             const productCompanyIds = activeTenantCompanyIds;

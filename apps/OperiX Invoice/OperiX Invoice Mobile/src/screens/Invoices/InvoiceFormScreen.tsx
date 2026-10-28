@@ -697,7 +697,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     domainDraft.idempotencyKey,
                 );
                 savedInvoice = amended as typeof savedInvoice;
-            } else if (isPosFlow && !invoiceId) {
+            } else if (isPosFlow && !invoiceId && !isLocalStorage) {
                 const posPayment = posPaymentMethod === 'debt'
                     ? 'customer_credit'
                     : posPaymentMethod === 'other'
@@ -757,6 +757,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 savedInvoice = savedLocal as unknown as typeof savedInvoice;
                 if (savedLocal.id && (invoiceId || deliveryMethod)) {
                     await store.save('invoices', { id: savedLocal.id, delivery_method: deliveryMethod, pickup_branch_id: pickupBranchId, delivery_details: resolvedDeliveryDetails, post_cod: deliveryMethod === 'delivery' && postCod });
+                }
+                if (issuingNow && !invoiceId && isPosFlow && documentType === 'INVOICE' && posPaymentMethod !== 'debt') {
+                    // A POS sale is paid at the counter: record the full amount against the new invoice.
+                    await store.recordCustomerPayment({
+                        invoiceId: savedLocal.id,
+                        amount: Number(savedLocal.total_amount),
+                        paymentDate: issueDateOnly,
+                        paymentMethod: posPaymentMethod === 'cash' || paymentMethod === 'cash' ? 'cash' : posPaymentMethod === 'card' || paymentMethod === 'card' ? 'card' : 'other',
+                        notes: `POS sale ${String(savedLocal.invoice_number || '')}`.trim(),
+                    });
                 }
                 if (issuingNow && !invoiceId && !isPosFlow && documentType === 'INVOICE' && paymentMethod === 'cash' && !postCod && customerForInvoice?.id && toMinorCurrencyUnits(amountPaid) >= toMinorCurrencyUnits(Number(savedLocal.total_amount))) {
                     await store.recordCustomerPayment({ invoiceId: savedLocal.id, amount: Number(savedLocal.total_amount), paymentDate: issueDateOnly, paymentMethod: 'cash', notes: `Cash payment for ${String(savedLocal.invoice_number || '')}`.trim() });

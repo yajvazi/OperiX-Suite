@@ -20,6 +20,7 @@ import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i
 import { listCompanyBankAccounts } from '@invoice-monorepo/api/repositories';
 import { generateTransactionPdf, generateTransactionPdfHtml, printTransactionPdf, shareTransactionPdf } from '../../services/pdf/transactionPdf';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { TransactionDocumentActions, TransactionPreviewModal } from '../../components/mobile/TransactionDocumentActions';
 import { documentPdfFileName } from '../../services/pdf/fileNaming';
 import * as Crypto from 'expo-crypto';
@@ -74,6 +75,8 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
 
     const fetchVendors = async () => {
         if (!user) return;
+        const local = await activeLocalStore();
+        if (local) { setVendors(await local.list('vendors', { orderBy: 'name' }) as any); return; }
         const { companyIds } = await getWorkspaceScope(user.id);
 
         const { data } = await supabase
@@ -85,6 +88,11 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
     };
 
     const fetchUnpaidBills = async (vendorId: string) => {
+        const local = await activeLocalStore();
+        if (local) {
+            setUnpaidBills((await local.list('supplier_bills', { where: { vendor_id: vendorId }, orderBy: '-issue_date' })).filter((bill) => bill.status !== 'paid') as any);
+            return;
+        }
         const { data } = await supabase
             .from('supplier_bills')
             .select('*')
@@ -97,6 +105,7 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
     const fetchBankAccounts = async () => {
         if (!user) return;
         try {
+            if (await activeLocalStore()) return; // Shared bank accounts are a cloud feature.
             const { companyId } = await getWorkspaceScope(user.id);
             const data = await listCompanyBankAccounts(supabase, companyId);
             setBankAccounts(data as unknown as CompanyBankAccount[]);
@@ -113,7 +122,8 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
     };
 
     const fetchPayment = async () => {
-        const { data } = await supabase.from('vendor_payments').select('*').eq('id', paymentId).single();
+        const local = await activeLocalStore();
+        const { data } = local ? { data: await local.get('vendor_payments', paymentId) as any } : await supabase.from('vendor_payments').select('*').eq('id', paymentId).single();
         if (data) {
             setFormData({
                 vendor_id: data.vendor_id || '',
@@ -133,6 +143,12 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
 
     const generatePaymentNumber = async () => {
         if (!user) return;
+        const local = await activeLocalStore();
+        if (local) {
+            const existingCount = (await local.list('vendor_payments')).length;
+            setFormData(prev => ({ ...prev, payment_number: `VP-${local.deviceCode}-${String(existingCount + 1).padStart(4, '0')}` }));
+            return;
+        }
         const { companyIds } = await getWorkspaceScope(user.id);
 
         const { count } = await supabase
@@ -248,8 +264,19 @@ export function VendorPaymentFormScreen({ navigation, route }: any) {
         setLoading(true);
         try {
             const { companyId, profile, company } = await getWorkspaceScope(user!.id);
-            if (formData.payment_method === 'bank' && !formData.company_bank_account_id) {
+            const local = await activeLocalStore();
+            if (formData.payment_method === 'bank' && !formData.company_bank_account_id && !local) {
                 throw new Error(t('selectBankAccount', language));
+            }
+
+            if (local) {
+                await local.save('vendor_payments', {
+                    vendor_id: formData.vendor_id, payment_number: formData.payment_number, amount: Number(formData.amount), payment_date: formData.payment_date,
+                    payment_method: formData.payment_method, bank_reference: formData.bank_reference || null, description: formData.description || null, notes: formData.notes || null,
+                    ...(isEditing ? { id: paymentId } : {}),
+                });
+                navigation.goBack();
+                return;
             }
 
             if (isEditing) {

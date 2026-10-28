@@ -21,6 +21,7 @@ import { Expense, ExpenseCategory } from '@invoice-monorepo/types';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import { deleteExpense, listExpenses } from '@invoice-monorepo/api/repositories';
 
 export function ExpensesScreen({ navigation }: any) {
@@ -64,8 +65,10 @@ export function ExpensesScreen({ navigation }: any) {
 
     const fetchExpenses = async () => {
         if (!user) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const data = await listExpenses(supabase, { userId: user.id, companyIds });
+        const local = await activeLocalStore();
+        const data = local
+            ? await local.list('expenses', { orderBy: '-date' })
+            : await listExpenses(supabase, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         const expenseRows = data as unknown as Expense[];
         setExpenses(expenseRows);
         applyFilters(expenseRows, selectedCategory, searchQuery, typeFilter);
@@ -109,8 +112,12 @@ export function ExpensesScreen({ navigation }: any) {
                 onPress: async () => {
                     try {
                         if (!user) throw new Error('Your session has expired.');
-                        const { companyId } = await getWorkspaceScope(user.id);
-                        await deleteExpense(supabase, id, companyId, user.id);
+                        const local = await activeLocalStore();
+                        if (local) await local.remove('expenses', id);
+                        else {
+                            const { companyId } = await getWorkspaceScope(user.id);
+                            await deleteExpense(supabase, id, companyId, user.id);
+                        }
                         await fetchExpenses();
                     } catch (error) {
                         Alert.alert(t('error', language), error instanceof Error ? error.message : t('failedToSaveExpense', language));

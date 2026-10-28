@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ArrowLeft, Camera, Image as ImageIcon, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
+import { activeLocalStore } from '../../services/localMode';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { Button, Card } from '@invoice-monorepo/ui';
@@ -61,6 +62,11 @@ export function ScanBillScreen({ navigation }: any) {
 
     const handleScan = async () => {
         if (!image) return;
+        if (await activeLocalStore()) {
+            // Scanning runs on the OperiX servers, so it is part of the cloud plan.
+            Alert.alert(language === 'sq' ? 'Skanimi është pjesë e planit cloud' : 'Scanning is part of the cloud plan', language === 'sq' ? 'Kaloni te ruajtja në cloud për të skanuar fatura furnitori.' : 'Switch to cloud storage to scan supplier bills.');
+            return;
+        }
 
         setScanning(true);
         try {

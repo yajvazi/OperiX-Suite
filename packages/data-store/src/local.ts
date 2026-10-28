@@ -352,7 +352,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     return invoices.map((invoice) => ({
       ...invoice,
       client: invoice.client_id ? clients.get(String(invoice.client_id)) ?? null : null,
-      items: items.filter((item) => item.invoice_id === invoice.id).map((item) => ({ id: item.id })),
+      items: items.filter((item) => item.invoice_id === invoice.id).map((item) => options.fullItems ? item : { id: item.id }),
     }));
   }
 
