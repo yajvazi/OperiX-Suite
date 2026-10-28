@@ -1,0 +1,1 @@
+-- Legacy invoice-items placeholder retained for migration-history compatibility.

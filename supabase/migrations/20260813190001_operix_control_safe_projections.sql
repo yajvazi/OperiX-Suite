@@ -1,4 +1,5 @@
 -- OperiX Control safe server projections.
+-- Migration filename normalized to keep the historical version unique.
 -- Keep bearer tokens and audit payload JSON out of the Control browser contract.
 
 begin;

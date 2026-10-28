@@ -20,11 +20,13 @@ begin
   limit 1;
 
   if admin_user_id is null or yll_user_id is null then
-    raise exception 'Both admin@lrdy-group.com and yllajvazi@lrdy-group.com must exist';
+    raise notice 'Historical sales attribution users are not present; skipping correction.';
+    return;
   end if;
 
   if admin_user_id = yll_user_id then
-    raise exception 'The source and destination agents must be different users';
+    raise notice 'Historical sales attribution source and destination are identical; skipping correction.';
+    return;
   end if;
 
   perform set_config('app.financial_workflow', 'authorized', true);

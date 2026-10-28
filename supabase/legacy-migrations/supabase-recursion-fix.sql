@@ -40,4 +40,3 @@ CREATE POLICY "Owners can delete memberships" ON memberships
   FOR DELETE USING (
     is_company_owner(company_id)
   );
-inse

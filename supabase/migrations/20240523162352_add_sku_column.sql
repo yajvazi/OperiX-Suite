@@ -1,1 +1,1 @@
-alter table products add column if not exists sku text;
+alter table if exists public.products add column if not exists sku text;

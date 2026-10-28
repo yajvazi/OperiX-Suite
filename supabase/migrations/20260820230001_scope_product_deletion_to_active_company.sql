@@ -1,4 +1,5 @@
 -- Product deletion must be scoped to the exact active company.
+-- Migration filename normalized to keep the historical version unique.
 --
 -- A parent company may be authorized to manage descendant tenants, but that
 -- does not mean a product from a descendant can be deleted while the parent
@@ -74,4 +75,3 @@ $$;
 
 revoke all on function public.delete_product(uuid, uuid) from public, anon;
 grant execute on function public.delete_product(uuid, uuid) to authenticated;
-

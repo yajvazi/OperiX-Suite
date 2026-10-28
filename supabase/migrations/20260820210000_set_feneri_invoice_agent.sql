@@ -11,12 +11,13 @@ begin
   select company.id
     into feneri_company_id
     from public.companies company
-   where lower(coalesce(company.company_name, company.name, '')) = 'feneri'
+   where lower(coalesce(company.company_name, '')) = 'feneri'
    order by company.created_at nulls last, company.id
    limit 1;
 
   if feneri_company_id is null then
-    raise exception 'Tenant Feneri was not found';
+    raise notice 'Tenant Feneri was not found; skipping historical attribution.';
+    return;
   end if;
 
   select auth_user.id
@@ -26,7 +27,8 @@ begin
    limit 1;
 
   if yll_user_id is null then
-    raise exception 'User yllajvazi@lrdy-group.com was not found';
+    raise notice 'User yllajvazi@lrdy-group.com was not found; skipping historical attribution.';
+    return;
   end if;
 
   if not exists (
@@ -36,7 +38,8 @@ begin
        and membership.user_id = yll_user_id
        and coalesce(membership.status, 'active') <> 'revoked'
   ) then
-    raise exception 'Yll Ajvazi is not an active member of tenant Feneri';
+    raise notice 'Yll Ajvazi is not an active member of tenant Feneri; skipping historical attribution.';
+    return;
   end if;
 
   -- This is an intentional historical attribution correction. Use the same

@@ -1,0 +1,104 @@
+migration	result_on_copy_of_live	detail
+20240101000000_legacy_schema_foundation.sql	OK	
+20260723070419_unify_invoice_company_rls.sql	FAIL	ERROR:  policy "companies_member_select" for table "companies" already exists
+20260724090000_invoice_growth_features.sql	OK	
+20260727123000_product_calculation_imports.sql	OK	
+20260727160000_kosovo_tax_reporting_fields.sql	OK	
+20260801100138_storage_company_isolation.sql	OK	
+20260805090000_operix_crm_integration.sql	OK	
+20260806111345_operix_support_foundation.sql	OK	
+20260807120000_phase_c_meta_channels.sql	FAIL	ERROR:  constraint "support_conversations_provider_check" for relation "support_conversations" already exists
+20260812141314_phase_1_accounting_completion.sql	OK	
+20260812143008_phase_2_tax_payroll_assets_inventory.sql	FAIL	ERROR:  cannot drop columns from view
+20260812144747_phase_3_reporting_mobile_compliance.sql	OK	
+20260812150605_invoice_customer_signatures.sql	OK	
+20260812154150_kosovo_efs_certification_readiness_20260812.sql	FAIL	ERROR:  trigger "fiscal_configuration_history_append_only" for relation "fiscal_configuration_history" already exists
+20260812161000_efs_tenant_and_receipt_access_hardening.sql	OK	
+20260812173000_delivery_note_numbering_compatibility.sql	OK	
+20260812181001_walk_in_customer_for_documents.sql	OK	
+20260813100000_citizen_walk_in_customer_name.sql	OK only with service-role session	needs request.jwt.claims role=service_role
+20260813120000_contract_builder_foundation.sql	OK	
+20260813145000_operix_desk_legacy_schema.sql	OK	
+20260813150000_operix_desk_shared_workspace.sql	OK	
+20260813180000_operix_control_foundation.sql	OK	
+20260813183000_operix_control_invitation_hardening.sql	OK	
+20260813190001_operix_control_safe_projections.sql	FAIL	ERROR:  cannot change return type of existing function
+20260813191000_operix_control_authorization_hardening.sql	OK	
+20260813192000_operix_control_active_context.sql	OK	
+20260813193000_operix_control_membership_lifecycle.sql	OK	
+20260819100000_product_images.sql	OK	
+20260819101000_invoice_product_pictures.sql	OK	
+20260819102000_product_images_storage.sql	OK	
+20260819130000_invoice_delivery_method.sql	OK	
+20260819133000_invoice_delivery_details.sql	FAIL	ERROR:  function public.set_invoice_delivery_details(uuid, text, unknown, unknown) is not unique
+20260819145555_invoice_number_allocator_compatibility.sql	OK	
+20260820105000_fix_company_owner_permissions.sql	OK	
+20260820120000_operix_intelligence.sql	OK	
+20260820130000_repair_unposted_expenses.sql	OK	
+20260820130426_delete_expense_with_ledger_cleanup.sql	OK	
+20260820133000_expense_correction_workflow.sql	OK	
+20260820141151_sales_book_period_lifecycle.sql	OK	
+20260820150000_expense_payment_method.sql	OK	
+20260820165417_invoice_agent_push_notifications.sql	OK	
+20260820220000_stripe_stores_sales_and_balances.sql	OK	
+20260820230000_remove_sales_book_vat_registration_gate.sql	OK	
+20260820230001_scope_product_deletion_to_active_company.sql	OK	
+20260820240000_fix_blank_company_agents.sql	OK	
+20260820250000_move_admin_sales_to_yll.sql	OK only with service-role session	needs request.jwt.claims role=service_role
+20260820260000_make_yll_and_leartha_company_admins.sql	OK only with service-role session	needs request.jwt.claims role=service_role
+20260821083855_cleanup_stripe_invoice_notes.sql	FAIL	ERROR:  Posted financial records are immutable; use a correction or reversal workflow
+20260821153000_drop_ambiguous_delivery_rpc.sql	OK	
+20260821160000_operational_pending_fund_balances.sql	OK	
+20260821160001_reports_hub_performance.sql	OK	
+20260821162000_agent_advances.sql	OK	
+20260822090000_expense_vat_articles_and_vendor_link.sql	OK	
+20260822170000_credit_note_returns.sql	OK	
+20260822180000_incoming_payments_other_income_finance.sql	OK (after fixing the Stripe-bank-fund constraint)	
+20260822193000_expenses_module_upgrade.sql	OK (after authorizing the backfill)	
+20260822200000_cash_payment_limit.sql	OK	
+20260824090000_sync_invoice_status_transitions.sql	OK	
+20260824091934_invoice_subscription_billing.sql	FAIL	ERROR:  cannot remove parameter defaults from existing function
+20260824110000_signup_workspace_onboarding.sql	OK	
+20260824113000_repair_confirmed_signup_workspaces.sql	OK	
+20260824114000_fix_signup_accounting_initialization.sql	OK	
+20260824120000_account_deletion.sql	OK	
+20260824123000_invoice_rbac_complete.sql	FAIL	ERROR:  Membership changes require a protected administration workflow
+20260824130000_invoice_rbac_hardening.sql	OK	
+20260824143000_invoice_rbac_workflow_guards.sql	OK	
+20260824150000_invoice_rbac_storage_and_scope_followup.sql	OK	
+20260824151000_invoice_rbac_storage_and_report_followup.sql	OK	
+20260824153000_invoice_rbac_scope_workflow_guards.sql	OK	
+20260824170000_operix_product_subscriptions.sql	OK	
+20260824180000_booking_mobile_edit_command.sql	OK	
+20260824180001_invoice_rbac_final_guards.sql	OK	
+20260824181000_invoice_rbac_document_and_related_guards.sql	OK	
+20260824182000_invoice_rbac_rpc_variable_fix.sql	OK	
+20260824183000_invoice_rbac_tax_report_followup.sql	OK	
+20260824184000_invoice_rbac_related_record_guard_fix.sql	OK	
+20260824185000_invoice_rbac_financial_scope_followup.sql	FAIL	ERROR:  policy "contracts_templates_rbac_select" for table "contract_templates" already exists
+20260824186000_invoice_rbac_contract_permission_catalog.sql	OK	
+20260824190000_booking_customer_update_command.sql	OK	
+20260824210000_invoice_users_access_billing.sql	OK	
+20260824220000_booking_growth_foundation.sql	FAIL	ERROR:  constraint "booking_services_group_booking_mode_check" for relation "booking_services" already exists
+20260824230000_enterprise_product_access_hardening.sql	FAIL	ERROR:  function hr_clock_in_unchecked_operix(uuid, uuid, text) already exists in schema "public"
+20260824231000_product_access_selection_read_model.sql	OK	
+20260824232000_enterprise_contract_audit_validation.sql	OK	
+20260824233000_enterprise_rpc_acl_hardening.sql	OK	
+20260824240000_invoice_pricing_alignment.sql	OK	
+20260824245000_control_enterprise_refresh_boundary.sql	OK	
+20260824250000_strict_enterprise_entitlement_sources.sql	OK	
+20260824251000_desk_device_token_product_boundary.sql	OK	
+20260824252000_hr_legacy_payroll_rpc_boundary.sql	OK	
+20260824261000_public_api_platform.sql	OK	
+20260824262000_booking_invoice_automation.sql	OK	
+20260824263000_public_api_control_plane.sql	OK	
+20260824264000_public_api_entitlement_period.sql	OK	
+20260824265000_invoice_pricing_contract.sql	OK	
+20260824266000_public_api_atomic_external_references.sql	OK	
+20260824267000_booking_public_attempt_ip_hash_fix.sql	OK	
+20260824268000_server_request_claims_compat.sql	OK	
+20260825090000_booking_pages.sql	FAIL	ERROR:  policy "booking_pages_manage" for table "booking_pages" already exists
+20260825100000_booking_platform_features.sql	OK	
+20260825110000_booking_completion.sql	OK	
+20260825120000_booking_industry_profiles.sql	OK	
+20260825130000_booking_industry_settings_read.sql	OK	

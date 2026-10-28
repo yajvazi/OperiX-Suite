@@ -1,0 +1,1 @@
+-- Legacy remote-schema placeholder retained for migration-history compatibility.

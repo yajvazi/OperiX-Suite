@@ -421,22 +421,29 @@ begin
     order by movement.created_at, movement.id
     for update
   loop
-    select coalesce(product.stock_quantity, 0)
-    into stock_before
-    from public.products product
-    where product.id = stock_row.product_id
-    for update;
+    if stock_row.branch_id is not null then
+      select coalesce(stock.stock_quantity, 0) into stock_before
+      from public.product_branch_stock stock
+      where stock.company_id = invoice_row.company_id and stock.branch_id = stock_row.branch_id and stock.product_id = stock_row.product_id
+      for update;
+      if found then
+        update public.product_branch_stock set stock_quantity = stock_before - stock_row.quantity_delta, updated_by = actor_id, updated_at = now() where company_id = invoice_row.company_id and branch_id = stock_row.branch_id and product_id = stock_row.product_id;
+        update public.products set stock_quantity = (select coalesce(sum(stock_quantity), 0) from public.product_branch_stock where company_id = invoice_row.company_id and product_id = stock_row.product_id) where id = stock_row.product_id;
+      end if;
+    else
+      select coalesce(product.stock_quantity, 0) into stock_before from public.products product where product.id = stock_row.product_id for update;
+      if found then
+        update public.products set stock_quantity = stock_before - stock_row.quantity_delta where id = stock_row.product_id;
+      end if;
+    end if;
 
     if found then
-      update public.products
-      set stock_quantity = stock_before - stock_row.quantity_delta
-      where id = stock_row.product_id;
 
       insert into public.inventory_stock_movements (
-        company_id, product_id, invoice_id, movement_type, quantity_delta,
+        company_id, branch_id, product_id, invoice_id, movement_type, quantity_delta,
         stock_before, stock_after, created_by
       ) values (
-        invoice_row.company_id, stock_row.product_id, null, 'invoice_reversal',
+        invoice_row.company_id, stock_row.branch_id, stock_row.product_id, null, 'invoice_reversal',
         -stock_row.quantity_delta, stock_before, stock_before - stock_row.quantity_delta, actor_id
       );
     end if;

@@ -1,4 +1,5 @@
 -- Reuse the company-scoped walk-in customer for documents created outside POS.
+-- Migration filename normalized to keep the historical version unique.
 -- Sales posting requires a customer subledger row, so the mobile form must not
 -- represent a walk-in sale as a null client_id.
 

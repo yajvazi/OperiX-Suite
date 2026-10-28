@@ -853,7 +853,7 @@ begin
       'currency', upper(coalesce(nullif(transaction_row.currency, ''), 'EUR')),
       'tax_amount', 0,
       'total_amount', transaction_row.amount,
-      'notes', 'Imported from Stripe store ' || store_row.store_name || '. Stripe transaction: ' || transaction_row.stripe_id,
+      'notes', 'Stripe transaction: ' || transaction_row.stripe_id,
       'source_document_type', 'stripe_transaction',
       'source_document_id', transaction_row.id,
       'template_id', 'corporate',
