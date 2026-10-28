@@ -6,12 +6,11 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Armchair,
+  CircleHelp,
   Bell,
   CalendarDays,
   FileCheck2,
   FileText,
-  Grid2X2,
   HandCoins,
   LogOut,
   MoreHorizontal,
@@ -20,11 +19,9 @@ import {
   Plus,
   ReceiptText,
   Search,
-  ShieldCheck,
   Settings2,
   Sun,
   UserRound,
-  UsersRound,
   WalletCards,
   X,
 } from "lucide-react";
@@ -80,19 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
   const [companySwitching, setCompanySwitching] = useState(false);
   const [companySwitchError, setCompanySwitchError] = useState("");
-  const [enterpriseProducts, setEnterpriseProducts] = useState({ hr: false, desk: false });
   const mobileCreateMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const client = createClient();
-    if (!client || !workspace.companyId) return;
-    let active = true;
-    void Promise.all(["hr", "desk"].map((product) => client.rpc("get_my_product_access", { p_product: product }))).then((results) => {
-      if (!active) return;
-      setEnterpriseProducts({ hr: Boolean((results[0].data || [])[0]?.allowed), desk: Boolean((results[1].data || [])[0]?.allowed) });
-    }).catch(() => { if (active) setEnterpriseProducts({ hr: false, desk: false }); });
-    return () => { active = false; };
-  }, [workspace.companyId]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -133,7 +118,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (mobileCreateMenuRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest(".operix-shared-sidebar-workspace-wrap")) return;
+      // Presses inside a menu or on a top bar button belong to that control (it opens/closes itself on click).
+      if (target instanceof Element && target.closest(".operix-shared-sidebar-workspace-wrap, .app-popover, .app-create-desktop, .operix-shared-topbar-slot")) return;
       setCreateOpen(false);
       setNotificationsOpen(false);
       setCompanyOpen(false);
@@ -340,13 +326,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   })), [workspace.companies]);
 
   const appLinks = useMemo(() => [
-    ...(workspace.platformAdmin ? [{ label: "OperiX Control", href: externalUrl("NEXT_PUBLIC_OPERIX_CONTROL_URL", "https://control.operixsuite.com"), tone: "control", icon: ShieldCheck }] : []),
-    { label: "OperiX Suite", href: externalUrl("NEXT_PUBLIC_OPERIX_SUITE_URL", "https://suite.operixsuite.com"), tone: "suite", icon: Grid2X2 },
-    { label: "OperiX Invoice", href: "/dashboard", current: true, tone: "invoice", icon: ReceiptText },
-    { label: "OperiX HR", href: externalUrl("NEXT_PUBLIC_OPERIX_HR_URL", "https://hr.operixsuite.com"), tone: "hr", icon: UsersRound, locked: !enterpriseProducts.hr, lockedHref: "https://suite.operixsuite.com/contact?type=enterprise&product=hr" },
-    { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays },
-    { label: "OperiX Desk", href: externalUrl("NEXT_PUBLIC_OPERIX_DESK_URL", "https://desk.operixsuite.com"), tone: "desk", icon: Armchair, locked: !enterpriseProducts.desk, lockedHref: "https://suite.operixsuite.com/contact?type=enterprise&product=desk" },
-  ], [enterpriseProducts, workspace.platformAdmin]);
+    { label: "OperiX Invoice", href: "/dashboard", current: true, tone: "invoice", icon: ReceiptText, locked: false, lockedHref: undefined as string | undefined },
+    { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays, current: false, locked: false, lockedHref: undefined as string | undefined },
+    { label: "Help Center", href: externalUrl("NEXT_PUBLIC_OPERIX_HELP_CENTER_URL", "https://helpdesk.operixsuite.com"), tone: "help", icon: CircleHelp, current: false, locked: false, lockedHref: undefined as string | undefined },
+  ], []);
 
   const companyName = workspace.company?.company_name || workspace.company?.name || workspace.profile?.company_name || "OperiX workspace";
   const firstName = workspace.profile?.first_name || workspace.user?.email?.split("@")[0] || "there";
