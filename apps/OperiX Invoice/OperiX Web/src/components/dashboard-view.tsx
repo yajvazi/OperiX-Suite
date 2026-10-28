@@ -1,6 +1,6 @@
 "use client";
 
-import { POS_ENABLED } from "@/lib/features";
+import { newDocumentHref, POS_ENABLED } from "@/lib/features";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -70,7 +70,7 @@ export function DashboardView() {
       </section>
       {error ? <ErrorState message={error} onRetry={() => { void invoicesQuery.refresh(); void expensesQuery.refresh(); void productsQuery.refresh(); }} /> : null}
       {loading && !invoicesQuery.data.length && !expensesQuery.data.length ? <LoadingSkeleton rows={5} /> : null}
-      {!loading && !error && !invoicesQuery.data.length && !expensesQuery.data.length ? <EmptyState title="Your workspace is ready" description="Create your first invoice or add a customer to start seeing business activity here." actionLabel="Create invoice" actionHref="/invoices/new" icon={ReceiptText} /> : null}
+      {!loading && !error && !invoicesQuery.data.length && !expensesQuery.data.length ? <EmptyState title="Your workspace is ready" description="Create your first invoice or add a customer to start seeing business activity here." actionLabel="Create invoice" actionHref={newDocumentHref()} icon={ReceiptText} /> : null}
       {!error && (loading || invoicesQuery.data.length || expensesQuery.data.length) ? <>
         <section className="dashboard-highlight" aria-label="Revenue today">
           <div><span>Revenue Today</span><strong>{money(revenueToday)}</strong><small>{period === "all" ? "Live workspace total for today" : `Filtered to ${periodOptions.find((option) => option.value === period)?.label.toLowerCase()}`}</small></div>
@@ -86,8 +86,8 @@ export function DashboardView() {
         <section className="dashboard-main-grid">
           <SectionCard title="Quick Actions" action={<Link className="ux-inline-link" href="/more">View all</Link>} className="dashboard-quick-card">
             <div className="ux-quick-actions">
-              <QuickAction label="New Invoice" icon={FileText} href="/invoices/new" />
-              <QuickAction label="New Quote" icon={FileCheck2} href="/invoices/new?type=offer" />
+              <QuickAction label="New Invoice" icon={FileText} href={newDocumentHref()} />
+              <QuickAction label="New Quote" icon={FileCheck2} href={newDocumentHref("offer")} />
               {POS_ENABLED ? <QuickAction label="POS Sale" icon={ShoppingCart} href="/pos" /> : null}
               <QuickAction label="New Customer" icon={UserPlus} href="/customers?create=1" />
               <QuickAction label="New Product" icon={PackagePlus} href="/products?create=1" />

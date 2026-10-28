@@ -1,5 +1,6 @@
 "use client";
 
+import { newDocumentHref } from "@/lib/features";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -107,7 +108,7 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
 
   const title = type === "invoice" ? "Invoices" : "Quotes";
   const singular = type === "invoice" ? "invoice" : "quote";
-  const newHref = type === "invoice" ? "/invoices/new" : "/invoices/new?type=offer";
+  const newHref = newDocumentHref(type === "invoice" ? undefined : "offer");
 
   return <div className="invoice-list-page">
     <PageHeader title={title} description={type === "invoice" ? "Create, send, and keep track of every customer invoice." : "Prepare proposals and turn approved quotes into invoices."} actions={<>{canCreate ? <Link data-testid={type === "invoice" ? "invoice.create" : "quote.create"} href={newHref} className="btn btn-primary"><Plus size={16} /> New {type === "invoice" ? "invoice" : "quote"}</Link> : null}{type === "offer" && source.length && workspace.can("invoice.create") ? <Link href={`/invoices/new?convert=${source[0].id}`} className="btn">Convert quote</Link> : null}</>} />

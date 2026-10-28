@@ -22,7 +22,8 @@ import {
 } from "lucide-react";
 import { useBusinessData } from "@/hooks/use-business-data";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { addDays, isoToday, money } from "@/lib/format";
+import { isoToday, money } from "@/lib/format";
+import { DUE_DATE_PRESETS, dueDateForPreset, type DueDatePreset } from "@invoice-monorepo/api/domain";
 import { POS_NOTICE } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -41,6 +42,7 @@ type DiscountMode = "amount" | "percent";
 type PosPayment = "cash" | "card" | "debt" | "other";
 type PosInvoiceType = "invoice" | "offer" | "proforma" | "order";
 
+const DUE_LABELS: Record<DueDatePreset, string> = { one_week: "In 1 week", two_weeks: "In 2 weeks", one_month: "In 1 month", two_months: "In 2 months", three_months: "In 3 months" };
 const invoiceTypes: Array<{ value: PosInvoiceType; label: string; type: string; subtype: string }> = [
   { value: "invoice", label: "Invoice", type: "invoice", subtype: "regular" },
   { value: "offer", label: "Quote", type: "offer", subtype: "offer" },
@@ -129,10 +131,17 @@ export function PosView() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [invoiceType, setInvoiceType] = useState<PosInvoiceType>("invoice");
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("type");
+    const match = requested ? invoiceTypes.find((option) => option.value === requested) : undefined;
+    if (match) setInvoiceType(match.value);
+  }, []);
   const [discountMode, setDiscountMode] = useState<DiscountMode>("percent");
   const [discountValue, setDiscountValue] = useState(0);
   const [taxRate, setTaxRate] = useState(18);
   const [note, setNote] = useState("");
+  const [duePreset, setDuePreset] = useState<"today" | DueDatePreset>("today");
+  const dueDateValue = duePreset === "today" ? isoToday() : dueDateForPreset(isoToday(), duePreset);
   const [payment, setPayment] = useState<PosPayment>("cash");
   const [cashReceived, setCashReceived] = useState(0);
   const [cashReceivedText, setCashReceivedText] = useState("");
@@ -430,7 +439,7 @@ export function PosView() {
       client_id: clientId,
       invoice_number: `DRAFT-${isoToday().replaceAll("-", "")}`,
       issue_date: isoToday(),
-      due_date: addDays(isoToday(), 0),
+      due_date: dueDateValue,
       payment_method: paymentMethod(payment),
       amount_received: payment === "cash" ? cashReceived : status === "paid" ? totals.total : 0,
       notes: note,
@@ -557,7 +566,7 @@ export function PosView() {
         setCashReceived(0);
         setCashReceivedText("");
         setDiscountValue(0);
-        setNote("");
+        setNote(""); setDuePreset("today");
         setCustomerSignatureRequested(false);
         setCustomerSignature(null);
         completionIdempotencyKeyRef.current = null;
@@ -584,7 +593,7 @@ export function PosView() {
       clientId: clientId || null,
       invoiceNumber: null,
       issueDate: isoToday(),
-      dueDate: addDays(isoToday(), 0),
+      dueDate: dueDateValue,
       documentType: commercialDocumentType,
       status: "draft",
       commercialStatus: "DRAFT",
@@ -607,7 +616,7 @@ export function PosView() {
       setCashReceived(0);
       setCashReceivedText("");
       setDiscountValue(0);
-      setNote("");
+      setNote(""); setDuePreset("today");
       setCustomerSignatureRequested(false);
       setCustomerSignature(null);
       setMessageTone("success");
@@ -645,7 +654,7 @@ export function PosView() {
           <div className="flex flex-wrap items-start gap-3 border-b border-[#edf0f4] p-4"><div className="min-w-0 basis-44 flex-1"><h2 className="text-lg font-semibold">{invoiceTypes.find((option) => option.value === invoiceType)?.label || "Invoice"} <span className="ml-1 rounded bg-[#ecfdf3] px-2 py-1 text-[10px] font-medium text-[#087443]">New</span></h2><p className="muted mt-1 text-[11px]">{cart.length ? `${cart.length} line item${cart.length === 1 ? "" : "s"}` : "No items added"} · {terminalReady ? terminals.find((terminal) => terminal.id === terminalId)?.name || "Terminal ready" : stockCheckout ? "Inventory checkout" : "Terminal required"}</p></div><div className="flex w-full min-w-0 justify-end gap-2 sm:ml-auto sm:w-auto"><label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Invoice type</span><select className="select h-9 w-full min-w-0 px-2 text-xs sm:w-auto sm:min-w-32" value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as PosInvoiceType)}>{invoiceTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="btn h-9 shrink-0 px-3 text-xs" onClick={() => void holdCurrentCart()} disabled={saving || !terminalReady || (!cart.length && !heldOrder)} title={heldOrder && !cart.length ? "Resume held order" : "Hold order"}>{heldOrder && !cart.length ? <FileText size={15}/> : <WalletCards size={15}/>}<span className="hidden sm:inline">{heldOrder && !cart.length ? "Resume" : "Hold"}</span></button><button className="btn h-9 shrink-0 px-3 text-xs" onClick={clearCart} disabled={!cart.length || saving}><Trash2 size={15}/><span className="hidden sm:inline">Clear</span></button></div></div>
           <div className="border-b border-[#edf0f4] p-4"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Customer</span><Link className="text-xs font-medium text-[#004ffe]" href="/customers"><Plus size={14} className="mr-1 inline"/>New customer</Link></div><div className="relative"><UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#667085]"/><input className="input pl-9 pr-9" placeholder="Search customers…" value={clientId ? (clients.find((client) => client.id === clientId)?.name || "") : customerSearch} onFocus={() => setCustomerPickerOpen(true)} onChange={(event) => { setCustomerSearch(event.target.value); setClientId(""); setCustomerPickerOpen(true); }} aria-label="Search customers"/><button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#667085]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(true); }} aria-label="Clear customer"><X size={15}/></button>{customerPickerOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#e4e9f0] bg-white p-1 shadow-lg"><button type="button" className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(""); setCustomerSearch(""); setCustomerPickerOpen(false); }}>Citizen</button>{matchingClients.map((client) => <button type="button" key={client.id} className="w-full rounded px-3 py-2 text-left text-xs hover:bg-[#f2f5f9]" onClick={() => { setClientId(client.id); setCustomerSearch(""); setCustomerPickerOpen(false); }}><span className="block font-medium text-[#101828]">{client.name}</span>{client.email ? <span className="muted block text-[10px]">{client.email}</span> : null}</button>)}{!matchingClients.length ? <p className="p-2 text-xs muted">No customers found.</p> : null}</div> : null}</div></div>
           <div className="max-h-[320px] overflow-y-auto border-b border-[#edf0f4]">{cart.length ? <div className="divide-y divide-[#edf0f4]">{cart.map((item, index) => <CartLine key={item.id} item={item} currency={currency} lineTotal={totals.lines[index]?.total ?? 0} onQuantityChange={(value) => updateQuantity(item.id, value)} onDiscountChange={(value) => updateProductDiscount(item.id, value)} onRemove={() => updateQuantity(item.id, 0)}/>)}</div> : <div className="grid min-h-44 place-items-center p-6 text-center"><ShoppingCart size={34} className="text-[#98a2b3]"/><p className="mt-2 text-sm font-medium">No items added</p><p className="muted mt-1 text-xs">Browse products and add them to this invoice.</p></div>}</div>
-          <div className="grid gap-4 border-b border-[#edf0f4] p-4 md:grid-cols-[1fr_1fr]"><div className="space-y-3"><div><label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#667085]">Discount <select className="h-7 rounded border border-[#e4e9f0] bg-white px-2 text-[11px] font-normal" value={discountMode} onChange={(event) => {const mode=event.target.value as DiscountMode;setDiscountMode(mode);setDiscountValue(current=>mode === "percent" ? Math.min(100,Math.round(current)) : Math.min(totals.subtotal,current));}}><option value="percent">% Percent</option><option value="amount">€ Amount</option></select></label><input className="input" type="number" min="0" max={discountMode === "percent" ? 100 : totals.subtotal} step={discountMode === "percent" ? 1 : "0.01"} value={discountValue || ""} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {const value=Math.max(0,Number(event.target.value)||0);setDiscountValue(Math.min(discountMode === "percent" ? 100 : totals.subtotal,discountMode === "percent" ? Math.round(value) : value));}}/></div><label className="field"><span>Note</span><textarea className="textarea min-h-16" maxLength={250} placeholder="Add note…" value={note} onChange={(event) => setNote(event.target.value)}/></label></div><div className="rounded-lg bg-[#f7f9fc] p-3"><SummaryRow label="Subtotal" value={totals.subtotal} currency={currency}/><SummaryRow label="Discount" value={-totals.discount} currency={currency}/><SummaryRow label="Tax" value={totals.tax} currency={currency}/><div className="mt-3 flex items-center border-t border-[#e4e9f0] pt-3 text-base font-semibold"><span>Total</span><strong className="ml-auto text-xl text-[#004ffe]">{money(totals.total, currency)}</strong></div></div></div>
+          <div className="grid gap-4 border-b border-[#edf0f4] p-4 md:grid-cols-[1fr_1fr]"><div className="space-y-3"><div><label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#667085]">Discount <select className="h-7 rounded border border-[#e4e9f0] bg-white px-2 text-[11px] font-normal" value={discountMode} onChange={(event) => {const mode=event.target.value as DiscountMode;setDiscountMode(mode);setDiscountValue(current=>mode === "percent" ? Math.min(100,Math.round(current)) : Math.min(totals.subtotal,current));}}><option value="percent">% Percent</option><option value="amount">€ Amount</option></select></label><input className="input" type="number" min="0" max={discountMode === "percent" ? 100 : totals.subtotal} step={discountMode === "percent" ? 1 : "0.01"} value={discountValue || ""} onFocus={(event) => event.currentTarget.select()} onChange={(event) => {const value=Math.max(0,Number(event.target.value)||0);setDiscountValue(Math.min(discountMode === "percent" ? 100 : totals.subtotal,discountMode === "percent" ? Math.round(value) : value));}}/></div><label className="field"><span>Note</span><textarea className="textarea min-h-16" maxLength={250} placeholder="Add note…" value={note} onChange={(event) => setNote(event.target.value)}/></label><label className="field"><span>Payment due</span><select className="select" value={duePreset} onChange={(event) => setDuePreset(event.target.value as "today" | DueDatePreset)}><option value="today">On receipt</option>{DUE_DATE_PRESETS.map((preset) => <option key={preset} value={preset}>{DUE_LABELS[preset]}</option>)}</select></label></div><div className="rounded-lg bg-[#f7f9fc] p-3"><SummaryRow label="Subtotal" value={totals.subtotal} currency={currency}/><SummaryRow label="Discount" value={-totals.discount} currency={currency}/><SummaryRow label="Tax" value={totals.tax} currency={currency}/><div className="mt-3 flex items-center border-t border-[#e4e9f0] pt-3 text-base font-semibold"><span>Total</span><strong className="ml-auto text-xl text-[#004ffe]">{money(totals.total, currency)}</strong></div></div></div>
           <div className="border-b border-[#edf0f4] p-4"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#667085]">Payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentOptions.map((option) => {const Icon = option.icon; const active = payment === option.value; return <button key={option.value} type="button" aria-pressed={active} className={`btn pos-payment-option h-10 px-2 text-xs ${active ? "pos-payment-active" : ""}`} onClick={() => setPayment(option.value)}><Icon size={15}/>{option.label}</button>;})}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="field"><span>Cash received</span><div className="flex gap-2"><input className="input min-w-0" type="text" inputMode="decimal" placeholder="0.00" value={cashReceivedText} onChange={(event) => { const next = event.target.value; setCashReceivedText(next); setCashReceived(parseDecimalInput(next)); }} disabled={payment !== "cash"}/><button type="button" className="btn shrink-0 px-3 text-xs" onClick={() => { const amount = Number(totals.total.toFixed(2)); setCashReceived(amount); setCashReceivedText(String(amount)); }} disabled={payment !== "cash" || !cart.length}>Paid in full</button></div></label><div className="field"><span>{payment === "debt" ? "Customer balance" : amountDue > 0 ? "Amount due" : "Change"}</span><strong className={`input ${payment === "debt" ? "bg-[#fff8eb] text-[#b54708]" : amountDue > 0 ? "bg-[#fff8eb] text-[#b54708]" : "bg-[#ecfdf3] text-[#087443]"}`}>{payment === "debt" ? money(totals.total, currency) : money(amountDue || change, currency)}</strong></div></div>{invoiceType === "invoice" ? <div className="mt-4 rounded-lg border border-[#d0d5dd] bg-[#f8fafc] p-3"><label className="flex cursor-pointer items-start gap-3"><input className="mt-1 h-4 w-4 accent-[#004ffe]" type="checkbox" checked={customerSignatureRequested} onChange={(event) => { const requested = event.target.checked; setCustomerSignatureRequested(requested); if (!requested) setCustomerSignature(null); }}/><span><strong className="block text-xs">Ask customer to sign this invoice</strong><span className="muted mt-1 block text-[11px]">Hand the phone to the customer before completing the sale. Their signature appears beside the issuer signature.</span></span></label>{customerSignatureRequested ? <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e4e9f0] pt-3">{customerSignature ? <img src={customerSignature} alt="Captured customer signature" className="h-10 max-w-32 rounded border border-[#d0d5dd] bg-white object-contain px-1"/> : <span className="text-[11px] text-[#b54708]">Signature required before completion.</span>}<button type="button" className="btn ml-auto px-3 text-xs" onClick={() => setShowCustomerSignature(true)}>{customerSignature ? "Replace" : "Capture signature"}</button></div> : null}</div> : null}</div>
           <div className="grid gap-2 p-4 sm:grid-cols-3"><button className="btn" onClick={() => saveInvoice("draft")} disabled={busy || !cart.length}><FileText size={16}/>Save as Draft</button><button className="btn" onClick={printDraft} disabled={busy || !cart.length}><Printer size={16}/>Print</button><button className="btn btn-primary sm:col-span-1" onClick={() => saveInvoice("complete")} disabled={busy || !cart.length || (!terminalReady && !stockCheckout)} title={terminalReady || stockCheckout ? undefined : "Configure and select an active POS terminal first"}><Banknote size={16}/>{saving ? "Saving…" : "Pay & Complete"}</button></div>
         </section>

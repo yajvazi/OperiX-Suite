@@ -1,5 +1,6 @@
 "use client";
 
+import { newDocumentHref } from "@/lib/features";
 import Link from "next/link";
 import { ArrowRight, Plus } from "lucide-react";
 import { businessNavigation, moreNavigation, salesNavigation, type NavigationItem } from "@/lib/navigation";
@@ -19,7 +20,7 @@ export function MoreHub() {
 }
 
 function HubPage({ title, description, items }: { title: string; description: string; items: NavigationItem[] }) {
-  return <div className="ux-page"><PageHeader title={title} description={description} actions={<Link href={title === "Sales" ? "/invoices/new" : "/products?create=1"} className="btn btn-primary"><Plus size={16} />{title === "Sales" ? "New invoice" : "Add item"}</Link>} /><div className="ux-hub-grid">{items.map((item) => <HubLink key={item.href} item={item} card />)}</div></div>;
+  return <div className="ux-page"><PageHeader title={title} description={description} actions={<Link href={title === "Sales" ? newDocumentHref() : "/products?create=1"} className="btn btn-primary"><Plus size={16} />{title === "Sales" ? "New invoice" : "Add item"}</Link>} /><div className="ux-hub-grid">{items.map((item) => <HubLink key={item.href} item={item} card />)}</div></div>;
 }
 
 function HubLink({ item, card = false }: { item: NavigationItem; card?: boolean }) {

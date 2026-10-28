@@ -1,5 +1,6 @@
 "use client";
 
+import { newDocumentHref } from "@/lib/features";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "next/link";
@@ -52,8 +53,8 @@ function externalUrl(key: string, fallback: string) {
 }
 
 const createActions: Array<{ label: string; description: string; href: string; icon: NavigationItem["icon"]; permission: string }> = [
-  { label: "Invoice", description: "Create and send an invoice", href: "/invoices/new", icon: FileText, permission: "invoice.create" },
-  { label: "Quote", description: "Prepare a proposal", href: "/invoices/new?type=offer", icon: FileCheck2, permission: "offer.create" },
+  { label: "Invoice", description: "Create and send an invoice", href: newDocumentHref(), icon: FileText, permission: "invoice.create" },
+  { label: "Quote", description: "Prepare a proposal", href: newDocumentHref("offer"), icon: FileCheck2, permission: "offer.create" },
   { label: "Customer", description: "Add a customer record", href: "/customers?create=1", icon: UserRound, permission: "customer.create" },
   { label: "Product", description: "Add a product or service", href: "/products?create=1", icon: Package, permission: "product.create" },
   { label: "Expense", description: "Record an operating cost", href: "/expenses?create=1", icon: WalletCards, permission: "expense.create" },
@@ -422,7 +423,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="app-main">{children}</main>
       </div>
 
-      <OperixMobileNavigation items={mobileNavigation.filter(canNavigate).map((item) => ({ href: item.href, label: item.label, icon: <item.icon size={19} />, active: isNavigationItemActive(pathname, item.href) }))} primaryAction={workspace.can("invoice.create") && pathname !== "/pos" ? { href: "/invoices/new", label: "Create invoice", icon: <Plus size={22} /> } : undefined} floatingPrimaryAction renderLink={renderTopbarLink} />
+      <OperixMobileNavigation items={mobileNavigation.filter(canNavigate).map((item) => ({ href: item.href, label: item.label, icon: <item.icon size={19} />, active: isNavigationItemActive(pathname, item.href) }))} primaryAction={workspace.can("invoice.create") && pathname !== "/pos" ? { href: newDocumentHref(), label: "Create invoice", icon: <Plus size={22} /> } : undefined} floatingPrimaryAction renderLink={renderTopbarLink} />
       {createOpen && visibleCreateActions.length ? <div className="app-mobile-create-menu" ref={mobileCreateMenuRef}><CreateMenu actions={visibleCreateActions} onClose={() => setCreateOpen(false)} /></div> : null}
 
       {companySwitchError ? <div className="app-shell-alert" role="alert" aria-live="polite"><span>{companySwitchError}</span><button type="button" onClick={() => setCompanySwitchError("")} aria-label="Dismiss company switch error"><X size={15} /></button></div> : null}
