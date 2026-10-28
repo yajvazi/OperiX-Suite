@@ -25,6 +25,7 @@ import { getPreferredBranchId, listBranches, listProductBranchStock, supabase, t
 import * as Crypto from 'expo-crypto';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveTenantCompanyIds, getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
 import type { RootStackParamList } from '../../navigation/types';
 import {
     EmptyState,
@@ -96,6 +97,15 @@ export function BusinessScreen() {
             const companyId = workspaceScope.company?.id || workspaceScope.companyId;
             setCanManageInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
             const scope = scopedResource(user.id, companyIds);
+            const local = await activeLocalStore();
+            if (local) {
+                // On the device: plain records, no branches or branch stock.
+                const table = section === 'vendors' ? 'vendors' : section === 'expenses' || section === 'income' ? 'expenses' : 'products';
+                let rows = await local.list(table, { orderBy: table === 'expenses' ? '-date' : 'name', limit: 80 });
+                if (table === 'expenses') rows = rows.filter((row) => (section === 'income' ? row.type === 'income' : row.type !== 'income'));
+                setItems(rows as unknown as BusinessItem[]);
+                return;
+            }
             let result;
             if (section === 'vendors') {
                 result = await supabase.from('vendors').select('id,name,email,phone,city,created_at').or(scope).order('name').limit(80);
@@ -171,6 +181,10 @@ export function BusinessScreen() {
             const workspaceScope = await getWorkspaceScope(user.id);
             const companyId = workspaceScope.company?.id || workspaceScope.companyId;
             if (!companyId) throw new Error(language === 'sq' ? 'Kompania nuk u gjet.' : 'Company not found.');
+            if (await activeLocalStore()) {
+                Alert.alert(language === 'sq' ? 'Duhet të keni dy degë' : 'Two branches required', language === 'sq' ? 'Degët janë pjesë e planit cloud.' : 'Branches are part of the cloud plan.');
+                return;
+            }
             const branches = await listBranches(supabase, companyId);
             if (branches.length < 2) {
                 Alert.alert(language === 'sq' ? 'Duhet të keni dy degë' : 'Two branches required', language === 'sq' ? 'Krijoni të paktën dy degë aktive për të lëvizur stokun.' : 'Create at least two active branches before moving stock.');

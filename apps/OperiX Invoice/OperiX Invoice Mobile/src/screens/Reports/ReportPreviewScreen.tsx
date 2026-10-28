@@ -7,6 +7,8 @@ import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
+import { isLocalReportType, localReportRows } from '../../services/localReports';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { Button } from '@invoice-monorepo/ui';
 import { ErrorState, LoadingState, MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';
@@ -225,6 +227,12 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                 const companyNames = new Map<string, string>(
                     companies.map((company): [string, string] => [company.id, company.company_name || '']),
                 );
+                const localStore = await activeLocalStore();
+                if (localStore) {
+                    if (!isLocalReportType(type)) throw new Error('This report needs cloud storage.');
+                    if (active) setRows(await localReportRows(localStore, definition.source));
+                    return;
+                }
                 const reportRows = await fetchReportRows(
                     definition.source,
                     companyIds,
@@ -308,12 +316,15 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                 const companyNames = new Map<string, string>(
                     companies.map((company): [string, string] => [company.id, company.company_name || '']),
                 );
-                exportRows = await fetchReportRows(
-                    definition.source,
-                    companyIds,
-                    definition.orderBy || [],
-                    companyNames,
-                );
+                const localStore = await activeLocalStore();
+                exportRows = localStore
+                    ? await localReportRows(localStore, definition.source)
+                    : await fetchReportRows(
+                        definition.source,
+                        companyIds,
+                        definition.orderBy || [],
+                        companyNames,
+                    );
             }
             const technicalColumns = new Set(['__company_name', 'id', 'company_id', 'client_id', 'invoice_id', 'supplier_bill_id', 'account_id', 'journal_entry_id', 'journal_line_id', 'fixed_asset_id', 'product_id']);
             const exportRowsWithTenant = exportRows.map((row) => ({ ...row, tenant_name: row.__company_name || '—' }));

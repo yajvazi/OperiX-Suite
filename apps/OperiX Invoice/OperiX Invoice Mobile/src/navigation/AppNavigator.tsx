@@ -99,6 +99,31 @@ import { HelpSupportScreen } from '../screens/Support/HelpSupportScreen';
 import { HelpCategoryScreen } from '../screens/Support/HelpCategoryScreen';
 import { HelpArticleScreen } from '../screens/Support/HelpArticleScreen';
 import { AboutScreen } from '../screens/About/AboutScreen';
+import { withCloudOnly } from '../components/mobile/CloudOnlyGate';
+
+// Screens that need the OperiX servers; with on-device storage they show a notice.
+const GatedAccountingScreen = withCloudOnly(AccountingScreen, { en: 'Accounting', sq: 'Kontabiliteti' });
+const GatedAccountantReportScreen = withCloudOnly(AccountantReportScreen, { en: 'Accountant report', sq: 'Raporti i kontabilistit' });
+const GatedPayrollScreen = withCloudOnly(PayrollScreen, { en: 'Payroll', sq: 'Paga' });
+const GatedPayrollSetupScreen = withCloudOnly(PayrollSetupScreen, { en: 'Payroll setup', sq: 'Konfigurimi i pagave' });
+const GatedCashBalancesScreen = withCloudOnly(CashBalancesScreen, { en: 'Cash and bank', sq: 'Para dhe banka' });
+const GatedAgentActivityScreen = withCloudOnly(AgentActivityScreen, { en: 'Agent activity', sq: 'Aktiviteti i agjentëve' });
+const GatedTaxCenterScreen = withCloudOnly(TaxCenterScreen, { en: 'Tax center', sq: 'Qendra e taksave' });
+const GatedSalesBookScreen = withCloudOnly(SalesBookScreen, { en: 'Sales book', sq: 'Libri i shitjes' });
+const GatedContractFormScreen = withCloudOnly(ContractFormScreen, { en: 'Contracts', sq: 'Kontratat' });
+const GatedContractDetailScreen = withCloudOnly(ContractDetailScreen, { en: 'Contracts', sq: 'Kontratat' });
+const GatedContractTemplatesScreen = withCloudOnly(ContractTemplatesScreen, { en: 'Contract templates', sq: 'Shabllonet e kontratave' });
+const GatedContractTemplateEditorScreen = withCloudOnly(ContractTemplateEditorScreen, { en: 'Contract templates', sq: 'Shabllonet e kontratave' });
+const GatedPaymentIntegrationsScreen = withCloudOnly(PaymentIntegrationsScreen, { en: 'Payment integrations', sq: 'Integrimet e pagesave' });
+const GatedStripeDashboardScreen = withCloudOnly(StripeDashboardScreen, { en: 'Stripe', sq: 'Stripe' });
+const GatedManageCompaniesScreen = withCloudOnly(ManageCompaniesScreen, { en: 'Companies', sq: 'Kompanitë' });
+const GatedUsersAccessScreen = withCloudOnly(UsersAccessScreen, { en: 'Users & Access', sq: 'Përdoruesit dhe qasja' });
+const GatedSubscriptionScreen = withCloudOnly(SubscriptionScreen, { en: 'Subscription', sq: 'Abonimi' });
+const GatedAdvancedSettingsScreen = withCloudOnly(AdvancedSettingsScreen, { en: 'Advanced settings', sq: 'Cilësimet e avancuara' });
+const GatedOtherIncomeScreen = withCloudOnly(OtherIncomeScreen, { en: 'Other income', sq: 'Të ardhura të tjera' });
+const GatedOtherIncomeFormScreen = withCloudOnly(OtherIncomeFormScreen, { en: 'Other income', sq: 'Të ardhura të tjera' });
+const GatedTemplateEditorScreen = withCloudOnly(TemplateEditorScreen, { en: 'Invoice template', sq: 'Shablloni i faturës' });
+const GatedInvoiceTemplateSettingsScreen = withCloudOnly(InvoiceTemplateSettingsScreen, { en: 'Invoice templates', sq: 'Shabllonet e faturave' });
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -144,10 +169,10 @@ function LegacyInvoicesNavigator() {
         <InvoicesStack.Screen name="AllInvoices" component={AllInvoicesScreen} />
         <InvoicesStack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
         <InvoicesStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
-        <InvoicesStack.Screen name="ContractForm" component={ContractFormScreen} />
-        <InvoicesStack.Screen name="ContractDetail" component={ContractDetailScreen} />
+        <InvoicesStack.Screen name="ContractForm" component={GatedContractFormScreen} />
+        <InvoicesStack.Screen name="ContractDetail" component={GatedContractDetailScreen} />
         <InvoicesStack.Screen name="ReportPreview" component={ReportPreviewScreen} />
-        <InvoicesStack.Screen name="SalesBook" component={SalesBookScreen} />
+        <InvoicesStack.Screen name="SalesBook" component={GatedSalesBookScreen} />
         <InvoicesStack.Screen name="PaymentForm" component={PaymentFormScreen} />
         <InvoicesStack.Screen name="PaymentsList" component={PaymentsListScreen} />
         <InvoicesStack.Screen name="ClientForm" component={ClientFormScreen} />
@@ -193,17 +218,17 @@ function LegacyExpensesNavigator() {
 function SettingsNavigator() {
     return <SettingsStack.Navigator id="settings-stack" screenOptions={{ headerShown: false }}>
         <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
-        <SettingsStack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
-        <SettingsStack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
-        <SettingsStack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
-        <SettingsStack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
-        <SettingsStack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
-        <SettingsStack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
-        <SettingsStack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
-        <SettingsStack.Screen name="UsersAccess" component={UsersAccessScreen} />
+        <SettingsStack.Screen name="TemplateEditor" component={GatedTemplateEditorScreen} />
+        <SettingsStack.Screen name="ContractTemplates" component={GatedContractTemplatesScreen} />
+        <SettingsStack.Screen name="ContractTemplateEditor" component={GatedContractTemplateEditorScreen} />
+        <SettingsStack.Screen name="InvoiceTemplateSettings" component={GatedInvoiceTemplateSettingsScreen} />
+        <SettingsStack.Screen name="PaymentIntegrations" component={GatedPaymentIntegrationsScreen} />
+        <SettingsStack.Screen name="StripeDashboard" component={GatedStripeDashboardScreen} />
+        <SettingsStack.Screen name="ManageCompanies" component={GatedManageCompaniesScreen} />
+        <SettingsStack.Screen name="UsersAccess" component={GatedUsersAccessScreen} />
         <SettingsStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
-        <SettingsStack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
-        <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
+        <SettingsStack.Screen name="AdvancedSettings" component={GatedAdvancedSettingsScreen} />
+        <SettingsStack.Screen name="Subscription" component={GatedSubscriptionScreen} />
     </SettingsStack.Navigator>;
 }
 
@@ -233,19 +258,19 @@ function RootNavigator() {
     return <RootStack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
         <RootStack.Screen name="MainTabs" component={MainTabs} />
         <RootStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ presentation: 'modal' }} />
-        <RootStack.Screen name="Accounting" component={AccountingScreen} />
-        <RootStack.Screen name="AccountantReport" component={AccountantReportScreen} />
-        <RootStack.Screen name="Payroll" component={PayrollScreen} />
-        <RootStack.Screen name="PayrollSetup" component={PayrollSetupScreen} />
+        <RootStack.Screen name="Accounting" component={GatedAccountingScreen} />
+        <RootStack.Screen name="AccountantReport" component={GatedAccountantReportScreen} />
+        <RootStack.Screen name="Payroll" component={GatedPayrollScreen} />
+        <RootStack.Screen name="PayrollSetup" component={GatedPayrollSetupScreen} />
         <RootStack.Screen name="ReportsHub" component={ReportsHubScreen} />
-        <RootStack.Screen name="CashBalances" component={CashBalancesScreen} />
-        <RootStack.Screen name="FinancialAccounts" component={CashBalancesScreen} />
-        <RootStack.Screen name="AgentActivity" component={AgentActivityScreen} />
-        <RootStack.Screen name="TaxCenter" component={TaxCenterScreen} />
+        <RootStack.Screen name="CashBalances" component={GatedCashBalancesScreen} />
+        <RootStack.Screen name="FinancialAccounts" component={GatedCashBalancesScreen} />
+        <RootStack.Screen name="AgentActivity" component={GatedAgentActivityScreen} />
+        <RootStack.Screen name="TaxCenter" component={GatedTaxCenterScreen} />
         <RootStack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'modal' }} />
         <RootStack.Screen name="Settings" component={SettingsNavigator} />
-        <RootStack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
-        <RootStack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
+        <RootStack.Screen name="ContractTemplates" component={GatedContractTemplatesScreen} />
+        <RootStack.Screen name="ContractTemplateEditor" component={GatedContractTemplateEditorScreen} />
         <RootStack.Screen name="Profile" component={ProfileScreen} />
         <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <RootStack.Screen name="HelpCategory" component={HelpCategoryScreen} />
@@ -258,8 +283,8 @@ function RootNavigator() {
         <RootStack.Screen name="AllInvoices" component={AllInvoicesScreen} />
         <RootStack.Screen name="PaymentsList" component={PaymentsListScreen} />
         <RootStack.Screen name="PaymentForm" component={PaymentFormScreen} />
-        <RootStack.Screen name="OtherIncome" component={OtherIncomeScreen} />
-        <RootStack.Screen name="OtherIncomeForm" component={OtherIncomeFormScreen} />
+        <RootStack.Screen name="OtherIncome" component={GatedOtherIncomeScreen} />
+        <RootStack.Screen name="OtherIncomeForm" component={GatedOtherIncomeFormScreen} />
         <RootStack.Screen name="ClientForm" component={ClientFormScreen} />
         <RootStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
         <RootStack.Screen name="ProductsList" component={ProductsScreen} />
@@ -276,10 +301,10 @@ function RootNavigator() {
         <RootStack.Screen name="SupplierBillForm" component={SupplierBillFormScreen} />
         <RootStack.Screen name="SupplierBillsList" component={SupplierBillsListScreen} />
         <RootStack.Screen name="ScanBill" component={ScanBillScreen} />
-        <RootStack.Screen name="ContractForm" component={ContractFormScreen} />
-        <RootStack.Screen name="ContractDetail" component={ContractDetailScreen} />
+        <RootStack.Screen name="ContractForm" component={GatedContractFormScreen} />
+        <RootStack.Screen name="ContractDetail" component={GatedContractDetailScreen} />
         <RootStack.Screen name="ReportPreview" component={ReportPreviewScreen} />
-        <RootStack.Screen name="SalesBook" component={SalesBookScreen} />
+        <RootStack.Screen name="SalesBook" component={GatedSalesBookScreen} />
 
         {/* Compatibility navigators; these are no longer bottom-navigation destinations. */}
         <RootStack.Screen name="InvoicesTab" component={LegacyInvoicesNavigator} />

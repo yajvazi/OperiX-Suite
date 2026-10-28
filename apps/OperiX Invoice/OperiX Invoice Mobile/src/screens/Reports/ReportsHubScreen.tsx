@@ -19,6 +19,8 @@ import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import type { TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
+import { isLocalReportType, localReportSummary } from '../../services/localReports';
 import type { RootStackParamList } from '../../navigation/types';
 import { MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';
 
@@ -71,6 +73,8 @@ export function ReportsHubScreen() {
     const [retryToken, setRetryToken] = useState(0);
     const [permissions, setPermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
+    // On the device only the reports that can be built from the local records are offered.
+    const [localMode, setLocalMode] = useState(false);
 
     useFocusEffect(useCallback(() => {
         let active = true;
@@ -87,6 +91,11 @@ export function ReportsHubScreen() {
                     throw new Error('REPORT_PERMISSION_REQUIRED');
                 }
                 const { companyIds } = workspace;
+                const localStore = await activeLocalStore();
+                if (localStore) {
+                    if (active) { setLocalMode(true); setSummary(await localReportSummary(localStore)); }
+                    return;
+                }
                 const cacheKey = `${user.id}:${[...companyIds].sort().join(',')}`;
                 const cached = summaryCache.get(cacheKey);
                 if (cached && cached.expiresAt > Date.now()) {
@@ -149,7 +158,7 @@ export function ReportsHubScreen() {
                     {can('reports.sales') ? <View style={styles.metricsRow}><MetricCard label={t('grossSales', language)} value={metricValue(summary?.gross_sales)} /></View> : null}
                     {can('reports.profit') ? <><View style={styles.metricsRow}><MetricCard label={t('revenue', language)} value={metricValue(summary?.revenue)} /><MetricCard label={t('expenses', language)} value={metricValue(summary?.expenses)} tone="warning" /></View><View style={styles.metricsRow}><MetricCard label={t('netProfitLabel', language)} value={metricValue(summary?.net_profit)} tone={(summary?.net_profit || 0) >= 0 ? 'success' : 'danger'} /><MetricCard label={t('receivables', language)} value={metricValue(summary?.ar_outstanding)} tone="warning" /></View></> : null}
                     <SectionTitle title={t('financialStatements', language)} />
-                    {REPORT_CARDS.filter((report) => can(report.permission)).map((report) => {
+                    {REPORT_CARDS.filter((report) => can(report.permission) && (!localMode || isLocalReportType(report.key))).map((report) => {
                         const Icon = report.icon;
                         return (
                             <TouchableOpacity

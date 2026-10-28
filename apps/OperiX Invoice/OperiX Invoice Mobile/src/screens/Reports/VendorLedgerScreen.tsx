@@ -29,6 +29,8 @@ import { Vendor, Profile } from "@invoice-monorepo/types";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
+import { isLocalReportType, localReportSummary } from '../../services/localReports';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 
 interface LedgerEntry {
@@ -95,11 +97,14 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     setProfile({ ...workspaceProfile, company_name: (company as any)?.company_name || (company as any)?.name || workspaceProfile.company_name });
     const scope = scopedResource(user.id, companyIds);
 
-    const { data: vendorsData } = await supabase
-      .from("vendors")
-      .select("*")
-      .or(scope)
-      .order("name");
+    const local = await activeLocalStore();
+    const { data: vendorsData } = local
+      ? { data: await local.list('vendors', { orderBy: 'name' }) as any[] }
+      : await supabase
+        .from("vendors")
+        .select("*")
+        .or(scope)
+        .order("name");
     if (vendorsData) {
       setVendors(vendorsData);
       setFilteredVendors(vendorsData);
@@ -112,23 +117,30 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     setLoading(true);
 
     try {
-      const { data: payments } = await supabase
-        .from("vendor_payments")
-        .select("*")
-        .eq("vendor_id", selectedVendorId)
-        .order("payment_date", { ascending: true });
+      const local = await activeLocalStore();
+      const { data: payments } = local
+        ? { data: (await local.list('vendor_payments', { where: { vendor_id: selectedVendorId }, orderBy: 'payment_date' })) as any[] }
+        : await supabase
+          .from("vendor_payments")
+          .select("*")
+          .eq("vendor_id", selectedVendorId)
+          .order("payment_date", { ascending: true });
 
-      const { data: bills } = await supabase
-        .from("supplier_bills")
-        .select("*")
-        .eq("vendor_id", selectedVendorId)
-        .order("issue_date", { ascending: true });
-      const { data: expenses } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("vendor_id", selectedVendorId)
-        .eq("type", "expense")
-        .order("date", { ascending: true });
+      const { data: bills } = local
+        ? { data: (await local.list('supplier_bills', { where: { vendor_id: selectedVendorId }, orderBy: 'issue_date' })) as any[] }
+        : await supabase
+          .from("supplier_bills")
+          .select("*")
+          .eq("vendor_id", selectedVendorId)
+          .order("issue_date", { ascending: true });
+      const { data: expenses } = local
+        ? { data: (await local.list('expenses', { where: { vendor_id: selectedVendorId, type: 'expense' }, orderBy: 'date' })) as any[] }
+        : await supabase
+          .from("expenses")
+          .select("*")
+          .eq("vendor_id", selectedVendorId)
+          .eq("type", "expense")
+          .order("date", { ascending: true });
       const entries: LedgerEntry[] = [];
 
       bills?.forEach((bill) => {

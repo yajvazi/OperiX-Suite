@@ -28,6 +28,8 @@ import {
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
+import { activeLocalStore } from '../../services/localMode';
+import { isLocalReportType, localReportSummary } from '../../services/localReports';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { listCustomerInvoices, listCustomerPayments } from '@invoice-monorepo/api/repositories';
 
@@ -104,11 +106,14 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         });
         const scope = scopedResource(user.id, companyIds);
 
-        const { data: clientsData } = await supabase
-            .from('clients')
-            .select('*')
-            .or(scope)
-            .order('name');
+        const local = await activeLocalStore();
+        const { data: clientsData } = local
+            ? { data: await local.list('clients', { orderBy: 'name' }) as any[] }
+            : await supabase
+                .from('clients')
+                .select('*')
+                .or(scope)
+                .order('name');
         if (clientsData) {
             setClients(clientsData);
             setFilteredClients(clientsData);
@@ -121,12 +126,17 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
         setLoading(true);
 
         try {
-            const { companyIds } = await getWorkspaceScope(user.id);
-            const scope = { userId: user.id, companyIds };
-            const [invoices, payments] = await Promise.all([
-                listCustomerInvoices(supabase, scope, selectedClientId),
-                listCustomerPayments(supabase, scope, selectedClientId),
-            ]);
+            const local = await activeLocalStore();
+            const [invoices, payments] = local
+                ? await Promise.all([local.listInvoices({ clientId: selectedClientId }), local.listPayments({ customerId: selectedClientId })])
+                : await (async () => {
+                    const { companyIds } = await getWorkspaceScope(user.id);
+                    const scope = { userId: user.id, companyIds };
+                    return Promise.all([
+                        listCustomerInvoices(supabase, scope, selectedClientId),
+                        listCustomerPayments(supabase, scope, selectedClientId),
+                    ]);
+                })();
             const normalizedPayments = payments as unknown as CustomerLedgerPayment[];
             const ledger = buildCustomerLedger({
                 invoices: invoices as unknown as CustomerLedgerInvoice[],

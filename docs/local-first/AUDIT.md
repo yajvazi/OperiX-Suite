@@ -200,3 +200,16 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
 - Still cloud-only on mobile: reports and tax book, accounting, contracts, customer ledger, bulk export,
   payroll, Stripe, payment reminders, agents and COD, editing a recorded customer payment, payments with no
   invoice, shared bank accounts, branch stock, document PDFs (untested for on-device companies).
+
+## Progress (mobile, round 4)
+
+- Reports on the device: the reports hub and report preview/export build summary, profit and loss (by month),
+  cash flow and cash book, inventory register, receivables aging and payables aging from local records
+  (`services/localReports.ts`); customer and vendor ledgers use local data too. Ledger-based reports (trial
+  balance, balance sheet, changes in equity, general ledger, asset register) are not offered on the device.
+- Business hub works on the device (no branches / branch stock).
+- Screens that need the OperiX servers (accounting, accountant report, payroll, cash and bank funds, agent
+  activity, tax center, sales book, contracts and templates, Stripe and payment integrations, companies,
+  users, subscription, advanced settings, other income, invoice template editors) show a "cloud plan"
+  notice in local mode (`components/mobile/CloudOnlyGate.tsx`) instead of failing.
+- Still to decide: on-device invoice templates, other income, contracts, and sales-book/tax reports for the free tier.
