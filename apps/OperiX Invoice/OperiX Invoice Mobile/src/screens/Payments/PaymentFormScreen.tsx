@@ -473,10 +473,10 @@ export function PaymentFormScreen({ navigation, route }: any) {
             const paymentIdempotencyKey = await generatePaymentIdempotencyKey();
             let saved: Awaited<ReturnType<typeof saveCustomerPayment>>;
             if (isLocalStorage) {
-                // On the device a payment is always recorded against one invoice, and cannot be edited yet.
-                if (isEditing) throw new Error('Delete this payment and enter it again to change it.');
+                // On the device a payment is always recorded against one invoice; an edit reverses the old entry and records the corrected one.
                 if (!selectedInvoice?.id) throw new Error('Choose the invoice this payment is for.');
                 const store = await getDataStore(user.id);
+                if (isEditing) await store.reverseCustomerPayment(String(paymentId), 'Payment edited by user');
                 const payment = await store.recordCustomerPayment({
                     invoiceId: selectedInvoice.id,
                     amount: Number(formData.amount),
