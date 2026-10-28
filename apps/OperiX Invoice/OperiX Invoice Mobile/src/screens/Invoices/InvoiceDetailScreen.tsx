@@ -217,7 +217,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (!creatorLabel && creatorUserId) {
             const { data: creatorProfile } = await supabase
                 .from('profiles')
-                .select('first_name,last_name,full_name')
+                .select('first_name,last_name')
                 .eq('id', creatorUserId)
                 .maybeSingle();
             creatorLabel = profileDisplayName(creatorProfile);
