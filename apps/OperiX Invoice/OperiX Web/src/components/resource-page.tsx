@@ -50,6 +50,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   const [exporting, setExporting] = useState(false);
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [editing, setEditing] = useState<ResourceRow | null>(null);
+  const [prefill, setPrefill] = useState<Record<string, string> | null>(null);
   const [ledgerCustomer, setLedgerCustomer] = useState<ResourceRow | null>(null);
   const [secondaryFilter, setSecondaryFilter] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -68,9 +69,28 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   const canDelete = workspace.can(access.delete);
   const canExport = workspace.can("financial.export");
 
+  const prefillInvoiceId = resourceKey === "payments" ? searchParams.get("invoiceId") : null;
   useEffect(() => {
-    if (createRequested) queueMicrotask(() => setModal(true));
-  }, [createRequested]);
+    if (!createRequested) return;
+    if (!prefillInvoiceId) { queueMicrotask(() => setModal(true)); return; }
+    const supabase = createClient();
+    if (!supabase) { queueMicrotask(() => setModal(true)); return; }
+    let cancelled = false;
+    void (async () => {
+      const [{ data: invoice }, { data: paid }] = await Promise.all([
+        supabase.from("invoices").select("id,client_id,total_amount,amount_received").eq("id", prefillInvoiceId).maybeSingle(),
+        supabase.from("payments").select("amount").eq("invoice_id", prefillInvoiceId),
+      ]);
+      if (cancelled) return;
+      if (invoice) {
+        const received = paid?.length ? paid.reduce((sum, row) => sum + Number(row.amount || 0), 0) : Number(invoice.amount_received || 0);
+        const outstanding = Math.max(0, Number(invoice.total_amount || 0) - received);
+        setPrefill({ invoice_id: String(invoice.id), client_id: invoice.client_id ? String(invoice.client_id) : "", amount: outstanding ? outstanding.toFixed(2) : "" });
+      }
+      setModal(true);
+    })();
+    return () => { cancelled = true; };
+  }, [createRequested, prefillInvoiceId]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -294,7 +314,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     } finally { setExporting(false); }
   }
 
-  function closeModal() { setModal(false); setEditing(null); setMessage(""); }
+  function closeModal() { setModal(false); setEditing(null); setPrefill(null); setMessage(""); }
   function openEdit(row: ResourceRow) {
     setEditing(config.table === "products" ? { ...row, stock_quantity: productBranchStock[String(row.id)] ?? row.stock_quantity } : row);
     setModal(true);
@@ -320,7 +340,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     {resourceKey === "customers" && <PortalLinksView embedded />}
     {ledgerCustomer ? <CustomerLedgerDialog customer={ledgerCustomer} onClose={() => setLedgerCustomer(null)} /> : null}
     {importModal ? <ProductImportDialog onClose={() => setImportModal(false)} onImported={refresh} /> : null}
-    {modal ? <ResourceModal config={config} editing={editing} relationOptions={relationOptions} branchOptions={branchOptions} selectedBranchId={selectedBranchId} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
+    {modal ? <ResourceModal key={Object.values(relationOptions).map((options) => options.length).join("-")} prefill={prefill} config={config} editing={editing} relationOptions={relationOptions} branchOptions={branchOptions} selectedBranchId={selectedBranchId} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
   </div>;
 }
 
@@ -346,8 +366,8 @@ function resourceAccess(resourceKey: string, table: string) {
   return { read: "invoice.view", create: "invoice.create", edit: "invoice.edit", delete: "invoice.delete_draft" };
 }
 
-function ResourceModal({ config, editing, relationOptions, branchOptions, selectedBranchId, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; relationOptions: Record<string, Array<{ id: string; label: string }>>; branchOptions: Array<{ id: string; name: string }>; selectedBranchId: string | null; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
-  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.table === "products" && branchOptions.length ? <label className="field"><span>Stock branch</span><select className="select" name="branch_id" defaultValue={selectedBranchId || ""}><option value="">Global stock</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label> : null}{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? field.defaultValue ?? ""; if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; return <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions[field.key]?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} />}</label>; })}</div>{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
+function ResourceModal({ config, editing, prefill, relationOptions, branchOptions, selectedBranchId, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; prefill: Record<string, string> | null; relationOptions: Record<string, Array<{ id: string; label: string }>>; branchOptions: Array<{ id: string; name: string }>; selectedBranchId: string | null; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
+  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.table === "products" && branchOptions.length ? <label className="field"><span>Stock branch</span><select className="select" name="branch_id" defaultValue={selectedBranchId || ""}><option value="">Global stock</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label> : null}{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? prefill?.[field.key] ?? field.defaultValue ?? (!editing && field.key === "payment_date" ? new Date().toISOString().slice(0, 10) : ""); if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; return <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions[field.key]?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} />}</label>; })}</div>{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
 }
 
 function readValue(row: Record<string, unknown>, key: string) { return key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" ? (current as Record<string, unknown>)[part] : undefined, row); }

@@ -25,6 +25,9 @@ await page.locator('summary:has-text("Advanced options")').click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(out, 'editor-advanced.png'), fullPage: true });
 console.log('shot editor-advanced');
+const branchSel = page.locator('select').filter({ has: page.locator('option:has-text("Select branch")') }).first();
+if (await branchSel.count()) await branchSel.selectOption({ index: 1 });
+await page.waitForTimeout(600);
 // pick the first real product for the first line, set quantity
 const itemSelect = page.locator('select').filter({ has: page.locator('option:has-text("Custom item")') }).first();
 const options = await itemSelect.locator('option').allTextContents();

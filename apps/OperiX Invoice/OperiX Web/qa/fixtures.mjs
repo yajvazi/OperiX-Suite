@@ -119,11 +119,12 @@ export function buildFixtures() {
   const payment_links = [{ id: uid('14141414', 1), company_id: C1, invoice_id: invoices[6].id, status: 'active', url: 'https://pay.example/demo-link', amount: invoices[6].total_amount, created_at: stamp(-4) }];
   const customer_portal_tokens = [{ id: uid('15151515', 1), company_id: C1, client_id: clients[1].id, token: 'qa-portal-token', status: 'active', expires_at: stamp(30), created_at: stamp(-5) }];
   const branches = [{ id: B1, company_id: C1, name: 'Prishtinë main store', city: 'Prishtinë', address: 'Rr. Nëna Terezë 12', is_active: true, is_store: true, created_at: stamp(-300) }, { id: B2, company_id: C1, name: 'Prizren branch', city: 'Prizren', address: 'Rr. Shadërvan 4', is_active: true, is_store: true, created_at: stamp(-200) }];
+  const product_branch_stock = products.filter((product) => product.track_stock).map((product, index) => ({ id: uid('18181818', index + 1), company_id: C1, branch_id: B1, product_id: product.id, stock_quantity: (index * 7) % 23, low_stock_threshold: 5 }));
   const pos_terminals = [{ id: uid('16161616', 1), company_id: C1, branch_id: B1, name: 'Counter 1', code: 'T1', status: 'active', created_at: stamp(-100) }];
 
   return {
     profiles: [profile], companies: [company], memberships: [{ id: uid('17171717', 1), user_id: USER.id, company_id: C1, status: 'active', role: 'owner' }],
-    branches, pos_terminals, clients, products, invoices, invoice_items: items, payments, expenses, vendors, supplier_bills, supplier_bill_items: [], vendor_payments,
+    branches, product_branch_stock, pos_terminals, clients, products, invoices, invoice_items: items, payments, expenses, vendors, supplier_bills, supplier_bill_items: [], vendor_payments,
     other_income, other_income_categories, contracts, recurring_invoice_templates, invoice_reminders, payment_links, customer_portal_tokens,
     invoice_templates: [], company_user_preferences: [], held_orders: [], subscription_accounts: [], tax_reports: [], api_keys: [], audit_events: [], company_feature_flags: [],
     employees: [], payroll_runs: [], accounting_periods: [], journal_entries: [],

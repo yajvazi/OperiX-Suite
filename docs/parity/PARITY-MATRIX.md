@@ -102,11 +102,11 @@ Both apps call the same shared save path. Differences found, and status:
 |---|---|---|
 | TAK sales-book treatment (`tax_reporting_category`) selector | web had it, mobile did not | **Done.** Shared list `TAX_REPORTING_CATEGORIES` in `packages/api/src/domain.ts` (test keeps it in sync with the DB constraint); mobile picker added; web renders from the shared list. Albanian wording needs accountant review. |
 | Post-COD flag when delivery method is "Delivery" | mobile only | **Done** on web (loads, saves, resets when the method changes). |
-| Due-date presets | both had them, **but different math**: web "1 month" = +30 days, mobile = +1 calendar month (clamped to month end) | **Fixed.** Shared `dueDateForPreset` in `domain.ts`; web uses it (mobile still has its own copy of the same rule: switch it to the shared helper next). |
-| Per-branch stock shown when adding items | mobile only | Open. |
-| Email the invoice to the customer | mobile only (web has no send path; an edge function `send-email` exists) | Open. |
-| Record payment from the invoice detail | mobile richer (to verify) | Open: audit. |
+| Due-date presets | both had them, **but different math**: web "1 month" = +30 days, mobile = +1 calendar month (clamped to month end) | **Done.** Shared `dueDateForPreset` in `domain.ts`; web and mobile both use it. |
+| Per-branch stock shown when adding items | mobile only | **Done** on web: the item picker shows branch stock, and a hint under the line turns red when the quantity exceeds it. |
+| Email the invoice to the customer | mobile uses the native mail composer (out of scope); web has a `mailto:` Send button | **No change needed.** Server-side sending would need the company SMTP settings (`send-email` takes SMTP credentials from the caller and requires `settings.integrations`), so it is a separate decision. |
+| Record payment from the invoice detail | mobile opens the payment form for the invoice | **Done** on web: a "Record payment" button on the detail page opens Payments with the invoice, customer, outstanding amount and today's date filled in. |
 | POS flow inside the invoice form (`completePosSale`) | mobile only | Tracked under POS. |
-| Delivery methods | web: pickup, delivery, bus/carrier, other; mobile: pickup, delivery, bus | Open: confirm whether mobile needs "other". |
+| Delivery methods | web: pickup, delivery, bus/carrier, other | **Already matched:** mobile has all four (the earlier note was out of date). |
 
 Verification: shared domain tests (7), web tests (63), web type check, web production build and mobile type check pass.

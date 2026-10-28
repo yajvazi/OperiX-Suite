@@ -46,7 +46,7 @@ import { WebView } from 'react-native-webview';
 import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
-import { isCashPaymentAllowed, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel } from '@invoice-monorepo/api/domain';
+import { dueDateForPreset, isCashPaymentAllowed, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel } from '@invoice-monorepo/api/domain';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input, SignaturePadModal } from '@invoice-monorepo/ui';
 import { Invoice, InvoiceItem, Client, Product, Profile, PaymentMethod } from '@invoice-monorepo/types';
@@ -116,15 +116,6 @@ type StoreLocation = {
     registered_address?: string | null;
     municipality?: string | null;
 };
-function addMonthsClamped(date: Date, months: number) {
-    const result = new Date(date);
-    const day = result.getDate();
-    result.setDate(1);
-    result.setMonth(result.getMonth() + months);
-    const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
-    result.setDate(Math.min(day, lastDay));
-    return result;
-}
 function toMinorCurrencyUnits(value: number) {
     return Math.round((Number.isFinite(value) ? value : 0) * 100);
 }
@@ -866,18 +857,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             setTimeout(() => openDatePicker('due'), 0);
             return;
         }
-        const presetMonths: Partial<Record<DueDatePreset, number>> = {
-            one_month: 1,
-            two_months: 2,
-            three_months: 3,
-        };
-        const presetDays: Partial<Record<DueDatePreset, number>> = {
-            one_week: 7,
-            two_weeks: 14,
-        };
-        const nextDate = presetDays[preset]
-            ? new Date(issueDate.getTime() + Number(presetDays[preset]) * 24 * 60 * 60 * 1000)
-            : addMonthsClamped(issueDate, presetMonths[preset] || 0);
+        // Same rule as the web app: shared helper in @invoice-monorepo/api/domain.
+        const pad = (value: number) => String(value).padStart(2, '0');
+        const issueIso = `${issueDate.getFullYear()}-${pad(issueDate.getMonth() + 1)}-${pad(issueDate.getDate())}`;
+        const [year, month, day] = dueDateForPreset(issueIso, preset).split('-').map(Number);
+        const nextDate = new Date(issueDate);
+        nextDate.setFullYear(year, month - 1, day);
         setDueDate(nextDate);
     };
 
