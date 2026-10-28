@@ -12,7 +12,7 @@ package. Nothing changes for local development or the other apps.
 
 Whenever the dependencies of `apps/OperiX Invoice/OperiX Invoice Mobile` or of the
 shared packages it uses (`packages/api`, `billing`, `commercial-documents`,
-`context`, `hooks`, `i18n`, `invoice-template`, `money`, `report-templates`,
+`context`, `data-store`, `hooks`, `i18n`, `invoice-template`, `money`, `report-templates`,
 `types`, `ui`) change:
 
 ```sh
