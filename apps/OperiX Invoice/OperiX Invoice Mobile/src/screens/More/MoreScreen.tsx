@@ -119,8 +119,6 @@ export function MoreScreen() {
                 <ShortcutRow testID="more-help-button" icon={CircleHelp} title={t('helpSupport', language)} description={t('supportResourcesUnavailable', language)} onPress={() => navigation.navigate('HelpSupport')} trailing={<ChevronRight color={palette.muted} size={18} />} />
                 <ShortcutRow testID="more-about-button" icon={Info} title={t('aboutOperixInvoice', language)} description={t('appVersionLegalInfo', language)} onPress={() => navigation.navigate('About')} trailing={<ChevronRight color={palette.muted} size={18} />} />
 
-                {deleteAccountButton}
-                <TouchableOpacity testID="more-logout-button" accessibilityRole="button" onPress={() => Alert.alert(t('signOut', language), t('signOutWorkspace', language), [{ text: t('cancel', language), style: 'cancel' }, { text: t('signOut', language), style: 'destructive', onPress: () => void signOut() }])} style={[styles.signOut, { borderColor: palette.border }]}><LogOut color={brand.colors.error} size={18} /><Text style={[styles.signOutText, { color: brand.colors.error }]}>{t('signOut', language)}</Text></TouchableOpacity>
                 <View style={{ height: 90 }} />
             </ScrollView>}
             <GlobalCreateButton />

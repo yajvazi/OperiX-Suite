@@ -3,10 +3,13 @@ import {
     Alert,
     FlatList,
     Image,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -23,13 +26,14 @@ import { listCustomers, listProducts } from '@invoice-monorepo/api/repositories'
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveTenantCompanyIds, getWorkspaceScope } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
+import { DecimalInput } from '../../components/mobile/DecimalInput';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import type { PosCartItem, RootStackParamList } from '../../navigation/types';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen, SearchField, mobileStyles } from '../../components/mobile/MobileUI';
 
 type ProductItem = Record<string, any>;
 type CustomerItem = Record<string, any>;
-type CartLine = ProductItem & { quantity: number };
+type CartLine = ProductItem & { quantity: number; custom?: boolean };
 type PaymentChoice = 'cash' | 'card' | 'debt' | 'other';
 
 export function POSScreen() {
@@ -53,12 +57,31 @@ export function POSScreen() {
     const [showPayment, setShowPayment] = useState(false);
     const [showHeldOrders, setShowHeldOrders] = useState(false);
     const autoAddedProduct = useRef<string | null>(null);
+    const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
+    const [showCustomItem, setShowCustomItem] = useState(false);
+    const [customName, setCustomName] = useState('');
+    const [customPrice, setCustomPrice] = useState('');
     useEffect(() => {
         const barcodeSearch = route.params?.barcodeSearch as string | undefined;
         if (!barcodeSearch) return;
-        setSearch(barcodeSearch);
+        setPendingBarcode(barcodeSearch);
         navigation.setParams({ barcodeSearch: undefined });
     }, [navigation, route.params?.barcodeSearch]);
+
+    // A scanned barcode puts the matching product straight into the cart; if nothing matches it is searched for instead.
+    useEffect(() => {
+        if (!pendingBarcode || loading) return;
+        const code = pendingBarcode.trim().toLowerCase();
+        setPendingBarcode(null);
+        const matches = products.filter((product) => [product.barcode, product.sku].some((value) => String(value ?? '').trim().toLowerCase() === code));
+        if (matches.length === 1) {
+            addToCart(matches[0]);
+            setSearch('');
+        } else {
+            setSearch(pendingBarcode);
+            if (!matches.length) Alert.alert(t('scanBarcode', language), t('noProductForBarcode', language).replace('{code}', pendingBarcode));
+        }
+    }, [pendingBarcode, loading, products]);
 
     useEffect(() => {
         const createdClientId = route.params?.createdClientId as string | undefined;
@@ -150,6 +173,18 @@ export function POSScreen() {
         });
     }
 
+    function setLinePrice(lineId: string, price: number) {
+        setCart((current) => current.map((line) => line.id === lineId ? { ...line, unit_price: price } : line));
+    }
+
+    function addCustomItem() {
+        const name = customName.trim();
+        const price = Number(customPrice.replace(',', '.'));
+        if (!name || !Number.isFinite(price) || price < 0) return;
+        setCart((current) => [...current, { id: `custom-${Crypto.randomUUID()}`, name, unit_price: price, quantity: 1, unit: 'pcs', tax_rate: 0, tax_included: false, custom: true }]);
+        setCustomName(''); setCustomPrice(''); setShowCustomItem(false);
+    }
+
     function changeQuantity(productId: string, delta: number) {
         const line = cart.find((candidate) => candidate.id === productId);
         if (line && delta > 0 && line.track_stock && line.quantity + delta > Number(line.stock_quantity ?? 0)) {
@@ -161,7 +196,7 @@ export function POSScreen() {
 
     const filteredCustomers = customers.filter((customer) => !customerSearch.trim() || [customer.name, customer.email, customer.phone].filter(Boolean).join(' ').toLowerCase().includes(customerSearch.toLowerCase()));
     const continueToInvoice = (paymentMethod: PaymentChoice) => {
-        const posCart: PosCartItem[] = cart.map((line) => ({ productId: line.id, name: line.name, quantity: line.quantity, unitPrice: Number(line.unit_price || 0), taxRate: Number(line.tax_rate || 0), taxIncluded: Boolean(line.tax_included), unit: line.unit || 'pcs', sku: line.sku || '' }));
+        const posCart: PosCartItem[] = cart.map((line) => ({ productId: line.custom ? undefined : line.id, name: line.name, quantity: line.quantity, unitPrice: Number(line.unit_price || 0), taxRate: Number(line.tax_rate || 0), taxIncluded: Boolean(line.tax_included), unit: line.unit || 'pcs', sku: line.sku || '' }));
         setShowPayment(false);
         setShowCart(false);
         navigation.navigate('InvoiceForm', { posCart, posCustomerId: selectedCustomer?.id, posPaymentMethod: paymentMethod, posIdempotencyKey: Crypto.randomUUID() });
@@ -206,12 +241,12 @@ export function POSScreen() {
 
                 <View style={[styles.cartBar, { backgroundColor: palette.surface, borderTopColor: palette.border }]}><TouchableOpacity testID="pos-cart-button" accessibilityRole="button" accessibilityLabel={t('cart', language)} onPress={() => setShowCart(true)} style={styles.cartSummary}><View style={[styles.cartIcon, { backgroundColor: primaryColor }]}><ShoppingCart color="#fff" size={18} /></View><View><Text style={[styles.cartLabel, { color: palette.muted }]}>{itemCount} {itemCount === 1 ? t('item', language) : t('itemsInInvoice', language)}</Text><Text style={[styles.cartTotal, { color: palette.text }]}>{formatCurrency(total)}</Text></View></TouchableOpacity><TouchableOpacity testID="pos-checkout-button" accessibilityRole="button" accessibilityState={{ disabled: !cart.length }} disabled={!cart.length} onPress={() => setShowPayment(true)} style={[styles.checkoutButton, { backgroundColor: primaryColor, opacity: cart.length ? 1 : 0.45 }]}><Text style={styles.checkoutText}>{t('createInvoiceAction', language)}</Text></TouchableOpacity></View>
 
-            <Modal visible={showCart} transparent animationType="slide" onRequestClose={() => setShowCart(false)}><View testID="pos-cart-modal" style={styles.modalOverlay}><View style={[styles.modalSheet, { backgroundColor: palette.surface }]}><SheetHeader title={t('cart', language)} onClose={() => setShowCart(false)} palette={palette} /><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cartList}>{cart.length ? cart.map((line) => <View key={line.id} style={[styles.cartLine, { borderBottomColor: palette.border }]}><View style={styles.cartLineCopy}><Text style={[styles.cartLineName, { color: palette.text }]}>{line.name}</Text><Text style={[styles.cartLinePrice, { color: palette.muted }]}>{formatCurrency(Number(line.unit_price || 0))} {t('each', language)}</Text></View><View style={styles.quantityControl}><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${t('delete', language)} ${line.name}`} onPress={() => changeQuantity(line.id, -1)} style={styles.quantityButton}><Minus color={palette.text} size={15} /></TouchableOpacity><Text style={[styles.quantityText, { color: palette.text }]}>{line.quantity}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${t('add', language)} ${line.name}`} onPress={() => changeQuantity(line.id, 1)} style={styles.quantityButton}><Plus color={palette.text} size={15} /></TouchableOpacity></View><Text style={[styles.lineTotal, { color: palette.text }]}>{formatCurrency(Number(line.unit_price || 0) * line.quantity)}</Text></View>) : <Text style={[styles.emptyCartText, { color: palette.muted }]}>{t('emptyCart', language)}</Text>}</ScrollView><View style={styles.cartActions}><TouchableOpacity testID="pos-hold-order-button" accessibilityRole="button" accessibilityState={{ disabled: !cart.length }} disabled={!cart.length} onPress={holdOrder} style={[styles.holdButton, { borderColor: palette.border, opacity: cart.length ? 1 : 0.45 }]}><Text style={[styles.holdButtonText, { color: palette.text }]}>{t('holdOrder', language)}</Text></TouchableOpacity><TouchableOpacity testID="pos-choose-payment-button" accessibilityRole="button" accessibilityState={{ disabled: !cart.length }} disabled={!cart.length} onPress={() => setShowPayment(true)} style={[styles.modalCheckout, { backgroundColor: primaryColor, opacity: cart.length ? 1 : 0.45 }]}><Text style={styles.checkoutText}>{t('choosePayment', language)}</Text></TouchableOpacity></View></View></View></Modal>
+            <Modal visible={showCart} transparent statusBarTranslucent animationType="slide" onRequestClose={() => setShowCart(false)}><KeyboardAvoidingView testID="pos-cart-modal" style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={[styles.modalSheet, { backgroundColor: palette.surface }]}><SheetHeader title={t('cart', language)} onClose={() => setShowCart(false)} palette={palette} /><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cartList}>{cart.length ? cart.map((line) => <View key={line.id} style={[styles.cartLine, { borderBottomColor: palette.border }]}><View style={styles.cartLineCopy}><Text style={[styles.cartLineName, { color: palette.text }]}>{line.name}</Text><View style={styles.priceRow}><PriceInput value={Number(line.unit_price || 0)} onChange={(price) => setLinePrice(line.id, price)} color={palette.text} borderColor={palette.border} label={`${t('priceEach', language)} ${line.name}`} /><Text style={[styles.cartLinePrice, { color: palette.muted }]}>{t('each', language)}</Text></View></View><View style={styles.quantityControl}><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${t('delete', language)} ${line.name}`} onPress={() => changeQuantity(line.id, -1)} style={styles.quantityButton}><Minus color={palette.text} size={15} /></TouchableOpacity><Text style={[styles.quantityText, { color: palette.text }]}>{line.quantity}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${t('add', language)} ${line.name}`} onPress={() => changeQuantity(line.id, 1)} style={styles.quantityButton}><Plus color={palette.text} size={15} /></TouchableOpacity></View><Text style={[styles.lineTotal, { color: palette.text }]}>{formatCurrency(Number(line.unit_price || 0) * line.quantity)}</Text></View>) : <Text style={[styles.emptyCartText, { color: palette.muted }]}>{t('emptyCart', language)}</Text>}{showCustomItem ? <View style={[styles.customItemForm, { borderColor: palette.border }]}><TextInput testID="pos-custom-item-name" value={customName} onChangeText={setCustomName} placeholder={t('customItemName', language)} placeholderTextColor={palette.muted} style={[styles.customInput, { color: palette.text, borderColor: palette.border }]} /><TextInput testID="pos-custom-item-price" value={customPrice} onChangeText={(text) => setCustomPrice(text.replace(',', '.').replace(/[^0-9.]/g, ''))} placeholder={t('customItemPrice', language)} placeholderTextColor={palette.muted} keyboardType="decimal-pad" style={[styles.customInput, { color: palette.text, borderColor: palette.border }]} /><TouchableOpacity testID="pos-custom-item-add" accessibilityRole="button" onPress={addCustomItem} style={[styles.customAdd, { backgroundColor: primaryColor }]}><Text style={styles.checkoutText}>{t('addCustomItem', language)}</Text></TouchableOpacity></View> : <TouchableOpacity testID="pos-custom-item-button" accessibilityRole="button" onPress={() => setShowCustomItem(true)} style={[styles.customItemButton, { borderColor: primaryColor }]}><Plus color={primaryColor} size={16} /><Text style={[styles.customItemText, { color: primaryColor }]}>{t('customItem', language)}</Text></TouchableOpacity>}</ScrollView><View style={styles.cartActions}><TouchableOpacity testID="pos-hold-order-button" accessibilityRole="button" accessibilityState={{ disabled: !cart.length }} disabled={!cart.length} onPress={holdOrder} style={[styles.holdButton, { borderColor: palette.border, opacity: cart.length ? 1 : 0.45 }]}><Text style={[styles.holdButtonText, { color: palette.text }]}>{t('holdOrder', language)}</Text></TouchableOpacity><TouchableOpacity testID="pos-choose-payment-button" accessibilityRole="button" accessibilityState={{ disabled: !cart.length }} disabled={!cart.length} onPress={() => setShowPayment(true)} style={[styles.modalCheckout, { backgroundColor: primaryColor, opacity: cart.length ? 1 : 0.45 }]}><Text style={styles.checkoutText}>{t('choosePayment', language)}</Text></TouchableOpacity></View></View></KeyboardAvoidingView></Modal>
 
             <Modal visible={showPayment} transparent animationType="slide" onRequestClose={() => setShowPayment(false)}><View testID="pos-payment-modal" style={styles.modalOverlay}><View style={[styles.modalSheet, { backgroundColor: palette.surface }]}><SheetHeader title={t('paymentType', language)} onClose={() => setShowPayment(false)} palette={palette} /><Text style={[styles.paymentHint, { color: palette.muted }]}>{t('paymentHint', language)}</Text><View style={styles.paymentGrid}>{([['cash', t('cash', language), Banknote, t('availableBelow', language)], ['card', t('card', language), CreditCard, t('cardPayment', language)], ['debt', t('balance', language), WalletCards, t('leaveOutstanding', language)], ['other', t('other', language), MoreHorizontal, t('chooseInReview', language)]] as const).map(([key, label, Icon, description]) => <TouchableOpacity testID={`pos-payment-${key}-button`} key={key} accessibilityRole="button" onPress={() => continueToInvoice(key)} style={[styles.paymentOption, { backgroundColor: palette.background, borderColor: palette.border }]}><View style={[styles.paymentIcon, { backgroundColor: palette.iconSurface }]}><Icon color={brand.colors.primary} size={20} /></View><View style={styles.paymentCopy}><Text style={[styles.paymentLabel, { color: palette.text }]}>{label}</Text><Text style={[styles.paymentDescription, { color: palette.muted }]}>{description}</Text></View></TouchableOpacity>)}</View></View></View></Modal>
 
-            <Modal visible={showCustomers} transparent animationType="slide" onRequestClose={() => setShowCustomers(false)}>
-                <View style={styles.modalOverlay}>
+            <Modal visible={showCustomers} transparent statusBarTranslucent animationType="slide" onRequestClose={() => setShowCustomers(false)}>
+                <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
                     <View testID="pos-customer-modal" style={[styles.modalSheet, { backgroundColor: palette.surface }]}>
                         <SheetHeader title={t('customer', language)} onClose={() => setShowCustomers(false)} palette={palette} />
                         <ScrollView
@@ -226,19 +261,24 @@ export function POSScreen() {
                             <TouchableOpacity testID="pos-new-customer-button" accessibilityRole="button" onPress={() => { setShowCustomers(false); navigation.navigate('ClientForm', { returnTo: 'POS' }); }} style={[styles.newCustomerButton, { borderColor: primaryColor, backgroundColor: `${primaryColor}12` }]}>
                                 <Plus color={primaryColor} size={18} /><Text style={[styles.newCustomerButtonText, { color: primaryColor }]}>{t('createNewCustomer', language)}</Text>
                             </TouchableOpacity>
-                            <SearchField testID="pos-customer-search" autoFocus value={customerSearch} onChangeText={setCustomerSearch} autoCorrect={false} placeholder={`${t('search', language)} ${t('clients', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}`} />
+                            <SearchField testID="pos-customer-search" value={customerSearch} onChangeText={setCustomerSearch} autoCorrect={false} placeholder={`${t('search', language)} ${t('clients', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')}`} />
                             {customers.length ? filteredCustomers.map((customer) => <TouchableOpacity testID={`pos-customer-${customer.id}-button`} key={customer.id} accessibilityRole="button" onPress={() => { setSelectedCustomer(customer); setShowCustomers(false); }} style={[styles.customerOption, { borderBottomColor: palette.border }]}>
                                 <View style={[styles.customerIcon, { backgroundColor: palette.iconSurface }]}><UserRound color={brand.colors.primary} size={16} /></View>
                                 <View style={styles.customerCopy}><Text style={[styles.customerName, { color: palette.text }]}>{customer.name}</Text><Text style={[styles.customerLabel, { color: palette.muted }]}>{customer.email || customer.phone || t('noContactDetails', language)}</Text></View>
                             </TouchableOpacity>) : <Text style={[styles.emptyCartText, { color: palette.muted }]}>{t('noCustomersFound', language)}</Text>}
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             <Modal visible={showHeldOrders} transparent animationType="slide" onRequestClose={() => setShowHeldOrders(false)}><View style={styles.modalOverlay}><View style={[styles.modalSheet, { backgroundColor: palette.surface }]}><SheetHeader title={t('heldOrders', language)} onClose={() => setShowHeldOrders(false)} palette={palette} />{heldOrders.length ? heldOrders.map((order, index) => <TouchableOpacity key={index} accessibilityRole="button" onPress={() => restoreOrder(order)} style={[styles.heldOrder, { borderBottomColor: palette.border }]}><View><Text style={[styles.primaryText, { color: palette.text }]}>{t('heldOrder', language)} {index + 1}</Text><Text style={[styles.secondaryText, { color: palette.muted }]}>{order.reduce((sum, line) => sum + line.quantity, 0)} {t('items', language).toLocaleLowerCase(language === 'sq' ? 'sq-XK' : 'en-US')} · {formatCurrency(order.reduce((sum, line) => sum + Number(line.unit_price || 0) * line.quantity, 0))}</Text></View><Text style={[styles.restoreText, { color: primaryColor }]}>{t('restore', language)}</Text></TouchableOpacity>) : <View style={styles.noHeld}><Text style={[styles.noProductsTitle, { color: palette.text }]}>{t('noHeldOrders', language)}</Text><Text style={[styles.noProductsText, { color: palette.muted }]}>{t('holdCartDescription', language)}</Text></View>}</View></View></Modal>
         </MobileScreen>
     );
+}
+
+/** An amount field for the cart. */
+function PriceInput({ value, onChange, color, borderColor, label }: { value: number; onChange: (value: number) => void; color: string; borderColor: string; label: string }) {
+    return <DecimalInput accessibilityLabel={label} selectTextOnFocus value={value} onValueChange={onChange} style={{ minWidth: 64, paddingVertical: 4, paddingHorizontal: 8, borderWidth: 1, borderColor, borderRadius: 8, fontSize: 12, color }} />;
 }
 
 function PackageMark({ color }: { color: string }) {
@@ -307,6 +347,12 @@ const styles = StyleSheet.create({
     cartLine: { minHeight: 70, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     cartLineCopy: { flex: 1 },
     cartLineName: { fontSize: 13, fontFamily: brand.fonts.semibold },
+    priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+    customItemForm: { gap: 8, marginTop: 14, padding: 12, borderWidth: 1, borderRadius: 14 },
+    customInput: { minHeight: 42, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 13 },
+    customAdd: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    customItemButton: { minHeight: 44, marginTop: 14, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+    customItemText: { fontSize: 13, fontFamily: brand.fonts.semibold },
     cartLinePrice: { fontSize: 10, fontFamily: brand.fonts.regular, marginTop: 3 },
     quantityControl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     quantityButton: { width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(148,163,184,0.12)', alignItems: 'center', justifyContent: 'center' },

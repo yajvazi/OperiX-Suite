@@ -64,6 +64,7 @@ import {
 import { normalizeBrandColor } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { getDataStore } from '../../services/dataStore';
+import { DecimalInput } from '../../components/mobile/DecimalInput';
 import { notifyInvoiceCreated } from '../../services/pushNotifications';
 import { openExternalLink } from '../../services/externalLinks';
 import { getHelpdeskArticleUrl } from '../../services/helpDocumentation';
@@ -338,7 +339,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             }
             if (Array.isArray(posCart)) {
                 setItems(posCart.map((item: any) => ({
-                    id: `pos-${item.productId}`,
+                    id: `pos-${item.productId ?? Crypto.randomUUID()}`,
                     product_id: item.productId,
                     description: item.name,
                     quantity: item.quantity,
@@ -697,7 +698,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     domainDraft.idempotencyKey,
                 );
                 savedInvoice = amended as typeof savedInvoice;
-            } else if (isPosFlow && !invoiceId && !isLocalStorage) {
+            } else if (isPosFlow && !invoiceId && !isLocalStorage && items.every((item) => item.product_id)) {
                 const posPayment = posPaymentMethod === 'debt'
                     ? 'customer_credit'
                     : posPaymentMethod === 'other'
@@ -801,8 +802,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 const cashPaymentAmount = Number.isFinite(persistedInvoiceTotal) && persistedInvoiceTotal > 0
                     ? persistedInvoiceTotal
                     : totals.total;
+                // A POS sale with a custom item (no product) is saved like an ordinary invoice, so its cash payment is recorded here.
                 const fullyPaidInCash = !invoiceId
-                    && !isPosFlow
+                    && (!isPosFlow || !items.every((item) => item.product_id))
                     && documentType === 'INVOICE'
                     && paymentMethod === 'cash'
                     && !postCod
@@ -859,7 +861,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
         } catch (error: unknown) {
             const errorRecord = error && typeof error === 'object' ? error as { code?: string; message?: string } : {};
-            if (errorRecord.code !== '42501') console.error('Save error:', error);
+            // A validation message (blank line description, bad quantity...) is for the user, not a crash.
+            if (errorRecord.code !== '42501' && (error as { name?: string } | null)?.name !== 'DomainValidationError') console.error('Save error:', error);
             const message = errorRecord.code === '23505' && String(errorRecord.message || '').includes('invoices_company_number_unique')
                 ? t('invoiceNumberUnavailable', language)
                 : getLocalizedErrorMessage(error, language, 'saveError');
@@ -1332,22 +1335,20 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     <View style={styles.itemInputs}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.inputLabel, { color: mutedColor }]}>{t('qty', language)}</Text>
-                                            <TextInput
+                                            <DecimalInput
                                                 testID={`invoice-item-quantity-${index}`}
                                                 style={[styles.smallInput, { color: textColor, borderColor }]}
-                                                value={String(item.quantity || '')}
-                                                onChangeText={(text) => handleUpdateItem(index, 'quantity', Number(text))}
-                                                keyboardType="numeric"
+                                                value={item.quantity}
+                                                onValueChange={(value) => handleUpdateItem(index, 'quantity', value)}
                                             />
                                         </View>
                                         <View style={{ flex: 2 }}>
                                             <Text style={[styles.inputLabel, { color: mutedColor }]}>{t('price', language)}</Text>
-                                            <TextInput
+                                            <DecimalInput
                                                 testID={`invoice-item-price-${index}`}
                                                 style={[styles.smallInput, { color: textColor, borderColor }]}
-                                                value={String(item.unit_price || '')}
-                                                onChangeText={(text) => handleUpdateItem(index, 'unit_price', Number(text))}
-                                                keyboardType="numeric"
+                                                value={item.unit_price}
+                                                onValueChange={(value) => handleUpdateItem(index, 'unit_price', value)}
                                             />
                                         </View>
                                         <View style={{ flex: 1 }}>

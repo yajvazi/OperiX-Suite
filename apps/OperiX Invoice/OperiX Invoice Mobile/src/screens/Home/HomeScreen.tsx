@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     FlatList,
     RefreshControl,
@@ -15,6 +16,8 @@ import {
     CircleDollarSign,
     FileText,
     HandCoins,
+    Eye,
+    EyeOff,
     Package,
     Receipt,
     Search,
@@ -69,6 +72,8 @@ type HomeData = {
     recentActivity: ActivityItem[];
 };
 
+const HIDE_AMOUNTS_KEY = 'operix.hideAmounts';
+
 const emptyData: HomeData = {
     revenueToday: 0,
     salesToday: 0,
@@ -110,6 +115,11 @@ export function HomeScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Amounts can be hidden on this screen (for example when showing the phone to a customer); the choice is remembered.
+    const [hideAmounts, setHideAmounts] = useState(false);
+    useEffect(() => { void AsyncStorage.getItem(HIDE_AMOUNTS_KEY).then((value) => setHideAmounts(value === '1')).catch(() => undefined); }, []);
+    const toggleHideAmounts = () => setHideAmounts((current) => { const next = !current; void AsyncStorage.setItem(HIDE_AMOUNTS_KEY, next ? '1' : '0').catch(() => undefined); return next; });
+    const money = (value: number) => hideAmounts ? '••••' : formatCurrency(value);
 
     const fetchData = useCallback(async () => {
         if (!user) return;
@@ -323,7 +333,7 @@ export function HomeScreen() {
                     <Text style={[styles.activityTitle, { color: palette.text }]} numberOfLines={1}>{item.title}</Text>
                     <Text style={[styles.activityDetail, { color: palette.muted }]} numberOfLines={1}>{item.detail} · {formatActivityDate(item.date, language)}</Text>
                 </View>
-                {item.amount !== undefined ? <Text style={[styles.activityAmount, { color: item.kind === 'expense' ? palette.text : item.kind === 'payment' ? brand.colors.success : palette.text }]}>{item.kind === 'expense' ? '-' : item.kind === 'payment' ? '+' : ''}{formatCurrency(item.amount)}</Text> : null}
+                {item.amount !== undefined ? <Text style={[styles.activityAmount, { color: item.kind === 'expense' ? palette.text : item.kind === 'payment' ? brand.colors.success : palette.text }]}>{item.kind === 'expense' ? '-' : item.kind === 'payment' ? '+' : ''}{hideAmounts ? '••••' : formatCurrency(item.amount)}</Text> : null}
             </TouchableOpacity>
         );
     };
@@ -340,6 +350,7 @@ export function HomeScreen() {
                     <ChevronRight color={palette.muted} size={16} />
                 </TouchableOpacity>
                 <View style={styles.headerActions}>
+                    <IconButton testID="home-hide-amounts-button" label={hideAmounts ? t('showAmounts', language) : t('hideAmounts', language)} onPress={toggleHideAmounts}>{hideAmounts ? <EyeOff color={palette.text} size={20} /> : <Eye color={palette.text} size={20} />}</IconButton>
                     <IconButton testID="home-global-search-button" label={t('searchYourBusiness', language)} onPress={() => navigation.navigate('GlobalSearch')}><Search color={palette.text} size={20} /></IconButton>
                 </View>
             </View>
@@ -359,13 +370,13 @@ export function HomeScreen() {
                                 <View style={styles.revenueCardTop}>
                                     <View>
                                         <Text style={styles.revenueLabel}>{t('revenueToday', language)}</Text>
-                                        <Text style={styles.revenueValue}>{formatCurrency(data.revenueToday)}</Text>
+                                        <Text style={styles.revenueValue}>{money(data.revenueToday)}</Text>
                                     </View>
                                     <View style={styles.revenueIcon}><CircleDollarSign color="#fff" size={22} /></View>
                                 </View>
                                 <View style={styles.revenueFooter}>
                                     <Text style={styles.revenueFooterText}>{data.salesToday} {data.salesToday === 1 ? t('sale', language) : t('salesToday', language)}</Text>
-                                    <Text style={styles.revenueFooterText}>{data.paymentsReceived ? `${formatCurrency(data.paymentsReceived)} ${t('received', language)}` : t('noPaymentsRecordedYet', language)}</Text>
+                                    <Text style={styles.revenueFooterText}>{data.paymentsReceived ? `${money(data.paymentsReceived)} ${t('received', language)}` : t('noPaymentsRecordedYet', language)}</Text>
                                 </View>
                             </View>
 
@@ -389,7 +400,7 @@ export function HomeScreen() {
                                     <MetricCard
                                         style={[styles.metricCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                                         label={t('totalAvailableFunds', language)}
-                                        value={formatCurrency(data.totalAvailableFunds)}
+                                        value={money(data.totalAvailableFunds)}
                                         tone={data.totalAvailableFunds >= 0 ? 'success' : 'danger'}
                                         icon={CircleDollarSign}
                                         valueStyle={styles.metricTotalValue}
@@ -405,7 +416,7 @@ export function HomeScreen() {
                                     <MetricCard
                                         style={[styles.metricCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                                         label={t('moneyWaitingFor', language)}
-                                        value={formatCurrency(data.outstanding)}
+                                        value={money(data.outstanding)}
                                         tone={data.outstanding > 0 ? 'warning' : 'success'}
                                         icon={HandCoins}
                                         valueStyle={styles.metricOutstandingValue}

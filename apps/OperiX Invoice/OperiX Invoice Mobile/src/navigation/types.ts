@@ -2,7 +2,8 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 
 export type PosCartItem = {
-    productId: string;
+    /** Absent for a custom item typed in at the counter. */
+    productId?: string;
     name: string;
     quantity: number;
     unitPrice: number;
