@@ -39,8 +39,8 @@ async function getLocalWorkspaceScope(userId: string): Promise<WorkspaceScope> {
     } as unknown as WorkspaceScope;
 }
 
-export async function getWorkspaceScope(userId: string): Promise<WorkspaceScope> {
-    if (await getStorageMode() === 'local') return getLocalWorkspaceScope(userId);
+export async function getWorkspaceScope(userId: string, options: { forceCloud?: boolean } = {}): Promise<WorkspaceScope> {
+    if (!options.forceCloud && await getStorageMode() === 'local') return getLocalWorkspaceScope(userId);
     const cached = workspaceCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) return cached.scope;
 

@@ -4,17 +4,18 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { Cloud, Download, HardDrive, Upload } from 'lucide-react-native';
-import { useTheme } from '@invoice-monorepo/hooks';
-import type { BackupFile, StorageMode } from '@invoice-monorepo/data-store';
+import { useAuth, useTheme } from '@invoice-monorepo/hooks';
+import { copyMasterData, type BackupFile, type StorageMode, type TransferResult } from '@invoice-monorepo/data-store';
 import { brand, getPalette } from '../../theme/brand';
 import { MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
-import { getLocalStore, getStorageMode, setStorageMode } from '../../services/dataStore';
+import { getCloudStore, getLocalStore, getStorageMode, setStorageMode } from '../../services/dataStore';
 
 /**
  * Where business data lives. "On this device" is free and keeps everything in a database on the phone;
  * "OperiX cloud" is the shared database used by web, teams and backups.
  */
 export function StorageSettingsScreen({ navigation }: any) {
+    const { user } = useAuth();
     const { isDark, primaryColor, language } = useTheme();
     const palette = getPalette(isDark);
     const sq = language === 'sq';
@@ -76,6 +77,38 @@ export function StorageSettingsScreen({ navigation }: any) {
         } finally { setBusy(false); }
     }
 
+    function summarize(result: TransferResult) {
+        const copied = result.copied.clients + result.copied.products + result.copied.vendors;
+        const skipped = result.skipped.clients + result.skipped.products + result.skipped.vendors;
+        const base = sq
+            ? `U kopjuan ${copied} regjistrime (${result.copied.clients} klientë, ${result.copied.products} produkte, ${result.copied.vendors} furnitorë). ${skipped} ekzistonin tashmë.`
+            : `Copied ${copied} records (${result.copied.clients} customers, ${result.copied.products} products, ${result.copied.vendors} suppliers). ${skipped} already existed.`;
+        return result.failed.length ? `${base} ${sq ? 'Dështuan' : 'Failed'}: ${result.failed.length} (${result.failed[0].name}: ${result.failed[0].message})` : base;
+    }
+
+    async function transfer(direction: 'toCloud' | 'toDevice') {
+        if (!user) return;
+        setBusy(true); setMessage('');
+        try {
+            const cloud = await getCloudStore(user.id);
+            const device = await getLocalStore();
+            const result = direction === 'toCloud' ? await copyMasterData(device, cloud) : await copyMasterData(cloud, device);
+            setMessage(summarize(result));
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : (sq ? 'Kopjimi dështoi.' : 'The copy failed.'));
+        } finally { setBusy(false); }
+    }
+
+    function confirmTransfer(direction: 'toCloud' | 'toDevice') {
+        Alert.alert(
+            direction === 'toCloud' ? (sq ? 'Kopjo në cloud' : 'Copy to the cloud') : (sq ? 'Kopjo në pajisje' : 'Copy to this device'),
+            direction === 'toCloud'
+                ? (sq ? 'Klientët, produktet dhe furnitorët nga ky telefon kopjohen në llogarinë tuaj cloud. Ekzistuesit anashkalohen. Faturat dhe pagesat nuk kopjohen; përdorni kopjen rezervë për to.' : 'Customers, products and suppliers on this phone are copied to your cloud account. Existing ones are skipped. Invoices and payments are not copied; use the backup file for them.')
+                : (sq ? 'Klientët, produktet dhe furnitorët nga cloud kopjohen në këtë telefon. Ekzistuesit anashkalohen. Faturat dhe pagesat nuk kopjohen.' : 'Customers, products and suppliers from the cloud are copied to this phone. Existing ones are skipped. Invoices and payments are not copied.'),
+            [{ text: sq ? 'Anulo' : 'Cancel', style: 'cancel' }, { text: sq ? 'Kopjo' : 'Copy', onPress: () => void transfer(direction) }],
+        );
+    }
+
     const option = (value: StorageMode, title: string, text: string, Icon: typeof Cloud) => <TouchableOpacity
         key={value} accessibilityRole="radio" accessibilityState={{ selected: mode === value }} onPress={() => void choose(value)} testID={`storage-mode-${value}`}
         style={[styles.card, { backgroundColor: palette.surface, borderColor: mode === value ? primaryColor : palette.border, borderWidth: mode === value ? 2 : 1 }]}>
@@ -97,6 +130,12 @@ export function StorageSettingsScreen({ navigation }: any) {
                     {deviceCode ? <Text style={[styles.text, { color: palette.muted }]}>{sq ? 'Kodi i pajisjes (në numrat e faturave)' : 'Device code (appears in invoice numbers)'}: {deviceCode}</Text> : null}
                     {busy ? <ActivityIndicator color={primaryColor} /> : null}
                 </View> : null}
+                <View style={[styles.panel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                    <Text style={[styles.title, { color: palette.text }]}>{sq ? 'Kopjo të dhënat bazë' : 'Copy your basic data'}</Text>
+                    <Text style={[styles.text, { color: palette.muted }]}>{sq ? 'Klientët, produktet dhe furnitorët mund të kopjohen mes pajisjes dhe cloud. Mund ta përsërisni pa rrezik dublikimi.' : 'Customers, products and suppliers can be copied between this device and the cloud. Repeating it is safe: nothing is duplicated.'}</Text>
+                    <TouchableOpacity disabled={busy} onPress={() => confirmTransfer('toCloud')} style={[styles.button, { backgroundColor: palette.iconSurface }]} testID="storage-copy-to-cloud"><Cloud color={primaryColor} size={17} /><Text style={[styles.buttonText, { color: primaryColor }]}>{sq ? 'Nga pajisja në cloud' : 'Device to cloud'}</Text></TouchableOpacity>
+                    <TouchableOpacity disabled={busy} onPress={() => confirmTransfer('toDevice')} style={[styles.button, { backgroundColor: palette.iconSurface }]} testID="storage-copy-to-device"><HardDrive color={primaryColor} size={17} /><Text style={[styles.buttonText, { color: primaryColor }]}>{sq ? 'Nga cloud në pajisje' : 'Cloud to device'}</Text></TouchableOpacity>
+                </View>
                 {message ? <Text style={[styles.text, { color: palette.text }]}>{message}</Text> : null}
             </>}
         </ScrollView>

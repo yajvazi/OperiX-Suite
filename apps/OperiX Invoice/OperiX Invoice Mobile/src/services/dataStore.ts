@@ -14,6 +14,11 @@ export { getLocalStore } from './localStore';
  */
 export async function getDataStore(userId: string): Promise<DocumentStore> {
     if (await getStorageMode() === 'local') return getLocalStore();
-    const scope = await getWorkspaceScope(userId);
+    return getCloudStore(userId);
+}
+
+/** The cloud store regardless of the chosen mode, for copying data between the device and the cloud. */
+export async function getCloudStore(userId: string): Promise<DocumentStore> {
+    const scope = await getWorkspaceScope(userId, { forceCloud: true });
     return new CloudDataStore(supabase, { userId, companyId: scope.company?.id ?? null, companyIds: scope.companyIds });
 }

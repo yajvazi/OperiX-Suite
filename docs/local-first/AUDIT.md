@@ -169,11 +169,14 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
 - `services/dataStore.ts` chooses the device store or the cloud store (`operix.storageMode`, default cloud).
 - Moved onto the data store with an on-device path: customers (list, form, detail) and products (list,
   form, detail). Cloud behaviour for these screens is unchanged.
-- New Settings > Data storage screen (mode switch, backup export/import). Hidden unless the build sets
-  `EXPO_PUBLIC_LOCAL_STORAGE=1`, because invoices, payments, expenses and vendors are still cloud-only.
+- Settings > Data storage (mode switch, backup export/import, copy of customers/products/suppliers between the device
+  and the cloud) is always visible; the `EXPO_PUBLIC_LOCAL_STORAGE` build flag no longer exists.
+- Contracts, contract templates and other income also run on the device (device-series numbers
+  `CTR-<code>-<year>-NNNN`, `INC-<code>-<year>-NNNNNN`). Other income feeds the local profit & loss and cash flow.
+- Moving data: `copyMasterData` (packages/data-store/src/transfer.ts) copies customers, products and suppliers in either
+  direction, skipping rows that already exist (same email/SKU/tax id or name). Invoices and payments move only through
+  the backup file, because issued numbers and postings must not be recreated by a bulk copy.
 - Needs a new TestFlight build: `expo-sqlite` is a native module.
-- Still to move: invoices and quotes, payments, expenses, vendors, supplier bills, vendor payments,
-  dashboard and reports, settings/company profile.
 
 ## Progress (mobile, invoices and payments)
 
