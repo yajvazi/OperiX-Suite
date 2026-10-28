@@ -138,5 +138,6 @@ export function rpcHandlers(db) {
     ensure_walk_in_customer: () => db.clients.find((client) => client.pos_walk_in_customer)?.id,
     get_my_product_access: () => ({ invoice: true, booking: false, hr: false, desk: false }),
     get_efs_readiness: () => ({ ready: false, status: 'not_certified' }),
+    reserve_invoice_number: (body) => `QA-${String(body?.p_document_type || 'INV').toUpperCase()}-${String(db.invoices.length + 1).padStart(4, '0')}`,
   };
 }

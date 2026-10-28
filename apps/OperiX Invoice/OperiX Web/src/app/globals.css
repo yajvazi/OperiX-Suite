@@ -1614,3 +1614,33 @@ html[data-theme="dark"] .invoice-chip:hover { background: #17233a; }
 .invoice-editor-page .invoice-flow-items .data-table td:nth-child(6) { width: 96px; text-align: right; white-space: nowrap; }
 html[data-theme="dark"] .ux-page .bg-white { background: var(--operix-surface); }
 html[data-theme="dark"] .ux-page .border { border-color: var(--operix-border); }
+
+/* POS: align with other pages and keep the notice readable in dark mode */
+.pos-page { padding-left: 32px; padding-right: 32px; }
+@media (max-width: 1023px) { .pos-page { padding-left: 16px; padding-right: 16px; } }
+html[data-theme="dark"] .pos-page { background: transparent; }
+html[data-theme="dark"] .pos-notice { background: rgba(245, 158, 11, .12); border-color: rgba(245, 158, 11, .35); color: #fbbf24; }
+
+/* Dark mode sweep: hard-coded light colours used by Tailwind arbitrary classes and older rules */
+html[data-theme="dark"] [class*="border-[#e"],
+html[data-theme="dark"] [class*="border-[#d"],
+html[data-theme="dark"] [class*="border-[#f"] { border-color: var(--operix-border); }
+html[data-theme="dark"] [class*="divide-[#"] > :not(:first-child) { border-color: var(--operix-border); }
+html[data-theme="dark"] [class*="text-[#344054]"],
+html[data-theme="dark"] [class*="text-[#475467]"],
+html[data-theme="dark"] [class*="text-[#101828]"],
+html[data-theme="dark"] [class*="text-[#1d2939]"] { color: #d0d5dd; }
+html[data-theme="dark"] [class*="text-[#667085]"],
+html[data-theme="dark"] [class*="text-[#98a2b3]"] { color: #98a2b3; }
+html[data-theme="dark"] [class*=" bg-[#f"],
+html[data-theme="dark"] [class^="bg-[#f"],
+html[data-theme="dark"] [class*=" bg-[#e"],
+html[data-theme="dark"] [class^="bg-[#e"] { background-color: rgba(148, 163, 184, .08); }
+html[data-theme="dark"] .field > span { color: #c4cbd6; }
+html[data-theme="dark"] .invoice-list-table td { border-bottom-color: var(--operix-border); color: #d0d5dd; }
+html[data-theme="dark"] .invoice-list-table tbody tr:hover { background: rgba(148, 163, 184, .08); }
+html[data-theme="dark"] .invoice-list-table tbody tr:last-child td { border-bottom: 0; }
+html[data-theme="dark"] .invoice-status-tab.is-active { background: rgba(0, 79, 254, .24); color: #9db8ff; }
+html[data-theme="dark"] [class*=" bg-[#edf4ff]"] { background-color: rgba(0, 79, 254, .2); color: #9db8ff; }
+html[data-theme="dark"] .reports-category-icon { background: rgba(0, 79, 254, .16); color: #7da3ff; }
+html[data-theme="dark"] hr { border-color: var(--operix-border); }
