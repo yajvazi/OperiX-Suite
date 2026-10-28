@@ -621,7 +621,7 @@ body { background: var(--operix-canvas); color: var(--operix-ink); }
 .invoice-detail-action { display: flex; min-height: 56px; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--operix-border); border-radius: 11px; background: #fff; color: #344054; font-size: 11px; font-weight: 600; }
 .invoice-detail-action:hover { border-color: #a9c3fc; background: #f8fbff; color: var(--operix-blue); }
 .invoice-detail-action.is-primary { border-color: var(--operix-blue); background: var(--operix-blue); color: #fff; }
-.invoice-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 315px; gap: 18px; align-items: start; }
+.invoice-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
 .invoice-detail-main { display: grid; gap: 14px; min-width: 0; }
 .invoice-detail-side { position: sticky; top: calc(var(--operix-topbar) + 18px); display: grid; gap: 14px; min-width: 0; }
 .invoice-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 20px; }
@@ -634,10 +634,13 @@ body { background: var(--operix-canvas); color: var(--operix-ink); }
 .invoice-items-table td:last-child, .invoice-items-table th:last-child { text-align: right; }
 .invoice-items-table tr:last-child td { border-bottom: 0; }
 .invoice-item-mobile-list { display: none; }
-.invoice-totals { display: grid; max-width: 360px; gap: 8px; margin: 0 20px 20px auto; padding-top: 15px; border-top: 1px solid var(--operix-border); }
+.invoice-detail-totals { display: grid; width: calc(100% - 40px); gap: 9px; margin: 8px auto 24px; padding: 22px 24px 26px; background: #f4f6f8; color: var(--operix-ink); font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgba(16,24,40,.08);
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%, conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%; -webkit-mask-composite: source-in; mask-composite: intersect;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%, conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%; mask-composite: intersect; }
 .invoice-total-line { display: flex; justify-content: space-between; gap: 14px; color: var(--operix-muted); font-size: 12px; }
-.invoice-total-line.is-total { padding-top: 10px; border-top: 1px solid var(--operix-border); color: var(--operix-ink); font-size: 15px; font-weight: 700; }
-.invoice-total-line.is-total strong { color: var(--operix-blue); }
+.invoice-total-line strong { color: var(--operix-ink); font-weight: 600; }
+.invoice-total-line.is-total { margin: 4px 0; padding: 12px 0; border-top: 1px dashed #b8c0cc; border-bottom: 1px dashed #b8c0cc; color: var(--operix-ink); font-size: 16px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.invoice-total-line.is-total strong { color: var(--operix-blue); font-weight: 800; }
 .invoice-payment-list, .invoice-activity-list { display: grid; padding: 6px 20px 17px; }
 .invoice-payment-row, .invoice-activity-row { display: flex; min-height: 50px; align-items: center; gap: 10px; border-bottom: 1px solid #edf0f4; }
 .invoice-payment-row:last-child, .invoice-activity-row:last-child { border-bottom: 0; }
@@ -872,7 +875,7 @@ body { background: var(--operix-canvas); color: var(--operix-ink); }
   .invoice-item-mobile-copy strong { display: block; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .invoice-item-mobile-copy small { display: block; margin-top: 3px; color: var(--operix-muted); font-size: 10px; }
   .invoice-item-mobile-total { margin-left: auto; font-size: 11px; font-weight: 700; }
-  .invoice-totals { margin: 0 15px 15px; }
+  .invoice-detail-totals { width: calc(100% - 30px); margin: 4px auto 18px; }
   .invoice-payment-list, .invoice-activity-list { padding-left: 15px; padding-right: 15px; }
   .invoice-preview-card { margin-top: 14px; }
   .ux-sticky-mobile-cta { position: fixed; right: 0; bottom: var(--operix-bottom-nav); left: 0; z-index: 70; display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--operix-border); background: rgba(255,255,255,.97); box-shadow: 0 -5px 18px rgba(16,24,40,.06); backdrop-filter: blur(12px); }
@@ -1512,7 +1515,6 @@ input[type="color"] { width: 44px; height: 32px; padding: 2px; border-radius: 8p
 .invoice-detail-heading p { margin: 0; }
 .invoice-detail-heading .status-badge, .invoice-detail-heading [class*="badge"] { margin-top: 4px; font-size: 11px; }
 .invoice-detail-top .invoice-detail-actions { align-self: center; }
-.invoice-preview-card .invoice-document-canvas > * { zoom: .34; }
 @media (max-width: 1100px) { .invoice-detail-top { grid-template-columns: 1fr; row-gap: 14px; } .invoice-detail-top .invoice-detail-actions { justify-content: flex-start; } }
 .reports-control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0 2px; font-size: 12px; }
 .reports-control-row span { color: var(--operix-muted); }
@@ -1644,3 +1646,29 @@ html[data-theme="dark"] .invoice-status-tab.is-active { background: rgba(0, 79, 
 html[data-theme="dark"] [class*=" bg-[#edf4ff]"] { background-color: rgba(0, 79, 254, .2); color: #9db8ff; }
 html[data-theme="dark"] .reports-category-icon { background: rgba(0, 79, 254, .16); color: #7da3ff; }
 html[data-theme="dark"] hr { border-color: var(--operix-border); }
+
+/* Invoice detail: compact status bar and scaled A4 preview */
+.invoice-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 14px; }
+.invoice-status-bar-label { color: var(--operix-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.invoice-status-segments { display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 2px; border: 1px solid var(--operix-border); border-radius: 10px; background: var(--operix-surface, #fff); }
+.invoice-status-segment { height: 30px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: #475467; font-size: 12px; font-weight: 600; cursor: pointer; }
+.invoice-status-segment:hover:not(:disabled) { background: #f2f6fc; }
+.invoice-status-segment.is-active { background: #edf4ff; color: var(--operix-blue); }
+.invoice-status-segment:disabled { opacity: .45; cursor: not-allowed; }
+.document-scale-frame { position: relative; width: 100%; overflow: hidden; }
+.document-scale-page { box-sizing: border-box; position: absolute; top: 0; left: 0; transform-origin: top left; padding: 12mm 12mm 10mm; min-height: 1123px; background: #fff; box-shadow: 0 1px 3px rgba(16,24,40,.12), 0 8px 24px rgba(16,24,40,.08); color: #111; }
+.document-scale-receipt { padding: 3mm; min-height: 0; }
+.invoice-preview-open { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; text-align: left; }
+.invoice-preview-card .invoice-document-canvas { padding: 12px; }
+.invoice-preview-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(16,24,40,.6); }
+.invoice-preview-modal-body { display: flex; flex-direction: column; width: min(900px, 100%); max-height: 100%; border-radius: 14px; background: #eef3f8; overflow: hidden; }
+.invoice-preview-modal-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--operix-border); background: #fff; font-size: 13px; }
+.invoice-preview-modal-bar > div { display: flex; gap: 8px; }
+.invoice-preview-modal-scroll { overflow: auto; padding: 20px; }
+html[data-theme="dark"] .invoice-status-segments { background: #101828; }
+html[data-theme="dark"] .invoice-status-segment { color: #d0d5dd; }
+html[data-theme="dark"] .invoice-status-segment:hover:not(:disabled) { background: #1d2939; }
+html[data-theme="dark"] .invoice-status-segment.is-active { background: #12306b; color: #cfe0ff; }
+html[data-theme="dark"] .invoice-preview-modal-body, html[data-theme="dark"] .invoice-preview-modal-bar { background: #101828; color: #f2f4f7; }
+html[data-theme="dark"] .invoice-detail-totals { background: #182230; }
+html[data-theme="dark"] .invoice-total-line.is-total { border-color: #475467; }
