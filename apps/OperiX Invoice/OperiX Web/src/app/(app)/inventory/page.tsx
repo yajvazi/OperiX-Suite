@@ -1,2 +1,4 @@
-import { ResourcePage } from "@/components/resource-page";
-export default function InventoryPage(){return <ResourcePage resourceKey="products" title="Inventory" description="Monitor stock levels and low-stock items."/>;}
+import { redirect } from "next/navigation";
+
+// Products and Inventory were the same page; keep old links working.
+export default function InventoryPage() { redirect("/products"); }

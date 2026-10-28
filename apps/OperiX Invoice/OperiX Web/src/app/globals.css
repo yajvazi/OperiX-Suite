@@ -320,7 +320,7 @@ body { background: var(--operix-canvas); color: var(--operix-ink); }
 .app-switcher-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-sidebar-app-menu { top: calc(100% - 4px); right: 14px; left: 14px; width: auto; }
 .app-sidebar-app-menu a { min-height: 37px; }
-.app-sidebar-nav { flex: 1; overflow-y: auto; padding: 4px 12px 20px; scrollbar-width: none; }
+.app-sidebar-nav { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 4px 12px 20px; scrollbar-width: none; }
 .app-sidebar-nav::-webkit-scrollbar { display: none; }
 .app-nav-section { margin-top: 12px; }
 .app-nav-section:first-child { margin-top: 0; }

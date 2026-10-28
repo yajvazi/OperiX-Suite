@@ -55,7 +55,7 @@ const accountingReports: ReportCard[] = [
   { label: "Changes in Equity", description: "Owner and retained equity", href: "#equity", icon: ArrowDownUp },
   { label: "General Ledger", description: "Every posted account line", href: "/accounting", icon: FileText },
   { label: "Asset Register", description: "Fixed assets and depreciation", href: "#assets", icon: Landmark },
-  { label: "Inventory Register", description: "Stock cost and quantities", href: "/inventory", icon: Boxes },
+  { label: "Inventory Register", description: "Stock cost and quantities", href: "/products", icon: Boxes },
   { label: "Receivables Aging", description: "Customer balances by due date", href: "#receivables", icon: Users },
   { label: "Payables Aging", description: "Supplier balances by due date", href: "#payables", icon: Users },
 ];

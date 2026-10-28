@@ -367,7 +367,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { label: "Manage", items: compact([
       sidebarGroup("Sales", FileText, ["/invoices", "/quotes", "/contracts", "/payments"]),
       sidebarItem("/customers"),
-      sidebarGroup("Stock", Package, ["/products", "/inventory"]),
+      sidebarItem("/products"),
       sidebarGroup("Purchases", WalletCards, ["/expenses", "/vendors", "/supplier-bills", "/vendor-payments"]),
       sidebarGroup("Money", HandCoins, ["/cash-bank", "/income", "/accounting", "/payroll"]),
       sidebarGroup("Reports", ReceiptText, ["/reports", "/tax-reports"]),
@@ -479,5 +479,4 @@ export const secondaryModules = [
   { href: "/supplier-bills", label: "Supplier Bills", icon: FileText },
   { href: "/contracts", label: "Contracts", icon: FileCheck2 },
   { href: "/management", label: "Management", icon: MoreHorizontal },
-  { href: "/inventory", label: "Inventory", icon: Package },
 ];

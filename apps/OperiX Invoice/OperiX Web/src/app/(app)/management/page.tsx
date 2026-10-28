@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, FileSignature, PackageOpen, ReceiptText, Store, Users } from "lucide-react";
+import { Building2, FileSignature, ReceiptText, Store, Users } from "lucide-react";
 import { useWorkspace } from "@/hooks/use-workspace";
 
 const modules=[
@@ -10,7 +10,6 @@ const modules=[
   {href:"/supplier-bills",label:"Supplier Bills",text:"Incoming bills and due dates",icon:ReceiptText,permission:"expense.view_own"},
   {href:"/vendor-payments",label:"Vendor Payments",text:"Payments to suppliers",icon:Building2,permission:"expense.view_own"},
   {href:"/contracts",label:"Contracts",text:"Agreements and signatures",icon:FileSignature,permission:"contracts.manage"},
-  {href:"/inventory",label:"Inventory",text:"Products, services and stock",icon:PackageOpen,permission:"inventory.view"},
 ];
 
 export default function ManagementPage(){

@@ -57,7 +57,6 @@ export const navigationSections: NavigationSection[] = [
     label: "Business",
     items: [
       { href: "/products", label: "Products", icon: Package, permission: "product.view" },
-      { href: "/inventory", label: "Inventory", icon: Boxes, permission: "inventory.view" },
       { href: "/expenses", label: "Expenses", icon: WalletCards, permission: "expense.view_own" },
       { href: "/vendors", label: "Vendors", icon: Store, permission: "expense.view_own" },
       { href: "/income", label: "Income", icon: HandCoins, permission: "payment.create" },
@@ -105,7 +104,6 @@ export const salesNavigation: NavigationItem[] = [
 
 export const businessNavigation: NavigationItem[] = [
   { href: "/products", label: "Products", icon: Package, description: "Products and services", permission: "product.view" },
-  { href: "/inventory", label: "Inventory", icon: Boxes, description: "See stock information", permission: "inventory.view" },
   { href: "/expenses", label: "Expenses", icon: WalletCards, description: "Track operating costs", permission: "expense.view_own" },
   { href: "/vendors", label: "Vendors", icon: Store, description: "Manage suppliers", permission: "expense.view_own" },
   { href: "/income", label: "Income", icon: HandCoins, description: "Record other income", permission: "payment.create" },
