@@ -22,6 +22,8 @@ import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { SERVICE_ICON_OPTIONS, serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 import { deleteProduct, getPreferredBranchId, getProduct, listBranches, listProductBranchStock, saveProduct, saveProductBranchStock } from '@invoice-monorepo/api/repositories';
 import * as Crypto from 'expo-crypto';
 
@@ -149,6 +151,10 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const loadProductAccess = async () => {
         if (!user) return;
         try {
+            if ((await getDataStore(user.id)).mode === 'local') {
+                setCanManageProducts(true); setCanChangePrice(true); setCanAdjustInventory(true); setCanDeleteProduct(true);
+                return;
+            }
             const workspaceScope = await getWorkspaceScope(user.id);
             setCanManageProducts(hasWorkspacePermission(workspaceScope, isEditing ? 'product.edit' : 'product.create'));
             setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
@@ -162,6 +168,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
     const loadBranchContext = async () => {
         if (!user) return;
         try {
+            if ((await getDataStore(user.id)).mode === 'local') { setBranches([]); setSelectedBranchId(null); return; }
             const workspaceScope = await getWorkspaceScope(user.id);
             const companyId = workspaceScope.company?.id || workspaceScope.companyId;
             if (!companyId) return;
@@ -192,13 +199,19 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
     const fetchProduct = async () => {
         if (!user) return;
-        const workspaceScope = await getWorkspaceScope(user.id);
-        setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
-        setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
-        setCanAdjustInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
-        setCanDeleteProduct(hasWorkspacePermission(workspaceScope, 'product.delete'));
-        const companyIds = getActiveProductCompanyIds(workspaceScope);
-        const companyId = workspaceScope.company?.id || workspaceScope.companyId;
+        const store = await getDataStore(user.id);
+        const isLocal = store.mode === 'local';
+        const workspaceScope = isLocal ? null : await getWorkspaceScope(user.id);
+        if (workspaceScope) {
+            setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
+            setCanChangePrice(hasWorkspacePermission(workspaceScope, 'product.change_price'));
+            setCanAdjustInventory(hasWorkspacePermission(workspaceScope, 'inventory.adjust'));
+            setCanDeleteProduct(hasWorkspacePermission(workspaceScope, 'product.delete'));
+        } else {
+            setCanManageProducts(true); setCanChangePrice(true); setCanAdjustInventory(true); setCanDeleteProduct(true);
+        }
+        const companyIds = workspaceScope ? getActiveProductCompanyIds(workspaceScope) : [];
+        const companyId = workspaceScope ? (workspaceScope.company?.id || workspaceScope.companyId) : null;
         let branchForProduct: string | null = null;
         if (companyId) {
             const branchRows = await listBranches(supabase, companyId).catch(() => []);
@@ -210,7 +223,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
             branchForProduct = selected;
             setSelectedBranchId(selected);
         }
-        const data = await getProduct(supabase, productId, { userId: user.id, companyIds });
+        const data = isLocal ? await store.get('products', productId) : await getProduct(supabase, productId, { userId: user.id, companyIds });
         if (data) {
             const product = data as unknown as Record<string, unknown>;
             const price = Number(product.unit_price) || 0;
@@ -316,6 +329,22 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
         try {
             if (!user) throw new Error(t('signInToCreateProduct', language));
+            const store = await getDataStore(user.id);
+            if (store.mode === 'local') {
+                // On the device: keep a copy of the picked photo in the app's own storage, then save the record.
+                let localImage = formData.image_url;
+                if (localImage && !isRemoteImageUrl(localImage) && !serviceIconNameFromValue(localImage) && !localImage.startsWith(`${LegacyFileSystem.documentDirectory}`)) {
+                    const folder = `${LegacyFileSystem.documentDirectory}product-images/`;
+                    await LegacyFileSystem.makeDirectoryAsync(folder, { intermediates: true }).catch(() => undefined);
+                    const target = `${folder}${Crypto.randomUUID()}.jpg`;
+                    await LegacyFileSystem.copyAsync({ from: localImage, to: target });
+                    localImage = target;
+                }
+                await store.save('products', { ...formData, image_url: localImage, ...(isEditing ? { id: productId } : {}) });
+                setLoading(false);
+                navigation.goBack();
+                return;
+            }
             const workspaceScope = await getWorkspaceScope(user.id);
             const requiredPermission = isEditing ? 'product.edit' : 'product.create';
             if (!hasWorkspacePermission(workspaceScope, requiredPermission)) {
@@ -374,8 +403,12 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                     if (!user) return;
                     setLoading(true);
                     try {
-                        const { companyId } = await getWorkspaceScope(user.id);
-                        await deleteProduct(supabase, productId, companyId, user.id);
+                        const store = await getDataStore(user.id);
+                        if (store.mode === 'local') await store.remove('products', productId);
+                        else {
+                            const { companyId } = await getWorkspaceScope(user.id);
+                            await deleteProduct(supabase, productId, companyId, user.id);
+                        }
                         setLoading(false);
                         Alert.alert(
                             t('success', language),

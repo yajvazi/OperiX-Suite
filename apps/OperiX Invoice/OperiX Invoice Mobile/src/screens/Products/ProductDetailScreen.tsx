@@ -9,6 +9,7 @@ import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i
 import { supabase } from '@invoice-monorepo/api';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { getPreferredBranchId, getProduct, listBranches, listProductBranchStock } from '@invoice-monorepo/api/repositories';
 import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
 import type { RootStackParamList } from '../../navigation/types';
@@ -32,6 +33,15 @@ export function ProductDetailScreen() {
         if (!user || !productId) return;
         setError(null);
         try {
+            const store = await getDataStore(user.id);
+            if (store.mode === 'local') {
+                const localProduct = await store.get('products', productId);
+                if (!localProduct) throw new Error('Product not found.');
+                setCanManageProducts(true);
+                setProduct(localProduct as Record<string, any>);
+                setBranchStocks([]);
+                return;
+            }
             const workspaceScope = await getWorkspaceScope(user.id);
             setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
             const companyIds = getActiveProductCompanyIds(workspaceScope);

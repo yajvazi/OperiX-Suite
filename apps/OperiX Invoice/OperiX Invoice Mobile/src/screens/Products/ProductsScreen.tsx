@@ -23,6 +23,7 @@ import { formatCurrency } from '@invoice-monorepo/i18n';
 import { t } from '@invoice-monorepo/i18n';
 import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { deleteProduct, getPreferredBranchId, listBranches, listProductBranchStock, listProducts } from '@invoice-monorepo/api/repositories';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
@@ -80,6 +81,16 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     const fetchProducts = async () => {
         if (!user) return;
         try {
+            const store = await getDataStore(user.id);
+            if (store.mode === 'local') {
+                // On the device the user is the only user: every action is allowed and there are no branches.
+                setCanManageProducts(true); setCanCreateProducts(true); setCanDeleteProducts(true);
+                const localRows = await store.list('products', { orderBy: 'name' }) as unknown as Product[];
+                setProducts(localRows);
+                applyFiltersAndSort(localRows, searchQuery, selectedCategory, sortBy);
+                setBranchStockByProduct({});
+                return;
+            }
             const workspaceScope = await getWorkspaceScope(user.id);
             setCanManageProducts(hasWorkspacePermission(workspaceScope, 'product.edit'));
             setCanCreateProducts(hasWorkspacePermission(workspaceScope, 'product.create'));
@@ -183,8 +194,12 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                 text: t('delete', language),
                 style: 'destructive',
                 onPress: async () => {
-                    const { companyId } = await getWorkspaceScope(user!.id);
-                    await deleteProduct(supabase, id, companyId, user!.id);
+                    const store = await getDataStore(user!.id);
+                    if (store.mode === 'local') await store.remove('products', id);
+                    else {
+                        const { companyId } = await getWorkspaceScope(user!.id);
+                        await deleteProduct(supabase, id, companyId, user!.id);
+                    }
                     await fetchProducts();
                     Alert.alert(t('success', language), t('productDeletedSuccessfully', language));
                 },

@@ -9,6 +9,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { getCustomer, listCustomerPayments, listInvoices } from '@invoice-monorepo/api/repositories';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import type { RootStackParamList } from '../../navigation/types';
 import { EmptyState, ErrorState, LoadingState, MobileHeader, MobileScreen, MobileStatusBadge, ShortcutRow } from '../../components/mobile/MobileUI';
 
@@ -33,14 +34,25 @@ export function CustomerDetailScreen() {
         if (!user || !clientId) return;
         setError(null);
         try {
-            const { companyIds } = await getWorkspaceScope(user.id);
-            const queryScope = { userId: user.id, companyIds };
-            const [clientData, invoicesData, paymentsData, quotesData] = await Promise.all([
-                getCustomer(supabase, clientId, queryScope),
-                listInvoices(supabase, queryScope, { select: 'id,invoice_number,total_amount,status,issue_date,created_at', documentType: 'INVOICE', legacyType: 'invoice', limit: 50 }),
-                listCustomerPayments(supabase, queryScope, clientId),
-                listInvoices(supabase, queryScope, { select: 'id,invoice_number,total_amount,status,issue_date,created_at', documentType: 'QUOTE', legacyType: 'offer', limit: 20 }),
-            ]);
+            const store = await getDataStore(user.id);
+            let clientData: unknown; let invoicesData: unknown[]; let paymentsData: unknown[]; let quotesData: unknown[];
+            if (store.mode === 'local') {
+                [clientData, invoicesData, paymentsData, quotesData] = await Promise.all([
+                    store.get('clients', clientId),
+                    store.list('invoices', { where: { client_id: clientId, commercial_document_type: 'INVOICE' }, limit: 50 }),
+                    store.list('payments', { where: { client_id: clientId } }),
+                    store.list('invoices', { where: { client_id: clientId, commercial_document_type: 'QUOTE' }, limit: 20 }),
+                ]);
+            } else {
+                const { companyIds } = await getWorkspaceScope(user.id);
+                const queryScope = { userId: user.id, companyIds };
+                [clientData, invoicesData, paymentsData, quotesData] = await Promise.all([
+                    getCustomer(supabase, clientId, queryScope),
+                    listInvoices(supabase, queryScope, { select: 'id,invoice_number,total_amount,status,issue_date,created_at', documentType: 'INVOICE', legacyType: 'invoice', limit: 50 }),
+                    listCustomerPayments(supabase, queryScope, clientId),
+                    listInvoices(supabase, queryScope, { select: 'id,invoice_number,total_amount,status,issue_date,created_at', documentType: 'QUOTE', legacyType: 'offer', limit: 20 }),
+                ]);
+            }
             if (!clientData) throw new Error('Customer not found in this workspace.');
 
             const invoices = invoicesData as Array<Record<string, any>>;
@@ -53,7 +65,7 @@ export function CustomerDetailScreen() {
             ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setClient(clientData as Record<string, any>);
             setActivities(nextActivities);
-            setOutstanding(invoices.filter((invoice) => ['draft', 'sent', 'pending', 'partial', 'overdue'].includes(invoice.status)).reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0));
+            setOutstanding(invoices.filter((invoice) => ['draft', 'sent', 'pending', 'partial', 'overdue', 'issued', 'partially_paid'].includes(invoice.status)).reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0));
             setLifetimeValue(invoices.filter((invoice) => invoice.status === 'paid').reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0));
         } catch (fetchError: any) {
             console.error('Customer detail error:', fetchError);
