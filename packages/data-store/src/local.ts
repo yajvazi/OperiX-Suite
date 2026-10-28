@@ -42,6 +42,9 @@ export interface LocalStoreOptions {
   deviceCode?: string;
   newId?: () => string;
   now?: () => Date;
+  /** Platform hooks for runtimes without Web Crypto (React Native): provide them from expo-crypto. */
+  getRandomValues?: (bytes: Uint8Array) => Uint8Array;
+  sha256Hex?: (value: string) => Promise<string>;
 }
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -53,13 +56,13 @@ function normalizeDeviceCode(value: string): string {
   return code;
 }
 
-function randomDeviceCode(): string {
+function randomDeviceCode(getRandomValues: (bytes: Uint8Array) => Uint8Array): string {
   const bytes = new Uint8Array(4);
-  globalThis.crypto.getRandomValues(bytes);
+  getRandomValues(bytes);
   return Array.from(bytes, (byte) => DEVICE_CODE_ALPHABET[byte % DEVICE_CODE_ALPHABET.length]).join('');
 }
 
-async function sha256Hex(value: string): Promise<string> {
+async function webCryptoSha256Hex(value: string): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -85,9 +88,10 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
   private readonly driver: SqlDriver;
   private readonly newId: () => string;
   private readonly now: () => Date;
+  private readonly sha256: (value: string) => Promise<string>;
 
-  private constructor(driver: SqlDriver, companyId: string, deviceCode: string, newId: () => string, now: () => Date) {
-    this.driver = driver; this.companyId = companyId; this.deviceCode = deviceCode; this.newId = newId; this.now = now;
+  private constructor(driver: SqlDriver, companyId: string, deviceCode: string, newId: () => string, now: () => Date, sha256: (value: string) => Promise<string>) {
+    this.driver = driver; this.companyId = companyId; this.deviceCode = deviceCode; this.newId = newId; this.now = now; this.sha256 = sha256;
   }
 
   static async open(driver: SqlDriver, options: LocalStoreOptions = {}): Promise<LocalDataStore> {
@@ -100,9 +104,9 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     if (!companyId) { companyId = newId(); await write('company_id', companyId); }
     let deviceCode = await read('device_code');
     if (options.deviceCode) { deviceCode = normalizeDeviceCode(options.deviceCode); await write('device_code', deviceCode); }
-    else if (!deviceCode) { deviceCode = randomDeviceCode(); await write('device_code', deviceCode); }
+    else if (!deviceCode) { deviceCode = randomDeviceCode(options.getRandomValues ?? ((bytes) => globalThis.crypto.getRandomValues(bytes))); await write('device_code', deviceCode); }
     await write('schema_version', SCHEMA_VERSION);
-    return new LocalDataStore(driver, companyId, deviceCode, newId, now);
+    return new LocalDataStore(driver, companyId, deviceCode, newId, now, options.sha256Hex ?? webCryptoSha256Hex);
   }
 
   private stamp() { return this.now().toISOString(); }
@@ -321,7 +325,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       format: 'operix-backup' as const, version: 1 as const, exportedAt: this.stamp(), companyId: this.companyId, deviceCode: this.deviceCode, sequences,
       records: rows.map((row) => ({ table: row.table_name, id: row.id, data: JSON.parse(row.data) as Record<string, unknown>, created_at: row.created_at, updated_at: row.updated_at, deleted_at: row.deleted_at })),
     };
-    return { ...body, checksum: await sha256Hex(canonicalJson(body)) };
+    return { ...body, checksum: await this.sha256(canonicalJson(body)) };
   }
 
   /**
@@ -332,7 +336,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
   async importBackup(file: BackupFile): Promise<ImportResult> {
     if (file?.format !== 'operix-backup' || file.version !== 1) throw new Error('This file is not an OperiX backup.');
     const { checksum, ...body } = file;
-    if (checksum !== await sha256Hex(canonicalJson(body))) throw new Error('The backup file is damaged or was changed.');
+    if (checksum !== await this.sha256(canonicalJson(body))) throw new Error('The backup file is damaged or was changed.');
     const result: ImportResult = { inserted: 0, updated: 0, skipped: 0 };
     await this.driver.transaction(async () => {
       for (const record of file.records) {

@@ -15,6 +15,8 @@ export interface ListOptions {
   /** Field to sort by; prefix with '-' for descending. Defaults to newest first. */
   orderBy?: string;
   limit?: number;
+  /** Cloud only: comma-separated columns to fetch (the local store always returns whole records). */
+  columns?: string;
 }
 
 export interface InvoiceLineInput {

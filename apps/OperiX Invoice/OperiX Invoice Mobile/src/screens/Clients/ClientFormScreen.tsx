@@ -11,13 +11,11 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { ArrowLeft, User, Percent, FileText, MapPin, Globe, ChevronDown, ChevronUp, Trash2 } from 'lucide-react-native';
-import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
-import { getWorkspaceScope } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
-import { deleteCustomer, getCustomer, saveCustomer } from '@invoice-monorepo/api/repositories';
 
 interface ClientFormScreenProps {
     navigation: any;
@@ -72,10 +70,10 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
 
     const fetchClient = async () => {
         if (!user) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const data = await getCustomer(supabase, clientId, { userId: user.id, companyIds });
+        const store = await getDataStore(user.id);
+        const data = await store.get('clients', clientId);
         if (data) {
-            const client = data as unknown as Partial<Parameters<typeof saveCustomer>[1]> & Record<string, unknown>;
+            const client = data as Record<string, unknown>;
             setFormData({
             name: String(client.name || ''),
             email: String(client.email || ''),
@@ -109,16 +107,10 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
         saveInFlight.current = true;
         setLoading(true);
         try {
-            // Do not use the user ID as a company ID. Older profiles can exist
-            // without a company yet, and the company-scoped RLS policy allows
-            // those creator-owned rows only when company_id is null.
-            // Resolve the selected company from the actual company rows so a
-            // legacy profile.company_id that points at the user UUID cannot be
-            // sent to the database as a non-existent company.
-            const { company } = await getWorkspaceScope(user.id);
-            const companyId = company?.id ?? null;
-
-            const savedClient = await saveCustomer(supabase, { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), user_id: user.id, company_id: companyId }, isEditing ? clientId : null);
+            // The data store resolves the company: in the cloud it never sends the user ID as a company ID
+            // (older profiles can exist without a company), and on the device there is a single company.
+            const store = await getDataStore(user.id);
+            const savedClient = await store.save('clients', { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), ...(isEditing ? { id: clientId } : {}) });
             if (route.params?.returnTo === 'POS' && savedClient?.id) {
                 navigation.navigate('POS', { createdClientId: savedClient.id });
             } else {
@@ -147,8 +139,8 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
                         try {
                             if (!user?.id) throw new Error(t('loginRequired', language));
                             setDeleting(true);
-                            const { company } = await getWorkspaceScope(user.id);
-                            await deleteCustomer(supabase, clientId, company?.id ?? null, user.id);
+                            const store = await getDataStore(user.id);
+                            await store.remove('clients', clientId);
                             navigation.goBack();
                         } catch (error) {
                             Alert.alert(

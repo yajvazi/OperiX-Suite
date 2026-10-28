@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { Search, Users, DollarSign, TrendingUp, MapPin, Mail, Phone, FileText, Star, X } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, FAB } from '@invoice-monorepo/ui';
@@ -18,8 +17,8 @@ import { Card, FAB } from '@invoice-monorepo/ui';
 import { Client } from '@invoice-monorepo/types';
 import { t } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
-import { getWorkspaceScope, scopedResource } from '../../services/workspace';
-import { listCustomers } from '@invoice-monorepo/api/repositories';
+import { getWorkspaceScope } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface ClientsScreenProps {
@@ -65,38 +64,27 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
     const fetchClients = async () => {
         if (!user) return;
         try {
-            const { companyIds } = await getWorkspaceScope(user.id);
-            const scope = scopedResource(user.id, companyIds);
-            const cacheKey = mobileCacheKey('customers', user.id, companyIds);
-            const cachedClients = await readMobileCache<Client[]>(cacheKey);
+            const store = await getDataStore(user.id);
+            // The cached copy only speeds up the cloud list; on-device data is already local.
+            const cacheKey = store.mode === 'cloud' ? mobileCacheKey('customers', user.id, (await getWorkspaceScope(user.id)).companyIds) : null;
+            const cachedClients = cacheKey ? await readMobileCache<Client[]>(cacheKey) : null;
             if (cachedClients) {
                 setClients(cachedClients);
                 applyFiltersAndSort(cachedClients, searchQuery, selectedFilter, sortBy);
             }
-            const data = await listCustomers(supabase, { userId: user.id, companyIds });
-            if (data) {
-                const clientRows = data as unknown as Client[];
-                setClients(clientRows);
-                applyFiltersAndSort(clientRows, searchQuery, selectedFilter, sortBy);
-                writeMobileCache(cacheKey, clientRows);
+            const clientRows = await store.list('clients', { orderBy: 'name' }) as unknown as Client[];
+            setClients(clientRows);
+            applyFiltersAndSort(clientRows, searchQuery, selectedFilter, sortBy);
+            if (cacheKey) writeMobileCache(cacheKey, clientRows);
 
-                // Fetch revenue per client
-                const { data: invoices } = await supabase
-                    .from('invoices')
-                    .select('client_id, total_amount')
-                    .or(scope)
-                    .eq('status', 'paid');
-
-                if (invoices) {
-                    const revenueMap: { [key: string]: number } = {};
-                    invoices.forEach((inv: any) => {
-                        if (inv.client_id) {
-                            revenueMap[inv.client_id] = (revenueMap[inv.client_id] || 0) + Number(inv.total_amount || 0);
-                        }
-                    });
-                    setClientStats(revenueMap);
-                }
-            }
+            // Revenue per client
+            const invoices = await store.list('invoices', { where: { status: 'paid' }, columns: 'client_id, total_amount' });
+            const revenueMap: { [key: string]: number } = {};
+            invoices.forEach((inv) => {
+                const clientId = inv.client_id as string | null;
+                if (clientId) revenueMap[clientId] = (revenueMap[clientId] || 0) + Number(inv.total_amount || 0);
+            });
+            setClientStats(revenueMap);
         } catch (err) {
             console.error(err);
         }

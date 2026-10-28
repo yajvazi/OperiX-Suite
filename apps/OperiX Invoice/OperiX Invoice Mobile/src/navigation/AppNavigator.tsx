@@ -91,6 +91,7 @@ import { PaymentIntegrationsScreen } from '../screens/Settings/PaymentIntegratio
 import { StripeDashboardScreen } from '../screens/Settings/StripeDashboardScreen';
 import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
 import { UsersAccessScreen } from '../screens/Settings/UsersAccessScreen';
+import { StorageSettingsScreen } from '../screens/Settings/StorageSettingsScreen';
 import { AdvancedSettingsScreen } from '../screens/Settings/AdvancedSettingsScreen';
 import { SubscriptionScreen } from '../screens/Settings/SubscriptionScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
@@ -200,6 +201,7 @@ function SettingsNavigator() {
         <SettingsStack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
         <SettingsStack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
         <SettingsStack.Screen name="UsersAccess" component={UsersAccessScreen} />
+        <SettingsStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
         <SettingsStack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
         <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
     </SettingsStack.Navigator>;

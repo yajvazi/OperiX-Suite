@@ -1,10 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  deleteScopedResource, reserveDocumentNumber, reverseCustomerPayment, saveCustomerPayment,
-  saveInvoiceDocument, saveScopedResource,
+  deleteCustomer, deleteProduct, deleteScopedResource, reserveDocumentNumber, reverseCustomerPayment,
+  saveCustomer, saveCustomerPayment, saveInvoiceDocument, saveProduct, saveScopedResource,
 } from '@invoice-monorepo/api/repositories';
+import { scopedResource } from '@invoice-monorepo/api/workspace';
 import type { InvoiceDraftInput } from '@invoice-monorepo/api/domain';
 import type { DataRecord, DocumentStore, InvoiceInput, ListOptions, PaymentInput, StoreTable } from './store.ts';
+
+export interface CloudScope { userId: string; companyId: string | null; companyIds: readonly string[] }
 
 const TYPE_ALIASES: Record<string, string> = { offer: 'quote', order: 'sales_order' };
 
@@ -20,40 +23,49 @@ function cloudDocumentType(value: string | undefined): InvoiceDraftInput['docume
 export class CloudDataStore implements DocumentStore {
   readonly mode = 'cloud' as const;
   private readonly client: SupabaseClient;
-  private readonly scope: { userId: string; companyId: string };
+  private readonly scope: CloudScope;
 
-  constructor(client: SupabaseClient, scope: { userId: string; companyId: string }) {
+  constructor(client: SupabaseClient, scope: CloudScope) {
     this.client = client; this.scope = scope;
   }
 
+  private get companyId(): string { return this.scope.companyId ?? ''; }
+  private get rowScope(): string { return scopedResource(this.scope.userId, this.scope.companyIds); }
+
   async list(table: StoreTable, options: ListOptions = {}): Promise<DataRecord[]> {
-    let query = this.client.from(table).select('*').eq('company_id', this.scope.companyId);
+    let query = this.client.from(table).select(options.columns ?? '*').or(this.rowScope);
     for (const [field, value] of Object.entries(options.where ?? {})) query = value === null ? query.is(field, null) : query.eq(field, value);
-    const orderBy = options.orderBy ?? '-created_at';
+    const orderBy = options.orderBy ?? (table === 'clients' || table === 'products' ? 'name' : '-created_at');
     query = query.order(orderBy.replace(/^-/, ''), { ascending: !orderBy.startsWith('-') });
     if (options.limit) query = query.limit(options.limit);
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-    return (data ?? []) as DataRecord[];
+    return (data ?? []) as unknown as DataRecord[];
   }
 
   async get(table: StoreTable, id: string): Promise<DataRecord | null> {
-    const { data, error } = await this.client.from(table).select('*').eq('company_id', this.scope.companyId).eq('id', id).maybeSingle();
+    const { data, error } = await this.client.from(table).select('*').eq('id', id).or(this.rowScope).maybeSingle();
     if (error) throw new Error(error.message);
     return (data as DataRecord | null) ?? null;
   }
 
   async save(table: StoreTable, record: Record<string, unknown> & { id?: string }): Promise<DataRecord> {
     const { id, ...fields } = record;
-    return await saveScopedResource(this.client, table, { ...fields, company_id: this.scope.companyId }, id ?? null) as DataRecord;
+    const payload = { ...fields, user_id: this.scope.userId, company_id: this.scope.companyId ?? null };
+    // Customers and products go through the same repository functions the screens used before.
+    if (table === 'clients') return await saveCustomer(this.client, payload, id ?? null) as DataRecord;
+    if (table === 'products') return await saveProduct(this.client, payload, id ?? null) as DataRecord;
+    return await saveScopedResource(this.client, table, payload, id ?? null) as DataRecord;
   }
 
   async remove(table: StoreTable, id: string): Promise<void> {
-    await deleteScopedResource(this.client, table, id, this.scope.companyId);
+    if (table === 'clients') return deleteCustomer(this.client, id, this.scope.companyId ?? null, this.scope.userId);
+    if (table === 'products') return deleteProduct(this.client, id, this.companyId, this.scope.userId);
+    await deleteScopedResource(this.client, table, id, this.companyId);
   }
 
   async reserveDocumentNumber(documentType: string, issueDate: string): Promise<string> {
-    return reserveDocumentNumber(this.client, this.scope.companyId, cloudDocumentType(documentType), issueDate);
+    return reserveDocumentNumber(this.client, this.companyId, cloudDocumentType(documentType), issueDate);
   }
 
   async saveInvoiceDocument(input: InvoiceInput): Promise<DataRecord> {
@@ -61,7 +73,7 @@ export class CloudDataStore implements DocumentStore {
     const saved = await saveInvoiceDocument(this.client, {
       draft: {
         userId: this.scope.userId,
-        companyId: this.scope.companyId,
+        companyId: this.companyId,
         documentType: cloudDocumentType(input.documentType),
         clientId: input.clientId ?? null,
         issueDate: input.issueDate,
@@ -86,7 +98,7 @@ export class CloudDataStore implements DocumentStore {
     if (!invoice) throw new Error('Invoice not found.');
     const saved = await saveCustomerPayment(this.client, {
       userId: this.scope.userId,
-      companyId: this.scope.companyId,
+      companyId: this.companyId,
       customerId: String(invoice.client_id ?? ''),
       invoiceId: input.invoiceId,
       paymentNumber: input.paymentNumber ?? null,

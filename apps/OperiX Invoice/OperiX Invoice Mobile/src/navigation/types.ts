@@ -84,6 +84,7 @@ export type SettingsStackParamList = {
     StripeDashboard: undefined;
     ManageCompanies: undefined;
     UsersAccess: undefined;
+    StorageSettings: undefined;
     AdvancedSettings: undefined;
     Subscription: undefined;
 };
