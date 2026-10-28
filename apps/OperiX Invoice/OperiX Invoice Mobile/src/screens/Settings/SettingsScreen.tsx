@@ -20,6 +20,7 @@ import { CompanyBankAccount, CompanyBankAccountShare, Profile } from '@invoice-m
 import { t } from '@invoice-monorepo/i18n';
 import { brand, getPalette, normalizeBrandColor } from '../../theme/brand';
 import { getWorkspaceScope } from '../../services/workspace';
+import { getDataStore, getLocalStore } from '../../services/dataStore';
 import { MobileHeader, MobileScreen, SectionTitle, ShortcutRow } from '../../components/mobile/MobileUI';
 import { StampGeneratorModal } from '../../components/mobile/StampGeneratorModal';
 
@@ -81,6 +82,8 @@ export function SettingsScreen({ navigation }: any) {
     const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
     const [bankAccounts, setBankAccounts] = useState<CompanyBankAccount[]>([]);
+    // On the device there are no branches, shared bank accounts, teams or subscriptions.
+    const [localMode, setLocalMode] = useState(false);
     const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
     const [bankAccountSaving, setBankAccountSaving] = useState(false);
     const [showBankAccountForm, setShowBankAccountForm] = useState(false);
@@ -119,6 +122,13 @@ export function SettingsScreen({ navigation }: any) {
             setWorkspaceRole(workspaceScope.roleCode);
             setWorkspacePermissions(workspaceScope.permissions);
             setPlatformAdmin(workspaceScope.platformAdmin);
+            if ((await getDataStore(user.id)).mode === 'local') {
+                // The company lives on the device: its record is the profile, and there are no branches or shared bank accounts.
+                setLocalMode(true);
+                const localProfile = workspaceScope.profile as unknown as Profile;
+                setProfile({ ...localProfile, currency: 'EUR', primary_color: normalizeBrandColor(localProfile.primary_color) });
+                return;
+            }
             if (workspaceScope.platformAdmin || workspaceScope.permissions.includes('settings.bank')) {
                 await fetchBankAccounts(workspaceScope.companyId);
             }
@@ -358,6 +368,12 @@ export function SettingsScreen({ navigation }: any) {
         if (updates.invoice_language) setLanguage(updates.invoice_language);
 
         try {
+            const store = user ? await getDataStore(user.id) : null;
+            if (store?.mode === 'local') {
+                const { id: _ignored, ...fields } = updates as Record<string, unknown>;
+                await (await getLocalStore()).save('companies', { id: (await getLocalStore()).companyId, ...fields });
+                return;
+            }
             // Determine if we are updating profile or company fields
             let profileUpdates: any = {};
             let companyUpdates: any = {};
@@ -614,7 +630,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Advanced Settings Link */}
-                {can('settings.company') || can('settings.invoice') || can('financial.export') ? <ShortcutRow
+                {!localMode && (can('settings.company') || can('settings.invoice') || can('financial.export')) ? <ShortcutRow
                     icon={Zap}
                     title={t('advancedSettingsTitle', language)}
                     description={t('advancedSettingsDescription', language)}
@@ -623,7 +639,7 @@ export function SettingsScreen({ navigation }: any) {
                 /> : null}
 
                 <SectionTitle title={language === 'sq' ? 'Kompania' : 'Company'} />
-                {can('subscription.manage') ? <ShortcutRow
+                {!localMode && can('subscription.manage') ? <ShortcutRow
                     icon={CreditCard}
                     title={language === 'sq' ? 'Abonimi dhe pagesa' : 'Subscription & billing'}
                     description={language === 'sq' ? 'Shikoni planin, provën, përdorimin dhe statusin e pagesës' : 'View plan, trial, usage, and payment status'}
@@ -637,7 +653,7 @@ export function SettingsScreen({ navigation }: any) {
                     onPress={() => navigation.navigate('StorageSettings')}
                     trailing={<ChevronRight color={palette.muted} size={18} />}
                 /> : null}
-                {can('users.manage') ? <ShortcutRow
+                {!localMode && can('users.manage') ? <ShortcutRow
                     icon={Users}
                     title={language === 'sq' ? 'Përdoruesit dhe qasja' : 'Users & Access'}
                     description={language === 'sq' ? 'Menaxhoni ekipin, rolet, lejet dhe vendet me pagesë' : 'Manage users, roles, permissions, invitations, and paid seats'}
@@ -665,8 +681,8 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {renderHeader(language === 'sq' ? 'Degët' : 'Branches', language === 'sq' ? 'Menaxhoni degët dhe degën e preferuar për këtë kompani' : 'Manage company branches and your preferred branch', MapPin, 'branches', primaryColor)}
-                {activeSection === 'branches' && (
+                {!localMode && renderHeader(language === 'sq' ? 'Degët' : 'Branches', language === 'sq' ? 'Menaxhoni degët dhe degën e preferuar për këtë kompani' : 'Manage company branches and your preferred branch', MapPin, 'branches', primaryColor)}
+                {!localMode && activeSection === 'branches' && (
                     <View style={sectionPanelStyle}>
                         <Text style={[styles.label, { color: textColor }]}>{language === 'sq' ? 'Dega e preferuar' : 'Preferred branch'}</Text>
                         <View style={styles.grid}>
@@ -759,6 +775,7 @@ export function SettingsScreen({ navigation }: any) {
                         <Input editable={can('settings.bank')} label={t('iban', language)} value={profile.bank_iban} onChangeText={(value) => setProfile({ ...profile, bank_iban: value })} onEndEditing={() => updateProfile({ bank_iban: profile.bank_iban })} />
                         <Input editable={can('settings.bank')} label={t('swift', language)} value={profile.bank_swift} onChangeText={(value) => setProfile({ ...profile, bank_swift: value })} onEndEditing={() => updateProfile({ bank_swift: profile.bank_swift })} />
 
+                        {!localMode ? <>
                         <View style={[styles.divider, { backgroundColor: borderColor }]} />
                         <View style={styles.bankAccountsHeader}>
                             <View style={styles.bankAccountsCopy}>
@@ -955,12 +972,13 @@ export function SettingsScreen({ navigation }: any) {
                                 </KeyboardAvoidingView>
                             </Modal>
                         ) : null}
+                        </> : null}
                     </View>
                 )}
 
                 <SectionTitle title={language === 'sq' ? 'Bashkëpunimi dhe siguria' : 'Team and security'} />
                 {/* Team & Collaboration */}
-                {can('users.view') || can('settings.company') ? renderHeader(t('teamCollaboration', language), language === 'sq' ? 'Rolet, anëtarët dhe kompanitë e lidhura' : 'Roles, members, and connected companies', Users, 'team', primaryColor) : null}
+                {!localMode && (can('users.view') || can('settings.company')) ? renderHeader(t('teamCollaboration', language), language === 'sq' ? 'Rolet, anëtarët dhe kompanitë e lidhura' : 'Roles, members, and connected companies', Users, 'team', primaryColor) : null}
                 {activeSection === 'team' && (can('users.view') || can('settings.company')) && (
                     <View style={sectionPanelStyle}>
                         <View style={styles.rowBetween}>

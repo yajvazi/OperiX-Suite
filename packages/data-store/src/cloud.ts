@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  deleteCustomer, deleteProduct, deleteScopedResource, getInvoice, listInvoices, listPayments, reserveDocumentNumber, reverseCustomerPayment,
-  saveCustomer, saveCustomerPayment, saveInvoiceDocument, saveProduct, saveScopedResource,
+  deleteCustomer, deleteInvoice, deleteProduct, deleteScopedResource, getInvoice, listInvoices, listPayments, postCreditNote, reserveDocumentNumber, reverseCustomerPayment,
+  saveCustomer, saveCustomerPayment, saveInvoiceDocument, saveProduct, saveScopedResource, transitionInvoiceStatus,
 } from '@invoice-monorepo/api/repositories';
 import { scopedResource } from '@invoice-monorepo/api/workspace';
 import type { InvoiceDraftInput } from '@invoice-monorepo/api/domain';
@@ -132,6 +132,27 @@ export class CloudDataStore implements DocumentStore {
 
   async listPayments(options: PaymentListOptions = {}): Promise<DataRecord[]> {
     return await listPayments(this.client, { userId: this.scope.userId, companyIds: this.scope.companyIds }, { customerId: options.customerId, invoiceId: options.invoiceId, limit: options.limit }) as unknown as DataRecord[];
+  }
+
+  async transitionDocumentStatus(id: string, status: string, eventType?: string): Promise<DataRecord> {
+    const { data, error } = await transitionInvoiceStatus(this.client, id, status, eventType ?? status.toLowerCase());
+    if (error) throw error;
+    return data as DataRecord;
+  }
+
+  async deleteInvoice(id: string): Promise<void> {
+    await deleteInvoice(this.client, id);
+  }
+
+  async convertDocument(sourceId: string, targetType: string): Promise<DataRecord> {
+    const { data, error } = await this.client.rpc('convert_commercial_document', { p_source_document_id: sourceId, p_target_document_type: targetType.toUpperCase() });
+    if (error) throw error;
+    if (!data) throw new Error('The document could not be created.');
+    return data as DataRecord;
+  }
+
+  async postCreditNote(id: string, reason?: string): Promise<DataRecord> {
+    return await postCreditNote(this.client, id, reason) as DataRecord;
   }
 
   async reverseCustomerPayment(paymentId: string, reason: string): Promise<DataRecord> {

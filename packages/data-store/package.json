@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@invoice-monorepo/api": "*",
+    "@invoice-monorepo/commercial-documents": "*",
     "@invoice-monorepo/money": "*"
   },
   "devDependencies": {

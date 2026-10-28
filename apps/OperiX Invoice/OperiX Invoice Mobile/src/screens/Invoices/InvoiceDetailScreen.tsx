@@ -16,7 +16,7 @@ import {
 import { ArrowLeft, Edit, Share2, FileText, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard, Download, Printer, Receipt, X, MoreHorizontal, HandCoins, ChevronRight, UserRound } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@invoice-monorepo/api';
-import { deleteInvoice, getInvoice, listCompanyAgents, listInvoicePayments, postCreditNote, transitionInvoiceStatus } from '@invoice-monorepo/api/repositories';
+import { getInvoice, listCompanyAgents, listInvoicePayments } from '@invoice-monorepo/api/repositories';
 import { calculateInvoice } from '@invoice-monorepo/money';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
@@ -195,8 +195,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             setSalesBookPeriodStatus(null);
             setItems((Array.isArray(localInvoice.items) ? localInvoice.items : []) as InvoiceItem[]);
             setPayments(await store.listPayments({ invoiceId }) as Array<Record<string, any>>);
-            setRelatedDocuments([]);
-            setEvents([]);
+            const links = (await store.list('document_source_links')).filter((link) => link.source_id === invoiceId || link.target_id === invoiceId);
+            const relatedIds = links.map((link) => String(link.source_id === invoiceId ? link.target_id : link.source_id));
+            setRelatedDocuments((await Promise.all(relatedIds.map((id) => store.get('invoices', id)))).filter(Boolean) as Array<Record<string, any>>);
+            setEvents(await store.list('commercial_document_events', { where: { document_id: invoiceId }, orderBy: '-occurred_at' }) as Array<Record<string, any>>);
             setLoading(false);
             return;
         }
@@ -575,8 +577,11 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         setUpdatingStatus(status);
         try {
-            const { data, error } = await transitionInvoiceStatus(supabase, invoice.id, nextStatus, `mobile_${status}`);
-            if (error) {
+            const store = await getDataStore(user!.id);
+            let data: Record<string, unknown> | null = null;
+            try {
+                data = await store.transitionDocumentStatus(invoice.id, nextStatus, `mobile_${status}`);
+            } catch (error) {
                 Alert.alert(t('error', language), getLocalizedErrorMessage(error, language));
                 return;
             }
@@ -586,7 +591,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 // older list/report surfaces still read status.
                 setInvoice({ ...invoice, ...(data as any), status: status as any, commercial_status: nextStatus } as Invoice);
                 const notificationType = nextStatus === 'PAID' ? 'invoice_paid' : nextStatus === 'CANCELLED' ? 'invoice_cancelled' : 'invoice_updated';
-                void notifyBusinessEvent(notificationType, String(invoice.company_id), String(invoice.id)).catch((notificationError) => console.warn('Invoice status notification could not be sent:', notificationError));
+                if (store.mode === 'cloud') void notifyBusinessEvent(notificationType, String(invoice.company_id), String(invoice.id)).catch((notificationError) => console.warn('Invoice status notification could not be sent:', notificationError));
             }
         } finally {
             setUpdatingStatus(null);
@@ -616,17 +621,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     text: t('confirm', language),
                     onPress: async () => {
                         try {
-                            const { data, error } = await supabase.rpc('convert_commercial_document', {
-                                p_source_document_id: invoice.id,
-                                p_target_document_type: targetType,
-                            });
-                            if (error || !data) {
-                                Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'unableToLoad'));
-                                return;
-                            }
-                            let createdDocument = data as any;
+                            const store = await getDataStore(user!.id);
+                            let createdDocument = await store.convertDocument(invoice.id, targetType) as any;
                             if (targetType === 'CREDIT_NOTE') {
-                                createdDocument = await postCreditNote(supabase, String((data as any).id));
+                                createdDocument = await store.postCreditNote(String(createdDocument.id), 'Customer product return');
                             }
                             if (!createdDocument?.id) {
                                 Alert.alert(t('error', language), t('unableToLoad', language));
@@ -658,7 +656,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await deleteInvoice(supabase, invoice.id);
+                            await (await getDataStore(user!.id)).deleteInvoice(invoice.id);
                             navigation.goBack();
                         } catch (error) {
                             Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'failedToDeleteInvoice'));

@@ -1,3 +1,4 @@
+import { CONVERSION_PATHS, type CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 import { buildInvoicePersistencePayload, invoiceTotalsForDraft, isCashPaymentAllowed, type InvoiceDraftInput } from '@invoice-monorepo/api/domain';
 import type { SqlDriver } from './driver.ts';
 import {
@@ -33,6 +34,7 @@ const DEFAULT_PREFIX: Record<string, string> = {
   quote: 'OF-', proforma: 'PRO-', sales_order: 'POR-', delivery_note: 'FD-', invoice: 'FAT-',
   advance_invoice: 'PAR-', credit_note: 'NK-', debit_note: 'ND-', fiscal_receipt: 'KUP-', bad_debt_invoice: 'BDI-',
 };
+const TRANSITION_STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ISSUED', 'CONFIRMED', 'PREPARED', 'DELIVERED', 'ACCEPTED', 'OVERDUE', 'CANCELLED', 'VOID', 'VOIDED', 'REVERSED', 'PAID', 'PARTIALLY_PAID', 'CREDITED', 'PARTIALLY_CREDITED', 'CORRECTED'];
 const STOCK_DOCUMENT_TYPES = new Set(['invoice', 'final_invoice', 'simplified_invoice', 'fiscal_receipt', 'delivery_note']);
 const DEVICE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -237,7 +239,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       const totals = invoiceTotalsForDraft(draft);
       if (issuing && STOCK_DOCUMENT_TYPES.has(type)) await this.checkStock(input);
 
-      const invoiceNumber = issuing ? await this.reserveDocumentNumber(type, input.issueDate) : '';
+      const invoiceNumber = String(existing?.invoice_number || '') || (issuing ? await this.reserveDocumentNumber(type, input.issueDate) : '');
       const { invoice: payload, items } = buildInvoicePersistencePayload(draft, totals, invoiceNumber);
       const operational = ['quote', 'proforma', 'sales_order', 'delivery_note'].includes(type);
       const invoice = await this.save('invoices', {
@@ -379,6 +381,102 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       invoice: payment.invoice_id ? invoices.get(String(payment.invoice_id)) ?? null : null,
     }));
     return options.limit ? rows.slice(0, options.limit) : rows;
+  }
+
+  private async recordEvent(documentId: string, eventType: string, fromStatus: unknown, toStatus: unknown) {
+    await this.save('commercial_document_events', { document_id: documentId, event_type: eventType, from_status: fromStatus ?? null, to_status: toStatus ?? null, payload: {}, occurred_at: this.stamp() });
+  }
+
+  async transitionDocumentStatus(id: string, status: string, eventType?: string): Promise<DataRecord> {
+    const next = String(status || '').trim().toUpperCase();
+    if (!next) throw new Error('A document status is required');
+    if (!TRANSITION_STATUSES.includes(next)) throw new Error('Unsupported commercial document status');
+    if (['PAID', 'PARTIALLY_PAID', 'CREDITED', 'PARTIALLY_CREDITED', 'CORRECTED'].includes(next)) {
+      throw new Error('Paid and correction states must use the supported financial workflow');
+    }
+    return this.driver.transaction(async () => {
+      const invoice = await this.get('invoices', id);
+      if (!invoice) throw new Error('Commercial document not found');
+      if (['posted', 'reversed'].includes(String(invoice.accounting_state)) && next !== 'OVERDUE') {
+        throw new Error('Posted financial documents must be corrected through a supported workflow');
+      }
+      const legacy: Record<string, string> = { DRAFT: 'draft', SENT: 'sent', ISSUED: 'sent', VIEWED: 'sent', OVERDUE: 'overdue', CANCELLED: 'cancelled', VOID: 'cancelled', VOIDED: 'cancelled', REVERSED: 'reversed' };
+      const updated = await this.save('invoices', { id, commercial_status: next, status: legacy[next] ?? invoice.status });
+      await this.recordEvent(id, eventType?.trim() || next.toLowerCase(), invoice.commercial_status, next);
+      return updated;
+    });
+  }
+
+  async deleteInvoice(id: string): Promise<void> {
+    await this.driver.transaction(async () => {
+      const invoice = await this.get('invoices', id);
+      if (!invoice) return;
+      if (invoice.status !== 'draft') throw new Error('Issued documents cannot be deleted. Cancel or credit them instead.');
+      for (const item of await this.list('invoice_items', { where: { invoice_id: id } })) await this.remove('invoice_items', item.id);
+      await this.remove('invoices', id);
+    });
+  }
+
+  async convertDocument(sourceId: string, targetType: string): Promise<DataRecord> {
+    const target = String(targetType || '').trim().toUpperCase() as CommercialDocumentType;
+    return this.driver.transaction(async () => {
+      const source = await this.get('invoices', sourceId);
+      if (!source) throw new Error('Source commercial document not found');
+      const sourceType = String(source.commercial_document_type || '').toUpperCase() as CommercialDocumentType;
+      if (!((CONVERSION_PATHS[sourceType] ?? []) as readonly string[]).includes(target)) throw new Error(`Conversion from ${sourceType} to ${target} is not supported`);
+      const previous = (await this.list('document_source_links', { where: { source_id: sourceId } })).find((link) => link.target_document_type === target);
+      if (previous) { const existing = await this.get('invoices', String(previous.target_id)); if (existing) return existing; }
+
+      const operational = ['QUOTE', 'PROFORMA', 'SALES_ORDER', 'DELIVERY_NOTE'].includes(target);
+      const number = await this.reserveDocumentNumber(target.toLowerCase(), String(source.issue_date));
+      const legacyType = target === 'QUOTE' ? 'offer' : target === 'PROFORMA' ? 'proforma' : target === 'SALES_ORDER' ? 'offer' : 'invoice';
+      const subtype: Record<string, string> = { QUOTE: 'offer', PROFORMA: 'pro_invoice', SALES_ORDER: 'order', DELIVERY_NOTE: 'delivery_note', ADVANCE_INVOICE: 'advance_invoice', FINAL_INVOICE: 'final_invoice', CREDIT_NOTE: 'credit_note', DEBIT_NOTE: 'debit_note', SIMPLIFIED_INVOICE: 'simplified_invoice', FISCAL_RECEIPT: 'fiscal_receipt', BAD_DEBT_INVOICE: 'bad_debt_invoice' };
+      const created = await this.save('invoices', {
+        client_id: source.client_id, invoice_number: number, issue_date: source.issue_date, due_date: source.due_date,
+        status: 'draft', discount_amount: source.discount_amount, discount_percent: source.discount_percent, tax_amount: source.tax_amount,
+        subtotal: source.subtotal, total_amount: source.total_amount, notes: source.notes, template_id: source.template_id,
+        type: legacyType, subtype: subtype[target] ?? 'regular', payment_method: 'cash', amount_received: 0, currency: source.currency,
+        source_document_type: sourceType, source_document_id: sourceId,
+        credit_of_invoice_id: target === 'CREDIT_NOTE' ? sourceId : null,
+        original_invoice_id: ['DEBIT_NOTE', 'BAD_DEBT_INVOICE'].includes(target) ? sourceId : null,
+        accounting_state: operational ? 'legacy' : 'ready_for_posting', commercial_document_type: target, commercial_status: 'DRAFT',
+        accounting_status: operational ? 'NOT_APPLICABLE' : 'READY_TO_POST', vat_status: operational ? 'NOT_APPLICABLE' : 'NOT_EVALUATED',
+        payment_status: operational ? 'NOT_APPLICABLE' : 'UNPAID', fiscalization_status: 'NOT_REQUIRED',
+      });
+      for (const item of await this.list('invoice_items', { where: { invoice_id: sourceId }, orderBy: 'position' })) {
+        const { id: sourceItemId, invoice_id: _invoice, created_at: _c, updated_at: _u, ...fields } = item;
+        await this.save('invoice_items', { ...fields, invoice_id: created.id, source_item_id: sourceItemId });
+      }
+      await this.save('document_source_links', { source_type: 'commercial_document', source_id: sourceId, target_type: 'commercial_document', target_id: created.id, target_document_type: target, amount: source.total_amount });
+      await this.recordEvent(sourceId, 'converted', source.commercial_status, source.commercial_status);
+      return created;
+    });
+  }
+
+  async postCreditNote(id: string, reason?: string): Promise<DataRecord> {
+    return this.driver.transaction(async () => {
+      const note = await this.get('invoices', id);
+      if (!note) throw new Error('Credit note not found');
+      if (!note.credit_of_invoice_id && String(note.subtype) !== 'credit_note' && String(note.type) !== 'credit_note') throw new Error('The document is not identified as a credit note');
+      if (note.accounting_state === 'posted') return note;
+      if (note.accounting_state !== 'ready_for_posting') throw new Error('Credit note must be prepared before posting');
+      if (!(Number(note.total_amount) > 0)) throw new Error('Credit note total must be greater than zero');
+      const posted = await this.save('invoices', { id, status: 'posted', accounting_state: 'posted', posted_at: this.stamp(), posting_reason: reason?.trim() || 'Credit note posted' });
+      // Return to stock only what the original sale actually issued from stock.
+      const issued = new Set((await this.list('inventory_stock_movements', { where: { invoice_id: String(note.credit_of_invoice_id), movement_type: 'invoice_issue' } })).map((movement) => String(movement.product_id)));
+      const returned = new Map<string, number>();
+      for (const item of await this.list('invoice_items', { where: { invoice_id: id } })) {
+        if (item.product_id && issued.has(String(item.product_id))) returned.set(String(item.product_id), (returned.get(String(item.product_id)) ?? 0) + Number(item.quantity));
+      }
+      for (const [productId, quantity] of returned) {
+        const product = await this.get('products', productId);
+        if (!product) continue;
+        const before = Number(product.stock_quantity ?? 0);
+        await this.save('products', { id: productId, stock_quantity: before + quantity });
+        await this.save('inventory_stock_movements', { product_id: productId, invoice_id: id, movement_type: 'invoice_reversal', quantity_delta: quantity, stock_before: before, stock_after: before + quantity });
+      }
+      return posted;
+    });
   }
 
   async exportBackup(): Promise<BackupFile> {

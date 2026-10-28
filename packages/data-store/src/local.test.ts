@@ -184,3 +184,53 @@ test('invoice reads attach customers, lines and products; payments attach custom
   assert.equal((await store.listPayments()).length, 0, 'reversed payments are hidden');
   assert.equal((await store.getInvoice(invoice.id))?.payment_status, 'UNPAID');
 });
+
+test('quotes can be sent, converted along the allowed path, and converting twice returns the same document', async () => {
+  const { store } = await openStore();
+  const quote = await store.saveInvoiceDocument({ documentType: 'quote', issueDate: '2026-03-01', lines: [line] });
+  assert.equal(quote.status, 'sent');
+  const sent = await store.transitionDocumentStatus(quote.id, 'accepted');
+  assert.equal(sent.commercial_status, 'ACCEPTED');
+  await assert.rejects(store.transitionDocumentStatus(quote.id, 'paid'), /financial workflow/);
+  await assert.rejects(store.transitionDocumentStatus(quote.id, 'nonsense'), /Unsupported/);
+  await assert.rejects(store.convertDocument(quote.id, 'CREDIT_NOTE'), /not supported/);
+  const order = await store.convertDocument(quote.id, 'SALES_ORDER');
+  assert.equal(order.commercial_document_type, 'SALES_ORDER');
+  assert.equal(order.status, 'draft');
+  assert.equal(order.source_document_id, quote.id);
+  assert.equal((await store.convertDocument(quote.id, 'SALES_ORDER')).id, order.id);
+  assert.equal((await store.list('invoice_items', { where: { invoice_id: order.id } })).length, 1);
+  const invoice = await store.convertDocument(order.id, 'INVOICE');
+  assert.equal(invoice.payment_status, 'UNPAID');
+  assert.match(String(invoice.invoice_number), /^FAT-AAAA-2026-/);
+  const events = await store.list('commercial_document_events', { where: { document_id: quote.id } });
+  assert.ok(events.length >= 2);
+});
+
+test('only drafts can be deleted, and posted invoices only move to overdue', async () => {
+  const { store } = await openStore();
+  const draft = await store.saveInvoiceDocument({ issueDate: '2026-03-01', status: 'draft', lines: [line] });
+  await store.deleteInvoice(draft.id);
+  assert.equal(await store.get('invoices', draft.id), null);
+  assert.equal((await store.list('invoice_items')).length, 0);
+  const invoice = await store.saveInvoiceDocument({ issueDate: '2026-03-01', lines: [line] });
+  await assert.rejects(store.deleteInvoice(invoice.id), /cannot be deleted/);
+  await assert.rejects(store.transitionDocumentStatus(invoice.id, 'cancelled'), /supported workflow/);
+  assert.equal((await store.transitionDocumentStatus(invoice.id, 'overdue')).status, 'overdue');
+});
+
+test('a credit note is created from an invoice, posted once, and returns stock', async () => {
+  const { store } = await openStore();
+  const product = await store.save('products', { name: 'Widget', track_stock: true, stock_quantity: 10 });
+  const invoice = await store.saveInvoiceDocument({ issueDate: '2026-03-01', lines: [{ ...line, productId: product.id, quantity: 4 }] });
+  assert.equal((await store.get('products', product.id))?.stock_quantity, 6);
+  const note = await store.convertDocument(invoice.id, 'CREDIT_NOTE');
+  assert.equal(note.credit_of_invoice_id, invoice.id);
+  assert.equal(note.accounting_state, 'ready_for_posting');
+  const posted = await store.postCreditNote(note.id, 'Customer return');
+  assert.equal(posted.accounting_state, 'posted');
+  assert.equal((await store.get('products', product.id))?.stock_quantity, 10);
+  assert.equal((await store.postCreditNote(note.id)).accounting_state, 'posted');
+  assert.equal((await store.get('products', product.id))?.stock_quantity, 10, 'posting twice does not return stock twice');
+  await assert.rejects(store.postCreditNote(invoice.id), /not identified as a credit note/);
+});

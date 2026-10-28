@@ -7,6 +7,7 @@ export type DataRecord = { id: string } & Record<string, unknown>;
 export const LOCAL_TABLES = [
   'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'vendor_payments', 'branches',
   'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
+  'document_source_links', 'commercial_document_events',
 ] as const;
 export type StoreTable = (typeof LOCAL_TABLES)[number];
 
@@ -116,6 +117,14 @@ export interface DocumentStore extends DataStore {
   getInvoice(id: string): Promise<DataRecord | null>;
   /** Payments that are not reversed, with `client` and `invoice` attached, newest first. */
   listPayments(options?: PaymentListOptions): Promise<DataRecord[]>;
+  /** Moves a document to another commercial status (for example SENT, OVERDUE, CANCELLED) and records the event. */
+  transitionDocumentStatus(id: string, status: string, eventType?: string): Promise<DataRecord>;
+  /** Deletes a draft document. Issued documents must be cancelled or credited instead. */
+  deleteInvoice(id: string): Promise<void>;
+  /** Creates the next document in a conversion path (quote -> order -> invoice, invoice -> credit note...). Repeating returns the same document. */
+  convertDocument(sourceId: string, targetType: string): Promise<DataRecord>;
+  /** Posts a draft credit note and returns returned stock to the shelf. */
+  postCreditNote(id: string, reason?: string): Promise<DataRecord>;
 }
 
 /** Free-tier backup file support. Only the local store implements it. */
