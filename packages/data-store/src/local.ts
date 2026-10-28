@@ -1,10 +1,9 @@
-import { calculateInvoice } from '@invoice-monorepo/money';
-import { isCashPaymentAllowed } from '@invoice-monorepo/api/domain';
+import { buildInvoicePersistencePayload, invoiceTotalsForDraft, isCashPaymentAllowed, type InvoiceDraftInput } from '@invoice-monorepo/api/domain';
 import type { SqlDriver } from './driver.ts';
 import {
   LOCAL_TABLES,
   type BackupCapable, type BackupFile, type DataRecord, type DocumentStore, type ImportResult,
-  type InvoiceInput, type ListOptions, type PaymentInput, type StoreTable,
+  type InvoiceInput, type InvoiceListOptions, type ListOptions, type PaymentInput, type PaymentListOptions, type StoreTable,
 } from './store.ts';
 
 const SCHEMA_VERSION = '1';
@@ -106,10 +105,24 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     if (options.deviceCode) { deviceCode = normalizeDeviceCode(options.deviceCode); await write('device_code', deviceCode); }
     else if (!deviceCode) { deviceCode = randomDeviceCode(options.getRandomValues ?? ((bytes) => globalThis.crypto.getRandomValues(bytes))); await write('device_code', deviceCode); }
     await write('schema_version', SCHEMA_VERSION);
-    return new LocalDataStore(driver, companyId, deviceCode, newId, now, options.sha256Hex ?? webCryptoSha256Hex);
+    const store = new LocalDataStore(driver, companyId, deviceCode, newId, now, options.sha256Hex ?? webCryptoSha256Hex);
+    await store.ensureCompany();
+    return store;
   }
 
   private stamp() { return this.now().toISOString(); }
+
+  /** The single company of a free account. Its details (name, tax ID, logo, bank...) are edited in Settings. */
+  private async ensureCompany() {
+    if (await this.get('companies', this.companyId)) return;
+    await this.save('companies', { id: this.companyId, company_name: '', currency: 'EUR', country: 'Kosovo', invoice_language: 'sq', tax_rate: 18, tax_name: 'TVSH', template_config: {} });
+  }
+
+  /** The company record, created on first use. */
+  async getCompany(): Promise<DataRecord> {
+    await this.ensureCompany();
+    return (await this.get('companies', this.companyId)) as DataRecord;
+  }
 
   private assertTable(table: string): asserts table is StoreTable {
     if (!(LOCAL_TABLES as readonly string[]).includes(table)) throw new Error(`Unknown collection "${table}".`);
@@ -204,43 +217,44 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       if (input.id && !existing) throw new Error('The document no longer exists.');
       if (existing && existing.status !== 'draft') throw new Error('Issued documents cannot be edited. Create a credit note instead.');
 
-      const calculation = calculateInvoice({
-        lines: input.lines.map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent ?? 0, taxRate: line.taxRate ?? 0, taxIncluded: line.taxIncluded ?? false })),
-        documentDiscountPercent: input.documentDiscountPercent ?? 0,
-        currency: input.currency ?? 'EUR',
-      });
       const issuing = (input.status ?? 'issued') === 'issued';
+      // The same draft -> totals -> database-shaped row path as the cloud save, so both stores produce identical records.
+      const draft: InvoiceDraftInput = {
+        ...input.draft,
+        userId: this.companyId,
+        companyId: this.companyId,
+        documentType: type.toUpperCase() as InvoiceDraftInput['documentType'],
+        clientId: input.clientId ?? null,
+        issueDate: input.issueDate,
+        dueDate: input.dueDate ?? input.issueDate,
+        currency: input.currency ?? 'EUR',
+        notes: input.notes,
+        documentDiscountPercent: input.documentDiscountPercent ?? input.draft?.documentDiscountPercent,
+        paymentMethod: (input.paymentMethod ?? input.draft?.paymentMethod ?? 'bank') as InvoiceDraftInput['paymentMethod'],
+        status: issuing ? 'sent' : 'draft',
+        lines: input.lines.map((line) => ({ ...line })),
+      };
+      const totals = invoiceTotalsForDraft(draft);
       if (issuing && STOCK_DOCUMENT_TYPES.has(type)) await this.checkStock(input);
 
       const invoiceNumber = issuing ? await this.reserveDocumentNumber(type, input.issueDate) : '';
+      const { invoice: payload, items } = buildInvoicePersistencePayload(draft, totals, invoiceNumber);
+      const operational = ['quote', 'proforma', 'sales_order', 'delivery_note'].includes(type);
       const invoice = await this.save('invoices', {
         id: existing?.id,
-        invoice_number: invoiceNumber,
-        commercial_document_type: type.toUpperCase(),
-        status: issuing ? 'issued' : 'draft',
-        client_id: input.clientId ?? null,
-        issue_date: input.issueDate,
-        due_date: input.dueDate ?? input.issueDate,
-        currency: calculation.currency,
-        subtotal: calculation.subtotal,
-        discount_amount: calculation.discount,
-        tax_amount: calculation.tax,
-        total_amount: calculation.total,
+        ...payload,
+        // The database posts issued invoices; locally an issued invoice is posted straight away.
+        status: !issuing ? 'draft' : operational ? 'sent' : 'posted',
+        accounting_state: issuing && !operational ? 'posted' : payload.accounting_state,
+        subtotal: totals.subtotal,
         amount_received: 0,
-        notes: input.notes ?? '',
-        payment_method: input.paymentMethod ?? null,
         idempotency_key: input.idempotencyKey ?? null,
       });
 
       for (const old of await this.list('invoice_items', { where: { invoice_id: invoice.id } })) await this.remove('invoice_items', old.id);
-      for (const [index, line] of input.lines.entries()) {
-        const calculated = calculation.lines[index];
-        await this.save('invoice_items', {
-          invoice_id: invoice.id, position: index + 1, product_id: line.productId ?? null, description: line.description,
-          sku: line.sku ?? null, unit: line.unit ?? 'pcs', quantity: line.quantity, unit_price: line.unitPrice,
-          discount_percent: line.discountPercent ?? 0, tax_rate: line.taxRate ?? 0, tax_included: line.taxIncluded ?? false,
-          taxable_amount: calculated.taxable, tax_amount: calculated.tax, total: calculated.total,
-        });
+      for (const [index, item] of items.entries()) {
+        const calculated = totals.lines[index];
+        await this.save('invoice_items', { ...item, invoice_id: invoice.id, position: index + 1, taxable_amount: calculated.taxable, tax_amount: calculated.tax, total: calculated.total });
       }
       if (issuing && STOCK_DOCUMENT_TYPES.has(type)) await this.applyStock(input, invoice.id);
       return invoice;
@@ -283,6 +297,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       const invoice = await this.get('invoices', input.invoiceId);
       if (!invoice) throw new Error('Invoice not found.');
       if (invoice.status === 'draft') throw new Error('Issue the invoice before recording a payment.');
+      if (invoice.payment_status === 'NOT_APPLICABLE') throw new Error('Payments cannot be recorded against this document type.');
       const outstanding = round2(Number(invoice.total_amount) - Number(invoice.amount_received ?? 0));
       if (round2(amount) > outstanding) throw new Error(`The payment exceeds the outstanding amount (${outstanding.toFixed(2)}).`);
       const payment = await this.save('payments', {
@@ -315,7 +330,55 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     const payments = await this.list('payments', { where: { invoice_id: invoiceId } });
     const received = round2(payments.filter((payment) => payment.accounting_state !== 'reversed').reduce((sum, payment) => sum + Number(payment.amount), 0));
     const total = Number(invoice.total_amount);
-    await this.save('invoices', { id: invoiceId, amount_received: received, status: received >= total ? 'paid' : received > 0 ? 'partially_paid' : 'issued' });
+    const paid = received >= total;
+    const partial = !paid && received > 0;
+    await this.save('invoices', {
+      id: invoiceId, amount_received: received,
+      status: paid ? 'paid' : partial ? 'partially_paid' : 'posted',
+      commercial_status: paid ? 'PAID' : partial ? 'PARTIALLY_PAID' : 'ISSUED',
+      payment_status: paid ? 'PAID' : partial ? 'PARTIALLY_PAID' : 'UNPAID',
+    });
+  }
+
+  async listInvoices(options: InvoiceListOptions = {}): Promise<DataRecord[]> {
+    const where: Record<string, string> = {};
+    if (options.documentType) where.commercial_document_type = options.documentType.toUpperCase();
+    if (options.clientId) where.client_id = options.clientId;
+    const invoices = await this.list('invoices', { where, orderBy: options.ascending ? 'created_at' : '-created_at', limit: options.limit });
+    const clients = new Map((await this.list('clients')).map((client) => [client.id, client]));
+    const items = await this.list('invoice_items');
+    return invoices.map((invoice) => ({
+      ...invoice,
+      client: invoice.client_id ? clients.get(String(invoice.client_id)) ?? null : null,
+      items: items.filter((item) => item.invoice_id === invoice.id).map((item) => ({ id: item.id })),
+    }));
+  }
+
+  async getInvoice(id: string): Promise<DataRecord | null> {
+    const invoice = await this.get('invoices', id);
+    if (!invoice) return null;
+    const client = invoice.client_id ? await this.get('clients', String(invoice.client_id)) : null;
+    const items = await this.list('invoice_items', { where: { invoice_id: id }, orderBy: 'position' });
+    const withProducts = await Promise.all(items.map(async (item) => {
+      const product = item.product_id ? await this.get('products', String(item.product_id)) : null;
+      return { ...item, product: product ? { sku: product.sku ?? null, name: product.name ?? null, image_url: product.image_url ?? null } : null };
+    }));
+    return { ...invoice, client, items: withProducts };
+  }
+
+  async listPayments(options: PaymentListOptions = {}): Promise<DataRecord[]> {
+    const where: Record<string, string> = {};
+    if (options.customerId) where.client_id = options.customerId;
+    if (options.invoiceId) where.invoice_id = options.invoiceId;
+    const payments = (await this.list('payments', { where, orderBy: '-payment_date' })).filter((payment) => payment.accounting_state !== 'reversed');
+    const clients = new Map((await this.list('clients')).map((client) => [client.id, client]));
+    const invoices = new Map((await this.list('invoices')).map((invoice) => [invoice.id, invoice]));
+    const rows = payments.map((payment) => ({
+      ...payment,
+      client: payment.client_id ? clients.get(String(payment.client_id)) ?? null : null,
+      invoice: payment.invoice_id ? invoices.get(String(payment.invoice_id)) ?? null : null,
+    }));
+    return options.limit ? rows.slice(0, options.limit) : rows;
   }
 
   async exportBackup(): Promise<BackupFile> {
@@ -339,8 +402,10 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     if (checksum !== await this.sha256(canonicalJson(body))) throw new Error('The backup file is damaged or was changed.');
     const result: ImportResult = { inserted: 0, updated: 0, skipped: 0 };
     await this.driver.transaction(async () => {
-      for (const record of file.records) {
-        if (!(LOCAL_TABLES as readonly string[]).includes(record.table)) { result.skipped += 1; continue; }
+      for (const source of file.records) {
+        if (!(LOCAL_TABLES as readonly string[]).includes(source.table)) { result.skipped += 1; continue; }
+        // A device has exactly one company: the backup's company details merge into it.
+        const record = source.table === 'companies' ? { ...source, id: this.companyId } : source;
         const current = (await this.driver.all<Row>('select * from records where table_name = ? and id = ?', [record.table, record.id]))[0];
         if (current && current.updated_at >= record.updated_at) { result.skipped += 1; continue; }
         await this.driver.run(

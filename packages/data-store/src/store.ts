@@ -1,3 +1,4 @@
+import type { InvoiceDraftInput } from '@invoice-monorepo/api/domain';
 import type { StorageMode } from './features.ts';
 
 export type DataRecord = { id: string } & Record<string, unknown>;
@@ -5,7 +6,7 @@ export type DataRecord = { id: string } & Record<string, unknown>;
 /** Collections the free (local) tier supports. The cloud store maps these to database tables. */
 export const LOCAL_TABLES = [
   'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'vendor_payments', 'branches',
-  'invoices', 'invoice_items', 'payments', 'inventory_stock_movements',
+  'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
 ] as const;
 export type StoreTable = (typeof LOCAL_TABLES)[number];
 
@@ -20,15 +21,16 @@ export interface ListOptions {
 }
 
 export interface InvoiceLineInput {
+  id?: string;
   productId?: string | null;
   description: string;
-  quantity: number;
-  unitPrice: number;
-  discountPercent?: number;
-  taxRate?: number;
+  quantity: number | string;
+  unitPrice: number | string;
+  discountPercent?: number | string;
+  taxRate?: number | string;
   taxIncluded?: boolean;
-  unit?: string;
-  sku?: string;
+  unit?: string | null;
+  sku?: string | null;
 }
 
 export interface InvoiceInput {
@@ -47,6 +49,8 @@ export interface InvoiceInput {
   paymentMethod?: string;
   /** Repeating a save with the same key returns the first result instead of creating a duplicate. */
   idempotencyKey?: string;
+  /** Any other fields of the shared invoice draft (branch, shipping, tax-included, signature, template...). */
+  draft?: Partial<Omit<InvoiceDraftInput, 'userId' | 'companyId' | 'lines'>>;
 }
 
 export interface PaymentInput {
@@ -90,11 +94,28 @@ export interface DataStore {
   reserveDocumentNumber(documentType: string, issueDate: string): Promise<string>;
 }
 
+export interface InvoiceListOptions {
+  /** Commercial document type, for example 'INVOICE' or 'QUOTE'. */
+  documentType?: string;
+  clientId?: string;
+  limit?: number;
+  /** Oldest first instead of newest first. */
+  ascending?: boolean;
+}
+
+export interface PaymentListOptions { customerId?: string; invoiceId?: string; limit?: number }
+
 /** Business operations. Local implements them now; the cloud adapter delegates to the existing repositories next. */
 export interface DocumentStore extends DataStore {
   saveInvoiceDocument(input: InvoiceInput): Promise<DataRecord>;
   recordCustomerPayment(input: PaymentInput): Promise<DataRecord>;
   reverseCustomerPayment(paymentId: string, reason: string): Promise<DataRecord>;
+  /** Invoices with their customer (`client`) and lines (`items`) attached, newest first. */
+  listInvoices(options?: InvoiceListOptions): Promise<DataRecord[]>;
+  /** One invoice with `client` and `items` (each item with its `product`). */
+  getInvoice(id: string): Promise<DataRecord | null>;
+  /** Payments that are not reversed, with `client` and `invoice` attached, newest first. */
+  listPayments(options?: PaymentListOptions): Promise<DataRecord[]>;
 }
 
 /** Free-tier backup file support. Only the local store implements it. */

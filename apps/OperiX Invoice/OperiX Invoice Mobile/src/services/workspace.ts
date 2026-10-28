@@ -6,6 +6,8 @@ import {
   type WorkspaceScope as SharedWorkspaceScope,
 } from '@invoice-monorepo/api/workspace';
 import type { Company, Profile } from '@invoice-monorepo/types';
+import { getLocalStore } from './localStore';
+import { getStorageMode } from './storageMode';
 
 export type WorkspaceCompany = Pick<Company, 'id' | 'company_name' | 'parent_company_id'> &
     Partial<Pick<Company, 'currency'>>;
@@ -17,7 +19,32 @@ export interface WorkspaceScope extends Omit<SharedWorkspaceScope, 'profile' | '
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 const workspaceCache = new Map<string, { scope: WorkspaceScope; expiresAt: number }>();
 
+/** Every permission check passes: on the device the signed-in user owns the only company. */
+class AllPermissions extends Array<string> {
+    override includes(): boolean { return true; }
+}
+
+async function getLocalWorkspaceScope(userId: string): Promise<WorkspaceScope> {
+    const store = await getLocalStore();
+    const company = await store.getCompany() as unknown as Record<string, unknown>;
+    const workspaceCompany = { id: store.companyId, company_name: String(company.company_name || ''), parent_company_id: null, currency: String(company.currency || 'EUR') } as WorkspaceCompany;
+    return {
+        user: null,
+        profile: { ...company, id: userId, company_id: store.companyId, active_company_id: store.companyId } as unknown as Profile,
+        companyId: store.companyId,
+        roleCode: 'company_administrator',
+        permissions: new AllPermissions(),
+        scopes: new Proxy({}, { get: () => 'ALL' }) as WorkspaceScope['scopes'],
+        platformAdmin: false,
+        companyIds: [store.companyId],
+        company: workspaceCompany,
+        companies: [workspaceCompany],
+        isGroup: false,
+    } as unknown as WorkspaceScope;
+}
+
 export async function getWorkspaceScope(userId: string): Promise<WorkspaceScope> {
+    if (await getStorageMode() === 'local') return getLocalWorkspaceScope(userId);
     const cached = workspaceCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) return cached.scope;
 

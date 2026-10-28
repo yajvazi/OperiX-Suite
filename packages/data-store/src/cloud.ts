@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  deleteCustomer, deleteProduct, deleteScopedResource, reserveDocumentNumber, reverseCustomerPayment,
+  deleteCustomer, deleteProduct, deleteScopedResource, getInvoice, listInvoices, listPayments, reserveDocumentNumber, reverseCustomerPayment,
   saveCustomer, saveCustomerPayment, saveInvoiceDocument, saveProduct, saveScopedResource,
 } from '@invoice-monorepo/api/repositories';
 import { scopedResource } from '@invoice-monorepo/api/workspace';
 import type { InvoiceDraftInput } from '@invoice-monorepo/api/domain';
-import type { DataRecord, DocumentStore, InvoiceInput, ListOptions, PaymentInput, StoreTable } from './store.ts';
+import type { DataRecord, DocumentStore, InvoiceInput, InvoiceListOptions, ListOptions, PaymentInput, PaymentListOptions, StoreTable } from './store.ts';
 
 export interface CloudScope { userId: string; companyId: string | null; companyIds: readonly string[] }
 
@@ -111,6 +111,27 @@ export class CloudDataStore implements DocumentStore {
       notes: input.notes ?? null,
     });
     return saved.payment as DataRecord;
+  }
+
+  async listInvoices(options: InvoiceListOptions = {}): Promise<DataRecord[]> {
+    const documentType = options.documentType?.toUpperCase();
+    const legacyType = documentType === 'QUOTE' ? 'offer' : documentType === 'INVOICE' ? 'invoice' : undefined;
+    const rows = await listInvoices(this.client, { userId: this.scope.userId, companyIds: this.scope.companyIds }, {
+      select: '*, client:clients(*), items:invoice_items(id)',
+      documentType: documentType as InvoiceDraftInput['documentType'] | undefined,
+      legacyType,
+      clientId: options.clientId,
+      limit: options.limit,
+    }) as unknown as DataRecord[];
+    return options.ascending ? [...rows].reverse() : rows;
+  }
+
+  async getInvoice(id: string): Promise<DataRecord | null> {
+    return await getInvoice(this.client, id, { userId: this.scope.userId, companyIds: this.scope.companyIds }, '*, client:clients(*), items:invoice_items(*, product:products(sku, name, image_url))') as unknown as DataRecord | null;
+  }
+
+  async listPayments(options: PaymentListOptions = {}): Promise<DataRecord[]> {
+    return await listPayments(this.client, { userId: this.scope.userId, companyIds: this.scope.companyIds }, { customerId: options.customerId, invoiceId: options.invoiceId, limit: options.limit }) as unknown as DataRecord[];
   }
 
   async reverseCustomerPayment(paymentId: string, reason: string): Promise<DataRecord> {

@@ -47,6 +47,7 @@ import { t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { formatCurrency } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 const { width } = Dimensions.get('window');
@@ -138,6 +139,27 @@ export function FaturatScreen({ navigation }: any) {
             setCanManageContracts(allowedContracts);
             if (workspaceProfile) {
                 setProfile(workspaceProfile);
+                const store = await getDataStore(user.id);
+                if (store.mode === 'local') {
+                    // On the device everything is counted from the local records.
+                    const localInvoices = await store.listInvoices();
+                    const countOf = (type: string, subtype: string) => localInvoices.filter((invoice) => invoice.type === type && invoice.subtype === subtype).length;
+                    const salesDocuments = localInvoices.filter((invoice) => invoice.type === 'invoice');
+                    const localTotal = salesDocuments.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+                    const localPaid = salesDocuments.filter((invoice) => invoice.status === 'paid').reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+                    setCounts({
+                        regularInvoice: countOf('invoice', 'regular'), deliveryNote: countOf('invoice', 'delivery_note'), offer: countOf('offer', 'offer'),
+                        order: countOf('offer', 'order'), proInvoice: countOf('offer', 'pro_invoice'),
+                        expense: (await store.list('vendor_payments')).length, employmentContract: 0, collaborationContract: 0, nda: 0,
+                    });
+                    setStats({ totalInvoices: salesDocuments.length, totalAmount: localTotal, paidAmount: localPaid, pendingAmount: localTotal - localPaid });
+                    const localPayments = await store.listPayments({ limit: 10 });
+                    setRecentActivity([
+                        ...localInvoices.slice(0, 10).map((invoice) => ({ ...invoice, activityType: 'document' })),
+                        ...localPayments.map((payment) => ({ ...payment, activityType: 'payment', total_amount: payment.amount })),
+                    ].sort((a: any, b: any) => new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime()).slice(0, 10) as any[]);
+                    return;
+                }
                 const scope = scopedResource(user.id, companyIds);
                 const cacheKey = mobileCacheKey('invoice-dashboard', user.id, companyIds);
                 const cached = await readMobileCache<{

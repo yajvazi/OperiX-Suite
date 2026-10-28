@@ -28,6 +28,7 @@ import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i
 import { brand, normalizeBrandColor } from '../../theme/brand';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen, MobileStatusBadge, ShortcutRow } from '../../components/mobile/MobileUI';
 import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import type { CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 import {
@@ -178,6 +179,27 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         setWorkspacePermissions(workspaceScope.permissions);
         setPlatformAdmin(workspaceScope.platformAdmin);
         const queryScope = { userId: user.id, companyIds: workspaceScope.companyIds };
+
+        const store = await getDataStore(user.id);
+        if (store.mode === 'local') {
+            // Everything for the document comes from the device; there are no branches, links or audit events.
+            setProfile(workspaceScope.profile as any);
+            const localInvoice = await store.getInvoice(invoiceId);
+            if (!localInvoice) {
+                setLoadError(t('invoiceUnavailable', language));
+                setLoading(false);
+                return;
+            }
+            setInvoice(localInvoice as unknown as Invoice);
+            setInvoiceAgent('');
+            setSalesBookPeriodStatus(null);
+            setItems((Array.isArray(localInvoice.items) ? localInvoice.items : []) as InvoiceItem[]);
+            setPayments(await store.listPayments({ invoiceId }) as Array<Record<string, any>>);
+            setRelatedDocuments([]);
+            setEvents([]);
+            setLoading(false);
+            return;
+        }
 
         let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
 

@@ -35,7 +35,8 @@ import {
   type TransactionReportCompany,
 } from "@invoice-monorepo/report-templates";
 import { getWorkspaceScope } from '../../services/workspace';
-import { deleteCustomerPayment, listPayments } from '@invoice-monorepo/api/repositories';
+import { deleteCustomerPayment } from '@invoice-monorepo/api/repositories';
+import { getDataStore } from '../../services/dataStore';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 
 export function PaymentsListScreen({ navigation }: any) {
@@ -143,7 +144,7 @@ export function PaymentsListScreen({ navigation }: any) {
       });
     }
 
-    const data = await listPayments(supabase, { userId: user.id, companyIds });
+    const data = await (await getDataStore(user.id)).listPayments();
     const paymentRows = data as unknown as Payment[];
     setPayments(paymentRows);
     const total = paymentRows.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -168,8 +169,12 @@ export function PaymentsListScreen({ navigation }: any) {
           onPress: async () => {
             try {
               if (!user) throw new Error('Your session has expired.');
-              const { companyIds } = await getWorkspaceScope(user.id);
-              await deleteCustomerPayment(supabase, payment.id, { userId: user.id, companyIds });
+              const store = await getDataStore(user.id);
+              if (store.mode === 'local') await store.reverseCustomerPayment(payment.id, 'Payment deleted by user');
+              else {
+                const { companyIds } = await getWorkspaceScope(user.id);
+                await deleteCustomerPayment(supabase, payment.id, { userId: user.id, companyIds });
+              }
               await fetchPayments();
             } catch (error) {
               Alert.alert(

@@ -63,6 +63,7 @@ import {
 } from '@invoice-monorepo/commercial-documents';
 import { normalizeBrandColor } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { notifyInvoiceCreated } from '../../services/pushNotifications';
 import { openExternalLink } from '../../services/externalLinks';
 import { getHelpdeskArticleUrl } from '../../services/helpDocumentation';
@@ -233,11 +234,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const refreshClients = async () => {
         if (!user) return;
         try {
+            const store = await getDataStore(user.id);
             const { companyIds } = await getWorkspaceScope(user.id);
-            const data = await listCustomers(supabase, { userId: user.id, companyIds });
+            const data = store.mode === 'local' ? await store.list('clients', { orderBy: 'name' }) : await listCustomers(supabase, { userId: user.id, companyIds });
             const clientRows = data as unknown as Client[];
             setClients(clientRows);
-            writeMobileCache(mobileCacheKey('customers', user.id, companyIds), clientRows);
+            if (store.mode === 'cloud') writeMobileCache(mobileCacheKey('customers', user.id, companyIds), clientRows);
         } catch (error) {
             console.error('Unable to refresh invoice customers:', error);
         }
@@ -266,7 +268,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const queryScope = { userId: user.id, companyIds };
         const customersCacheKey = mobileCacheKey('customers', user.id, companyIds);
         const productsCacheKey = mobileCacheKey('products', user.id, productCompanyIds);
-        const storeLocationsPromise = resolvedCompanyId && typeof (supabase as any).from === 'function'
+        const dataStore = await getDataStore(user.id);
+        const isLocalStorage = dataStore.mode === 'local';
+        const storeLocationsPromise = !isLocalStorage && resolvedCompanyId && typeof (supabase as any).from === 'function'
             ? listBranches(supabase, resolvedCompanyId)
             : Promise.resolve([] as StoreLocation[]);
         const [cachedClients, cachedProducts] = await Promise.all([
@@ -275,13 +279,18 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         ]);
         if (cachedClients) setClients(cachedClients);
         if (cachedProducts) setProducts(cachedProducts);
-        const clientsPromise = listCustomers(supabase, queryScope).then((data) => ({ data, error: null }));
-        const productsPromise = listProducts(supabase, { userId: user.id, companyIds: productCompanyIds }).then((data) => ({ data, error: null }));
+        const clientsPromise = (isLocalStorage ? dataStore.list('clients', { orderBy: 'name' }) : listCustomers(supabase, queryScope)).then((data) => ({ data, error: null }));
+        const productsPromise = (isLocalStorage ? dataStore.list('products', { orderBy: 'name' }) : listProducts(supabase, { userId: user.id, companyIds: productCompanyIds })).then((data) => ({ data, error: null }));
         const invoicePromise = invoiceId
-            ? getInvoice(supabase, invoiceId, queryScope, '*, client:clients(*), items:invoice_items(*, product:products(sku, name, image_url))').then((data) => ({ data, error: null }))
+            ? (isLocalStorage
+                ? dataStore.getInvoice(invoiceId)
+                : getInvoice(supabase, invoiceId, queryScope, '*, client:clients(*), items:invoice_items(*, product:products(sku, name, image_url))')).then((data) => ({ data, error: null }))
             : Promise.resolve({ data: null, error: null });
         const walkInCustomerPromise = !invoiceId && !isPosFlow && resolvedCompanyId
-            ? supabase.rpc('ensure_walk_in_customer', { p_company_id: resolvedCompanyId })
+            ? (isLocalStorage
+                ? dataStore.list('clients', { where: { pos_walk_in_customer: true }, limit: 1 })
+                    .then(async (existing) => ({ data: existing[0] ?? await dataStore.save('clients', { name: t('walkInCustomer', language), pos_walk_in_customer: true }), error: null }))
+                : supabase.rpc('ensure_walk_in_customer', { p_company_id: resolvedCompanyId }))
             : Promise.resolve({ data: null, error: null } as any);
         const [clientsResult, productsResult, invoiceResult, walkInCustomerResult, storeLocationsResult] = await Promise.all([
             clientsPromise,
@@ -298,17 +307,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const productRows = productsData as unknown as Product[];
         if (clientsData) {
             setClients(clientRows);
-            writeMobileCache(customersCacheKey, clientRows);
+            if (!isLocalStorage) writeMobileCache(customersCacheKey, clientRows);
         }
         if (productsData) {
             setProducts(productRows);
-            writeMobileCache(productsCacheKey, productRows);
+            if (!isLocalStorage) writeMobileCache(productsCacheKey, productRows);
         }
         const existingWalkInCustomer = clientRows.find((client) => client.pos_walk_in_customer) || null;
         const ensuredWalkInCustomer = (walkInCustomerResult.data || existingWalkInCustomer) as Client | null;
         if (ensuredWalkInCustomer) setWalkInCustomer(ensuredWalkInCustomer);
         if (!invoiceId) {
-            const preferredBranchId = resolvedCompanyId && user?.id
+            const preferredBranchId = !isLocalStorage && resolvedCompanyId && user?.id
                 ? await getPreferredBranchId(supabase, user.id, resolvedCompanyId).catch(() => null)
                 : null;
             const defaultBranchId = preferredBranchId && storeRows.some((row) => row.id === preferredBranchId)
@@ -493,8 +502,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         }
         setLoadingLinkedDocuments(true);
         try {
+            const linkStore = await getDataStore(user.id);
             const workspaceScope = await getWorkspaceScope(user.id);
-            const rows = await listInvoices(supabase, { userId: user.id, companyIds: workspaceScope.companyIds }, {
+            const rows = linkStore.mode === 'local' ? await linkStore.listInvoices({ clientId: selectedClient.id }) : await listInvoices(supabase, { userId: user.id, companyIds: workspaceScope.companyIds }, {
                 select: 'id,invoice_number,client_id,issue_date,due_date,status,type,subtype,commercial_document_type,commercial_status,total_amount,discount_percent,notes,items:invoice_items(*)',
                 clientId: selectedClient.id,
             });
@@ -597,10 +607,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             if (!companyId || !user?.id) throw new Error(t('selectCompany', language));
 
             let customerForInvoice = selectedClient;
+            const isLocalStorage = (await getDataStore(user.id)).mode === 'local';
             if (!isPosFlow && !customerForInvoice) {
-                const { data: ensuredCustomer, error: customerError } = await supabase.rpc('ensure_walk_in_customer', {
-                    p_company_id: companyId,
-                });
+                const { data: ensuredCustomer, error: customerError } = isLocalStorage
+                    ? await (async () => {
+                        const localStore = await getDataStore(user.id);
+                        const existing = (await localStore.list('clients', { where: { pos_walk_in_customer: true }, limit: 1 }))[0];
+                        return { data: existing ?? await localStore.save('clients', { name: t('walkInCustomer', language), pos_walk_in_customer: true }), error: null };
+                    })()
+                    : await supabase.rpc('ensure_walk_in_customer', { p_company_id: companyId });
                 if (customerError) throw customerError;
                 if (!ensuredCustomer) throw new Error(t('walkInCustomerUnavailable', language));
                 customerForInvoice = ensuredCustomer as Client;
@@ -721,6 +736,31 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 if (posResult.paymentAllocationError) {
                     Alert.alert(t('paymentSaved', language), posResult.paymentAllocationError.message);
                 }
+            } else if (isLocalStorage) {
+                const { userId: _userId, companyId: _companyId, lines: _lines, status: draftStatus, currency: draftCurrency, notes: draftNotes, paymentMethod: draftPaymentMethod, idempotencyKey: draftKey, issueDate: _issue, dueDate: _due, clientId: _client, documentType: _type, commercialStatus: _commercial, invoiceNumber: _number, ...extraFields } = domainDraft;
+                const store = await getDataStore(user.id);
+                const issuingNow = documentType === 'INVOICE' || (draftStatus !== undefined && draftStatus !== 'draft');
+                const savedLocal = await store.saveInvoiceDocument({
+                    id: invoiceId || undefined,
+                    documentType,
+                    clientId: customerForInvoice?.id || null,
+                    issueDate: issueDateOnly,
+                    dueDate: dueDateOnly,
+                    currency: draftCurrency,
+                    status: issuingNow ? 'issued' : 'draft',
+                    lines: domainDraft.lines,
+                    notes: draftNotes ?? undefined,
+                    paymentMethod: draftPaymentMethod,
+                    idempotencyKey: draftKey ?? undefined,
+                    draft: extraFields,
+                });
+                savedInvoice = savedLocal as unknown as typeof savedInvoice;
+                if (savedLocal.id && (invoiceId || deliveryMethod)) {
+                    await store.save('invoices', { id: savedLocal.id, delivery_method: deliveryMethod, pickup_branch_id: pickupBranchId, delivery_details: resolvedDeliveryDetails, post_cod: deliveryMethod === 'delivery' && postCod });
+                }
+                if (issuingNow && !invoiceId && !isPosFlow && documentType === 'INVOICE' && paymentMethod === 'cash' && !postCod && customerForInvoice?.id && toMinorCurrencyUnits(amountPaid) >= toMinorCurrencyUnits(Number(savedLocal.total_amount))) {
+                    await store.recordCustomerPayment({ invoiceId: savedLocal.id, amount: Number(savedLocal.total_amount), paymentDate: issueDateOnly, paymentMethod: 'cash', notes: `Cash payment for ${String(savedLocal.invoice_number || '')}`.trim() });
+                }
             } else {
                 const saved = await saveInvoiceDocument(supabase, {
                     draft: domainDraft,
@@ -778,15 +818,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 }
             }
 
-            if (!invoiceId && documentType === 'INVOICE' && savedInvoice.id) {
+            if (!isLocalStorage && !invoiceId && documentType === 'INVOICE' && savedInvoice.id) {
                 void notifyInvoiceCreated(savedInvoice.id, companyId).catch((notificationError) => {
                     console.warn('Invoice push notification could not be sent:', notificationError);
                 });
             }
 
-            await setInvoiceProductPictures(supabase, savedInvoice.id, showProductPictures);
+            if (!isLocalStorage) await setInvoiceProductPictures(supabase, savedInvoice.id, showProductPictures);
 
-            if (savedInvoice.id && (invoiceId || deliveryMethod)) {
+            if (!isLocalStorage && savedInvoice.id && (invoiceId || deliveryMethod)) {
                 await setInvoiceDeliveryDetails(supabase, {
                     invoiceId: savedInvoice.id,
                     deliveryMethod,
@@ -796,7 +836,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 });
             }
 
-            if (documentType === 'DELIVERY_NOTE' && (linkedSourceDocumentId || savedInvoice.source_document_id)) {
+            if (!isLocalStorage && documentType === 'DELIVERY_NOTE' && (linkedSourceDocumentId || savedInvoice.source_document_id)) {
                 const { error: fulfillmentError } = await supabase.rpc('apply_delivery_fulfillment', { p_delivery_id: savedInvoice.id });
                 if (fulfillmentError) throw fulfillmentError;
             }

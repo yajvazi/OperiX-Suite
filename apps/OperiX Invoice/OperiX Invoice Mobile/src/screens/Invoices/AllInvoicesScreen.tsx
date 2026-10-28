@@ -19,7 +19,7 @@ import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
 import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
-import { listInvoices } from '@invoice-monorepo/api/repositories';
+import { getDataStore } from '../../services/dataStore';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface AllInvoicesScreenProps {
@@ -103,7 +103,10 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
         }
 
         let data: ListItem[] = [];
-        if (selectedType === 'contract') {
+        const store = await getDataStore(user.id);
+        if (selectedType === 'contract' && store.mode === 'local') {
+            data = []; // Contracts are not part of the on-device tier yet.
+        } else if (selectedType === 'contract') {
             const { data: result, error } = await supabase
                 .from('contracts')
                 .select(`*, client:clients(name)`)
@@ -112,11 +115,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
             if (error) throw error;
             data = (result || []) as ListItem[];
         } else {
-            data = await listInvoices(supabase, { userId: user.id, companyIds }, {
-                select: '*, client:clients(name), items:invoice_items(id)',
-                documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE',
-                legacyType: selectedType,
-            }) as unknown as ListItem[];
+            data = await store.listInvoices({ documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE' }) as unknown as ListItem[];
             if (sortOrder === 'asc') data.sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
         }
         setInvoices(data);

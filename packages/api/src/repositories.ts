@@ -7,7 +7,7 @@ import type {
 } from './domain';
 import {
   buildInvoicePersistencePayload,
-  validateInvoiceDraft,
+  invoiceTotalsForDraft,
 } from './domain';
 import type { WorkspaceScope } from './workspace';
 import { scopedResource } from './workspace';
@@ -282,27 +282,7 @@ export async function reserveDocumentNumber(
   return number;
 }
 
-export function invoiceTotalsForDraft(input: InvoiceDraftInput) {
-  const totals = calculateInvoice({
-    lines: input.lines.map((line) => ({
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      discountPercent: line.discountPercent,
-      taxRate: line.taxRate,
-      taxIncluded: line.taxIncluded,
-    })),
-    documentDiscountPercent: input.documentDiscountPercent,
-    documentDiscountAmount: input.documentDiscountAmount,
-    shipping: input.shipping,
-    transport: input.transport,
-    additionalFees: input.additionalFees,
-    taxIncluded: input.taxIncluded,
-    paidAmount: input.amountReceived,
-    currency: input.currency,
-  });
-  validateInvoiceDraft(input, totals);
-  return totals;
-}
+export { invoiceTotalsForDraft };
 
 /** Build the same canonical persistence payload used by normal invoice saves.
  * Amendment commands reuse this payload so corrections never invent a second

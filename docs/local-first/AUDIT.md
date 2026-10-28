@@ -174,3 +174,17 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
 - Needs a new TestFlight build: `expo-sqlite` is a native module.
 - Still to move: invoices and quotes, payments, expenses, vendors, supplier bills, vendor payments,
   dashboard and reports, settings/company profile.
+
+## Progress (mobile, invoices and payments)
+
+- On-device workspace: `getWorkspaceScope` returns a local company and full permissions in local mode, so
+  screens that ask for the workspace work on the device. The company record lives in the local store.
+- The on-device engine now builds invoice rows with the same shared draft -> totals -> persistence payload as
+  the cloud save (`invoiceTotalsForDraft` moved to `packages/api/src/domain.ts`), uses the same statuses
+  (`posted`, `paid`, `partially_paid`, `ISSUED`...), and the store has `listInvoices`, `getInvoice` and
+  `listPayments` for both local and cloud.
+- Screens moved with an on-device path: invoice and quote lists, the sales hub (counts and recent activity),
+  invoice detail (view), invoice form (new and draft edit, cash payment), payments list and payment form.
+- Not yet on the device: invoice actions on the detail screen (status change, delete, convert, credit note,
+  PDF generation uses the local company profile but is untested), POS, company profile editing in Settings,
+  editing a recorded payment, payments without an invoice, expenses, vendors, bills, reports, dashboard.

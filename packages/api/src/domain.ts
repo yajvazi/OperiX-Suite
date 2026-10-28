@@ -337,6 +337,29 @@ function canonicalCommercialStatus(input: InvoiceDraftInput) {
   return 'DRAFT';
 }
 
+/** Totals for an invoice draft (the shared calculation), after validating the draft. */
+export function invoiceTotalsForDraft(input: InvoiceDraftInput) {
+  const totals = calculateInvoice({
+    lines: input.lines.map((line) => ({
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discountPercent: line.discountPercent,
+      taxRate: line.taxRate,
+      taxIncluded: line.taxIncluded,
+    })),
+    documentDiscountPercent: input.documentDiscountPercent,
+    documentDiscountAmount: input.documentDiscountAmount,
+    shipping: input.shipping,
+    transport: input.transport,
+    additionalFees: input.additionalFees,
+    taxIncluded: input.taxIncluded,
+    paidAmount: input.amountReceived,
+    currency: input.currency,
+  });
+  validateInvoiceDraft(input, totals);
+  return totals;
+}
+
 export function buildInvoicePersistencePayload(input: InvoiceDraftInput, totals: InvoiceCalculationResult, invoiceNumber: string): {
   invoice: InvoicePersistencePayload;
   items: InvoiceItemPersistencePayload[];

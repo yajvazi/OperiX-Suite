@@ -19,7 +19,7 @@ import { FileText, Users, Package, Wallet, DollarSign } from 'lucide-react-nativ
 import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
 import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource } from '../../services/workspace';
-import { listInvoices } from '@invoice-monorepo/api/repositories';
+import { getDataStore } from '../../services/dataStore';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
 interface InvoicesScreenProps {
@@ -109,13 +109,10 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         let data = [];
 
         if (selectedType === 'invoice' || selectedType === 'offer') {
-            const invData = await listInvoices(supabase, { userId: user.id, companyIds }, {
-                select: '*, client:clients(name), items:invoice_items(id)',
-                documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE',
-                legacyType: selectedType,
-                limit: 5,
-            });
-            data = invData;
+            const store = await getDataStore(user.id);
+            data = await store.listInvoices({ documentType: selectedType === 'invoice' ? 'INVOICE' : 'QUOTE', limit: 5 }) as any[];
+        } else if (selectedType === 'contract' && (await getDataStore(user.id)).mode === 'local') {
+            data = []; // Contracts are not part of the on-device tier yet.
         } else if (selectedType === 'contract') {
             console.log('Fetching contracts for user:', user.id);
             const { data: contractData, error } = await supabase

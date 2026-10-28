@@ -22,6 +22,7 @@ import { Client, Invoice, CompanyBankAccount } from '@invoice-monorepo/types';
 import { formatCurrency, t } from '@invoice-monorepo/i18n';
 import { generateTransactionPdf, generateTransactionPdfHtml, printTransactionPdf, shareTransactionPdf } from '../../services/pdf/transactionPdf';
 import { getWorkspaceScope } from '../../services/workspace';
+import { getDataStore } from '../../services/dataStore';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import { TransactionDocumentActions, TransactionPreviewModal } from '../../components/mobile/TransactionDocumentActions';
 import { SearchField } from '../../components/mobile/MobileUI';
@@ -141,8 +142,10 @@ export function PaymentFormScreen({ navigation, route }: any) {
 
     const fetchClients = async () => {
         if (!user) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const data = await listCustomers(supabase, { userId: user.id, companyIds });
+        const store = await getDataStore(user.id);
+        const data = store.mode === 'local'
+            ? await store.list('clients', { orderBy: 'name' })
+            : await listCustomers(supabase, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         if (data) {
             setClients(data as unknown as Client[]);
             if (preselectedClientId) {
@@ -171,10 +174,17 @@ export function PaymentFormScreen({ navigation, route }: any) {
         if (!user) return;
         setClientPickerLoading(true);
         try {
-            const { companyId } = await getWorkspaceScope(user.id);
-            if (!companyId) throw new Error(t('selectCompany', language));
-            const { data, error } = await supabase.rpc('ensure_walk_in_customer', { p_company_id: companyId });
-            if (error) throw error;
+            const store = await getDataStore(user.id);
+            let data: unknown;
+            if (store.mode === 'local') {
+                data = await store.save('clients', { name: t('walkInCustomer', language), pos_walk_in_customer: true });
+            } else {
+                const { companyId } = await getWorkspaceScope(user.id);
+                if (!companyId) throw new Error(t('selectCompany', language));
+                const result = await supabase.rpc('ensure_walk_in_customer', { p_company_id: companyId });
+                if (result.error) throw result.error;
+                data = result.data;
+            }
             if (!data) throw new Error(t('walkInCustomerUnavailable', language));
 
             const citizen = data as unknown as Client;
@@ -193,6 +203,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
     const fetchBankAccounts = async () => {
         if (!user) return;
         try {
+            if ((await getDataStore(user.id)).mode === 'local') return; // No bank-account records on the device.
             const { companyId } = await getWorkspaceScope(user.id);
             const data = await listCompanyBankAccounts(supabase, companyId);
             setBankAccounts(data as unknown as CompanyBankAccount[]);
@@ -211,6 +222,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
     const fetchFinancialAccounts = async () => {
         if (!user || typeof listFinancialAccountBalances !== 'function') return;
         try {
+            if ((await getDataStore(user.id)).mode === 'local') return; // Cash and bank funds are a cloud feature for now.
             const scope = await getWorkspaceScope(user.id);
             const data = await listFinancialAccountBalances(supabase, { userId: user.id, companyIds: scope.companyIds });
             setFinancialAccounts(data as Record<string, unknown>[]);
@@ -225,13 +237,22 @@ export function PaymentFormScreen({ navigation, route }: any) {
 
     const fetchUnpaidInvoices = async (clientId: string) => {
         if (!user) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const scope = { userId: user.id, companyIds };
-        const [openData, invoiceData, paymentData] = await Promise.all([
-            listOpenCustomerInvoices(supabase, scope, clientId),
-            listCustomerInvoices(supabase, scope, clientId),
-            listCustomerPayments(supabase, scope, clientId),
-        ]);
+        const store = await getDataStore(user.id);
+        let openData: unknown[]; let invoiceData: unknown[]; let paymentData: unknown[];
+        if (store.mode === 'local') {
+            const clientInvoices = await store.listInvoices({ clientId });
+            invoiceData = clientInvoices;
+            openData = clientInvoices.filter((invoice) => ['INVOICE', 'FINAL_INVOICE', 'ADVANCE_INVOICE'].includes(String(invoice.commercial_document_type)) && !['draft', 'paid', 'cancelled', 'credited', 'reversed'].includes(String(invoice.status)));
+            paymentData = await store.listPayments({ customerId: clientId });
+        } else {
+            const { companyIds } = await getWorkspaceScope(user.id);
+            const scope = { userId: user.id, companyIds };
+            [openData, invoiceData, paymentData] = await Promise.all([
+                listOpenCustomerInvoices(supabase, scope, clientId),
+                listCustomerInvoices(supabase, scope, clientId),
+                listCustomerPayments(supabase, scope, clientId),
+            ]);
+        }
         if (openData) {
             const invoices = openData as unknown as Invoice[];
             setUnpaidInvoices(invoices);
@@ -249,8 +270,10 @@ export function PaymentFormScreen({ navigation, route }: any) {
 
     const fetchInvoiceAndClient = async (invoiceId: string) => {
         if (!user) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const invoice = await getInvoice(supabase, invoiceId, { userId: user.id, companyIds });
+        const store = await getDataStore(user.id);
+        const invoice = store.mode === 'local'
+            ? await store.getInvoice(invoiceId)
+            : await getInvoice(supabase, invoiceId, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         if (invoice) {
             const invoiceRecord = invoice as unknown as Invoice & { client?: Client | null };
             setSelectedInvoice(invoiceRecord);
@@ -263,8 +286,10 @@ export function PaymentFormScreen({ navigation, route }: any) {
 
     const fetchPayment = async () => {
         if (!user || !paymentId) return;
-        const { companyIds } = await getWorkspaceScope(user.id);
-        const data = await getPayment(supabase, paymentId, { userId: user.id, companyIds });
+        const store = await getDataStore(user.id);
+        const data: any = store.mode === 'local'
+            ? (await store.listPayments()).find((payment) => payment.id === paymentId)
+            : await getPayment(supabase, paymentId, { userId: user.id, companyIds: (await getWorkspaceScope(user.id)).companyIds });
         if (data) {
             setSelectedClient(data.client as unknown as Client);
             setSelectedInvoice(data.invoice as unknown as Invoice);
@@ -392,8 +417,12 @@ export function PaymentFormScreen({ navigation, route }: any) {
                         try {
                             if (!user) throw new Error('Your session has expired.');
                             setDeleting(true);
-                            const { companyIds } = await getWorkspaceScope(user.id);
-                            await deleteCustomerPayment(supabase, paymentId, { userId: user.id, companyIds });
+                            const store = await getDataStore(user.id);
+                            if (store.mode === 'local') await store.reverseCustomerPayment(paymentId, 'Payment deleted by user');
+                            else {
+                                const { companyIds } = await getWorkspaceScope(user.id);
+                                await deleteCustomerPayment(supabase, paymentId, { userId: user.id, companyIds });
+                            }
                             navigation.goBack();
                         } catch (error) {
                             Alert.alert(
@@ -424,7 +453,8 @@ export function PaymentFormScreen({ navigation, route }: any) {
             Alert.alert(t('error', language), t('selectCustomerRequired', language));
             return;
         }
-        if (formData.payment_method === 'bank' && !formData.company_bank_account_id) {
+        const isLocalStorage = (user ? (await getDataStore(user.id)).mode : 'cloud') === 'local';
+        if (formData.payment_method === 'bank' && !formData.company_bank_account_id && !isLocalStorage) {
             Alert.alert(t('error', language), t('selectBankAccountForPaymentRequired', language));
             return;
         }
@@ -436,12 +466,28 @@ export function PaymentFormScreen({ navigation, route }: any) {
             if (!user) throw new Error(t('signInSavePayment', language));
             const { companyId, profile, company } = await getWorkspaceScope(user.id);
             if (!companyId) throw new Error(t('selectCompany', language));
-            notificationCompanyId = companyId;
+            if (!isLocalStorage) notificationCompanyId = companyId;
             // The payment RPC requires an idempotency key for both new payments
             // and edits. The repository fallback relies on globalThis.crypto,
             // which is not available in every native Expo runtime.
             const paymentIdempotencyKey = await generatePaymentIdempotencyKey();
-            const saved = await saveCustomerPayment(supabase, {
+            let saved: Awaited<ReturnType<typeof saveCustomerPayment>>;
+            if (isLocalStorage) {
+                // On the device a payment is always recorded against one invoice, and cannot be edited yet.
+                if (isEditing) throw new Error('Delete this payment and enter it again to change it.');
+                if (!selectedInvoice?.id) throw new Error('Choose the invoice this payment is for.');
+                const store = await getDataStore(user.id);
+                const payment = await store.recordCustomerPayment({
+                    invoiceId: selectedInvoice.id,
+                    amount: Number(formData.amount),
+                    paymentDate: formData.payment_date,
+                    paymentMethod: formData.payment_method as 'cash' | 'bank',
+                    bankReference: formData.bank_reference || undefined,
+                    notes: formData.notes || undefined,
+                    paymentNumber: formData.payment_number || undefined,
+                });
+                saved = { payment } as unknown as Awaited<ReturnType<typeof saveCustomerPayment>>;
+            } else saved = await saveCustomerPayment(supabase, {
                 userId: user.id,
                 companyId,
                 customerId: selectedClient.id,
@@ -462,11 +508,11 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 Alert.alert(t('paymentSaved', language), saved.allocationError.message);
             }
             if (!isEditing) {
-                void notifyBusinessEvent('payment_received', companyId, String(saved.payment.id), {
+                if (!isLocalStorage) void notifyBusinessEvent('payment_received', companyId, String(saved.payment.id), {
                     invoiceId: selectedInvoice?.id || null,
                 }).catch((notificationError) => console.warn('Payment notification could not be sent:', notificationError));
                 const selectedBankAccount = bankAccounts.find((account) => account.id === formData.company_bank_account_id);
-                if (formData.payment_method === 'bank' && selectedBankAccount?.is_shared) {
+                if (!isLocalStorage && formData.payment_method === 'bank' && selectedBankAccount?.is_shared) {
                     void notifyBusinessEvent('shared_bank_activity', companyId, String(saved.payment.id), {
                         entityType: 'payment',
                         amount: Number(formData.amount),
@@ -476,7 +522,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 const invoiceOutstanding = selectedInvoice
                     ? Number(selectedInvoice.total_amount || 0) - Number((selectedInvoice as any).amount_received || 0)
                     : 0;
-                if (selectedInvoice?.id && Number(formData.amount) >= Math.max(invoiceOutstanding, 0)) {
+                if (!isLocalStorage && selectedInvoice?.id && Number(formData.amount) >= Math.max(invoiceOutstanding, 0)) {
                     void notifyBusinessEvent('invoice_paid', companyId, String(selectedInvoice.id)).catch((notificationError) => console.warn('Paid invoice notification could not be sent:', notificationError));
                 }
                 try {

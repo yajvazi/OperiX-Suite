@@ -42,7 +42,10 @@ test('an invoice uses the shared calculation, is numbered when issued and cannot
   assert.equal(invoice.total_amount, expected.total);
   assert.equal(invoice.tax_amount, expected.tax);
   assert.equal(invoice.invoice_number, 'FAT-AAAA-2026-000001');
-  assert.equal(invoice.status, 'issued');
+  assert.equal(invoice.status, 'posted');
+  assert.equal(invoice.commercial_status, 'ISSUED');
+  assert.equal(invoice.commercial_document_type, 'INVOICE');
+  assert.equal(invoice.accounting_state, 'posted');
   const items = await store.list('invoice_items', { where: { invoice_id: invoice.id } });
   assert.equal(items.length, 1);
   await assert.rejects(store.saveInvoiceDocument({ id: invoice.id, issueDate: '2026-03-01', lines: [line] }), /cannot be edited/);
@@ -100,7 +103,7 @@ test('a backup restores everything on another device and never reuses an issued 
 
   const b = await openStore('BBBB');
   const result = await b.store.importBackup(file);
-  assert.equal(result.skipped, 0);
+  assert.ok(result.skipped <= 1, 'only the (already newer) company record may be skipped');
   assert.equal((await b.store.get('clients', customer.id))?.name, 'Drini Logistics');
   assert.equal((await b.store.get('invoices', invoice.id))?.invoice_number, 'FAT-AAAA-2026-000001');
   // B continues in its own series, and A's counter was carried over (restoring onto A itself never reuses 000001/000002).
@@ -134,4 +137,50 @@ test('list filters and sorts', async () => {
   assert.deepEqual((await store.list('clients', { orderBy: 'name' })).map((row) => row.name), ['Alpha', 'Bravo', 'Charlie']);
   assert.deepEqual((await store.list('clients', { where: { city: 'Prishtina' } })).map((row) => row.name), ['Charlie']);
   assert.equal((await store.list('clients', { limit: 2 })).length, 2);
+});
+
+test('a new store has one company that can be updated', async () => {
+  const { store } = await openStore();
+  const company = await store.getCompany();
+  assert.equal(company.id, store.companyId);
+  assert.equal(company.currency, 'EUR');
+  await store.save('companies', { id: store.companyId, company_name: 'Demo Trade' });
+  assert.equal((await store.getCompany()).company_name, 'Demo Trade');
+  assert.equal((await store.list('companies')).length, 1);
+});
+
+test('importing a backup keeps a single company on the device', async () => {
+  const a = await openStore('AAAA'); const b = await openStore('BBBB');
+  await a.store.save('companies', { id: a.store.companyId, company_name: 'From A' });
+  await b.store.importBackup(await a.store.exportBackup());
+  const companies = await b.store.list('companies');
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].id, b.store.companyId);
+});
+
+test('invoice reads attach customers, lines and products; payments attach customer and invoice', async () => {
+  const { store } = await openStore();
+  const customer = await store.save('clients', { name: 'Drini Logistics' });
+  const product = await store.save('products', { name: 'Desk', sku: 'D-1' });
+  const invoice = await store.saveInvoiceDocument({ issueDate: '2026-03-01', clientId: customer.id, lines: [{ description: 'Desk', quantity: 1, unitPrice: 100, productId: product.id }] });
+  await store.saveInvoiceDocument({ documentType: 'offer', issueDate: '2026-03-02', clientId: customer.id, lines: [line] });
+  assert.equal((await store.listInvoices()).length, 2);
+  const invoices = await store.listInvoices({ documentType: 'INVOICE' });
+  assert.equal(invoices.length, 1);
+  assert.equal((invoices[0].client as { name: string }).name, 'Drini Logistics');
+  assert.equal((invoices[0].items as unknown[]).length, 1);
+  const detail = await store.getInvoice(invoice.id);
+  assert.equal(((detail?.items as Array<{ product: { sku: string } }>)[0]).product.sku, 'D-1');
+  assert.equal(await store.getInvoice('missing'), null);
+  const quote = (await store.listInvoices({ documentType: 'QUOTE' }))[0];
+  assert.equal(quote.status, 'sent');
+  await assert.rejects(store.recordCustomerPayment({ invoiceId: quote.id, amount: 10, paymentDate: '2026-03-03', paymentMethod: 'bank' }), /cannot be recorded/);
+  const payment = await store.recordCustomerPayment({ invoiceId: invoice.id, amount: 50, paymentDate: '2026-03-03', paymentMethod: 'bank' });
+  const payments = await store.listPayments({ customerId: customer.id });
+  assert.equal(payments.length, 1);
+  assert.equal((payments[0].invoice as { invoice_number: string }).invoice_number, invoice.invoice_number);
+  assert.equal((await store.getInvoice(invoice.id))?.payment_status, 'PARTIALLY_PAID');
+  await store.reverseCustomerPayment(payment.id, 'Mistake');
+  assert.equal((await store.listPayments()).length, 0, 'reversed payments are hidden');
+  assert.equal((await store.getInvoice(invoice.id))?.payment_status, 'UNPAID');
 });
