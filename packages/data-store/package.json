@@ -15,7 +15,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/local.test.ts src/features.test.ts src/drivers.test.ts"
+    "test": "node --test src/local.test.ts src/features.test.ts src/drivers.test.ts src/reports.test.ts"
   },
   "dependencies": {
     "@invoice-monorepo/api": "*",

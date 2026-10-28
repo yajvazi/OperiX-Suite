@@ -1,4 +1,5 @@
-import type { DataRecord, LocalDataStore } from '@invoice-monorepo/data-store';
+import type { DataRecord } from './store.ts';
+import type { LocalDataStore } from './local.ts';
 
 type Row = Record<string, unknown>;
 

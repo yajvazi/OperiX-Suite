@@ -122,8 +122,6 @@ const GatedSubscriptionScreen = withCloudOnly(SubscriptionScreen, { en: 'Subscri
 const GatedAdvancedSettingsScreen = withCloudOnly(AdvancedSettingsScreen, { en: 'Advanced settings', sq: 'Cilësimet e avancuara' });
 const GatedOtherIncomeScreen = withCloudOnly(OtherIncomeScreen, { en: 'Other income', sq: 'Të ardhura të tjera' });
 const GatedOtherIncomeFormScreen = withCloudOnly(OtherIncomeFormScreen, { en: 'Other income', sq: 'Të ardhura të tjera' });
-const GatedTemplateEditorScreen = withCloudOnly(TemplateEditorScreen, { en: 'Invoice template', sq: 'Shablloni i faturës' });
-const GatedInvoiceTemplateSettingsScreen = withCloudOnly(InvoiceTemplateSettingsScreen, { en: 'Invoice templates', sq: 'Shabllonet e faturave' });
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -218,10 +216,10 @@ function LegacyExpensesNavigator() {
 function SettingsNavigator() {
     return <SettingsStack.Navigator id="settings-stack" screenOptions={{ headerShown: false }}>
         <SettingsStack.Screen name="SettingsMain" component={SettingsScreen} />
-        <SettingsStack.Screen name="TemplateEditor" component={GatedTemplateEditorScreen} />
+        <SettingsStack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
         <SettingsStack.Screen name="ContractTemplates" component={GatedContractTemplatesScreen} />
         <SettingsStack.Screen name="ContractTemplateEditor" component={GatedContractTemplateEditorScreen} />
-        <SettingsStack.Screen name="InvoiceTemplateSettings" component={GatedInvoiceTemplateSettingsScreen} />
+        <SettingsStack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
         <SettingsStack.Screen name="PaymentIntegrations" component={GatedPaymentIntegrationsScreen} />
         <SettingsStack.Screen name="StripeDashboard" component={GatedStripeDashboardScreen} />
         <SettingsStack.Screen name="ManageCompanies" component={GatedManageCompaniesScreen} />

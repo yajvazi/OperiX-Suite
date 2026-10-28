@@ -20,7 +20,7 @@ import type { TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
-import { isLocalReportType, localReportSummary } from '../../services/localReports';
+import { isLocalReportType, localReportSummary } from '@invoice-monorepo/data-store';
 import type { RootStackParamList } from '../../navigation/types';
 import { MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';
 

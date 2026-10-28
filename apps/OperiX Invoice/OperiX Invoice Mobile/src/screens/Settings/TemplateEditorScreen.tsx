@@ -6,6 +6,7 @@ import { useTheme } from '@invoice-monorepo/hooks';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { Card, Button, Input } from '@invoice-monorepo/ui';
 import { supabase } from '@invoice-monorepo/api';
+import { activeLocalStore } from '../../services/localMode';
 import { TemplateConfig, Profile, TemplateType } from '@invoice-monorepo/types';
 import { templateInfo } from '../../services/pdf/TemplateFactory';
 import { t, type TranslationKey } from '@invoice-monorepo/i18n';
@@ -75,7 +76,10 @@ export function TemplateEditorScreen({ navigation }: any) {
 
     const fetchConfig = async () => {
         if (!user) return;
-        const { data } = await supabase.from('profiles').select('template_config').eq('id', user.id).single();
+        const local = await activeLocalStore();
+        const { data } = local
+            ? { data: { template_config: (await local.getCompany()).template_config } as { template_config?: unknown } }
+            : await supabase.from('profiles').select('template_config').eq('id', user.id).single();
         if (data?.template_config) {
             const storedConfig = data.template_config as TemplateConfig;
             setConfig({ ...storedConfig, labels: storedConfig.labels || defaultLabelsFor(language) });
@@ -85,7 +89,9 @@ export function TemplateEditorScreen({ navigation }: any) {
     const handleSave = async () => {
         setLoading(true);
         try {
-            await supabase.from('profiles').update({ template_config: config }).eq('id', user?.id);
+            const local = await activeLocalStore();
+            if (local) await local.save('companies', { id: local.companyId, template_config: config });
+            else await supabase.from('profiles').update({ template_config: config }).eq('id', user?.id);
             Alert.alert(t('success', language), t('settingsSaved', language));
         } catch (error) {
             Alert.alert(t('error', language), t('saveError', language));

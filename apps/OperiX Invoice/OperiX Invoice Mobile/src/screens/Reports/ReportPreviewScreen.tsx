@@ -8,7 +8,7 @@ import { formatCurrency, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope, hasWorkspacePermission } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
-import { isLocalReportType, localReportRows } from '../../services/localReports';
+import { isLocalReportType, localReportRows } from '@invoice-monorepo/data-store';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { Button } from '@invoice-monorepo/ui';
 import { ErrorState, LoadingState, MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../components/mobile/MobileUI';

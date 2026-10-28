@@ -7,7 +7,7 @@ export type DataRecord = { id: string } & Record<string, unknown>;
 export const LOCAL_TABLES = [
   'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'supplier_bill_items', 'vendor_payments', 'branches',
   'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
-  'document_source_links', 'commercial_document_events',
+  'document_source_links', 'commercial_document_events', 'invoice_templates',
 ] as const;
 export type StoreTable = (typeof LOCAL_TABLES)[number];
 

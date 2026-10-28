@@ -12,6 +12,7 @@ import { ArrowLeft, Save, FileText, Type, Hash, Calendar, Percent, User, Package
 import { useTheme } from '@invoice-monorepo/hooks';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { supabase } from '@invoice-monorepo/api';
+import { activeLocalStore } from '../../../services/localMode';
 import { Card, Input, Button } from '@invoice-monorepo/ui';
 import { normalizeBrandColor } from '../../../theme/brand';
 import { getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
@@ -190,12 +191,15 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
 
     const loadTemplate = async () => {
         if (!user) return;
-        const { data } = await supabase
-            .from('invoice_templates')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('is_default', true)
-            .single();
+        const local = await activeLocalStore();
+        const { data } = local
+            ? { data: (await local.list('invoice_templates', { where: { is_default: true }, limit: 1 }))[0] as Record<string, any> | undefined }
+            : await supabase
+                .from('invoice_templates')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('is_default', true)
+                .single();
 
         if (data) {
             setTemplate({
@@ -246,7 +250,11 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 is_default: true,
             };
 
-            if (template.id) {
+            const local = await activeLocalStore();
+            if (local) {
+                const { user_id: _user, ...localTemplate } = templateData;
+                await local.save('invoice_templates', { ...localTemplate, ...(template.id ? { id: template.id } : {}) });
+            } else if (template.id) {
                 await supabase.from('invoice_templates').update(templateData).eq('id', template.id);
             } else {
                 await supabase.from('invoice_templates').insert(templateData);

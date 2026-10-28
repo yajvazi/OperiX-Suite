@@ -29,7 +29,6 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
-import { isLocalReportType, localReportSummary } from '../../services/localReports';
 import { namePdfFile, reportPdfFileName } from '../../services/pdf/fileNaming';
 import { listCustomerInvoices, listCustomerPayments } from '@invoice-monorepo/api/repositories';
 

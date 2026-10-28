@@ -639,6 +639,22 @@ export function SettingsScreen({ navigation }: any) {
                 /> : null}
 
                 <SectionTitle title={language === 'sq' ? 'Kompania' : 'Company'} />
+                {localMode ? <>
+                    <ShortcutRow
+                        icon={Palette}
+                        title={t('invoiceDesignStyle', language)}
+                        description={t('invoiceDesignStyle', language)}
+                        onPress={() => navigation.navigate('TemplateEditor')}
+                        trailing={<ChevronRight color={palette.muted} size={18} />}
+                    />
+                    <ShortcutRow
+                        icon={Edit2}
+                        title={t('invoiceFieldsDefaults', language)}
+                        description={t('invoiceFieldsDefaults', language)}
+                        onPress={() => navigation.navigate('InvoiceTemplateSettings')}
+                        trailing={<ChevronRight color={palette.muted} size={18} />}
+                    />
+                </> : null}
                 {!localMode && can('subscription.manage') ? <ShortcutRow
                     icon={CreditCard}
                     title={language === 'sq' ? 'Abonimi dhe pagesa' : 'Subscription & billing'}
