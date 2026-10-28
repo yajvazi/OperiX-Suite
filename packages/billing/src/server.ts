@@ -261,7 +261,7 @@ export async function readProductBillingSummary(client: BillingClient, companyId
 }
 
 export async function authorizeProductWorkspace(client: BillingClient, userId: string, requestedCompanyId: string | undefined, product: "invoice" | "booking" | "suite" | "hr" | "desk", permission: "billing.read" | "billing.manage") {
-  const workspace = await resolveWorkspace(client, userId, { includeSensitiveFields: false });
+  const workspace = await resolveWorkspace(client, userId, { includeSensitiveFields: false, membershipOnly: true });
   const companyId = requestedCompanyId || workspace.companyId;
   if (!companyId || !workspace.companyIds.includes(companyId)) throw new BillingError("The selected workspace is not accessible.", 403);
   const { data: allowed, error: permissionError } = await client.rpc("billing_has_permission", { p_company_id: companyId, p_permission: permission });

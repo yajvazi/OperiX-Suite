@@ -127,7 +127,7 @@ export function buildFixtures() {
   const pos_terminals = [{ id: uid('16161616', 1), company_id: C1, branch_id: B1, name: 'Counter 1', code: 'T1', status: 'active', created_at: stamp(-100) }];
 
   return {
-    profiles: [profile], companies: [company], memberships: [{ id: uid('17171717', 1), user_id: USER.id, company_id: C1, status: 'active', role: 'owner' }],
+    profiles: [profile], companies: [company, { ...company, id: uid('22222222', 777), company_name: 'Unrelated Tenant SH.P.K.', owner_id: uid('99999999', 1), parent_company_id: null, email: 'other@tenant.example' }], memberships: [{ id: uid('17171717', 1), user_id: USER.id, company_id: C1, status: 'active', role: 'owner' }],
     branches, chart_of_accounts, product_branch_stock, operix_accessible_company_bank_accounts, operix_financial_account_balances, pos_terminals, clients, products, invoices, invoice_items: items, payments, expenses, vendors, supplier_bills, supplier_bill_items: [], vendor_payments,
     other_income, other_income_categories, contracts, recurring_invoice_templates, invoice_reminders, payment_links, customer_portal_tokens,
     invoice_templates: [], company_user_preferences: [], held_orders: [], subscription_accounts: [], tax_reports: [], api_keys: [], audit_events: [], company_feature_flags: [],

@@ -17,7 +17,7 @@ export async function POST(request:Request){
   const {data:{user},error:authError}=await supabase.auth.getUser();
   if(authError||!user)return NextResponse.json({error:"Authentication is required to generate a PDF."},{status:401});
   let workspace;
-  try { workspace = await resolveWorkspace(supabase, user.id); }
+  try { workspace = await resolveWorkspace(supabase, user.id, { membershipOnly: true }); }
   catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
 
   let browser:Awaited<ReturnType<typeof puppeteer.launch>>|null=null;

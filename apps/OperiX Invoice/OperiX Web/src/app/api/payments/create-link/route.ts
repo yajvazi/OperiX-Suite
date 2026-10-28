@@ -8,7 +8,7 @@ export async function POST(request:Request){
   const {data:{user}}=await supabase.auth.getUser(); if(!user)return NextResponse.json({error:"Authentication required."},{status:401});
   const body=await request.json().catch(()=>({})); const invoiceId=String(body.invoiceId||""); if(!invoiceId)return NextResponse.json({error:"Invoice is required."},{status:400});
   const stripeKey=process.env.STRIPE_SECRET_KEY; if(!stripeKey)return NextResponse.json({error:"Online payments are not configured yet. Add STRIPE_SECRET_KEY to enable Stripe checkout."},{status:503});
-  let workspace; try { workspace = await resolveWorkspace(supabase, user.id); } catch (workspaceError) { return NextResponse.json({error:workspaceError instanceof Error?workspaceError.message:"Workspace unavailable."},{status:403}); }
+  let workspace; try { workspace = await resolveWorkspace(supabase, user.id, { membershipOnly: true }); } catch (workspaceError) { return NextResponse.json({error:workspaceError instanceof Error?workspaceError.message:"Workspace unavailable."},{status:403}); }
   if (!hasWorkspacePermission(workspace, "payment.create")) return NextResponse.json({ error: "Payment permission is required." }, { status: 403 });
   const invoice = await getInvoice(supabase, invoiceId, { userId: user.id, companyIds: workspace.companyIds });
   if(!invoice)return NextResponse.json({error:"Invoice not found in the current workspace."},{status:404});

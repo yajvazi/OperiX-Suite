@@ -23,7 +23,7 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
     let workspace;
-    try { workspace = await resolveWorkspace(supabase, user.id); }
+    try { workspace = await resolveWorkspace(supabase, user.id, { membershipOnly: true }); }
     catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
     if (!hasWorkspacePermission(workspace, "financial.export")) return NextResponse.json({ error: "Financial export permission is required." }, { status: 403 });
     const { id } = await context.params;

@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     let workspace;
     try {
-      workspace = await resolveWorkspace(supabase, user.id);
+      workspace = await resolveWorkspace(supabase, user.id, { membershipOnly: true });
     } catch (workspaceError) {
       return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 });
     }

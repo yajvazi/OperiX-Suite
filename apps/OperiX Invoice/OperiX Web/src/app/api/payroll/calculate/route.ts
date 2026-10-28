@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   let workspace;
-  try { workspace = await resolveWorkspace(supabase, auth.user.id); }
+  try { workspace = await resolveWorkspace(supabase, auth.user.id, { membershipOnly: true }); }
   catch (workspaceError) { return NextResponse.json({ error: workspaceError instanceof Error ? workspaceError.message : "Workspace unavailable." }, { status: 403 }); }
   if (!hasWorkspacePermission(workspace, "users.manage")) return NextResponse.json({ error: "Payroll administration permission is required." }, { status: 403 });
 

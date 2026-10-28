@@ -19,7 +19,7 @@ export async function developerContext() {
   if (error || !user) throw new DeveloperAccessError("Authentication is required.", 401);
   let workspace: WorkspaceScope;
   try {
-    workspace = await resolveWorkspace(client, user.id, { includeSensitiveFields: false });
+    workspace = await resolveWorkspace(client, user.id, { includeSensitiveFields: false, membershipOnly: true });
   } catch {
     throw new DeveloperAccessError("The active workspace could not be resolved.", 403);
   }

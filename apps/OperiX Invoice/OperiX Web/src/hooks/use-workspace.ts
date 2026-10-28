@@ -110,7 +110,7 @@ export function useWorkspace() {
 
     try {
       setUser(authData.user);
-      const resolved = await resolveWorkspace(supabase, authData.user.id);
+      const resolved = await resolveWorkspace(supabase, authData.user.id, { membershipOnly: true });
       setProfile(resolved.profile as WorkspaceProfile);
       setCompany(resolved.company as WorkspaceCompany | null);
       setCompanies(resolved.companies as WorkspaceCompany[]);
