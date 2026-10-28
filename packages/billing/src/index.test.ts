@@ -12,24 +12,24 @@ import {
 } from "./index";
 
 test("uses the exact Invoice prices", () => {
-  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "monthly", totalTenants: 1, totalActiveUsers: 1 }).total, "8.99");
-  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "annual", totalTenants: 1, totalActiveUsers: 1 }).total, "99.99");
-  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "monthly", totalTenants: 3, totalActiveUsers: 5 }).total, "16.93");
+  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "monthly", totalTenants: 1, totalActiveUsers: 1 }).total, "2.99");
+  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "annual", totalTenants: 1, totalActiveUsers: 1 }).total, "29.99");
+  assert.equal(calculateSubscriptionPrice({ plan: "invoice", interval: "monthly", totalTenants: 3, totalActiveUsers: 5 }).total, "10.93");
 });
 
 test("uses the exact Booking and Suite prices", () => {
   assert.equal(calculateSubscriptionPrice({ plan: "booking", interval: "monthly", totalTenants: 1, totalActiveUsers: 1 }).total, "4.99");
   assert.equal(calculateSubscriptionPrice({ plan: "booking", interval: "annual", totalTenants: 1, totalActiveUsers: 1 }).total, "49.99");
-  assert.equal(calculateSubscriptionPrice({ plan: "suite", interval: "monthly", totalTenants: 3, totalActiveUsers: 5 }).total, "19.93");
-  assert.equal(calculateSubscriptionPrice({ plan: "suite", interval: "annual", totalTenants: 3, totalActiveUsers: 5 }).total, "179.93");
+  assert.equal(calculateSubscriptionPrice({ plan: "suite", interval: "monthly", totalTenants: 3, totalActiveUsers: 5 }).total, "12.93");
+  assert.equal(calculateSubscriptionPrice({ plan: "suite", interval: "annual", totalTenants: 3, totalActiveUsers: 5 }).total, "129.93");
 });
 
 test("uses one shared Suite quantity set and compares separate plans", () => {
   const preview = calculateBillingPreview({ plan: "suite", interval: "monthly", totalTenants: 3, totalActiveUsers: 5 });
   assert.equal(preview.billableTenants, 2);
   assert.equal(preview.billableUsers, 4);
-  assert.equal(separatePlanMonthlyTotal(1, 1), "13.98");
-  assert.equal(separatePlanMonthlyTotal(3, 5), "29.86");
+  assert.equal(separatePlanMonthlyTotal(1, 1), "7.98");
+  assert.equal(separatePlanMonthlyTotal(3, 5), "23.86");
 });
 
 test("calculates included and billable quantities", () => {

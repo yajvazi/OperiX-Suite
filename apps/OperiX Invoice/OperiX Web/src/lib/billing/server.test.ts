@@ -22,8 +22,8 @@ describe("Invoice server billing contracts", () => {
 
   it("builds exact server-side billing previews from authoritative usage", () => {
     const preview = previewFromSummary({ total_tenants: 3, total_users: 5 } as never, "annual");
-    expect(preview.lineItems.map((item) => item.amount)).toEqual(["99.99", "39.98", "39.96"]);
-    expect(preview.total).toBe("179.93");
+    expect(preview.lineItems.map((item) => item.amount)).toEqual(["29.99", "39.98", "39.96"]);
+    expect(preview.total).toBe("109.93");
   });
 
   it("builds Checkout with the selected interval and only positive add-on quantities", () => {

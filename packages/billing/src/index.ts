@@ -56,8 +56,8 @@ export const PLAN_DEFINITIONS: Readonly<Record<PurchasablePlan, PlanDefinition>>
     description: "Invoicing and financial operations for your organization.",
     products: ["invoice"],
     pricing: {
-      monthly: { base: "8.99", additionalTenant: "1.99", additionalUser: "0.99" },
-      annual: { base: "99.99", additionalTenant: "19.99", additionalUser: "9.99" },
+      monthly: { base: "2.99", additionalTenant: "1.99", additionalUser: "0.99" },
+      annual: { base: "29.99", additionalTenant: "19.99", additionalUser: "9.99" },
     },
   },
   booking: {
@@ -76,8 +76,8 @@ export const PLAN_DEFINITIONS: Readonly<Record<PurchasablePlan, PlanDefinition>>
     description: "OperiX Invoice and OperiX Booking with shared usage.",
     products: ["invoice", "booking"],
     pricing: {
-      monthly: { base: "11.99", additionalTenant: "1.99", additionalUser: "0.99" },
-      annual: { base: "99.99", additionalTenant: "19.99", additionalUser: "9.99" },
+      monthly: { base: "4.99", additionalTenant: "1.99", additionalUser: "0.99" },
+      annual: { base: "49.99", additionalTenant: "19.99", additionalUser: "9.99" },
     },
   },
 };
