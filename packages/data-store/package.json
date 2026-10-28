@@ -9,11 +9,13 @@
     ".": "./src/index.ts",
     "./local": "./src/local.ts",
     "./cloud": "./src/cloud.ts",
-    "./drivers/node-sqlite": "./src/drivers/node-sqlite.ts"
+    "./drivers/node-sqlite": "./src/drivers/node-sqlite.ts",
+    "./drivers/expo-sqlite": "./src/drivers/expo-sqlite.ts",
+    "./drivers/sqlite-wasm": "./src/drivers/sqlite-wasm.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/local.test.ts src/features.test.ts"
+    "test": "node --test src/local.test.ts src/features.test.ts src/drivers.test.ts"
   },
   "dependencies": {
     "@invoice-monorepo/api": "*",

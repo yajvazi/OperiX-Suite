@@ -153,7 +153,11 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
   rule, payments with cash limit / overpayment / reversal, backup export and import with checksum and
   merge rules), and a cloud adapter for collections and numbering (`cloud.ts`). 14 tests run against
   node:sqlite (`npm test` in the package).
-- **Next:** (a) expo-sqlite driver on mobile and a browser SQLite driver on web; (b) cloud adapter
-  delegating invoices and payments to the existing repositories; (c) move screens onto `DataStore`
+- **Step 1, part 2 (done):** driver adapters for expo-sqlite (mobile) and the official sqlite-wasm (web), both
+  structural (no dependency added yet), and the cloud adapter now delegates invoices and payments to the
+  existing `saveInvoiceDocument`, `saveCustomerPayment` and `reverseCustomerPayment`. 18 tests pass.
+- **Next:** (a) add `expo-sqlite` to the mobile app (native module, needs a new TestFlight build) and
+  `@sqlite.org/sqlite-wasm` to the web app; (b) a conformance suite that runs the same scenarios against
+  the local engine and the cloud store; (c) move screens onto `DataStore`
   module by module (customers/products first); (d) server-side enforcement of the paid feature keys;
   (e) storage-mode switch and the upgrade upload.

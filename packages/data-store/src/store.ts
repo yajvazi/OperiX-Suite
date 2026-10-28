@@ -55,6 +55,9 @@ export interface PaymentInput {
   bankReference?: string;
   notes?: string;
   paymentNumber?: string;
+  /** Cloud only: the receiving bank account / fund account (required for bank payments there). */
+  companyBankAccountId?: string | null;
+  fundAccountId?: string | null;
 }
 
 export interface BackupFile {
