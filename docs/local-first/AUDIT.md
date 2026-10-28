@@ -161,3 +161,16 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
   the local engine and the cloud store; (c) move screens onto `DataStore`
   module by module (customers/products first); (d) server-side enforcement of the paid feature keys;
   (e) storage-mode switch and the upgrade upload.
+
+## Progress (mobile)
+
+- Decision: no trials. Accounts are free or paid; billing, entitlements and the billing UI need the trial
+  logic removed (done later, with server-side enforcement).
+- `services/dataStore.ts` chooses the device store or the cloud store (`operix.storageMode`, default cloud).
+- Moved onto the data store with an on-device path: customers (list, form, detail) and products (list,
+  form, detail). Cloud behaviour for these screens is unchanged.
+- New Settings > Data storage screen (mode switch, backup export/import). Hidden unless the build sets
+  `EXPO_PUBLIC_LOCAL_STORAGE=1`, because invoices, payments, expenses and vendors are still cloud-only.
+- Needs a new TestFlight build: `expo-sqlite` is a native module.
+- Still to move: invoices and quotes, payments, expenses, vendors, supplier bills, vendor payments,
+  dashboard and reports, settings/company profile.

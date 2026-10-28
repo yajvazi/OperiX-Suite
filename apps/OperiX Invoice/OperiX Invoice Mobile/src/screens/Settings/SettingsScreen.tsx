@@ -630,13 +630,13 @@ export function SettingsScreen({ navigation }: any) {
                     onPress={() => navigation.navigate('Subscription')}
                     trailing={<ChevronRight color={palette.muted} size={18} />}
                 /> : null}
-                <ShortcutRow
+                {process.env.EXPO_PUBLIC_LOCAL_STORAGE === '1' ? <ShortcutRow
                     icon={HardDrive}
                     title={language === 'sq' ? 'Ruajtja e të dhënave' : 'Data storage'}
                     description={language === 'sq' ? 'Ruani të dhënat në këtë pajisje ose në cloud, dhe menaxhoni kopjet rezervë' : 'Keep data on this device or in the cloud, and manage backups'}
                     onPress={() => navigation.navigate('StorageSettings')}
                     trailing={<ChevronRight color={palette.muted} size={18} />}
-                />
+                /> : null}
                 {can('users.manage') ? <ShortcutRow
                     icon={Users}
                     title={language === 'sq' ? 'Përdoruesit dhe qasja' : 'Users & Access'}
