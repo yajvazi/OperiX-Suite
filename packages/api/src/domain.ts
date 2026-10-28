@@ -62,6 +62,33 @@ export function taxReportingCategoryLabel(value: string | null | undefined, lang
   return TAX_REPORTING_CATEGORIES.find((category) => category.value === value)?.label[language] ?? '';
 }
 
+export type PaymentFundMethod = 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'other';
+
+/**
+ * Picks the cash/bank fund account a customer payment is booked against, so Web and Mobile
+ * keep the Cash & Bank balances consistent. Cash uses the cash fund (or the first account),
+ * bank uses the fund linked to the chosen company bank account, other methods use a fund of
+ * the same type when one exists.
+ */
+export function resolvePaymentFundAccount(
+  accounts: ReadonlyArray<Record<string, unknown>>,
+  method: PaymentFundMethod,
+  companyBankAccountId?: string | null,
+): string | null {
+  const kind = (account: Record<string, unknown>) => String(account.account_type || account.fund_type || '');
+  const match = accounts.find((account) => {
+    if (method === 'cash') return kind(account) === 'cash';
+    if (method === 'bank') return String(account.company_bank_account_id || '') === String(companyBankAccountId || '');
+    return kind(account) === method;
+  });
+  if (match?.id) return String(match.id);
+  if (method === 'cash') {
+    const fallback = accounts[0];
+    return fallback?.id ? String(fallback.id) : null;
+  }
+  return null;
+}
+
 /** Quick due-date choices offered next to the due date field on both apps. */
 export const DUE_DATE_PRESETS = ['one_week', 'two_weeks', 'one_month', 'two_months', 'three_months'] as const;
 export type DueDatePreset = (typeof DUE_DATE_PRESETS)[number];

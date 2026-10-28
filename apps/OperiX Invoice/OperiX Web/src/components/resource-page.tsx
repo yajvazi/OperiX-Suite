@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Boxes, Download, Edit3, FileSpreadsheet, FileUp, MoreHorizontal, Plus, Trash2, TrendingUp, Users, X, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useBusinessData } from "@/hooks/use-business-data";
@@ -14,13 +14,16 @@ import { CustomerLedgerDialog } from "@/components/customer-ledger-dialog";
 import { EmptyState, ErrorState, LoadingSkeleton, MetricCard, PageHeader, SearchField, SectionCard, StatusBadge } from "./ui";
 import {
   deleteCustomer,
+  deleteCustomerPayment,
   deleteExpense,
   deleteProduct,
   deleteScopedResource,
   getPreferredBranchId,
   listBranches,
+  listCompanyBankAccounts,
+  listFinancialAccountBalances,
+  listOpenCustomerInvoices,
   listProductBranchStock,
-  reverseCustomerPayment,
   saveCustomer,
   saveCustomerPayment,
   saveExpense,
@@ -28,8 +31,10 @@ import {
   saveProductBranchStock,
   saveScopedResource,
 } from "@invoice-monorepo/api/repositories";
+import { isCashPaymentAllowed, resolvePaymentFundAccount, type PaymentFundMethod } from "@invoice-monorepo/api/domain";
 
 type ResourceRow = Record<string, unknown> & { id: string };
+const PAYMENT_METHOD_LABELS: Record<string, string> = { cash: "Cash", bank: "Bank transfer", card: "Card", online_payment: "Online payment", cheque: "Cheque", other: "Other" };
 type ResourcePageProps = { resourceKey: string; title?: string; description?: string; embedded?: boolean };
 
 export function ResourcePage(props: ResourcePageProps) {
@@ -51,6 +56,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [editing, setEditing] = useState<ResourceRow | null>(null);
   const [prefill, setPrefill] = useState<Record<string, string> | null>(null);
+  const [bankAccounts, setBankAccounts] = useState<Array<{ id: string; label: string; isPrimary: boolean }>>([]);
   const [ledgerCustomer, setLedgerCustomer] = useState<ResourceRow | null>(null);
   const [secondaryFilter, setSecondaryFilter] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -117,6 +123,20 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }, [config.table, workspace.companyId, workspace.user]);
 
   useEffect(() => {
+    if (config.table !== "payments" || !workspace.companyId) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    void listCompanyBankAccounts(supabase, workspace.companyId).then((rows) => setBankAccounts(rows.map((row) => ({ id: String(row.id), label: [row.bank_name, row.account_name || row.iban || row.account_number].filter(Boolean).join(" · ") || "Bank account", isPrimary: Boolean(row.is_primary) })))).catch(() => setBankAccounts([]));
+  }, [config.table, workspace.companyId]);
+
+  const loadOpenInvoices = useCallback(async (clientId: string) => {
+    const supabase = createClient();
+    if (!supabase || !workspace.user) return [];
+    const rows = await listOpenCustomerInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, clientId);
+    return rows.map((row) => ({ id: String(row.id), label: `${String(row.invoice_number || "Invoice")} · ${money(Number(row.total_amount || 0) - Number(row.amount_received || 0), workspace.company?.currency || "EUR")} due` }));
+  }, [workspace.user, workspace.companyIds, workspace.company?.currency]);
+
+  useEffect(() => {
     if (config.table !== "products" || !workspace.companyId || !selectedBranchId) return;
     const supabase = createClient();
     if (!supabase) return;
@@ -173,6 +193,13 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   } : null;
 
   async function save(formData: FormData) {
+    try { await saveRecord(formData); } catch (saveError) {
+      setMessage(saveError instanceof Error ? saveError.message : "The record could not be saved.");
+      setSaving(false);
+    }
+  }
+
+  async function saveRecord(formData: FormData) {
     if (editing ? !canEdit : !canCreate) { setMessage("You do not have permission to change this resource."); return; }
     setSaving(true);
     setMessage("");
@@ -199,6 +226,12 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     let resultData: ResourceRow;
     if (config.table === "payments") {
       if (!payload.client_id) { setMessage("Select a customer for this payment."); setSaving(false); return; }
+      const paymentMethod = String(payload.payment_method || "bank") as PaymentFundMethod;
+      const bankAccountId = paymentMethod === "bank" ? String(formData.get("company_bank_account_id") || "") : "";
+      if (Number(payload.amount || 0) <= 0) { setMessage("Enter a payment amount greater than zero."); setSaving(false); return; }
+      if (paymentMethod === "cash" && !isCashPaymentAllowed(Number(payload.amount || 0))) { setMessage("Cash payments are limited to amounts below €300. Choose another method."); setSaving(false); return; }
+      if (paymentMethod === "bank" && !bankAccountId) { setMessage("Select the bank account that received this payment."); setSaving(false); return; }
+      const fundAccounts = await listFinancialAccountBalances(supabase, { userId: authData.user.id, companyIds: workspace.companyIds }).catch(() => []);
       const paymentResult = await saveCustomerPayment(supabase, {
         userId: authData.user.id,
         companyId,
@@ -207,7 +240,9 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
         paymentNumber: payload.payment_number ? String(payload.payment_number) : null,
         amount: Number(payload.amount || 0),
         paymentDate: String(payload.payment_date || ""),
-        paymentMethod: String(payload.payment_method || "bank") as "cash" | "bank" | "card" | "online_payment" | "cheque" | "other",
+        paymentMethod,
+        companyBankAccountId: bankAccountId || null,
+        fundAccountId: resolvePaymentFundAccount(fundAccounts, paymentMethod, bankAccountId),
         bankReference: payload.bank_reference ? String(payload.bank_reference) : null,
         notes: payload.notes ? String(payload.notes) : null,
         existingPaymentId: editing?.id || null,
@@ -241,11 +276,11 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
 
   async function remove(id: string) {
     if (!canDelete) { setMessage("You do not have permission to delete or reverse this resource."); return; }
-    if (!window.confirm(`Delete this ${config.singular.toLowerCase()}?`)) return;
+    if (!window.confirm(config.table === "payments" ? "Remove this payment? A payment already posted to the accounts is reversed with an audit entry instead of being erased." : `Delete this ${config.singular.toLowerCase()}?`)) return;
     const supabase = createClient();
     if (supabase) {
       try {
-        if (config.table === "payments") await reverseCustomerPayment(supabase, id, "Reversed from Web payments");
+        if (config.table === "payments") await deleteCustomerPayment(supabase, id, { userId: workspace.user?.id || "", companyIds: workspace.companyIds });
         else if (config.table === "clients") await deleteCustomer(supabase, id, workspace.companyId || "", workspace.user?.id);
         else if (config.table === "products") await deleteProduct(supabase, id, workspace.companyId || "", workspace.user?.id);
         else if (config.table === "expenses") await deleteExpense(supabase, id, workspace.companyId || "", workspace.user?.id);
@@ -340,7 +375,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     {resourceKey === "customers" && <PortalLinksView embedded />}
     {ledgerCustomer ? <CustomerLedgerDialog customer={ledgerCustomer} onClose={() => setLedgerCustomer(null)} /> : null}
     {importModal ? <ProductImportDialog onClose={() => setImportModal(false)} onImported={refresh} /> : null}
-    {modal ? <ResourceModal key={Object.values(relationOptions).map((options) => options.length).join("-")} prefill={prefill} config={config} editing={editing} relationOptions={relationOptions} branchOptions={branchOptions} selectedBranchId={selectedBranchId} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
+    {modal ? <ResourceModal key={Object.values(relationOptions).map((options) => options.length).join("-") + bankAccounts.length} prefill={prefill} bankAccounts={bankAccounts} loadOpenInvoices={loadOpenInvoices} config={config} editing={editing} relationOptions={relationOptions} branchOptions={branchOptions} selectedBranchId={selectedBranchId} saving={saving} message={message} onClose={closeModal} onSave={save} /> : null}
   </div>;
 }
 
@@ -366,8 +401,21 @@ function resourceAccess(resourceKey: string, table: string) {
   return { read: "invoice.view", create: "invoice.create", edit: "invoice.edit", delete: "invoice.delete_draft" };
 }
 
-function ResourceModal({ config, editing, prefill, relationOptions, branchOptions, selectedBranchId, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; prefill: Record<string, string> | null; relationOptions: Record<string, Array<{ id: string; label: string }>>; branchOptions: Array<{ id: string; name: string }>; selectedBranchId: string | null; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
-  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.table === "products" && branchOptions.length ? <label className="field"><span>Stock branch</span><select className="select" name="branch_id" defaultValue={selectedBranchId || ""}><option value="">Global stock</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label> : null}{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? prefill?.[field.key] ?? field.defaultValue ?? (!editing && field.key === "payment_date" ? new Date().toISOString().slice(0, 10) : ""); if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; return <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions[field.key]?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} />}</label>; })}</div>{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
+function ResourceModal({ config, editing, prefill, bankAccounts, loadOpenInvoices, relationOptions, branchOptions, selectedBranchId, saving, message, onClose, onSave }: { config: ResourceConfig; editing: ResourceRow | null; prefill: Record<string, string> | null; bankAccounts: Array<{ id: string; label: string; isPrimary: boolean }>; loadOpenInvoices: (clientId: string) => Promise<Array<{ id: string; label: string }>>; relationOptions: Record<string, Array<{ id: string; label: string }>>; branchOptions: Array<{ id: string; name: string }>; selectedBranchId: string | null; saving: boolean; message: string; onClose: () => void; onSave: (formData: FormData) => Promise<void> }) {
+  const isPayment = config.table === "payments";
+  const [clientId, setClientId] = useState(String(editing?.client_id ?? prefill?.client_id ?? ""));
+  const [method, setMethod] = useState(String(editing?.payment_method ?? (isCashPaymentAllowed(prefill?.amount) ? "cash" : "bank")));
+  const [amount, setAmount] = useState(String(editing?.amount ?? prefill?.amount ?? ""));
+  const [openInvoices, setOpenInvoices] = useState<Array<{ id: string; label: string }> | null>(null);
+  useEffect(() => {
+    if (!isPayment || !clientId) { setOpenInvoices(null); return; }
+    let cancelled = false;
+    void loadOpenInvoices(clientId).then((rows) => { if (!cancelled) setOpenInvoices(rows); }).catch(() => { if (!cancelled) setOpenInvoices(null); });
+    return () => { cancelled = true; };
+  }, [isPayment, clientId, loadOpenInvoices]);
+  const cashBlocked = !isCashPaymentAllowed(amount);
+  const primaryBank = bankAccounts.find((account) => account.isPrimary) || bankAccounts[0];
+  return <div className="resource-modal-backdrop" onMouseDown={onClose}><section className="resource-modal" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2>{editing ? "Edit" : "New"} {config.singular}</h2><p>Keep the information clear and up to date.</p></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Close form"><X size={18} /></button></header><form action={onSave}><div className="resource-modal-fields">{config.table === "products" && branchOptions.length ? <label className="field"><span>Stock branch</span><select className="select" name="branch_id" defaultValue={selectedBranchId || ""}><option value="">Global stock</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label> : null}{config.fields.map((field) => { const defaultValue = editing?.[field.key] ?? prefill?.[field.key] ?? field.defaultValue ?? (!editing && field.key === "payment_date" ? new Date().toISOString().slice(0, 10) : ""); if (field.type === "checkbox") return <label className="field flex-row items-center gap-3" key={field.key}><input className="h-4 w-4" name={field.key} type="checkbox" defaultChecked={Boolean(defaultValue)} /><span>{field.label}{field.required ? " *" : ""}</span></label>; const control = <label className={`field ${field.type === "textarea" ? "field-wide" : ""}`} key={field.key}><span>{field.label}{field.required ? " *" : ""}</span>{field.relation ? <select key={isPayment && field.key === "invoice_id" ? `invoice-${clientId}-${openInvoices ? "open" : "all"}` : field.key} className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)} onChange={isPayment && field.key === "client_id" ? (event) => setClientId(event.target.value) : undefined}><option value="">{isPayment && field.key === "invoice_id" ? "No invoice (on account)" : `Select ${field.label.toLowerCase()}`}</option>{(isPayment && field.key === "invoice_id" && openInvoices ? [...openInvoices, ...(relationOptions[field.key] || []).filter((option) => option.id === String(defaultValue) && !openInvoices.some((open) => open.id === option.id))] : relationOptions[field.key])?.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : field.type === "select" ? <select className="select" name={field.key} required={field.required} defaultValue={String(defaultValue)} onChange={isPayment && field.key === "payment_method" ? (event) => setMethod(event.target.value) : undefined}>{field.options?.map((option) => <option key={option} value={option} disabled={isPayment && field.key === "payment_method" && option === "cash" && cashBlocked}>{field.key === "payment_method" ? PAYMENT_METHOD_LABELS[option] || option : option}</option>)}</select> : field.type === "textarea" ? <textarea className="textarea" name={field.key} defaultValue={String(defaultValue)} /> : <input className="input" name={field.key} type={field.type || "text"} min={field.min} max={field.max} step={field.step ?? (field.type === "number" ? "0.01" : undefined)} required={field.required} defaultValue={String(defaultValue)} onChange={isPayment && field.key === "amount" ? (event) => setAmount(event.target.value) : undefined} />}</label>; if (!(isPayment && field.key === "payment_method" && method === "bank")) return control; return <Fragment key={field.key}>{control}<label className="field"><span>Bank account *</span><select className="select" name="company_bank_account_id" required defaultValue={String(editing?.company_bank_account_id ?? primaryBank?.id ?? "")}><option value="">Select bank account</option>{bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}</select></label></Fragment>; })}</div>{isPayment && method === "cash" && cashBlocked ? <p className="resource-modal-error">Cash payments are limited to amounts below €300. Choose another method.</p> : null}{message ? <p className="resource-modal-error">{message}</p> : null}<footer className="resource-modal-footer"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : `${editing ? "Update" : "Save"} ${config.singular}`}</button></footer></form></section></div>;
 }
 
 function readValue(row: Record<string, unknown>, key: string) { return key.split(".").reduce<unknown>((current, part) => current && typeof current === "object" ? (current as Record<string, unknown>)[part] : undefined, row); }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calculateInvoice } from '@invoice-monorepo/money';
-import { buildInvoicePersistencePayload, DomainValidationError, dueDateForPreset, isCashPaymentAllowed, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel, type InvoiceDraftInput } from './domain.ts';
+import { buildInvoicePersistencePayload, DomainValidationError, dueDateForPreset, isCashPaymentAllowed, resolvePaymentFundAccount, TAX_REPORTING_CATEGORIES, taxReportingCategoryLabel, type InvoiceDraftInput } from './domain.ts';
 import { existsSync, readFileSync } from 'node:fs';
 
 function invoiceDraft(overrides: Partial<InvoiceDraftInput> = {}): InvoiceDraftInput {
@@ -132,4 +132,20 @@ test('due date presets add days or clamped months to the issue date', () => {
   assert.equal(dueDateForPreset('2026-03-15', 'two_months'), '2026-05-15');
   assert.equal(dueDateForPreset('2026-11-30', 'three_months'), '2027-02-28');
   assert.throws(() => dueDateForPreset('31/01/2026', 'one_week'));
+});
+
+test('payment fund account resolution matches the Mobile rules', () => {
+  const accounts = [
+    { id: 'f-bank-a', account_type: 'bank', company_bank_account_id: 'bank-a' },
+    { id: 'f-cash', account_type: 'cash' },
+    { id: 'f-bank-b', fund_type: 'bank', company_bank_account_id: 'bank-b' },
+    { id: 'f-card', account_type: 'card' },
+  ];
+  assert.equal(resolvePaymentFundAccount(accounts, 'cash'), 'f-cash');
+  assert.equal(resolvePaymentFundAccount(accounts, 'bank', 'bank-b'), 'f-bank-b');
+  assert.equal(resolvePaymentFundAccount(accounts, 'bank', 'unknown'), null);
+  assert.equal(resolvePaymentFundAccount(accounts, 'card'), 'f-card');
+  assert.equal(resolvePaymentFundAccount(accounts, 'cheque'), null);
+  assert.equal(resolvePaymentFundAccount([{ id: 'only', account_type: 'bank', company_bank_account_id: 'x' }], 'cash'), 'only');
+  assert.equal(resolvePaymentFundAccount([], 'cash'), null);
 });

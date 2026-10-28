@@ -14,6 +14,8 @@ const browser = await chromium.launch({ args: ['--no-sandbox'] });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await context.addCookies([{ name: 'sb-invoice-auth-token', value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`, domain: new URL(base).hostname, path: '/' }]);
 const page = await context.newPage();
+const writes = [];
+page.on('request', (r) => { if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(r.method()) && r.url().includes(':55321') && !/rpc\/(get_my|rbac_get)/.test(r.url())) writes.push(`${r.method()} ${r.url().replace(/.*55321/, '')} ${(r.postData() || '').slice(0, 1200)}`); });
 await page.goto(`${base}/invoices`, { waitUntil: 'networkidle' });
 const rows = page.locator('tbody tr');
 const count = await rows.count();
@@ -35,5 +37,18 @@ if (opened) {
   const values = await page.$$eval('.resource-modal select, .resource-modal input', (els) => els.map((el) => `${el.name}=${el.tagName === 'SELECT' ? el.options[el.selectedIndex]?.text : el.value}`));
   console.log(values.join('\n'));
   await page.screenshot({ path: path.join(out, 'payment-prefilled.png') });
+}
+if (opened) {
+  const cash = page.locator('.resource-modal select[name="payment_method"] option[value="cash"]');
+  console.log('cash option disabled at', await page.locator('.resource-modal input[name="amount"]').inputValue(), '->', await cash.isDisabled());
+  await page.locator('.resource-modal select[name="payment_method"]').selectOption('bank');
+  await page.waitForTimeout(300);
+  console.log('bank account select visible:', await page.locator('.resource-modal select[name="company_bank_account_id"]').isVisible());
+  console.log('invoice options:', (await page.locator('.resource-modal select[name="invoice_id"] option').allTextContents()).join(' | '));
+  await page.screenshot({ path: path.join(out, 'payment-bank.png') });
+  await page.locator('.resource-modal footer button.btn-primary').click();
+  await page.waitForTimeout(2000);
+  console.log('modal error:', (await page.locator('.resource-modal-error').allTextContents()).join(' | '), '| modal open:', await page.locator('.resource-modal').count());
+  console.log('writes:\n' + writes.join('\n'));
 }
 await browser.close();

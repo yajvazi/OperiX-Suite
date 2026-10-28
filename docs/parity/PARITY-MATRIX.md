@@ -24,7 +24,7 @@ Legend: ✅ both · ◐ partial (see note) · ⬅ mobile only · ➡ web only ·
 | Invoices, quotes, sales orders, delivery notes | ◐ *audited 2026-10-28* | Core save logic, totals/rounding and the cash limit are already shared code (`saveInvoiceDocument`, `@invoice-monorepo/money`, `isCashPaymentAllowed`). See the invoice audit below. |
 | Customers | ✅ *depth audit* | Web uses a generic page; mobile has dedicated form/detail/ledger screens. |
 | Customer ledger | ✅ | |
-| Payments (record, links) | ✅ *depth audit* | Mobile `PaymentForm` is 986 lines. Mobile can delete a payment; web reverses. Decide one behavior. |
+| Payments (record, links) | ◐ *audited 2026-10-28* | See the payment audit below. |
 | Credit notes | ✅ *depth audit* | |
 | Recurring invoices | ➡ | Mobile: none. |
 | Payment reminders | ◐ | Web has reminders resource and automation; mobile minimal. |
@@ -93,6 +93,20 @@ Cross-cutting (needed for "used simultaneously"):
 - Live updates between devices (no realtime in the invoicing code today).
 - Conflict protection (version checks) on shared records.
 - Move business rules (pricing, tax, numbering, validation) into shared packages so both apps call the same code.
+
+## Payment form audit (2026-10-28)
+
+| Difference | Direction | Status |
+|---|---|---|
+| Removing a payment: mobile calls shared `deleteCustomerPayment` (reverses a posted payment with an audit entry, hard-deletes only legacy unposted rows); web always called the reverse command with a fixed reason | behavior differed | **Done.** Web uses `deleteCustomerPayment` too. No separate decision needed. |
+| Bank payments carry the receiving bank account (required) | mobile only | **Done** on web: bank account select (primary preselected), required for bank payments. |
+| Payment booked to the matching cash/bank fund account (keeps Cash & Bank balances right) | mobile only | **Done.** Shared `resolvePaymentFundAccount` in `domain.ts` (tested); web uses it. Mobile still has its own inline copy of the same rule. |
+| Cash payment limit (below 300 EUR) enforced on the form | mobile only | **Done** on web, using the shared `isCashPaymentAllowed`. |
+| Invoice choice limited to the customer's open invoices, showing amount due | mobile only | **Done** on web. |
+| Payment number optional (assigned automatically) | mobile | **Done** on web (was required). |
+| Failed save showed a crash page instead of a message | web only | **Fixed** for all resource forms. |
+| Push/business notifications after saving (`payment_received`, `invoice_paid`, shared bank activity) | mobile only | Not done: web has no notification trigger yet. Decide whether web should call `business-notification`. |
+| Customer debt shown while choosing a customer, payment preview/signature | mobile only | Open (display only). |
 
 ## Invoice form audit (2026-10-28)
 
