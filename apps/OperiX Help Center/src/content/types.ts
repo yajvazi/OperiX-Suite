@@ -209,6 +209,8 @@ export interface ReleaseNote {
   description: string;
   releaseDate: string;
   type: "new" | "improved" | "fixed" | "deprecated";
+  /** Albanian wording of the month, title and description. */
+  sq?: { month: string; title: string; description: string };
 }
 
 export interface ApiSection {

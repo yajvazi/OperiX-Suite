@@ -10,6 +10,7 @@ import { CodeBlockClient, TabsClient } from "./article-interactions";
 import { Icon } from "./icons";
 import { SupportCta } from "./support-cta";
 import "../app/api-docs.css";
+import { copy } from "../content/ui";
 
 type OpenApiObject = Record<string, unknown>;
 type OpenApiSpec = { paths: Record<string, Record<string, OpenApiObject>>; components?: Record<string, Record<string, OpenApiObject>> };
@@ -122,8 +123,8 @@ function EndpointReference({ locale, path, method, operation }: { locale: Locale
     {rows.length ? <div className="api-block"><h4>{ui.requestBody}</h4><div className="api-table-wrap"><table className="api-table"><thead><tr><th>{ui.name}</th><th>{ui.type}</th><th>{ui.required}</th><th>{ui.description}</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.name}><td><code>{row.name}</code></td><td>{row.type}</td><td>{row.required ? ui.yes : ui.no}</td><td>{fields[row.name] || fields[row.name.split(".").pop() || ""] || ""}</td></tr>)}
     </tbody></table></div>{method === "patch" ? <p className="api-note">{locale === "sq" ? "Të gjitha fushat janë opsionale: dërgoni vetëm ato që ndryshojnë." : "All fields are optional: send only the ones that change."}</p> : null}</div> : null}
-    <div className="api-block"><h4>{ui.tryIn}</h4><TabsClient tabs={samples(path, method, docs.request, idempotent)} /></div>
-    {docs.response ? <div className="api-block"><h4>{ui.responseExample}</h4><CodeBlockClient language="json" code={JSON.stringify(docs.response, null, 2)} filename={`${status} ${status === "201" ? "Created" : "OK"}`} /></div> : null}
+    <div className="api-block"><h4>{ui.tryIn}</h4><TabsClient locale={locale} tabs={samples(path, method, docs.request, idempotent)} /></div>
+    {docs.response ? <div className="api-block"><h4>{ui.responseExample}</h4><CodeBlockClient locale={locale} language="json" code={JSON.stringify(docs.response, null, 2)} filename={`${status} ${status === "201" ? "Created" : "OK"}`} /></div> : null}
     <p className="api-foot">{ui.errorsNote} <Link href={apiPath(locale, "errors")}>{localizedSection("errors", locale)?.title}</Link></p>
   </article>;
 }
@@ -202,12 +203,12 @@ export function ApiSectionPage({ locale, slug: requestedSlug }: { locale: Locale
   return <div className="api-page"><div className="site-container api-shell">
     <ApiNav locale={locale} current={slug} />
     <main id="main-content" className="api-main">
-      <nav className="article-breadcrumb" aria-label="Breadcrumb"><Link href={`/${locale}`}>{ui.breadcrumbRoot}</Link><span>/</span><Link href={apiPath(locale)}>{ui.breadcrumbApi}</Link><span>/</span><strong>{section.title}</strong></nav>
+      <nav className="article-breadcrumb" aria-label={copy(locale, "breadcrumb")}><Link href={`/${locale}`}>{ui.breadcrumbRoot}</Link><span>/</span><Link href={apiPath(locale)}>{ui.breadcrumbApi}</Link><span>/</span><strong>{section.title}</strong></nav>
       <header className="api-title"><span className="api-hero-icon"><Icon name={section.icon} size={21} /></span><p className="eyebrow">{ui.sectionEyebrow}</p><h1>{section.title}</h1><p>{section.description}</p></header>
       {showCloudNote ? <CloudNote locale={locale} /> : null}
-      {slug === "booking-api" ? <BookingComingSoon locale={locale} /> : <ArticleContent blocks={guide} />}
+      {slug === "booking-api" ? <BookingComingSoon locale={locale} /> : <ArticleContent blocks={guide} locale={locale} />}
       {operations.length ? <section className="api-reference" id="endpoints"><div className="api-reference-head"><div><p className="eyebrow">{ui.openApi}</p><h2>{ui.endpoints}</h2><p>{ui.endpointsText}</p></div></div>{operations.map((item) => <EndpointReference key={`${item.method}-${item.path}`} locale={locale} {...item} />)}</section> : null}
-      <nav className="api-pager" aria-label="API pages">
+      <nav className="api-pager" aria-label={copy(locale, "apiPages")}>
         {previous ? <Link href={apiPath(locale, previous.slug)}><ArrowLeft size={15} /><span><small>{ui.previous}</small><strong>{localizedSection(previous.slug, locale)?.title}</strong></span></Link> : <span />}
         {next ? <Link className="is-next" href={apiPath(locale, next.slug)}><span><small>{ui.next}</small><strong>{localizedSection(next.slug, locale)?.title}</strong></span><ArrowRight size={15} /></Link> : <span />}
       </nav>

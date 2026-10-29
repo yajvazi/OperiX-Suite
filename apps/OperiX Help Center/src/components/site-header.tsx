@@ -20,7 +20,7 @@ export function DocsHeader({ locale }: { locale: Locale }) {
     <header className="docs-header">
       <div className="site-container header-inner">
         <HelpCenterLogo href={`/${locale}`} className="docs-brand" />
-        <nav className="desktop-nav" aria-label="Primary navigation">{links.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}</nav>
+        <nav className="desktop-nav" aria-label={copy(locale, "primaryNavigation")}>{links.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}</nav>
         <div className="header-actions">
           <SearchDialog locale={locale} />
           <LanguageSwitcher locale={locale} />

@@ -10,6 +10,7 @@ export const releases: ReleaseNote[] = [
     description: "The Help Center now covers OperiX Invoice for web and mobile in English and Albanian, with guides for storage, plans, point of sale, payroll, reports, self-hosting and troubleshooting, and API documentation for OperiX Invoice. OperiX Booking is shown as coming soon.",
     releaseDate: "2026-10-29",
     type: "new",
+    sq: { month: "tetor 2026", title: "Qendra e Ndihmës e ndërtuar nga e para", description: "Qendra e Ndihmës tani mbulon OperiX Invoice për web dhe celular në shqip dhe anglisht, me udhëzime për ruajtjen e të dhënave, planet, pikën e shitjes, pagat, raportet, vetë-strehimin dhe zgjidhjen e problemeve, plus dokumentacion API për OperiX Invoice. OperiX Booking shfaqet si «Së shpejti»." },
   },
   {
     id: "2026-10-web-fixes",
@@ -19,6 +20,7 @@ export const releases: ReleaseNote[] = [
     description: "Pages open without a flash of the permission message, the More page on phones opens faster, the top bar and side menu fit small screens, the customer ledger scrolls on phones, and the dashboard period filter is easier to use. The Compliance tab was removed from Settings.",
     releaseDate: "2026-10-29",
     type: "improved",
+    sq: { month: "tetor 2026", title: "Faqe më të qeta dhe pamje më e mirë në telefon", description: "Faqet hapen pa mesazhin e përkohshëm të lejeve, faqja «Më shumë» hapet më shpejt në telefon, shiriti i sipërm dhe menuja anësore përshtaten me ekranet e vogla, kartela e klientit lëviz në telefon dhe filtri i periudhës te paneli është më i lehtë për t’u përdorur. Skeda «Pajtueshmëria» u hoq nga Cilësimet." },
   },
   {
     id: "2026-10-albanian-web",
@@ -28,6 +30,7 @@ export const releases: ReleaseNote[] = [
     description: "The web app can be used in Albanian. Choose Shqip in Settings → Appearance or on the sign-in page. Invoices keep the language chosen for each invoice.",
     releaseDate: "2026-10-29",
     type: "new",
+    sq: { month: "tetor 2026", title: "Ndërfaqe në shqip në web", description: "Aplikacioni web mund të përdoret në shqip. Zgjidhni Shqip te Cilësimet → Pamja ose në faqen e hyrjes. Faturat e ruajnë gjuhën e zgjedhur për secilën faturë." },
   },
   {
     id: "2026-10-low-stock-alerts",
@@ -37,6 +40,7 @@ export const releases: ReleaseNote[] = [
     description: "The notification bell on the Home tab now also lists products whose stock is at or below their low-stock threshold, next to overdue invoices and bills that are due.",
     releaseDate: "2026-10-29",
     type: "new",
+    sq: { month: "tetor 2026", title: "Njoftime për stok të ulët në celular", description: "Zilja e njoftimeve te Ballina tani liston edhe produktet me stok në ose nën pragun e stokut të ulët, krahas faturave me vonesë dhe faturave që duhen paguar." },
   },
   {
     id: "2026-10-pricing",
@@ -46,6 +50,7 @@ export const releases: ReleaseNote[] = [
     description: "OperiX Invoice is free On this device. OperiX Invoice in the cloud costs €2.99 a month or €29.99 a year, with extra workspaces at €1.99 a month or €19.99 a year and extra active users at €0.99 a month or €9.99 a year. The API add-on is €4.99 a month. Timed trials were removed. OperiX Suite and OperiX Booking are coming soon.",
     releaseDate: "2026-10-29",
     type: "improved",
+    sq: { month: "tetor 2026", title: "Plane dhe çmime të reja", description: "OperiX Invoice është falas «Në këtë pajisje». OperiX Invoice në cloud kushton €2.99 në muaj ose €29.99 në vit, me hapësira pune shtesë €1.99 në muaj ose €19.99 në vit dhe përdorues aktivë shtesë €0.99 në muaj ose €9.99 në vit. Shtesa API kushton €4.99 në muaj. Periudhat provuese u hoqën. OperiX Suite dhe OperiX Booking vijnë së shpejti." },
   },
   {
     id: "2026-10-web-pos-held-orders",
@@ -55,6 +60,7 @@ export const releases: ReleaseNote[] = [
     description: "In the POS you can hold an order, serve another customer and resume the held order later with the cart exactly as it was.",
     releaseDate: "2026-10-28",
     type: "new",
+    sq: { month: "tetor 2026", title: "Porosi të mbajtura në POS-in web", description: "Në POS mund ta mbani një porosi, të shërbeni një klient tjetër dhe ta vazhdoni porosinë e mbajtur më vonë, me shportën saktësisht siç ishte." },
   },
   {
     id: "2026-10-web-payroll-ledger",
@@ -64,6 +70,7 @@ export const releases: ReleaseNote[] = [
     description: "On the web, On this device mode now includes employees and monthly payroll with Kosovo rules, a derived trial balance, general ledger and journal, cash and bank balances, other income, bank accounts and branches, and sales and purchase registers with CSV export.",
     releaseDate: "2026-10-28",
     type: "new",
+    sq: { month: "tetor 2026", title: "Paga, libri i përgjithshëm dhe regjistrat «Në këtë pajisje»", description: "Në web, mënyra «Në këtë pajisje» tani përfshin punonjësit dhe pagat mujore sipas rregullave të Kosovës, bilanc provë të derivuar, libër të përgjithshëm dhe ditar, salda të arkës e të bankës, të ardhura të tjera, llogari bankare dhe degë, si dhe libra shitjesh e blerjesh me eksport CSV." },
   },
   {
     id: "2026-10-on-device-web",
@@ -73,6 +80,7 @@ export const releases: ReleaseNote[] = [
     description: "OperiX Invoice on the web can store your data in a private database in your browser (On this device) instead of the cloud. It includes backup export and import, a backup reminder, and copying customers, products and suppliers between the device and the cloud.",
     releaseDate: "2026-10-28",
     type: "new",
+    sq: { month: "tetor 2026", title: "Mbajeni biznesin në shfletuesin tuaj falas", description: "OperiX Invoice në web mund t’i ruajë të dhënat tuaja në një bazë të dhënash private në shfletues («Në këtë pajisje») në vend të cloud-it. Përfshin eksport e import të kopjes rezervë, kujtesë për kopjen rezervë dhe kopjim të klientëve, produkteve e furnitorëve mes pajisjes dhe cloud-it." },
   },
   {
     id: "2026-10-on-device-mobile",
@@ -82,6 +90,7 @@ export const releases: ReleaseNote[] = [
     description: "The mobile app can keep your business in a database on the phone. Customers, products, invoices, payments, expenses, vendors, POS and reports work On this device, and Settings → Data storage offers backup export and import.",
     releaseDate: "2026-10-28",
     type: "new",
+    sq: { month: "tetor 2026", title: "Mënyra «Në këtë pajisje» në celular", description: "Aplikacioni celular mund ta mbajë biznesin tuaj në një bazë të dhënash në telefon. Klientët, produktet, faturat, pagesat, shpenzimet, furnitorët, POS-i dhe raportet punojnë «Në këtë pajisje», ndërsa Cilësimet → Ruajtja e të dhënave ofron eksport e import të kopjes rezervë." },
   },
   {
     id: "2026-10-booking-coming-soon",
@@ -91,5 +100,6 @@ export const releases: ReleaseNote[] = [
     description: "OperiX Booking, the scheduling and reservations product with online booking and reminders, is being prepared. It cannot be purchased yet.",
     releaseDate: "2026-10-29",
     type: "new",
+    sq: { month: "tetor 2026", title: "OperiX Booking vjen së shpejti", description: "OperiX Booking, produkti për planifikim dhe rezervime me rezervim online dhe kujtesa, po përgatitet. Nuk mund të blihet ende." },
   },
 ];

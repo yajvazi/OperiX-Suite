@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import type { Locale, ProductDefinition } from "../content/types";
 import { copy } from "../content/ui";
 import { productPath } from "../lib/paths";
+import { productDescription } from "../content/i18n";
 import { Icon } from "./icons";
 
 export function ProductCard({ product, locale, articleCount }: { product: ProductDefinition; locale: Locale; articleCount?: number }) {
@@ -12,7 +13,7 @@ export function ProductCard({ product, locale, articleCount }: { product: Produc
       <span className="product-icon"><Icon name={product.icon} size={24} /></span>
       <span className={`status-pill ${product.comingSoon ? "status-soon" : "status-live"}`}>{product.comingSoon ? copy(locale, "comingSoonBadge") : copy(locale, "availableNow")}</span>
     </span>
-    <span className="product-card-copy"><strong>{product.name}</strong><span id={descriptionId}>{product.description}</span></span>
+    <span className="product-card-copy"><strong>{product.name}</strong><span id={descriptionId}>{productDescription(locale, product)}</span></span>
     <span className="product-card-foot">{typeof articleCount === "number" ? <span>{articleCount} {copy(locale, "guidesCount")}</span> : <span />}<span className="product-card-link">{copy(locale, "browseProduct")} <ArrowRight size={15} aria-hidden="true" /></span></span>
   </Link>;
 }

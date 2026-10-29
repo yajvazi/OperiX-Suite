@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, Command, Search, X } from "lucide-react";
+import { copy } from "../content/ui";
 import type { Locale } from "../content/types";
 import { productDefinitions } from "../content/products";
 import { popularSearchEntries, searchDocumentation, type SearchEntry } from "../lib/search";
 import { localePath } from "../lib/paths";
 import { trackDocsEvent } from "../lib/analytics";
 
-const suggestedSearches = ["invoice payment", "getting started", "roles and permissions", "creating a booking"];
+const suggestedSearchesByLocale: Record<Locale, string[]> = { en: ["invoice payment", "backup", "on this device", "API key"], sq: ["pagesë faturë", "kopje rezervë", "në këtë pajisje", "çelës API"] };
 
 function readRecentSearches() {
   if (typeof window === "undefined") return [];
@@ -87,39 +88,39 @@ export function SearchDialog({ locale }: { locale: Locale }) {
   const overlay = open ? <div className="search-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
     <section className="search-dialog" role="dialog" aria-modal="true" aria-labelledby="search-dialog-title">
       <div className="search-dialog-topline">
-        <span id="search-dialog-title">Search the Help Center</span>
-        <button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label="Close search"><X size={18} /></button>
+        <span id="search-dialog-title">{copy(locale, "searchTitle")}</span>
+        <button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={copy(locale, "closeSearch")}><X size={18} /></button>
       </div>
       <form className="search-dialog-form" onSubmit={submit}>
         <Search size={19} aria-hidden="true" />
-        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search guides, documentation and answers..." aria-label="Search guides, documentation and answers" autoComplete="off" />
+        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy(locale, "searchPlaceholder")} aria-label={copy(locale, "searchPlaceholder")} autoComplete="off" />
         <kbd>Esc</kbd>
       </form>
       <div className="search-dialog-body">
         {liveResults.length ? (
           <div className="search-suggestion-group">
-            <p className="search-group-label">Results</p>
+            <p className="search-group-label">{copy(locale, "resultsLabel")}</p>
             {liveResults.map((entry) => <Suggestion key={entry.id} entry={entry} onChoose={() => choose(entry.title)} />)}
           </div>
         ) : null}
         {!query.trim() ? (
           <>
-            {recent.length ? <div className="search-suggestion-group"><p className="search-group-label"><Clock3 size={13} />Recent Searches</p>{recent.map((item) => <button type="button" className="suggestion-row" key={item} onClick={() => choose(item)}><Clock3 size={15} /><span>{item}</span><ArrowRight size={14} /></button>)}</div> : null}
-            <div className="search-suggestion-group"><p className="search-group-label">Popular Articles</p>{popular.map((entry) => <Suggestion key={entry.id} entry={entry} onChoose={() => choose(entry.title)} />)}</div>
-            <div className="search-suggestion-group"><p className="search-group-label">Products</p><div className="search-product-links">{productDefinitions.map((product) => <button type="button" key={product.key} onClick={() => choose(product.name)}>{product.name}</button>)}</div></div>
-            <div className="search-suggestion-group"><p className="search-group-label">Suggested Searches</p><div className="search-product-links">{suggestedSearches.map((item) => <button type="button" key={item} onClick={() => choose(item)}>{item}</button>)}</div></div>
+            {recent.length ? <div className="search-suggestion-group"><p className="search-group-label"><Clock3 size={13} />{copy(locale, "recentSearches")}</p>{recent.map((item) => <button type="button" className="suggestion-row" key={item} onClick={() => choose(item)}><Clock3 size={15} /><span>{item}</span><ArrowRight size={14} /></button>)}</div> : null}
+            <div className="search-suggestion-group"><p className="search-group-label">{copy(locale, "popularArticles")}</p>{popular.map((entry) => <Suggestion key={entry.id} entry={entry} onChoose={() => choose(entry.title)} />)}</div>
+            <div className="search-suggestion-group"><p className="search-group-label">{copy(locale, "searchProducts")}</p><div className="search-product-links">{productDefinitions.filter((product) => !product.hidden).map((product) => <button type="button" key={product.key} onClick={() => choose(product.name)}>{product.name}</button>)}</div></div>
+            <div className="search-suggestion-group"><p className="search-group-label">{copy(locale, "suggestedSearches")}</p><div className="search-product-links">{suggestedSearchesByLocale[locale].map((item) => <button type="button" key={item} onClick={() => choose(item)}>{item}</button>)}</div></div>
           </>
         ) : null}
-        {query.trim() && !liveResults.length ? <div className="search-empty-inline"><Search size={19} /><strong>No suggestions yet</strong><span>Press Enter to see all results.</span></div> : null}
+        {query.trim() && !liveResults.length ? <div className="search-empty-inline"><Search size={19} /><strong>{copy(locale, "noSuggestions")}</strong><span>{copy(locale, "pressEnter")}</span></div> : null}
       </div>
     </section>
   </div> : null;
 
   return (
     <>
-      <button type="button" className="header-search-trigger" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search documentation">
+      <button type="button" className="header-search-trigger" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={copy(locale, "searchDocumentation")}>
         <Search size={16} />
-        <span>Search</span>
+        <span>{copy(locale, "searchLabel")}</span>
         <kbd><Command size={11} />K</kbd>
       </button>
       {overlay && typeof document !== "undefined" ? createPortal(overlay, document.body) : null}

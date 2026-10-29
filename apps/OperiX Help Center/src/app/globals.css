@@ -1004,3 +1004,4 @@ p { color: var(--body); }
 .faq-group details p { margin: 0; padding: 0 20px 18px; }
 .faq-category-links a { border-radius: 999px; }
 @media (max-width: 640px) { .support-grid, .troubleshooting-grid { grid-template-columns: 1fr; } }
+.desktop-nav a { white-space: nowrap; }

@@ -38,7 +38,11 @@ export function allPublishedArticles() {
 
 export function resolveRelatedArticles(article: Article, locale: Locale) {
   return (article.related ?? [])
-    .map((id) => getArticleById(id, locale))
+    .map((id) => {
+      // Albanian articles are `${id}-sq`; generated catalog articles end in -en/-sq.
+      if (locale === "sq") return getArticleById(`${id}-sq`, "sq") ?? getArticleById(id.replace(/-en$/, "-sq"), "sq") ?? getArticleById(id, locale);
+      return getArticleById(id, locale);
+    })
     .filter((related): related is Article => Boolean(related));
 }
 

@@ -24,5 +24,5 @@ function SearchResult({ entry, query }: { entry: SearchEntry; query: string }) {
 
 function EmptySearch({ locale, query }: { locale: Locale; query: string }) {
   const publicProducts = productDefinitions.filter((product) => !product.hidden);
-  return <div className="empty-search"><span><Search size={24} /></span><h2>{query ? `${copy(locale, "noSearchResults")} “${query}”.` : "Search guides and answers across Operix."}</h2><p>{copy(locale, "tryDifferentSearch")}</p><div className="empty-search-links">{publicProducts.map((product) => <Link href={productPath(locale, product)} key={product.key}>{product.name}<ArrowRight size={14} /></Link>)}</div></div>;
+  return <div className="empty-search"><span><Search size={24} /></span><h2>{query ? `${copy(locale, "noSearchResults")} “${query}”.` : (locale === "sq" ? "Kërkoni udhëzime e përgjigje në OperiX." : "Search guides and answers across OperiX.")}</h2><p>{copy(locale, "tryDifferentSearch")}</p><div className="empty-search-links">{publicProducts.map((product) => <Link href={productPath(locale, product)} key={product.key}>{product.name}<ArrowRight size={14} /></Link>)}</div></div>;
 }

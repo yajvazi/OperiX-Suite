@@ -21,5 +21,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="en" className={poppins.variable}><body><a className="skip-link" href="#main-content">Skip to content</a>{children}</body></html>;
+  return <html lang="en" className={poppins.variable}><body>{children}</body></html>;
 }

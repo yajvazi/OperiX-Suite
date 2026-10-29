@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import type { Locale } from "../content/types";
+import { copy } from "../content/ui";
 import { LanguageSwitcher } from "./language-switcher";
 
 export function MobileSiteNav({ locale, links }: { locale: Locale; links: Array<{ label: string; href: string }> }) {
@@ -16,14 +17,14 @@ export function MobileSiteNav({ locale, links }: { locale: Locale; links: Array<
     document.body.classList.add("mobile-nav-is-open");
     return () => { window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("mobile-nav-is-open"); };
   }, [open]);
-  const overlay = open ? <div className="mobile-site-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><nav className="mobile-site-panel" aria-label="Mobile navigation">
-    <div className="mobile-site-panel-header"><strong>OperiX Help Center</strong><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label="Close navigation"><X size={19} /></button></div>
+  const overlay = open ? <div className="mobile-site-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><nav className="mobile-site-panel" aria-label={copy(locale, "primaryNavigation")}>
+    <div className="mobile-site-panel-header"><strong>{copy(locale, "homeEyebrow")}</strong><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label={copy(locale, "closeNavigation")}><X size={19} /></button></div>
     <LanguageSwitcher locale={locale} />
     <div className="mobile-site-links">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>{link.label}</Link>)}</div>
-    <Link className="mobile-site-home" href={`/${locale}`} onClick={() => setOpen(false)}>Back to Help Center home</Link>
+    <Link className="mobile-site-home" href={`/${locale}`} onClick={() => setOpen(false)}>{copy(locale, "backToHome")}</Link>
   </nav></div> : null;
   return <>
-    <button type="button" className="mobile-menu-button" onClick={() => setOpen(true)} aria-label="Open navigation" aria-expanded={open}><Menu size={21} /></button>
+    <button type="button" className="mobile-menu-button" onClick={() => setOpen(true)} aria-label={copy(locale, "openNavigation")} aria-expanded={open}><Menu size={21} /></button>
     {overlay && typeof document !== "undefined" ? createPortal(overlay, document.body) : null}
   </>;
 }

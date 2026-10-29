@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootPage() {
-  return <><DocsHeader locale="en" /><HomePage locale="en" /><DocsFooter locale="en" /></>;
+  return <><a className="skip-link" href="#main-content">Skip to content</a><DocsHeader locale="en" /><HomePage locale="en" /><DocsFooter locale="en" /></>;
 }

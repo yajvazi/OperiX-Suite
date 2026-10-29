@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Search } from "lucide-react";
 import type { Locale } from "../content/types";
+import { copy } from "../content/ui";
 import { popularSearchEntries } from "../lib/search";
 import { localePath } from "../lib/paths";
 
@@ -25,9 +26,9 @@ export function HeroSearch({ locale, placeholder }: { locale: Locale; placeholde
         <Search size={21} aria-hidden="true" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => window.setTimeout(() => setFocused(false), 120)} placeholder={placeholder} aria-label={placeholder} />
         <kbd>⌘ K</kbd>
-        <button type="submit" aria-label="Search"><ArrowRight size={19} /></button>
+        <button type="submit" aria-label={copy(locale, "searchLabel")}><ArrowRight size={19} /></button>
       </form>
-      {focused ? <div className="hero-search-suggestions" role="listbox" aria-label="Search suggestions">{popular.map((entry) => <button type="button" key={entry.id} onMouseDown={() => router.push(entry.href)}><Search size={14} /><span>{entry.title}</span><ArrowRight size={14} /></button>)}</div> : null}
+      {focused ? <div className="hero-search-suggestions" role="listbox" aria-label={copy(locale, "searchSuggestions")}>{popular.map((entry) => <button type="button" key={entry.id} onMouseDown={() => router.push(entry.href)}><Search size={14} /><span>{entry.title}</span><ArrowRight size={14} /></button>)}</div> : null}
     </div>
   );
 }

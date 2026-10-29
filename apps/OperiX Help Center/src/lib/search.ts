@@ -1,4 +1,5 @@
-import { apiSections } from "../content/api-docs";
+import { apiSections, localizedSection } from "../content/api-docs";
+import { endpointDocs } from "../content/api-guides";
 import { publicApiOpenApi } from "@invoice-monorepo/public-api/openapi";
 import { articles, getPublishedArticles } from "../content/articles";
 import { getFaqs } from "../content/faqs";
@@ -6,6 +7,7 @@ import { bookingGlossary } from "../content/booking-registry";
 import { getCategory, productDefinitions } from "../content/products";
 import type { DocumentationPlatform, Locale, ProductKey } from "../content/types";
 import { apiPath, articlePath, faqPath, productPath } from "./paths";
+import { categoryIntro, categoryLabel } from "../content/i18n";
 
 export type SearchEntryKind = "article" | "faq" | "category" | "api";
 
@@ -70,7 +72,7 @@ function buildIndex(locale: Locale): SearchEntry[] {
       body: blocksToText(article),
       product: article.product,
       productName: product?.name,
-      category: category?.name,
+      category: category ? categoryLabel(locale, category) : undefined,
       platform: article.platform ?? article.platforms?.[0],
       tags: [...article.tags, ...article.keywords, ...(article.product === "invoice" ? INVOICE_GLOSSARY_TERMS : []), ...(article.product === "booking" ? bookingGlossary.flatMap((term) => [term.en, term.sq, ...term.aliases]) : [])],
       href: articlePath(locale, article),
@@ -82,13 +84,13 @@ function buildIndex(locale: Locale): SearchEntry[] {
         id: `${locale}:category:${product.key}:${category.slug}`,
         kind: "category",
         locale,
-        title: category.name,
-        description: category.description ?? `Browse ${category.name} documentation in ${product.name}.`,
-        body: `${product.name} ${category.name} documentation coming soon`,
+        title: categoryLabel(locale, category),
+        description: category.description ?? categoryIntro(locale, categoryLabel(locale, category), product.name),
+        body: `${product.name} ${category.name} ${categoryLabel(locale, category)}`,
         product: product.key,
         productName: product.name,
-        category: category.name,
-        tags: [product.name, category.name],
+        category: categoryLabel(locale, category),
+        tags: [product.name, category.name, categoryLabel(locale, category)],
         href: productPath(locale, product),
       });
     }
@@ -107,14 +109,15 @@ function buildIndex(locale: Locale): SearchEntry[] {
     });
   }
   for (const section of apiSections) {
+    const text = localizedSection(section.slug, locale) ?? section;
     result.push({
       id: `${locale}:api:${section.slug}`,
       kind: "api",
       locale,
-      title: section.title,
-      description: section.description,
-      body: `${section.title} ${section.description} API developers webhooks code examples`,
-      tags: ["api", "developers", section.title],
+      title: text.title,
+      description: text.description,
+      body: `${text.title} ${text.description} ${section.title} ${section.description} API developers webhooks code examples`,
+      tags: ["api", "developers", text.title, section.title],
       href: apiPath(locale, section.slug),
     });
   }
@@ -141,7 +144,7 @@ function buildIndex(locale: Locale): SearchEntry[] {
         kind: "api",
         locale,
         title: `${method.toUpperCase()} ${path}`,
-        description: operation.description || operation.summary,
+        description: endpointDocs[`${method.toUpperCase()} ${path}`]?.summary?.[locale] ?? (locale === "en" ? operation.description || operation.summary : operation.summary),
         body: `${operation.summary} ${operation.description || ""} API endpoint request response ${operation["x-operix-scope"] || ""} webhook signature availability create invoice booking`,
         tags: ["api", "endpoint", method, path, String(operation["x-operix-scope"] || "")],
         href: `${apiPath(locale, slug)}#${method}-${path.replace(/[^a-z0-9]+/gi, "-")}`,

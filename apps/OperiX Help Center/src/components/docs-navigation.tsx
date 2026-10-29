@@ -4,6 +4,8 @@ import { getProduct, listedProducts } from "../content/products";
 import type { Locale, ProductKey } from "../content/types";
 import { getPublicArticles } from "../lib/content";
 import { docsPath, productPath } from "../lib/paths";
+import { categoryLabel } from "../content/i18n";
+import { copy } from "../content/ui";
 import { Icon } from "./icons";
 
 export interface NavigationGroup {
@@ -30,7 +32,7 @@ export function buildNavigationGroups(locale: Locale, product?: ProductKey, curr
     const categoryArticles = getPublicArticles(locale, product, category.slug, platform);
     if (!categoryArticles.length) continue;
     groups.push({
-      label: category.name,
+      label: categoryLabel(locale, category),
       href: docsPath(locale, product, category.slug, undefined, platform),
       active: currentCategory === category.slug,
       children: categoryArticles.map((article) => ({ label: article.title, href: docsPath(locale, article.product, article.category, article.slug, platform), active: currentSlug === article.slug })),
@@ -42,8 +44,8 @@ export function buildNavigationGroups(locale: Locale, product?: ProductKey, curr
 export function DocsSidebar({ locale, product, currentCategory, currentSlug, platform }: { locale: Locale; product?: ProductKey; currentCategory?: string; currentSlug?: string; platform?: "web" | "mobile" }) {
   const groups = buildNavigationGroups(locale, product, currentCategory, currentSlug, platform);
   const productDefinition = product ? getProduct(product) : undefined;
-  return <aside className="docs-sidebar" aria-label="Documentation navigation">
-    <div className="sidebar-title"><span>{productDefinition?.name ?? "Documentation"}</span><Icon name="book-open" size={16} /></div>
+  return <aside className="docs-sidebar" aria-label={copy(locale, "docsNavigation")}>
+    <div className="sidebar-title"><span>{productDefinition?.name ?? copy(locale, "documentation")}</span><Icon name="book-open" size={16} /></div>
     <nav>{groups.map((group) => <div className={`sidebar-group ${group.active ? "is-active" : ""}`} key={group.href}>
       <Link className="sidebar-group-link" href={group.href}><span>{group.label}</span><ChevronRight size={14} /></Link>
       {group.children?.length ? <div className="sidebar-children">{group.children.map((child) => <Link className={child.active ? "is-active" : ""} href={child.href} key={child.href}>{child.label}</Link>)}</div> : null}
