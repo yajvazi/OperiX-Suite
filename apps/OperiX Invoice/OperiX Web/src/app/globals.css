@@ -1743,3 +1743,22 @@ html[data-theme="dark"] .purchases-nav-item.is-active { color: #fff; }
   .resource-stats-grid::-webkit-scrollbar { display: none; }
   .resource-stats-grid > * { flex: 0 0 72%; scroll-snap-align: start; }
 }
+
+/* ---- Phone layout: one gutter and one card grid for every page (kept last so it wins) ---- */
+@media (max-width: 767px) {
+  :root { --mobile-gutter: 16px; }
+  .ux-page, .invoice-list-page, .pos-page, .help-page, .invoice-editor-page { padding-left: var(--mobile-gutter); padding-right: var(--mobile-gutter); }
+  /* Summary cards: two equal columns, an odd last card spans the row, instead of a sideways carousel. */
+  .resource-stats-grid, .invoice-list-summary, .ux-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; overflow: visible; scroll-snap-type: none; padding-bottom: 0; }
+  .resource-stats-grid > *, .invoice-list-summary > *, .ux-metric-grid > * { flex: none; min-width: 0; }
+  .resource-stats-grid > :last-child:nth-child(odd), .invoice-list-summary > :last-child:nth-child(odd), .ux-metric-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Section tabs: equal columns across the full width. */
+  .purchases-nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; overflow: visible; }
+  .purchases-nav-item { min-width: 0; padding: 0 6px; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .purchases-nav-item span { overflow: hidden; text-overflow: ellipsis; }
+  /* Page title block and its primary action line up with the cards below. */
+  .operix-page-header { align-items: stretch; }
+  .operix-page-header-actions > .btn, .operix-page-header-actions > a.btn { justify-content: center; }
+  /* Decorative shapes never push the page sideways. */
+  .help-hero, .standard-dashboard-hero { overflow: hidden; }
+}
