@@ -193,8 +193,12 @@ export function PosView() {
 
   useEffect(() => {
     const userId = workspace.user?.id;
-    if (!workspace.companyId || !userId || workspace.storage === "local") return;
+    if (!workspace.companyId || !userId) return;
     let cancelled = false;
+    if (workspace.storage === "local") {
+      void getLocalStore().then((store) => store.list("held_orders", { where: { status: "held" } })).then((rows) => { if (!cancelled && rows[0]) setHeldOrder(rows[0] as unknown as HeldOrder); }).catch(() => undefined);
+      return () => { cancelled = true; };
+    }
     const loadHeldOrder = async () => {
       const supabase = createClient();
       if (!supabase) return;
@@ -354,7 +358,32 @@ export function PosView() {
   }
 
   async function holdCurrentCart() {
-    if (workspace.storage === "local") { setMessageTone("error"); setMessage("Holding orders is not available in on-device mode yet."); return; }
+    if (workspace.storage === "local") {
+      setSaving(true); setMessage("");
+      try {
+        const store = await getLocalStore();
+        if (cart.length) {
+          const snapshot: HeldOrderSnapshot = { items: cart, clientId, invoiceType, discountMode, discountValue, taxRate, note, payment, cashReceived };
+          const saved = await store.save("held_orders", { status: "held", version: 1, terminal_id: "local", cart_snapshot: snapshot });
+          setHeldOrder(saved as unknown as HeldOrder);
+          setCart([]); setCashReceived(0); setCashReceivedText("");
+          setMessageTone("success"); setMessage("Order held on this device.");
+        } else if (heldOrder) {
+          const snapshot = heldOrder.cart_snapshot;
+          setCart(snapshot.items.map((item) => ({ ...item, discountPercent: Number(item.discountPercent) || 0 })));
+          setClientId(snapshot.clientId || ""); setInvoiceType(snapshot.invoiceType || "invoice");
+          setDiscountMode(snapshot.discountMode || "percent"); setDiscountValue(Number(snapshot.discountValue) || 0);
+          setTaxRate(Number(snapshot.taxRate) || 0); setNote(snapshot.note || ""); setPayment(snapshot.payment || "cash");
+          setCashReceived(Number(snapshot.cashReceived) || 0); setCashReceivedText(snapshot.cashReceived ? String(snapshot.cashReceived) : "");
+          await store.save("held_orders", { id: heldOrder.id, status: "resumed" });
+          const older = (await store.list("held_orders", { where: { status: "held" } }))[0];
+          setHeldOrder((older as unknown as HeldOrder) || null);
+          setMessageTone("success"); setMessage("Held order resumed.");
+        }
+      } catch (error) { setMessageTone("error"); setMessage(error instanceof Error ? error.message : "The order could not be held."); }
+      setSaving(false);
+      return;
+    }
     const supabase = createClient();
     if (!supabase || !workspace.companyId) {
       setMessageTone("error");

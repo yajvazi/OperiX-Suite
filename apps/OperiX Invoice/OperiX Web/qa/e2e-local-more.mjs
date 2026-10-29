@@ -40,6 +40,18 @@ await page.waitForURL(/\/invoices\/[0-9a-f-]{36}/, { timeout: 20000 }).then(() =
 await page.waitForTimeout(1500);
 check('POS invoice shows paid', /paid/i.test(await page.locator('body').innerText()));
 
+// hold and resume
+await page.goto(`${base}/pos`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+await page.locator('button:has-text("Widget")').first().click();
+await page.locator('button[title="Hold order"]').click();
+await page.waitForTimeout(800);
+check('order held (cart emptied)', (await page.locator('text=No items added').count()) > 0);
+await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1500);
+await page.locator('button[title="Resume held order"]').click();
+await page.waitForTimeout(800);
+check('held order resumed after reload', (await page.locator('text=1 line item').count()) > 0);
+
 // other income
 await page.goto(`${base}/income`, { waitUntil: 'networkidle' }).catch(() => {});
 await page.waitForTimeout(1500);
