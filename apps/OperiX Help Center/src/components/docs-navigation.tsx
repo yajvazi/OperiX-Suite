@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { getProduct } from "../content/products";
+import { getProduct, listedProducts } from "../content/products";
 import type { Locale, ProductKey } from "../content/types";
 import { getPublicArticles } from "../lib/content";
-import { docsPath } from "../lib/paths";
+import { docsPath, productPath } from "../lib/paths";
 import { Icon } from "./icons";
 
 export interface NavigationGroup {
@@ -13,34 +13,34 @@ export interface NavigationGroup {
   children?: Array<{ label: string; href: string; active?: boolean }>;
 }
 
-export function buildNavigationGroups(locale: Locale, product?: ProductKey, currentCategory?: string, currentSlug?: string): NavigationGroup[] {
+export function buildNavigationGroups(locale: Locale, product?: ProductKey, currentCategory?: string, currentSlug?: string, platform?: "web" | "mobile"): NavigationGroup[] {
   if (!product) {
     return [
-      { label: "Getting Started", href: docsPath(locale, "suite", "getting-started") },
-      ...(["suite", "control", "invoice", "hr", "booking", "desk"] as ProductKey[]).map((key) => {
-        const item = getProduct(key)!;
-        return { label: item.name, href: docsPath(locale, key), children: [] };
-      }),
-      { label: "API & Developers", href: `/${locale}/api` },
-      { label: "FAQs", href: `/${locale}/faq` },
-      { label: "Troubleshooting", href: `/${locale}/troubleshooting` },
+      { label: locale === "sq" ? "Fillimi" : "Getting Started", href: docsPath(locale, "general", "getting-started") },
+      ...listedProducts.map((item) => ({ label: item.comingSoon ? `${item.name} · ${locale === "sq" ? "Së shpejti" : "Coming soon"}` : item.name, href: productPath(locale, item), children: [] })),
+      { label: locale === "sq" ? "API dhe zhvillues" : "API & Developers", href: `/${locale}/api` },
+      { label: locale === "sq" ? "Pyetje të shpeshta" : "FAQs", href: `/${locale}/faq` },
+      { label: locale === "sq" ? "Zgjidhja e problemeve" : "Troubleshooting", href: `/${locale}/troubleshooting` },
     ];
   }
   const selected = getProduct(product);
   if (!selected) return [];
-  return selected.categories.map((category) => {
-    const categoryArticles = getPublicArticles(locale, product, category.slug);
-    return {
+  const groups: NavigationGroup[] = [];
+  for (const category of selected.categories) {
+    const categoryArticles = getPublicArticles(locale, product, category.slug, platform);
+    if (!categoryArticles.length) continue;
+    groups.push({
       label: category.name,
-      href: docsPath(locale, product, category.slug),
+      href: docsPath(locale, product, category.slug, undefined, platform),
       active: currentCategory === category.slug,
-      children: categoryArticles.map((article) => ({ label: article.title, href: docsPath(locale, article.product, article.category, article.slug), active: currentSlug === article.slug })),
-    };
-  });
+      children: categoryArticles.map((article) => ({ label: article.title, href: docsPath(locale, article.product, article.category, article.slug, platform), active: currentSlug === article.slug })),
+    });
+  }
+  return groups;
 }
 
-export function DocsSidebar({ locale, product, currentCategory, currentSlug }: { locale: Locale; product?: ProductKey; currentCategory?: string; currentSlug?: string }) {
-  const groups = buildNavigationGroups(locale, product, currentCategory, currentSlug);
+export function DocsSidebar({ locale, product, currentCategory, currentSlug, platform }: { locale: Locale; product?: ProductKey; currentCategory?: string; currentSlug?: string; platform?: "web" | "mobile" }) {
+  const groups = buildNavigationGroups(locale, product, currentCategory, currentSlug, platform);
   const productDefinition = product ? getProduct(product) : undefined;
   return <aside className="docs-sidebar" aria-label="Documentation navigation">
     <div className="sidebar-title"><span>{productDefinition?.name ?? "Documentation"}</span><Icon name="book-open" size={16} /></div>
@@ -51,9 +51,9 @@ export function DocsSidebar({ locale, product, currentCategory, currentSlug }: {
   </aside>;
 }
 
-export function MobileDocsNavigation({ locale, product, currentCategory, currentSlug }: { locale: Locale; product?: ProductKey; currentCategory?: string; currentSlug?: string }) {
-  const groups = buildNavigationGroups(locale, product, currentCategory, currentSlug);
-  return <MobileDocsNavigationClient locale={locale} groups={groups} productName={getProduct(product ?? "suite")?.name ?? "Documentation"} />;
+export function MobileDocsNavigation({ locale, product, currentCategory, currentSlug, platform }: { locale: Locale; product?: ProductKey; currentCategory?: string; currentSlug?: string; platform?: "web" | "mobile" }) {
+  const groups = buildNavigationGroups(locale, product, currentCategory, currentSlug, platform);
+  return <MobileDocsNavigationClient locale={locale} groups={groups} productName={getProduct(product ?? "general")?.name ?? "Documentation"} />;
 }
 
 export function ArticleToc({ headings, label }: { headings: Array<{ id: string; text: string; level: 2 | 3 }>; label: string }) {

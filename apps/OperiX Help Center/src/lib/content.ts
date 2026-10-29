@@ -6,12 +6,18 @@ export function isLocale(value: string): value is Locale {
   return value === "en" || value === "sq";
 }
 
-export function getPublicArticles(locale: Locale, product?: ProductKey, category?: string) {
-  return getPublishedArticles(locale, product, category);
+export function getPublicArticles(locale: Locale, product?: ProductKey, category?: string, platform?: "web" | "mobile") {
+  return getPublishedArticles(locale, product, category, platform);
 }
 
-export function getPublicArticle(locale: Locale, product: ProductKey, category: string, slug: string) {
-  return getPublishedArticle(locale, product, category, slug);
+export function getPublicArticle(locale: Locale, product: ProductKey, category: string, slug: string, platform?: "web" | "mobile") {
+  return getPublishedArticle(locale, product, category, slug, platform);
+}
+
+export function getArticlesByFeatureId(featureId: string, locale: Locale) {
+  return articles
+    .filter((article) => article.featureId === featureId && article.locale === locale && !article.draft)
+    .sort((a, b) => (a.platform ?? "").localeCompare(b.platform ?? ""));
 }
 
 export function getProductOrThrow(productKey: string): ProductDefinition {
@@ -37,7 +43,7 @@ export function resolveRelatedArticles(article: Article, locale: Locale) {
 }
 
 export function articleSequence(article: Article, locale: Locale) {
-  return getPublicArticles(locale, article.product, article.category);
+  return getPublicArticles(locale, article.product, article.category, article.platform === "web" || article.platform === "mobile" ? article.platform : undefined);
 }
 
 export function getProductArticles(product: ProductKey, locale: Locale) {

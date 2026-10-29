@@ -10,8 +10,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  transpilePackages: ["@invoice-monorepo/public-api"],
   poweredByHeader: false,
   reactStrictMode: true,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
@@ -22,6 +24,10 @@ const nextConfig: NextConfig = {
       { source: "/tickets", destination: "/en", permanent: true },
       { source: "/settings", destination: "/en", permanent: true },
       { source: "/agent/:path*", destination: "/en", permanent: true },
+      // Products that are no longer documented here.
+      { source: "/:locale(en|sq)/help/:product(suite|hr|desk|control)", destination: "/:locale/help", permanent: true },
+      { source: "/:locale(en|sq)/help/:product(suite|hr|desk|control)/:path*", destination: "/:locale/help", permanent: true },
+      { source: "/:locale(en|sq)/enterprise", destination: "/:locale/help", permanent: true },
     ];
   },
 };

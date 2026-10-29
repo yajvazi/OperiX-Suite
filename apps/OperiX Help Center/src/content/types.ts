@@ -1,6 +1,13 @@
 export type Locale = "en" | "sq";
 
-export type ProductKey = "suite" | "control" | "invoice" | "hr" | "booking" | "desk";
+export type Platform = "web" | "mobile";
+export type ArticleStatus = "CURRENT" | "AUTO_UPDATED" | "REVIEW_REQUIRED" | "OUTDATED" | "MISSING" | "DEPRECATED";
+export type DocumentationRisk = "low" | "medium" | "high" | "booking-critical" | "financial" | "legal" | "security" | "subscription" | "integration";
+
+export type DocumentationPlatform = "web" | "mobile" | "both";
+export type DocumentationStatus = "CURRENT" | "AUTO_UPDATED" | "REVIEW_REQUIRED" | "OUTDATED" | "MISSING" | "DEPRECATED";
+/** "general" holds the shared getting-started guides and is not listed as a product. */
+export type ProductKey = "general" | "invoice" | "booking";
 
 export type IconName =
   | "book-open"
@@ -38,6 +45,8 @@ export interface ProductDefinition {
   name: string;
   description: string;
   icon: IconName;
+  comingSoon?: boolean;
+  hidden?: boolean;
   categories: CategoryDefinition[];
 }
 
@@ -79,6 +88,9 @@ export interface ScreenshotBlock {
   alt: string;
   caption: string;
   mobile?: boolean;
+  screenshotId?: string;
+  scenario?: string;
+  annotations?: Array<{ number: string; label: string; description: string }>;
 }
 
 export interface VideoBlock {
@@ -148,8 +160,30 @@ export interface Article {
   draft: boolean;
   featured?: boolean;
   translationId?: string;
+  featureId?: string;
+  platforms?: Platform[];
+  status?: ArticleStatus;
+  riskLevel?: DocumentationRisk;
+  documentation?: {
+    lastVerifiedCommit?: string;
+    lastDocumentationCommit?: string;
+    lastScreenshotCommit?: string;
+    lastAutomatedVerification?: string;
+    latestRelevantApplicationCommit?: string;
+    reviewStatus?: "approved" | "review_required" | "outdated" | "missing";
+    screenshotIds?: string[];
+  };
   blocks: DocBlock[];
   related?: string[];
+  platform?: DocumentationPlatform;
+  documentationStatus?: DocumentationStatus;
+  requiredPermissions?: string[];
+  lastVerifiedCommit?: string;
+  lastScreenshotCommit?: string;
+  latestRelevantApplicationCommit?: string;
+  screenshotIds?: string[];
+  visualGuide?: boolean;
+  availableSince?: string;
 }
 
 export interface FaqItem {

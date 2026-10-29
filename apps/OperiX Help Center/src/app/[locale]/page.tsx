@@ -5,7 +5,7 @@ import { HomePage } from "../../components/home-page";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
-  return isLocale(locale) ? { title: "How can we help?", description: "Search official OperiX Suite guides, documentation and answers." } : {};
+  return isLocale(locale) ? { title: "How can we help?", description: "Search official OperiX Invoice and OperiX Booking guides, documentation and answers." } : {};
 }
 
 export default async function LocaleHome({ params }: { params: Promise<{ locale: string }> }) {

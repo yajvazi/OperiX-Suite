@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
@@ -12,6 +12,12 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   generator: "OperiX Help Center",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

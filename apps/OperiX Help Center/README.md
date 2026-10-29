@@ -71,12 +71,12 @@ The production health endpoint is `/api/health` and returns only:
 
 ## Deployment
 
-The production deployment follows the existing OperiX Docker convention. `docker-compose.help-center.yml` builds the standalone app and binds it only to `127.0.0.1:3042`. Nginx should proxy `helpdesk.operixsuite.com` to that port after local health and route tests pass.
+The production deployment follows the existing OperiX Docker convention. `docker-compose.help-center.yml` builds the single Help Center app and binds it only to `127.0.0.1:3042`. Nginx may proxy both `helpdesk.operixsuite.com` and `helpcenter.operixsuite.com` to that same port after local health and route tests pass. `helpcenter.operixsuite.com` is an alias for this Help Center, not a separate developer website.
 
 Environment variables:
 
 - `PORT` — internal Next.js port; production compose uses `3015`.
-- `NEXT_PUBLIC_SITE_URL` — canonical public origin; defaults to `https://helpdesk.operixsuite.com`.
+- `NEXT_PUBLIC_SITE_URL` — canonical public origin; defaults to `https://helpdesk.operixsuite.com`. Set it to `https://helpcenter.operixsuite.com` only after that hostname has working DNS and a valid origin certificate.
 - `NEXT_PUBLIC_SUPPORT_URL` — optional official support destination. If absent, the UI links to the Help Center support configuration page and does not create a fake ticketing flow.
 - `INDEXING_ALLOWED` — set to `true` only for production. Staging/development returns a disallow-all robots policy and an empty sitemap.
 - `PREVIEW_DRAFTS` — set to `true` only for a private preview build.

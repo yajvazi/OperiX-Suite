@@ -1,6 +1,6 @@
 # OperiX Help Center deployment runbook
 
-The production service is `operix-help-center`. It runs as a standalone Next.js container bound only to `127.0.0.1:3042` and is exposed through the existing Nginx server block for `helpdesk.operixsuite.com`.
+The production service is `operix-help-center`. It runs as a standalone Next.js container bound only to `127.0.0.1:3042` and is exposed through the existing Nginx server block for `helpdesk.operixsuite.com`. `helpcenter.operixsuite.com` is an optional hostname alias for the same service and must never be deployed as a second documentation application.
 
 ## Build and run
 
@@ -31,6 +31,8 @@ Before changing the upstream, save the current server block under the approved b
 proxy_pass http://127.0.0.1:3042;
 ```
 
+If the alias is enabled, add it to the same HTTPS server block only after DNS resolves and the certificate covers both hostnames. Keep `helpdesk.operixsuite.com` as the canonical origin until the alias has passed public checks; set `NEXT_PUBLIC_SITE_URL=https://helpcenter.operixsuite.com` only when the alias is intended to become canonical.
+
 Validate and reload without restarting unrelated services:
 
 ```bash
@@ -42,11 +44,13 @@ Keep the existing certificate, Cloudflare-compatible proxy headers, real-IP hand
 
 ## Verification
 
-Check the internal health endpoint, the public HTTPS health endpoint, the homepage, one English article, one Albanian route, search, API docs, FAQs, and a legacy redirect. Run the browser suite against both the internal port and the public hostname:
+Check the internal health endpoint, the public HTTPS health endpoint, the homepage, one English article, one Albanian route, search, API docs, FAQs, and a legacy redirect. When the alias is configured, repeat the public checks against both hostnames. Run the browser suite against both the internal port and the public hostname:
 
 ```bash
 E2E_BASE_URL=http://127.0.0.1:3042 npm run test:e2e --workspace=operix-help-center
 E2E_BASE_URL=https://helpdesk.operixsuite.com npm run test:e2e --workspace=operix-help-center
+# After DNS and TLS are ready:
+E2E_BASE_URL=https://helpcenter.operixsuite.com npm run test:e2e --workspace=operix-help-center
 ```
 
 Also check `docker logs --since 15m operix-help-center` and the Nginx error log for new Help Center upstream failures.

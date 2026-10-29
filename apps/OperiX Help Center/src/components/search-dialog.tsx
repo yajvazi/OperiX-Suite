@@ -128,5 +128,5 @@ export function SearchDialog({ locale }: { locale: Locale }) {
 }
 
 function Suggestion({ entry, onChoose }: { entry: SearchEntry; onChoose: () => void }) {
-  return <button type="button" className="suggestion-row" onClick={onChoose}><span className="suggestion-icon"><Search size={14} /></span><span className="suggestion-copy"><strong>{entry.title}</strong><small>{entry.productName ?? entry.category ?? entry.kind.toUpperCase()}</small></span><ArrowRight size={14} /></button>;
+  return <button type="button" className="suggestion-row" onClick={onChoose} aria-label={entry.title}><span className="suggestion-icon"><Search size={14} /></span><span className="suggestion-copy"><span className="suggestion-title"><strong>{entry.title}</strong></span><small>{entry.productName ?? entry.category ?? entry.kind.toUpperCase()}</small></span><ArrowRight size={14} aria-hidden="true" /></button>;
 }

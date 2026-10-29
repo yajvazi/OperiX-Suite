@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { AlertTriangle, Copy, Info, Lightbulb, ExternalLink } from "lucide-react";
-import { articlePath } from "../lib/paths";
-import type { Article, CalloutBlock, DocBlock, ScreenshotBlock } from "../content/types";
+import { articlePath, docsPath } from "../lib/paths";
+import type { Article, CalloutBlock, DocBlock, Locale, ScreenshotBlock } from "../content/types";
 import { CodeBlockClient, ImageLightbox, TabsClient } from "./article-interactions";
 
 export function ArticleContent({ blocks }: { blocks: DocBlock[] }) {
@@ -36,19 +38,31 @@ function Callout({ block }: { block: CalloutBlock }) {
 }
 
 function Screenshot({ block }: { block: ScreenshotBlock }) {
-  if (!block.src) return <figure className={`screenshot-placeholder ${block.mobile ? "is-mobile" : ""}`}><div><span className="placeholder-image-icon"><Copy size={24} /></span><strong>Screenshot placeholder</strong></div><figcaption>{block.caption}</figcaption></figure>;
-  return <ImageLightbox src={block.src} alt={block.alt} caption={block.caption} mobile={block.mobile} />;
+  const annotations = block.annotations?.length ? <ol className="screenshot-annotations" aria-label="Screenshot annotations">{block.annotations.map((annotation) => <li key={annotation.number}><span aria-hidden="true">{annotation.number}</span><div><strong>{annotation.label}</strong><p>{annotation.description}</p></div></li>)}</ol> : null;
+  const generatedSrc = block.screenshotId ? `/screenshots/booking/${block.screenshotId}.png` : undefined;
+  const generatedFileExists = generatedSrc ? existsSync(resolve(process.cwd(), "public", generatedSrc.slice(1))) : false;
+  const src = block.src ?? (generatedFileExists ? generatedSrc : undefined);
+  if (!src) return <div className="screenshot-guide"><figure className={`screenshot-placeholder ${block.mobile ? "is-mobile" : ""}`} aria-label={block.alt}><div><span className="placeholder-image-icon"><Copy size={24} /></span><strong>Screenshot pending capture</strong><small>Screenshot placeholder until an approved non-production application or simulator capture is available.</small></div><figcaption>{block.caption}{block.screenshotId ? <small className="screenshot-id">Screenshot ID: {block.screenshotId}</small> : null}</figcaption></figure>{annotations}</div>;
+  return <div className="screenshot-guide"><ImageLightbox src={src} alt={block.alt} caption={block.caption} mobile={block.mobile} />{annotations}</div>;
 }
 
 function linkifyText(text: string) {
-  return text.split(/(`[^`]+`)/g).map((part, index) => part.startsWith("`") && part.endsWith("`") ? <code key={index}>{part.slice(1, -1)}</code> : <span key={index}>{part}</span>);
+  const parts = text.split(/(`[^`]+`|\[[^\]]+\]\([^\)]+\))/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={index}>{part.slice(1, -1)}</code>;
+    const link = part.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
+    if (link) return link[2].startsWith("/") ? <Link key={index} href={link[2]}>{link[1]}</Link> : <a key={index} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>;
+    return <span key={index}>{part}</span>;
+  });
 }
 
-export function ArticleHeader({ article, productName, productIcon: _productIcon, locale, isFallback }: { article: Article; productName: string; productIcon: React.ReactNode; locale: "en" | "sq"; isFallback: boolean }) {
+export function ArticleHeader({ article, productName, productIcon: _productIcon, locale, isFallback, platformAlternatives = [], displayPlatform }: { article: Article; productName: string; productIcon: React.ReactNode; locale: Locale; isFallback: boolean; platformAlternatives?: Article[]; displayPlatform?: "web" | "mobile" }) {
+  const platformOptions = article.product === "booking" && article.platform !== "web" && article.platform !== "mobile" ? (["web", "mobile"] as const) : article.platform === "web" || article.platform === "mobile" ? ([article.platform] as const) : [];
+  const invoicePlatformAlternatives = article.product === "invoice" ? platformAlternatives.filter((alternative) => alternative.platforms?.[0] === "web" || alternative.platforms?.[0] === "mobile") : [];
   return <>
     {isFallback ? <div className="translation-notice" role="status">This article is currently available in English. You are viewing the available version.</div> : null}
-    <nav className="article-breadcrumb" aria-label="Breadcrumb"><Link href={`/${locale}`}>Help Center</Link><span>/</span><Link href={`/${locale}/help/${article.product}`}>{productName}</Link><span>/</span><Link href={`/${locale}/help/${article.product}/${article.category}`}>{article.category.replace(/-/g, " ")}</Link><span>/</span><strong>{article.title}</strong></nav>
-    <div className="article-heading"><div className="article-product-mark">{_productIcon}</div><div><p className="article-product-name">{productName}</p><h1>{article.title}</h1><p className="article-description">{article.description}</p><div className="article-meta"><span>Last updated: {new Intl.DateTimeFormat(locale === "sq" ? "sq-AL" : "en-US", { month: "short", year: "numeric" }).format(new Date(`${article.lastUpdated}T12:00:00Z`))}</span><span aria-hidden="true">·</span><span>{article.readingTime} read</span></div></div></div>
+    <nav className="article-breadcrumb" aria-label="Breadcrumb"><Link href={`/${locale}`}>Help Center</Link><span>/</span><Link href={docsPath(locale, article.product)}>{productName}</Link><span>/</span><Link href={docsPath(locale, article.product, article.category, undefined, displayPlatform)}>{article.category.replace(/-/g, " ")}</Link><span>/</span><strong>{article.title}</strong></nav>
+    <div className="article-heading"><div className="article-product-mark">{_productIcon}</div><div><p className="article-product-name">{productName}</p><h1>{article.title}</h1><p className="article-description">{article.description}</p><div className="article-meta"><span>Last updated: {new Intl.DateTimeFormat(locale === "sq" ? "sq-AL" : "en-US", { month: "short", year: "numeric" }).format(new Date(`${article.lastUpdated}T12:00:00Z`))}</span><span aria-hidden="true">·</span><span>{article.readingTime} read</span>{article.documentationStatus && article.documentationStatus !== "CURRENT" ? <><span aria-hidden="true">·</span><span className={`article-status article-status-${article.documentationStatus.toLowerCase()}`}>{article.documentationStatus.replaceAll("_", " ")}</span></> : null}</div>{invoicePlatformAlternatives.length > 1 ? <nav className="platform-switcher" aria-label={locale === "sq" ? "Platforma" : "Platform"}><span>{locale === "sq" ? "Platforma:" : "Platform:"}</span>{invoicePlatformAlternatives.map((alternative) => <Link key={alternative.id} className={alternative.id === article.id ? "is-active" : ""} href={articlePath(locale, alternative)}>{alternative.platforms?.[0] === "mobile" ? "Mobile" : "Web"}</Link>)}</nav> : platformOptions.length ? <nav className="platform-switcher" aria-label={locale === "sq" ? "Platforma" : "Platform"}><span>{locale === "sq" ? "Platforma:" : "Platform:"}</span>{platformOptions.map((platform) => <Link key={platform} className={(displayPlatform ?? article.platform) === platform ? "is-active" : ""} href={docsPath(locale, article.product, article.category, article.slug, platform)}>{platform === "mobile" ? "Mobile" : "Web"}</Link>)}</nav> : null}{article.requiredPermissions?.length ? <p className="article-permissions"><strong>{locale === "sq" ? "Qasja:" : "Access:"}</strong> {locale === "sq" ? "Disa veprime kërkojnë leje të rolit." : "Some actions require role permissions."}</p> : null}</div></div>
   </>;
 }
 

@@ -3,7 +3,7 @@ import type { Locale } from "../content/types";
 import { absoluteUrl, siteUrl } from "./paths";
 
 export const siteName = "OperiX Help Center";
-export const defaultDescription = "Official OperiX Suite documentation, guides, FAQs, API resources and troubleshooting help.";
+export const defaultDescription = "Official documentation for OperiX Invoice and OperiX Booking: guides, FAQs, API reference and troubleshooting.";
 
 export function localeMetadata(locale: Locale): Metadata {
   return {

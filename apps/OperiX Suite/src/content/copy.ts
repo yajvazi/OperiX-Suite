@@ -93,7 +93,7 @@ const en: Copy = {
       sub: "Create invoices, sell at the counter, track expenses and keep VAT and reports in order — in the browser or on your phone. Start free, with your data stored on your own device.",
       primary: "Start free",
       secondary: "See pricing",
-      note: ["No credit card", "Works offline", "English & Shqip", "Euro & Kosovo VAT"],
+      note: ["No credit card", "Your data stays on your device", "English & Shqip", "Euro & Kosovo VAT"],
     },
     products: {
       label: "Products",
@@ -138,7 +138,7 @@ const en: Copy = {
         title: "On this device",
         badge: "Free",
         text: "Your business lives in your browser or phone. Nothing leaves your device unless you export it.",
-        items: ["Invoices, POS, expenses, reports and payroll", "Works offline", "Backup and restore with a file", "No monthly cost"],
+        items: ["Invoices, POS, expenses, reports and payroll", "Private: nothing leaves your device", "Backup and restore with a file", "No monthly cost"],
       },
       cloud: {
         title: "OperiX Cloud",
@@ -151,8 +151,8 @@ const en: Copy = {
       label: "Web & Mobile",
       title: "At your desk or on the move.",
       sub: "Use OperiX in any modern browser, and take it with you on the mobile app.",
-      web: { title: "Web app", text: "A full workspace for the office: documents, reports, payroll and settings on a large screen.", items: ["Works on desktop, tablet and phone browsers", "Installable and usable offline", "English and Albanian interface"] },
-      mobile: { title: "Mobile app", text: "Invoice a customer, take a sale or check stock wherever you are.", items: ["Create and share invoices on the spot", "POS with barcode scanning", "Low-stock alerts and offline use"] },
+      web: { title: "Web app", text: "A full workspace for the office: documents, reports, payroll and settings on a large screen.", items: ["Works on desktop, tablet and phone browsers", "Install it as an app on your computer or phone", "English and Albanian interface"] },
+      mobile: { title: "Mobile app", text: "Invoice a customer, take a sale or check stock wherever you are.", items: ["Create and share invoices on the spot", "POS with barcode scanning", "Low-stock alerts and on-device data"] },
     },
     selfhost: {
       label: "Open source",
@@ -238,7 +238,7 @@ const en: Copy = {
     hero: { title: "Simple pricing that grows with you.", sub: "Start free on your own device. Move to the cloud when you want backup, sync and a team." },
     monthly: "Monthly", annual: "Yearly", saveBadge: "Save about 16%", per: { month: "/month", year: "/year" },
     plans: {
-      free: { name: "On this device", tagline: "For one person getting started.", cta: "Start free", items: ["Invoices, quotes and documents", "Point of sale and stock", "Customers, vendors and expenses", "VAT registers and reports", "Payroll", "Works offline", "Backup and restore with a file"] },
+      free: { name: "On this device", tagline: "For one person getting started.", cta: "Start free", items: ["Invoices, quotes and documents", "Point of sale and stock", "Customers, vendors and expenses", "VAT registers and reports", "Payroll", "Private: data stays on your device", "Backup and restore with a file"] },
       invoice: { name: "OperiX Invoice", tagline: "Cloud storage for your business.", cta: "Choose Invoice", popular: "Most popular", items: ["Everything in On this device", "Cloud storage and automatic backup", "Same data on web and mobile", "1 workspace and 1 active user included", "Team roles and permissions", "Customer portal and payment links"] },
       suite: { name: "OperiX Suite", tagline: "Invoice and Booking together.", cta: "Get notified", badge: "Coming soon", items: ["Everything in OperiX Invoice", "OperiX Booking included", "One shared workspace and active-user allowance", "One subscription for both products"] },
       booking: { name: "OperiX Booking", tagline: "Appointments and reservations.", cta: "Get notified", badge: "Coming soon", items: ["Calendar and online booking page", "Services, staff and customers", "Reminders", "Web and mobile"] },
@@ -263,7 +263,6 @@ const en: Copy = {
         { label: "Expenses, bills and vendor payments", free: true, paid: true },
         { label: "VAT registers and financial reports", free: true, paid: true },
         { label: "Payroll", free: true, paid: true },
-        { label: "Works offline", free: true, paid: true },
         { label: "Where your data is stored", free: "This device", paid: "OperiX Cloud" },
         { label: "Automatic backup", free: "Manual file", paid: true },
         { label: "Same data on web and mobile", free: false, paid: true },
@@ -344,7 +343,7 @@ const sq: Copy = {
       sub: "Krijoni fatura, shitni në banak, ndiqni shpenzimet dhe mbani TVSH-në e raportet në rregull — në shfletues ose në telefon. Filloni falas, me të dhënat e ruajtura në pajisjen tuaj.",
       primary: "Filloni falas",
       secondary: "Shihni çmimet",
-      note: ["Pa kartë krediti", "Punon pa internet", "Shqip dhe anglisht", "Euro dhe TVSH e Kosovës"],
+      note: ["Pa kartë krediti", "Të dhënat mbeten në pajisje", "Shqip dhe anglisht", "Euro dhe TVSH e Kosovës"],
     },
     products: {
       label: "Produktet",
@@ -389,7 +388,7 @@ const sq: Copy = {
         title: "Në këtë pajisje",
         badge: "Falas",
         text: "Biznesi juaj ruhet në shfletues ose në telefon. Asgjë nuk largohet nga pajisja nëse nuk e eksportoni.",
-        items: ["Fatura, POS, shpenzime, raporte dhe paga", "Punon pa internet", "Kopje rezervë dhe rikthim me skedar", "Pa pagesë mujore"],
+        items: ["Fatura, POS, shpenzime, raporte dhe paga", "Privat: asgjë nuk largohet nga pajisja", "Kopje rezervë dhe rikthim me skedar", "Pa pagesë mujore"],
       },
       cloud: {
         title: "OperiX Cloud",
@@ -402,8 +401,8 @@ const sq: Copy = {
       label: "Web dhe celular",
       title: "Në zyrë ose në lëvizje.",
       sub: "Përdorni OperiX në çdo shfletues modern dhe merreni me vete në aplikacionin celular.",
-      web: { title: "Aplikacioni web", text: "Hapësirë e plotë pune për zyrën: dokumente, raporte, paga dhe cilësime në ekran të madh.", items: ["Punon në shfletues kompjuteri, tableti dhe telefoni", "Instalohet dhe përdoret pa internet", "Ndërfaqe në shqip dhe anglisht"] },
-      mobile: { title: "Aplikacioni celular", text: "Faturoni një klient, kryeni një shitje ose kontrolloni stokun kudo që jeni.", items: ["Krijoni dhe ndani fatura në vend", "POS me skanim barkodi", "Njoftime për stok të ulët dhe përdorim pa internet"] },
+      web: { title: "Aplikacioni web", text: "Hapësirë e plotë pune për zyrën: dokumente, raporte, paga dhe cilësime në ekran të madh.", items: ["Punon në shfletues kompjuteri, tableti dhe telefoni", "Instalojeni si aplikacion në kompjuter ose telefon", "Ndërfaqe në shqip dhe anglisht"] },
+      mobile: { title: "Aplikacioni celular", text: "Faturoni një klient, kryeni një shitje ose kontrolloni stokun kudo që jeni.", items: ["Krijoni dhe ndani fatura në vend", "POS me skanim barkodi", "Njoftime për stok të ulët dhe të dhëna në pajisje"] },
     },
     selfhost: {
       label: "Kod i hapur",
@@ -489,7 +488,7 @@ const sq: Copy = {
     hero: { title: "Çmime të thjeshta që rriten me ju.", sub: "Filloni falas në pajisjen tuaj. Kaloni në cloud kur doni kopje rezervë, sinkronizim dhe ekip." },
     monthly: "Mujore", annual: "Vjetore", saveBadge: "Kurseni rreth 16%", per: { month: "/muaj", year: "/vit" },
     plans: {
-      free: { name: "Në këtë pajisje", tagline: "Për një person që po fillon.", cta: "Filloni falas", items: ["Fatura, oferta dhe dokumente", "Pika e shitjes dhe stoku", "Klientë, furnitorë dhe shpenzime", "Libra të TVSH-së dhe raporte", "Paga", "Punon pa internet", "Kopje rezervë dhe rikthim me skedar"] },
+      free: { name: "Në këtë pajisje", tagline: "Për një person që po fillon.", cta: "Filloni falas", items: ["Fatura, oferta dhe dokumente", "Pika e shitjes dhe stoku", "Klientë, furnitorë dhe shpenzime", "Libra të TVSH-së dhe raporte", "Paga", "Privat: të dhënat mbeten në pajisje", "Kopje rezervë dhe rikthim me skedar"] },
       invoice: { name: "OperiX Invoice", tagline: "Ruajtje në cloud për biznesin.", cta: "Zgjidhni Invoice", popular: "Më e zgjedhura", items: ["Gjithçka që përfshin plani Në këtë pajisje", "Ruajtje në cloud dhe kopje rezervë automatike", "Të njëjtat të dhëna në web dhe celular", "1 hapësirë pune dhe 1 përdorues aktiv të përfshirë", "Role dhe leje për ekipin", "Portal për klientët dhe lidhje pagese"] },
       suite: { name: "OperiX Suite", tagline: "Invoice dhe Booking së bashku.", cta: "Njoftomë", badge: "Së shpejti", items: ["Gjithçka nga OperiX Invoice", "OperiX Booking i përfshirë", "Një hapësirë pune dhe kuotë përdoruesish e përbashkët", "Një abonim për të dy produktet"] },
       booking: { name: "OperiX Booking", tagline: "Takime dhe rezervime.", cta: "Njoftomë", badge: "Së shpejti", items: ["Kalendar dhe faqe rezervimi online", "Shërbime, staf dhe klientë", "Kujtesa", "Web dhe celular"] },
@@ -514,7 +513,6 @@ const sq: Copy = {
         { label: "Shpenzime, fatura furnitorësh dhe pagesa", free: true, paid: true },
         { label: "Libra të TVSH-së dhe raporte financiare", free: true, paid: true },
         { label: "Paga", free: true, paid: true },
-        { label: "Punon pa internet", free: true, paid: true },
         { label: "Ku ruhen të dhënat", free: "Kjo pajisje", paid: "OperiX Cloud" },
         { label: "Kopje rezervë automatike", free: "Skedar manual", paid: true },
         { label: "Të njëjtat të dhëna në web dhe celular", free: false, paid: true },

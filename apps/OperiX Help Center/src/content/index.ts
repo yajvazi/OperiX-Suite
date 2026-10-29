@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { articles } from "./articles";
+import { bookingFeatureRegistry } from "./booking-registry";
 import { productDefinitions } from "./products";
 
 const publicRoots = [resolve(process.cwd(), "public"), resolve(process.cwd(), "apps/OperiX Help Center/public")];
@@ -19,7 +20,7 @@ function validateContent() {
       throw new Error(`Duplicate article id: ${article.locale}:${article.id}`);
     }
     articleIds.add(`${article.locale}:${article.id}`);
-    const key = `${article.locale}:${article.product}:${article.category}:${article.slug}`;
+    const key = `${article.locale}:${article.product}:${article.category}:${article.slug}:${article.platform ?? "both"}`;
     if (articleKeys.has(key)) throw new Error(`Duplicate article route: ${key}`);
     articleKeys.add(key);
     const orderKey = `${article.locale}:${article.product}:${article.category}`;
@@ -30,6 +31,9 @@ function validateContent() {
     const product = productDefinitions.find((item) => item.key === article.product);
     if (!product?.categories.some((category) => category.slug === article.category)) {
       throw new Error(`Unknown documentation category: ${article.product}/${article.category} (${article.id})`);
+    }
+    if (article.product === "booking" && article.featureId && !bookingFeatureRegistry.some((feature) => feature.id === article.featureId)) {
+      throw new Error(`Unknown Booking feature ID ${article.featureId} in ${article.id}`);
     }
     const headingIds = new Set<string>();
     for (const block of article.blocks) {
@@ -50,6 +54,14 @@ function validateContent() {
         || articles.some((candidate) => candidate.id === relatedId && candidate.locale === "en" && !candidate.draft);
       if (!relatedExists) throw new Error(`Missing related article ${relatedId} in ${article.id}`);
     }
+  }
+
+  // Booking pricing and trial wording stays hidden until the product launches.
+  const hiddenBookingFeatures = new Set(["booking.subscription"]);
+  for (const feature of bookingFeatureRegistry.filter((item) => (item.documentation?.en || item.documentation?.sq) && !hiddenBookingFeatures.has(item.id))) {
+    const featureArticles = articles.filter((article) => article.product === "booking" && article.featureId === feature.id && !article.draft);
+    const locales = new Set(featureArticles.map((article) => article.locale));
+    if (!locales.has("en") || !locales.has("sq")) throw new Error(`Booking feature ${feature.id} must have both English and Albanian articles`);
   }
 
   for (const product of productDefinitions) {

@@ -1,9 +1,11 @@
 import { apiSections } from "../content/api-docs";
+import { publicApiOpenApi } from "@invoice-monorepo/public-api/openapi";
 import { articles, getPublishedArticles } from "../content/articles";
 import { getFaqs } from "../content/faqs";
+import { bookingGlossary } from "../content/booking-registry";
 import { getCategory, productDefinitions } from "../content/products";
-import type { Locale, ProductKey } from "../content/types";
-import { apiPath, articlePath, docsPath, faqPath } from "./paths";
+import type { DocumentationPlatform, Locale, ProductKey } from "../content/types";
+import { apiPath, articlePath, faqPath, productPath } from "./paths";
 
 export type SearchEntryKind = "article" | "faq" | "category" | "api";
 
@@ -17,9 +19,25 @@ export interface SearchEntry {
   product?: ProductKey;
   productName?: string;
   category?: string;
+  platform?: DocumentationPlatform;
   tags: string[];
   href: string;
 }
+
+const INVOICE_SEARCH_ALIASES: Array<[string, string[]]> = [
+  ["invoice", ["invoices", "fature", "fatura", "faturat"]],
+  ["customer", ["customers", "klient", "klienti", "klientët"]],
+  ["product", ["products", "produkt", "produktet"]],
+  ["payment", ["payments", "pagesë", "pagesa", "pagesat"]],
+  ["expense", ["expenses", "shpenzim", "shpenzime", "shpenzimet"]],
+  ["settings", ["cilësime", "cilësimet", "settings"]],
+  ["user", ["users", "përdorues", "përdoruesit"]],
+  ["report", ["reports", "raport", "raportet"]],
+  ["sales book", ["libri i shitjes", "sales book"]],
+  ["vat", ["tvsh", "vat"]],
+];
+
+const INVOICE_GLOSSARY_TERMS = INVOICE_SEARCH_ALIASES.flatMap(([term, aliases]) => [term, ...aliases]);
 
 function normalize(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -53,11 +71,12 @@ function buildIndex(locale: Locale): SearchEntry[] {
       product: article.product,
       productName: product?.name,
       category: category?.name,
-      tags: [...article.tags, ...article.keywords],
+      platform: article.platform ?? article.platforms?.[0],
+      tags: [...article.tags, ...article.keywords, ...(article.product === "invoice" ? INVOICE_GLOSSARY_TERMS : []), ...(article.product === "booking" ? bookingGlossary.flatMap((term) => [term.en, term.sq, ...term.aliases]) : [])],
       href: articlePath(locale, article),
     });
   }
-  for (const product of productDefinitions) {
+  for (const product of productDefinitions.filter((item) => !item.hidden)) {
     for (const category of product.categories) {
       result.push({
         id: `${locale}:category:${product.key}:${category.slug}`,
@@ -70,7 +89,7 @@ function buildIndex(locale: Locale): SearchEntry[] {
         productName: product.name,
         category: category.name,
         tags: [product.name, category.name],
-        href: docsPath(locale, product.key, category.slug),
+        href: productPath(locale, product),
       });
     }
   }
@@ -99,6 +118,36 @@ function buildIndex(locale: Locale): SearchEntry[] {
       href: apiPath(locale, section.slug),
     });
   }
+  const endpointSection = (path: string) => {
+    if (path.includes("/invoice/customers")) return "invoice-customers";
+    if (path.includes("/invoice/products")) return "invoice-products";
+    if (path.includes("/invoice/invoices") && path.endsWith("/pdf")) return "invoice-pdfs";
+    if (path.includes("/invoice/invoices")) return "invoice-invoices";
+    if (path.includes("/invoice/payments")) return "invoice-payments";
+    if (path.includes("/booking/services")) return "booking-services";
+    if (path.includes("/booking/providers")) return "booking-providers";
+    if (path.includes("/booking/locations")) return "booking-locations";
+    if (path.includes("/booking/resources")) return "booking-resources";
+    if (path.includes("/booking/availability")) return "booking-availability";
+    if (path.includes("/booking/bookings")) return "booking-bookings";
+    return "introduction";
+  };
+  for (const [path, pathItem] of Object.entries(publicApiOpenApi.paths)) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!("summary" in operation) || typeof operation.summary !== "string") continue;
+      const slug = endpointSection(path);
+      result.push({
+        id: `${locale}:api-endpoint:${method}:${path}`,
+        kind: "api",
+        locale,
+        title: `${method.toUpperCase()} ${path}`,
+        description: operation.description || operation.summary,
+        body: `${operation.summary} ${operation.description || ""} API endpoint request response ${operation["x-operix-scope"] || ""} webhook signature availability create invoice booking`,
+        tags: ["api", "endpoint", method, path, String(operation["x-operix-scope"] || "")],
+        href: `${apiPath(locale, slug)}#${method}-${path.replace(/[^a-z0-9]+/gi, "-")}`,
+      });
+    }
+  }
   return result;
 }
 
@@ -109,6 +158,14 @@ export const searchIndexes: Record<Locale, SearchEntry[]> = {
 
 function scoreEntry(entry: SearchEntry, query: string) {
   const normalizedQuery = normalize(query);
+  const queryVariants = [normalizedQuery];
+  for (const [term, aliases] of INVOICE_SEARCH_ALIASES) {
+    const normalizedTerm = normalize(term);
+    const normalizedAliases = aliases.map(normalize);
+    if (normalizedQuery.includes(normalizedTerm) || normalizedAliases.some((alias) => normalizedQuery.includes(alias))) {
+      queryVariants.push(normalizedTerm, ...normalizedAliases);
+    }
+  }
   const title = normalize(entry.title);
   const description = normalize(entry.description);
   const body = normalize(entry.body);
@@ -120,7 +177,13 @@ function scoreEntry(entry: SearchEntry, query: string) {
   if (tags.includes(normalizedQuery)) score += 25;
   if (description.includes(normalizedQuery)) score += 18;
   if (body.includes(normalizedQuery)) score += 10;
-  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
+  for (const variant of queryVariants.slice(1)) {
+    if (title.includes(variant)) score += 14;
+    if (tags.includes(variant)) score += 9;
+    if (description.includes(variant)) score += 6;
+    if (body.includes(variant)) score += 3;
+  }
+  const terms = queryVariants.join(" ").split(/\s+/).filter(Boolean);
   for (const term of terms) {
     if (title.includes(term)) score += 24;
     if (tags.includes(term)) score += 12;
@@ -144,7 +207,7 @@ export function searchDocumentation(query: string, locale: Locale, product?: Pro
 }
 
 export function popularSearchEntries(locale: Locale) {
-  const preferred = ["welcome-to-operix", "create-an-invoice", "about-operix-hr", "about-operix-booking", "about-operix-desk", "about-operix-control"];
+  const preferred = ["welcome-to-operix", "choose-where-your-data-lives", "create-an-invoice", "about-operix-booking"];
   return preferred.map((id) => searchIndexes[locale].find((entry) => entry.id.endsWith(`:article:${id}`))).filter(Boolean) as SearchEntry[];
 }
 

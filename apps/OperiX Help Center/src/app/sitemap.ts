@@ -14,12 +14,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entries.push({ url: absoluteUrl(troubleshootingPath(locale)), changeFrequency: "monthly", priority: 0.6 });
     entries.push({ url: absoluteUrl(whatsNewPath(locale)), changeFrequency: "weekly", priority: 0.6 });
     entries.push({ url: absoluteUrl(apiPath(locale)), changeFrequency: "monthly", priority: 0.6 });
-    for (const product of productDefinitions) {
+    for (const product of productDefinitions.filter((item) => !item.hidden)) {
       entries.push({ url: absoluteUrl(docsPath(locale, product.key)), changeFrequency: "weekly", priority: 0.75 });
       for (const category of product.categories) entries.push({ url: absoluteUrl(docsPath(locale, product.key, category.slug)), changeFrequency: "monthly", priority: 0.45 });
+      if (product.key === "booking") {
+        for (const platform of ["web", "mobile"] as const) {
+          entries.push({ url: absoluteUrl(docsPath(locale, product.key, undefined, undefined, platform)), changeFrequency: "weekly", priority: 0.7 });
+          for (const category of product.categories) entries.push({ url: absoluteUrl(docsPath(locale, product.key, category.slug, undefined, platform)), changeFrequency: "monthly", priority: 0.4 });
+        }
+      }
     }
     for (const section of apiSections) entries.push({ url: absoluteUrl(apiPath(locale, section.slug)), changeFrequency: "monthly", priority: 0.45 });
-    for (const article of allPublishedArticles().filter((item) => item.locale === locale)) entries.push({ url: absoluteUrl(articlePath(locale, article)), lastModified: article.lastUpdated, changeFrequency: "monthly", priority: article.featured ? 0.8 : 0.65 });
+    for (const article of allPublishedArticles().filter((item) => item.locale === locale)) {
+      entries.push({ url: absoluteUrl(articlePath(locale, article)), lastModified: article.lastUpdated, changeFrequency: "monthly", priority: article.featured ? 0.8 : 0.65 });
+      if (article.product === "booking" && article.platform === "both") for (const platform of ["web", "mobile"] as const) entries.push({ url: absoluteUrl(docsPath(locale, article.product, article.category, article.slug, platform)), lastModified: article.lastUpdated, changeFrequency: "monthly", priority: 0.6 });
+    }
   }
   return entries;
 }

@@ -2,6 +2,7 @@ FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY ["apps/OperiX Help Center/package.json", "apps/OperiX Help Center/package.json"]
+COPY ["packages/public-api/package.json", "packages/public-api/package.json"]
 RUN npm ci --workspace=operix-help-center --include-workspace-root=false --ignore-scripts
 
 FROM node:22-bookworm-slim AS builder
@@ -14,6 +15,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps ["/app/apps/OperiX Help Center/node_modules", "./apps/OperiX Help Center/node_modules"]
 COPY package.json package-lock.json turbo.json tsconfig.base.json ./
 COPY ["apps/OperiX Help Center", "apps/OperiX Help Center"]
+COPY ["packages/public-api", "packages/public-api"]
+COPY ["scripts/docs", "scripts/docs"]
+COPY ["docs/invoice", "docs/invoice"]
+COPY ["docs/booking", "docs/booking"]
+COPY ["apps/OperiX Invoice/OperiX Web/src", "apps/OperiX Invoice/OperiX Web/src"]
+COPY ["apps/OperiX Invoice/OperiX Invoice Mobile/src", "apps/OperiX Invoice/OperiX Invoice Mobile/src"]
 RUN npm run build --workspace=operix-help-center
 
 FROM node:22-bookworm-slim AS runner
