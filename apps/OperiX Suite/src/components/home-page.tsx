@@ -15,7 +15,6 @@ export function HomePage({ lang }: { lang: Lang }) {
       <div className="hero-glow" aria-hidden="true" />
       <div className="container hero-grid">
         <div className="hero-copy">
-          <span className="eyebrow"><span className="dot" />{h.hero.eyebrow}</span>
           <h1>{h.hero.title} <span className="accent">{h.hero.accent}</span></h1>
           <p className="lead">{h.hero.sub}</p>
           <div className="button-row">
