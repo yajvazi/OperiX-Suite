@@ -1762,3 +1762,22 @@ html[data-theme="dark"] .purchases-nav-item.is-active { color: #fff; }
   /* Decorative shapes never push the page sideways. */
   .help-hero, .standard-dashboard-hero { overflow: hidden; }
 }
+
+/* ---- Phone: centre the top bar search and fill the invoice action and status rows evenly ---- */
+@media (max-width: 767px) {
+  .operix-shared-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 190px) minmax(0, 1fr); align-items: center; column-gap: 8px; }
+  .operix-shared-topbar-leading { justify-self: start; min-width: 0; }
+  .operix-shared-topbar-search { justify-self: center; width: 100%; max-width: 190px; min-width: 0; margin: 0; }
+  .operix-shared-topbar-actions { justify-self: end; }
+  .invoice-detail-action-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .invoice-status-bar { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
+  .invoice-status-segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+  .invoice-status-segment { padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (max-width: 767px) {
+  .invoice-detail-action-grid .btn, .invoice-detail-action-grid a { text-align: center; justify-content: center; }
+}
+@media (max-width: 380px) {
+  .operix-shared-topbar { grid-template-columns: minmax(0, 1fr) minmax(0, 168px) minmax(0, 1fr); }
+  .operix-shared-topbar-search { max-width: 168px; }
+}
