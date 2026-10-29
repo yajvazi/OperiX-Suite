@@ -410,3 +410,8 @@ h3 { font-size: 1.15rem; letter-spacing: -.02em; line-height: 1.3; }
 .selfhost-banner h2 { font-size: 1.5rem; }
 .selfhost-banner p { margin-top: 6px; max-width: 60ch; }
 @media (max-width: 900px) { .selfhost-grid, .selfhost-foot, .selfhost-banner { grid-template-columns: 1fr; } .selfhost-banner .button { width: 100%; } }
+
+/* A backdrop-filter makes the header the containing block of fixed children, which clipped the open mobile menu to the header height. */
+.site-header { -webkit-backdrop-filter: blur(14px) saturate(1.4); }
+.site-header.is-open { backdrop-filter: none; -webkit-backdrop-filter: none; background: #fff; }
+.mobile-panel { top: var(--header-h); bottom: 0; height: auto; max-height: calc(100dvh - var(--header-h)); overscroll-behavior: contain; }

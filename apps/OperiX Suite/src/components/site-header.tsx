@@ -33,7 +33,8 @@ export function SiteHeader() {
   ];
   const other = lang === "en" ? "sq" : "en";
 
-  return <header className={`site-header ${scrolled || open ? "is-solid" : ""}`}>
+  return <>
+  <header className={`site-header ${scrolled || open ? "is-solid" : ""} ${open ? "is-open" : ""}`.trim()}>
     <div className="container header-row">
       <Logo lang={lang} />
       <nav className="header-nav" aria-label="Main">
@@ -46,7 +47,8 @@ export function SiteHeader() {
         <button type="button" className="menu-toggle" aria-label={t.nav.menu} aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
       </div>
     </div>
-    {open ? <div className="mobile-panel">
+  </header>
+  {open ? <div className="mobile-panel">
       <nav aria-label="Mobile">
         {links.map((item) => <Link key={item.to} href={href(lang, item.to)} onClick={() => setOpen(false)}>{item.label}{item.soon ? <span className="pill pill-soon">{t.comingSoon}</span> : null}</Link>)}
       </nav>
@@ -56,5 +58,5 @@ export function SiteHeader() {
         <Link className="lang-switch lang-switch-wide" href={href(other, path)} hrefLang={other} lang={other} onClick={() => setOpen(false)}>{other === "sq" ? "Shqip" : "English"}</Link>
       </div>
     </div> : null}
-  </header>;
+  </>;
 }
