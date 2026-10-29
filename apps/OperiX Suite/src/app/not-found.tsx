@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { copy } from "@/content/copy";
 
 export default function NotFound() {
-  return <section className="page-hero"><div className="container"><div className="success-card"><h1>Page not found.</h1><p>The page you’re looking for may have moved or is not available yet.</p><div className="button-row"><Link className="button" href="/">Back to overview</Link><Link className="button button-secondary" href="/contact">Contact us</Link></div></div></div></section>;
+  const t = copy.en.notFound;
+  return <section className="page-hero"><div className="container center"><h1>{t.title}</h1><p className="lead lead-center">{t.text}</p><div className="button-row button-row-center"><Link className="button" href="/">{t.cta}</Link></div></div></section>;
 }

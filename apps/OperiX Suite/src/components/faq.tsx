@@ -1,34 +1,9 @@
-"use client";
+export function Faq({ items }: { items: { q: string; a: string }[] }) {
+  return <div className="faq">
+    {items.map((item) => <details key={item.q}><summary>{item.q}</summary><p>{item.a}</p></details>)}
+  </div>;
+}
 
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { faqs } from "@/content/site";
-
-export function FAQList({ limit }: { limit?: number }) {
-  const [open, setOpen] = useState(0);
-  return (
-    <div className="faq-list">
-      {faqs.slice(0, limit).map((item, index) => {
-        const expanded = open === index;
-        return (
-          <article className="faq-item" key={item.question}>
-            <h3>
-              <button
-                type="button"
-                aria-expanded={expanded}
-                aria-controls={`faq-${index}`}
-                onClick={() => setOpen(expanded ? -1 : index)}
-              >
-                <span>{item.question}</span>
-                <ChevronDown className={expanded ? "rotated" : ""} aria-hidden="true" />
-              </button>
-            </h3>
-            <div id={`faq-${index}`} className="faq-answer" hidden={!expanded}>
-              <p>{item.answer}</p>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  );
+export function faqSchema(items: { q: string; a: string }[]) {
+  return JSON.stringify({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: items.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })) }).replace(/</g, "\\u003c");
 }

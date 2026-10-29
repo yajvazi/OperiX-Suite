@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
-import { PageHero } from "@/components/page-hero";
+import { LegalPage } from "@/components/legal-page";
+import { getCopy, type Lang } from "@/content/copy";
+import { pageMetadata } from "@/lib/lang";
 
-export const metadata: Metadata = { title: "Terms", alternates: { canonical: "/terms" } };
+const lang: Lang = "en";
 
-export default function TermsPage() {
-  return (
-    <>
-      <PageHero title="Terms" description="Approved terms of use will be published here before the OperiX Suite site launches." />
-      <section className="section"><article className="container legal-copy"><p>This page is reserved for reviewed legal copy. Product availability, pricing, trials, subscriptions, account responsibilities, acceptable use, support, liability, and governing law must be confirmed before launch.</p><h2>Product information</h2><p>Marketing descriptions on this site explain the intended product experience and do not replace the final commercial agreement.</p></article></section>
-    </>
-  );
+export function generateMetadata() {
+  const t = getCopy(lang);
+  return pageMetadata(lang, "/terms", t.legal.terms.title, t.legal.review);
+}
+
+export default function Page() {
+  return <LegalPage lang={lang} kind="terms" />;
 }

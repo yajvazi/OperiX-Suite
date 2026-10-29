@@ -12,8 +12,9 @@ export function AnalyticsBoundary() {
   const pathname = usePathname();
 
   useEffect(() => {
-    const productMatch = pathname.match(/^\/products\/(invoice|hr|booking|desk|control|suite)$/);
-    const eventName = productMatch ? "product_viewed" : pathname === "/pricing" ? "pricing_viewed" : pathname === "/enterprise" ? "enterprise_viewed" : undefined;
+    const path = pathname.replace(/^\/sq(?=\/|$)/, "") || "/";
+    const productMatch = path.match(/^\/(invoice|booking)$/);
+    const eventName = productMatch ? "product_viewed" : path === "/pricing" ? "pricing_viewed" : undefined;
     if (!eventName) return;
     const payload = { event: eventName, ...(productMatch ? { product: productMatch[1] } : {}) };
     const analyticsWindow = window as AnalyticsWindow;
