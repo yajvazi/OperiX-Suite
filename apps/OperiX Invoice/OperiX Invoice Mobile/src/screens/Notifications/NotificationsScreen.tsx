@@ -18,7 +18,7 @@ export function NotificationsScreen() {
     const load = useCallback(async () => {
         if (!user) return;
         try {
-            setItems(await loadNotifications(user.id, { overdue: t('invoiceOverdueNotice', language), dueSoon: t('invoiceDueSoonNotice', language), bill: t('billDueNotice', language) }));
+            setItems(await loadNotifications(user.id, { overdue: t('invoiceOverdueNotice', language), dueSoon: t('invoiceDueSoonNotice', language), bill: t('billDueNotice', language), lowStock: t('lowStockNotice', language) }));
         } catch { setItems([]); }
     }, [language, user]);
     useFocusEffect(useCallback(() => { void load(); }, [load]));

@@ -7,7 +7,7 @@ export interface AppNotification {
     title: string;
     detail: string;
     /** Screen to open, with its params. */
-    target: { screen: 'InvoiceDetail'; params: { invoiceId: string } } | { screen: 'SupplierBillsList' };
+    target: { screen: 'InvoiceDetail'; params: { invoiceId: string } } | { screen: 'SupplierBillsList' } | { screen: 'ProductDetail'; params: { productId: string } };
 }
 
 const DISMISSED_KEY = 'operix.dismissedNotifications';
@@ -21,8 +21,8 @@ export async function dismissNotifications(ids: string[]) {
     try { const current = await dismissedIds(); ids.forEach((id) => current.add(id)); await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify([...current].slice(-500))); } catch { /* the list simply reappears */ }
 }
 
-/** Unpaid invoices and supplier bills that are overdue or due within a week. Works on the device and in the cloud. */
-export async function loadNotifications(userId: string, labels: { overdue: string; dueSoon: string; bill: string }): Promise<AppNotification[]> {
+/** Unpaid invoices and supplier bills that are overdue or due within a week, and stock-tracked products at or below their threshold. Works on the device and in the cloud. */
+export async function loadNotifications(userId: string, labels: { overdue: string; dueSoon: string; bill: string; lowStock: string }): Promise<AppNotification[]> {
     const store = await getDataStore(userId);
     const dismissed = await dismissedIds();
     const now = Date.now();
@@ -46,5 +46,15 @@ export async function loadNotifications(userId: string, labels: { overdue: strin
             out.push({ id, kind: 'bill_due', title: labels.bill, detail: String(bill.bill_number ?? ''), target: { screen: 'SupplierBillsList' } });
         }
     } catch { /* supplier bills are optional for the alert list */ }
+    try {
+        for (const product of await store.list('products', { limit: 500 })) {
+            if (!product.track_stock) continue;
+            const quantity = Number(product.stock_quantity ?? 0);
+            if (quantity > Number(product.low_stock_threshold ?? 5)) continue;
+            const id = `stock:${product.id}:${quantity}`;
+            if (dismissed.has(id)) continue;
+            out.push({ id, kind: 'low_stock', title: labels.lowStock, detail: `${String(product.name ?? '')} · ${quantity}`, target: { screen: 'ProductDetail', params: { productId: String(product.id) } } });
+        }
+    } catch { /* products are optional for the alert list */ }
     return out.sort((a, b) => (a.kind === 'invoice_overdue' ? 0 : 1) - (b.kind === 'invoice_overdue' ? 0 : 1));
 }

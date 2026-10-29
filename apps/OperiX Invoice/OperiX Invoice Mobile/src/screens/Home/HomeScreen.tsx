@@ -124,7 +124,7 @@ export function HomeScreen() {
     const [notificationCount, setNotificationCount] = useState(0);
     useFocusEffect(useCallback(() => {
         if (!user) return;
-        void loadNotifications(user.id, { overdue: '', dueSoon: '', bill: '' }).then((list) => setNotificationCount(list.length)).catch(() => setNotificationCount(0));
+        void loadNotifications(user.id, { overdue: '', dueSoon: '', bill: '', lowStock: '' }).then((list) => setNotificationCount(list.length)).catch(() => setNotificationCount(0));
     }, [user]));
     const money = (value: number) => hideAmounts ? '••••' : formatCurrency(value);
 
