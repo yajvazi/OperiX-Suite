@@ -465,7 +465,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   const pdfExport = Boolean(config.pdfTemplate);
   const rootClass = embedded ? "resource-page resource-page-embedded" : "ux-page resource-page";
 
-  if (!canRead) return <div className={rootClass}><PageHeader title={config.title} description={config.description} /><SectionCard><p className="muted">You do not have permission to view this resource.</p></SectionCard></div>;
+  if (!workspace.loading && !canRead) return <div className={rootClass}><PageHeader title={config.title} description={config.description} /><SectionCard><p className="muted">You do not have permission to view this resource.</p></SectionCard></div>;
 
   return <div className={rootClass}>
     {!embedded && ["vendors", "supplier-bills", "vendor-payments"].includes(resourceKey) ? <PurchasesNav /> : null}

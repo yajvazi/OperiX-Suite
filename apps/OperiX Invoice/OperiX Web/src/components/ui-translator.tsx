@@ -9,6 +9,13 @@ const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE", "NOSCRI
 const SKIP_SELECTOR = "[data-no-translate], [contenteditable='true'], .document-scale-frame, .invoice-template-preview, .receipt-doc, .invoice-doc";
 const ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"];
 
+// React marks every DOM node it owns with a "__reactFiber$…" property. Server HTML that React has not hydrated yet has none,
+// and changing its text would make hydration throw that HTML away and render it again. Such parts are translated once React owns them.
+function hydrated(element: Element): boolean {
+  for (const key in element) if (key.startsWith("__reactFiber$")) return true;
+  return false;
+}
+
 function skipped(element: Element | null): boolean {
   for (let node: Element | null = element; node; node = node.parentElement) if (SKIP_TAGS.has(node.tagName)) return true;
   return Boolean(element?.closest(SKIP_SELECTOR));
@@ -22,6 +29,7 @@ function translateText(text: Text, translator: Translator) {
 function translateElement(element: Element, translator: Translator) {
   if (SKIP_TAGS.has(element.tagName)) return;
   if (element.matches(SKIP_SELECTOR)) return;
+  if (!hydrated(element)) return;
   for (const attribute of ATTRIBUTES) {
     const value = element.getAttribute(attribute);
     if (value) { const next = translator.translate(value); if (next !== null) element.setAttribute(attribute, next); }
@@ -41,7 +49,7 @@ function translateElement(element: Element, translator: Translator) {
 function translateTree(root: Node, translator: Translator) {
   if (root.nodeType === Node.TEXT_NODE) {
     const text = root as Text;
-    if (!skipped(text.parentElement)) translateText(text, translator);
+    if (text.parentElement && hydrated(text.parentElement) && !skipped(text.parentElement)) translateText(text, translator);
   } else if (root.nodeType === Node.ELEMENT_NODE && !skipped(root as Element)) translateElement(root as Element, translator);
 }
 
@@ -52,6 +60,7 @@ export function UiTranslator() {
     document.documentElement.lang = "sq";
     let observer: MutationObserver | null = null;
     let cancelled = false;
+    let sweepTimer = 0;
     // Changing text while React is still attaching to the server HTML makes it discard that HTML, so wait until the page is settled.
     const settled = new Promise<void>((resolve) => {
       const done = () => window.setTimeout(resolve, 250);
@@ -60,8 +69,12 @@ export function UiTranslator() {
     void Promise.all([import("@/lib/i18n/sq-dictionary"), settled]).then(([{ SQ_DICTIONARY }]) => {
       if (cancelled) return;
       const translator = createTranslator(SQ_DICTIONARY);
-      const run = () => translateTree(document.body, translator);
+      const watch = () => observer?.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRIBUTES });
+      const run = () => { observer?.disconnect(); try { translateTree(document.body, translator); } finally { watch(); } };
       run();
+      // Parts of the page that React hydrates later change no DOM when they become ready, so look again for a while.
+      let sweeps = 0;
+      sweepTimer = window.setInterval(() => { run(); if (++sweeps >= 20) window.clearInterval(sweepTimer); }, 750);
       const title = translator.translate(document.title);
       if (title !== null) document.title = title;
       observer = new MutationObserver((records) => {
@@ -78,7 +91,7 @@ export function UiTranslator() {
       });
       observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRIBUTES });
     });
-    return () => { cancelled = true; observer?.disconnect(); };
+    return () => { cancelled = true; window.clearInterval(sweepTimer); observer?.disconnect(); };
   }, []);
   return null;
 }

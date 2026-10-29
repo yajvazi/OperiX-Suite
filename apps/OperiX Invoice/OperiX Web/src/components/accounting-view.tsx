@@ -119,8 +119,8 @@ const emptyLine = (): JournalLineDraft => ({
 
 function CloudAccountingView() {
   const workspace = useWorkspace();
-  const locale = workspace.company?.default_language || "en";
-  const t = copy[locale] || copy.en;
+  // English source text; the interface language (runtime translator) decides what the user reads.
+  const t = copy.en;
   const canInitialize = workspace.can("settings.company");
   const canManageAccounts = workspace.can("accounting_period.close");
   const canCreateJournal = workspace.can("accounting_period.close");

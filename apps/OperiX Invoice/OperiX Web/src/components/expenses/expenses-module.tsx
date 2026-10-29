@@ -25,7 +25,7 @@ const labelFor = (id: string, sq: boolean) => {
 const amount = (value: string | number | null | undefined) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(Number(value || 0));
 
 export function ExpensesModule() {
-  const { user, companyId, companyIds, company, loading: workspaceLoading } = useWorkspace();
+  const { user, companyId, companyIds, loading: workspaceLoading } = useWorkspace();
   const [tab, setTab] = useState<Tab>("overview");
   const [rows, setRows] = useState<Row[]>([]);
   const [vendors, setVendors] = useState<Row[]>([]);
@@ -39,7 +39,8 @@ export function ExpensesModule() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ category_code: "other_expenses", vendor_id: "", vendor_name: "", document_type: "other", document_number: "", date: new Date().toISOString().slice(0, 10), gross_amount: "", vat_rate: "0", description: "", payment_method: "bank", due_date: "", tax_treatment: "review_required", vat_treatment: "review_required", business_use_percentage: "100", tax_deductible_percentage: "", vat_deductible_percentage: "", tax_override_reason: "", vat_override_reason: "", fuel_type: "", litres: "", price_per_litre: "", vehicle_label: "", billing_period_start: "", billing_period_end: "", utility_account_reference: "" });
-  const sq = company?.default_language === "sq";
+  // The screen follows the interface language (translated at runtime), not the company default.
+  const sq = false;
   const client = createClient();
   const companyScope = companyIds.join(",");
 
@@ -140,7 +141,7 @@ export function ExpensesModule() {
     } finally { setSaving(false); }
   };
 
-  if (workspaceLoading) return <div className="ux-page"><SectionCard title="Shpenzimet / Expenses"><p>Loading workspace…</p></SectionCard></div>;
+  if (workspaceLoading) return <div className="ux-page"><SectionCard title="Expenses"><p>Loading workspace…</p></SectionCard></div>;
 
   return <div className="ux-page expenses-module">
     <PurchasesNav />

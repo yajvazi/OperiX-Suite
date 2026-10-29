@@ -29,7 +29,7 @@ import { OperixMobileNavigation, OperixSidebar, OperixTopBar, type OperixSidebar
 import { InvoiceLogo } from "./product-logo";
 import { createClient } from "@/lib/supabase/client";
 import { searchLocalResource } from "@/lib/local/resource";
-import { useWorkspace } from "@/hooks/use-workspace";
+import { clearWorkspaceSnapshot, useWorkspace } from "@/hooks/use-workspace";
 import { useBusinessData } from "@/hooks/use-business-data";
 import type { InvoiceRow } from "@/lib/models";
 import { useTheme } from "./theme-provider";
@@ -253,6 +253,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   async function signOut() {
     const supabase = createClient();
     if (supabase) await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    clearWorkspaceSnapshot();
     router.push("/login");
     router.refresh();
   }

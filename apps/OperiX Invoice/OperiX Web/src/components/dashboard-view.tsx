@@ -66,7 +66,7 @@ export function DashboardView() {
     <div className="ux-page dashboard-page">
       <section className="standard-dashboard-hero">
         <div className="standard-dashboard-hero-copy"><p className="standard-dashboard-kicker">Business overview</p><h1>Welcome, {workspaceName}</h1><p>Here’s what’s happening with your business today.</p></div>
-        <label className="standard-dashboard-hero-action standard-dashboard-period-select"><span className="sr-only">Dashboard period</span><select value={period} onChange={(event) => setPeriod(event.target.value as Period)}>{periodOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+        <div className="dashboard-period-segments" role="group" aria-label="Dashboard period">{periodOptions.map((option) => <button type="button" key={option.value} aria-pressed={period === option.value} className={period === option.value ? "is-active" : undefined} onClick={() => setPeriod(option.value)}>{option.label}</button>)}</div>
       </section>
       {error ? <ErrorState message={error} onRetry={() => { void invoicesQuery.refresh(); void expensesQuery.refresh(); void productsQuery.refresh(); }} /> : null}
       {loading && !invoicesQuery.data.length && !expensesQuery.data.length ? <LoadingSkeleton rows={5} /> : null}
