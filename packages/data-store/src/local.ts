@@ -307,6 +307,16 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
     if (!isoDate(input.paymentDate)) throw new Error('Payment date must be an ISO date.');
     if (input.paymentMethod === 'cash' && !isCashPaymentAllowed(amount)) throw new Error('Cash payments must be below 300 EUR.');
     return this.driver.transaction(async () => {
+      if (!input.invoiceId) {
+        // Money received on account: not allocated to any invoice.
+        if (!input.customerId || !(await this.get('clients', input.customerId))) throw new Error('Choose the customer this payment is from.');
+        return this.save('payments', {
+          invoice_id: null, client_id: input.customerId, amount: round2(amount), payment_date: input.paymentDate,
+          payment_method: input.paymentMethod, bank_reference: input.bankReference ?? null, notes: input.notes ?? null,
+          payment_number: input.paymentNumber || `PAY-${this.deviceCode}-${input.paymentDate.slice(0, 4)}-${String((await this.list('payments')).length + 1).padStart(5, '0')}`,
+          accounting_state: 'posted',
+        });
+      }
       const invoice = await this.get('invoices', input.invoiceId);
       if (!invoice) throw new Error('Invoice not found.');
       if (invoice.status === 'draft') throw new Error('Issue the invoice before recording a payment.');
@@ -331,7 +341,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       if (!payment) throw new Error('Payment not found.');
       if (payment.accounting_state === 'reversed') throw new Error('This payment has already been reversed.');
       const reversed = await this.save('payments', { id: paymentId, accounting_state: 'reversed', reversal_reason: reason.trim(), reversed_at: this.stamp() });
-      await this.settle(String(payment.invoice_id));
+      if (payment.invoice_id) await this.settle(String(payment.invoice_id));
       return reversed;
     });
   }

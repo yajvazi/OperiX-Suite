@@ -26,6 +26,7 @@ import { isoToday, money } from "@/lib/format";
 import { DUE_DATE_PRESETS, dueDateForPreset, type DueDatePreset } from "@invoice-monorepo/api/domain";
 import { POS_NOTICE } from "@/lib/features";
 import { createClient } from "@/lib/supabase/client";
+import { getLocalStore } from "@/lib/local/local-store";
 import type {
   ClientRow,
   InvoiceDraft,
@@ -192,7 +193,7 @@ export function PosView() {
 
   useEffect(() => {
     const userId = workspace.user?.id;
-    if (!workspace.companyId || !userId) return;
+    if (!workspace.companyId || !userId || workspace.storage === "local") return;
     let cancelled = false;
     const loadHeldOrder = async () => {
       const supabase = createClient();
@@ -221,12 +222,18 @@ export function PosView() {
     };
     void loadHeldOrder();
     return () => { cancelled = true; };
-  }, [workspace.companyId, workspace.user?.id]);
+  }, [workspace.companyId, workspace.storage, workspace.user?.id]);
 
   useEffect(() => {
     if (!workspace.companyId) return;
     let cancelled = false;
     const loadTerminals = async () => {
+      if (workspace.storage === "local") {
+        // On-device mode has no terminals or shifts: the counter is this browser.
+        setTerminals([{ id: "local", code: "LOCAL", name: "This device", branch_id: "", warehouse_id: null, fiscal_location_id: null, cashier_shift_required: false }]);
+        setTerminalId("local");
+        return;
+      }
       setTerminalsLoading(true);
       const supabase = createClient();
       if (!supabase) {
@@ -347,6 +354,7 @@ export function PosView() {
   }
 
   async function holdCurrentCart() {
+    if (workspace.storage === "local") { setMessageTone("error"); setMessage("Holding orders is not available in on-device mode yet."); return; }
     const supabase = createClient();
     if (!supabase || !workspace.companyId) {
       setMessageTone("error");
@@ -546,6 +554,22 @@ export function PosView() {
         return;
       }
       try {
+        if (workspace.storage === "local") {
+          const store = await getLocalStore();
+          const issued = await store.saveInvoiceDocument({
+            documentType: "invoice", clientId: clientId || null, issueDate: isoToday(), dueDate: dueDateValue, currency, status: "issued",
+            lines: cart.map((item) => ({ productId: item.productId, description: item.name, quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate, discountPercent: item.discountPercent, unit: item.unit, sku: item.sku || null, taxIncluded: item.taxIncluded })),
+            documentDiscountPercent: discountMode === "percent" ? discountValue : undefined,
+            notes: note || undefined, paymentMethod: paymentMethod(payment),
+            idempotencyKey: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()),
+            draft: { customerSignatureRequested: customerSignatureRequested, buyerSignatureUrl: customerSignatureRequested ? customerSignature : null, customerSignatureStatus: customerSignatureRequested ? (customerSignature ? "signed" : "pending") : "not_requested" },
+          });
+          if (payment !== "debt") await store.recordCustomerPayment({ invoiceId: issued.id, amount: Number(issued.total_amount), paymentDate: isoToday(), paymentMethod: payment === "cash" ? "cash" : "card", notes: `POS sale ${String(issued.invoice_number || "")}`.trim() });
+          setCart([]); setCashReceived(0); setCashReceivedText(""); setDiscountValue(0); setNote(""); setDuePreset("today");
+          setCustomerSignatureRequested(false); setCustomerSignature(null); completionIdempotencyKeyRef.current = null; setSaving(false);
+          router.push(`/invoices/${issued.id}`);
+          return;
+        }
         const result = await completePosSale(supabase, {
           userId: workspace.user?.id || "",
           companyId: workspace.companyId || "",
@@ -611,6 +635,20 @@ export function PosView() {
       lines: cart.map((item) => ({ productId: item.productId, description: item.name, quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate, discountPercent: item.discountPercent, unit: item.unit, sku: item.sku || null, taxIncluded: item.taxIncluded })),
     };
     try {
+      if (workspace.storage === "local") {
+        const store = await getLocalStore();
+        const savedLocal = await store.saveInvoiceDocument({
+          documentType: commercialDocumentType.toLowerCase(), clientId: clientId || null, issueDate: draft.issueDate, dueDate: draft.dueDate, currency, status: "draft",
+          lines: draft.lines, documentDiscountPercent: draft.documentDiscountPercent === undefined ? undefined : Number(draft.documentDiscountPercent), notes: note || undefined, paymentMethod: draft.paymentMethod,
+          idempotencyKey: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()),
+        });
+        setCart([]); setCashReceived(0); setCashReceivedText(""); setDiscountValue(0); setNote(""); setDuePreset("today"); setCustomerSignatureRequested(false); setCustomerSignature(null);
+        completionIdempotencyKeyRef.current = null;
+        setMessageTone("success");
+        setMessage(`${selectedInvoiceType.label} saved as draft (${String(savedLocal.invoice_number || "no number until issued")}).`);
+        setSaving(false);
+        return;
+      }
       const saved = await saveInvoiceDocument(supabase, { draft, postInvoice: false, idempotencyKey: completionIdempotencyKeyRef.current || (completionIdempotencyKeyRef.current = crypto.randomUUID()) });
       setCart([]);
       setCashReceived(0);

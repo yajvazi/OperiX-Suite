@@ -231,8 +231,9 @@ private file system) instead of the cloud. Switch in Settings -> Data storage; t
   vendor payments, invoices (list, editor, detail, status, convert, delete), payments recorded against an
   invoice, global search, reports (profit and loss, summary), company settings, backup export/import and
   customer/product/supplier copy to and from the cloud. Printing/PDF is done by the browser (no server).
-- Still cloud-only in local mode: POS, contracts, other income, payments without an invoice, bank/fund accounts,
-  branches, tax book, payroll, accounting ledger reports, team, billing, developers, portal and payment links.
+- Also on the store: POS (no terminals or held orders), contracts, other income (cash/bank), payments on account
+  (no invoice), CSV import/export.
+- Still cloud-only in local mode: bank/fund accounts, branches, held POS orders, tax book, payroll, accounting ledger reports, team, billing, developers, portal and payment links.
 - Needs HTTPS (or localhost) and a browser with OPFS. One tab at a time holds the database.
 - The OSS export now includes `packages/data-store`; `deploy/web-oss/package-lock.json` was regenerated for it.
 - QA: `qa/e2e-local.mjs` (customer, reload, backup, invoice, list, reports) passes against the QA tree.

@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ArrowDownToLine, Landmark, Plus, RefreshCw } from "lucide-react";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
+import { getLocalStore } from "@/lib/local/local-store";
+import { OTHER_INCOME_CATEGORIES, localReportRows } from "@invoice-monorepo/data-store";
 import { money } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
 
@@ -28,6 +30,19 @@ export function FinanceOverview({ initialTab = "accounts" }: { initialTab?: "acc
     const supabase = createClient();
     if (!supabase) return;
     setLoading(true);
+    if (workspace.storage === "local") {
+      const store = await getLocalStore();
+      const flow = await localReportRows(store, "operix_cash_flow");
+      const balance = (type: string) => flow.filter((row) => row.cash_account_type === type).reduce((sum, row) => sum + Number(row.net_change || 0), 0);
+      const localAccounts = [{ id: "cash", name: "Cash", account_type: "cash", currency: "EUR", company_id: store.companyId, current_balance: balance("cash") }, { id: "bank", name: "Bank", account_type: "bank", currency: "EUR", company_id: store.companyId, current_balance: balance("bank") }] as Row[];
+      setAccounts(localAccounts);
+      setIncome((await store.list("other_income", { orderBy: "-income_date" })) as unknown as Row[]);
+      setCategories(OTHER_INCOME_CATEGORIES.map((row) => ({ id: row.category_key, ...row })) as unknown as Row[]);
+      setForm((current) => ({ ...current, categoryId: current.categoryId || "other_income", accountId: current.accountId || "cash" }));
+      setMessage("");
+      setLoading(false);
+      return;
+    }
     const [accountResult, incomeResult, categoryResult] = await Promise.all([
       supabase.from("operix_financial_account_balances").select("*").in("company_id", workspace.companyIds).order("account_type").order("name"),
       supabase.from("other_income").select("*,category:other_income_categories(name_en,name_sq)").in("company_id", workspace.companyIds).order("income_date", { ascending: false }),
@@ -39,7 +54,7 @@ export function FinanceOverview({ initialTab = "accounts" }: { initialTab?: "acc
     setForm((current) => ({ ...current, categoryId: current.categoryId || String(categoryResult.data?.[0]?.id || ""), accountId: current.accountId || String(accountResult.data?.[0]?.id || "") }));
     setMessage(accountResult.error?.message || incomeResult.error?.message || "");
     setLoading(false);
-  }, [workspace.companyId, workspace.companyIds]);
+  }, [workspace.companyId, workspace.companyIds, workspace.storage]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -53,6 +68,19 @@ export function FinanceOverview({ initialTab = "accounts" }: { initialTab?: "acc
     const supabase = createClient();
     if (!supabase) return;
     setWorking(true); setMessage("");
+    if (workspace.storage === "local") {
+      try {
+        const store = await getLocalStore();
+        const category = categories.find((row) => String(row.id) === form.categoryId);
+        const net = Number(form.net); const vat = Number(form.vat || 0);
+        await store.save("other_income", { income_number: await store.reserveSeriesNumber("INC", form.date.slice(0, 4)), category_id: form.categoryId, category: category ? { name_en: category.name_en, name_sq: category.name_sq } : null, income_date: form.date, payer_source: form.payer || null, description: form.description.trim(), currency: "EUR", net_amount: net, vat_amount: vat, gross_amount: Math.round((net + vat) * 100) / 100, tax_treatment: "review_required", payment_method: form.accountId === "cash" ? "cash" : "bank", reference: form.reference || null, notes: null });
+        setMessage("Other income recorded. Tax treatment remains Review Required until confirmed.");
+        setForm((current) => ({ ...current, payer: "", description: "", net: "", vat: "", reference: "" }));
+        await load();
+      } catch (error) { setMessage(error instanceof Error ? error.message : "The income could not be saved."); }
+      setWorking(false);
+      return;
+    }
     const { error } = await supabase.rpc("record_other_income", { p_company_id: workspace.companyId, p_category_id: form.categoryId, p_income_date: form.date, p_payer_source: form.payer || null, p_description: form.description, p_currency: "EUR", p_net_amount: Number(form.net), p_vat_amount: Number(form.vat || 0), p_tax_treatment: "review_required", p_payment_method: "bank", p_fund_account_id: form.accountId, p_reference: form.reference || null, p_notes: null, p_attachment_id: null, p_idempotency_key: crypto.randomUUID() });
     if (error) setMessage(error.message); else { setMessage("Other income recorded. Tax treatment remains Review Required until confirmed."); setForm((current) => ({ ...current, payer: "", description: "", net: "", vat: "", reference: "" })); await load(); }
     setWorking(false);

@@ -94,13 +94,13 @@ export class CloudDataStore implements DocumentStore {
   }
 
   async recordCustomerPayment(input: PaymentInput): Promise<DataRecord> {
-    const invoice = await this.get('invoices', input.invoiceId);
-    if (!invoice) throw new Error('Invoice not found.');
+    const invoice = input.invoiceId ? await this.get('invoices', input.invoiceId) : null;
+    if (input.invoiceId && !invoice) throw new Error('Invoice not found.');
     const saved = await saveCustomerPayment(this.client, {
       userId: this.scope.userId,
       companyId: this.companyId,
-      customerId: String(invoice.client_id ?? ''),
-      invoiceId: input.invoiceId,
+      customerId: String(invoice?.client_id ?? input.customerId ?? ''),
+      invoiceId: input.invoiceId ?? null,
       paymentNumber: input.paymentNumber ?? null,
       amount: input.amount,
       paymentDate: input.paymentDate,

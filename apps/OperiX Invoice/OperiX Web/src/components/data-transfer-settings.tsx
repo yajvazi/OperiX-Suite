@@ -6,6 +6,7 @@ import { autoMapTransferColumns, dataTransferDefinitions, mappedTransferRecord, 
 import { scopedResource } from "@invoice-monorepo/api/workspace";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
+import { listLocalResource, saveLocalResource } from "@/lib/local/resource";
 
 type TransferRow = Record<string, unknown>;
 
@@ -57,10 +58,15 @@ export function DataTransferSettings() {
     try {
       const supabase = createClient();
       if (!supabase || !workspace.user || !workspace.companyIds.length) throw new Error("No active workspace is available.");
-      const scope = scopedResource(workspace.user.id, workspace.companyIds);
-      const result = await supabase.from(definition.table).select(definition.exportFields.map((field) => field.key).join(",")).or(scope).limit(5000);
-      if (result.error) throw result.error;
-      const rows = (result.data || []) as unknown as TransferRow[];
+      let rows: TransferRow[];
+      if (workspace.storage === "local") {
+        rows = (await listLocalResource(definition.table)).slice(0, 5000).map((record) => Object.fromEntries(definition.exportFields.map((field) => [field.key, record[field.key] ?? null])));
+      } else {
+        const scope = scopedResource(workspace.user.id, workspace.companyIds);
+        const result = await supabase.from(definition.table).select(definition.exportFields.map((field) => field.key).join(",")).or(scope).limit(5000);
+        if (result.error) throw result.error;
+        rows = (result.data || []) as unknown as TransferRow[];
+      }
       const date = new Date().toISOString().slice(0, 10);
       if (format === "csv") downloadText(`operix-${entity}-${date}.csv`, `\uFEFF${stringifyTransferCsv(entity, rows)}`, "text/csv;charset=utf-8");
       else downloadText(`operix-${entity}-${date}.json`, JSON.stringify({ entity, exported_at: new Date().toISOString(), rows }, null, 2), "application/json");
@@ -101,6 +107,7 @@ export function DataTransferSettings() {
       const supabase = createClient();
       if (!supabase || !workspace.user || !workspace.companyId) throw new Error("No active company workspace is available.");
       let created = 0; let updated = 0;
+      const localExisting = workspace.storage === "local" ? await listLocalResource(definition.table) : [];
       for (const row of pendingRows) {
         const payload: TransferRow = { ...row, user_id: workspace.user.id, company_id: workspace.companyId };
         if (entity === "products") {
@@ -114,6 +121,16 @@ export function DataTransferSettings() {
         }
         if (entity === "vendors") payload.default_currency = payload.default_currency || "EUR";
         if (entity === "expenses") payload.type = "expense";
+        if (workspace.storage === "local") {
+          const key = identityField(entity, row);
+          const identity = key ? String(row[key] || "").trim() : "";
+          const match = identity ? localExisting.find((record) => String(record[key as string] || "").trim() === identity) : undefined;
+          const { user_id: _u, company_id: _c, ...fields } = payload;
+          void _u; void _c;
+          const saved = await saveLocalResource(definition.table, fields, match?.id);
+          if (match) updated += 1; else { created += 1; localExisting.push(saved); }
+          continue;
+        }
         const existingId = await findExisting(supabase, row);
         const result = existingId
           ? await supabase.from(definition.table).update(payload).eq("id", existingId).eq("company_id", workspace.companyId).select("id").single()

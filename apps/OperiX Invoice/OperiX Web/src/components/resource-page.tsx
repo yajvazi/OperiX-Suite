@@ -285,12 +285,13 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     if (workspace.storage === "local") {
       if (config.table === "payments") {
         const store = await getLocalStore();
-        if (!payload.invoice_id) throw new Error("On-device payments are recorded against an invoice. Choose the invoice this payment is for.");
+        if (!payload.invoice_id && !payload.client_id) throw new Error("Select a customer, or the invoice this payment is for.");
         const method = String(payload.payment_method || "bank") as "cash" | "bank" | "card" | "online_payment" | "cheque" | "other";
         if (method === "cash" && !isCashPaymentAllowed(Number(payload.amount || 0))) throw new Error("Cash payments are limited to amounts below €300. Choose another method.");
         if (editing?.id) await store.reverseCustomerPayment(String(editing.id), "Edited");
         const recorded = await store.recordCustomerPayment({
-          invoiceId: String(payload.invoice_id),
+          invoiceId: payload.invoice_id ? String(payload.invoice_id) : null,
+          customerId: payload.client_id ? String(payload.client_id) : null,
           amount: Number(payload.amount || 0),
           paymentDate: String(payload.payment_date || new Date().toISOString().slice(0, 10)),
           paymentMethod: method,

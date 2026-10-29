@@ -234,3 +234,14 @@ test('a credit note is created from an invoice, posted once, and returns stock',
   assert.equal((await store.get('products', product.id))?.stock_quantity, 10, 'posting twice does not return stock twice');
   await assert.rejects(store.postCreditNote(invoice.id), /not identified as a credit note/);
 });
+
+test('money received on account is kept against the customer and can be reversed', async () => {
+  const { store } = await openStore();
+  const customer = await store.save('clients', { name: 'Acme' });
+  await assert.rejects(store.recordCustomerPayment({ amount: 50, paymentDate: '2026-03-02', paymentMethod: 'bank' }), /Choose the customer/);
+  const payment = await store.recordCustomerPayment({ customerId: customer.id, amount: 50, paymentDate: '2026-03-02', paymentMethod: 'bank' });
+  assert.equal(payment.invoice_id, null);
+  assert.equal((await store.listPayments({ customerId: customer.id })).length, 1);
+  await store.reverseCustomerPayment(payment.id, 'Entered twice');
+  assert.equal((await store.listPayments({ customerId: customer.id })).length, 0);
+});

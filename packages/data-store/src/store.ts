@@ -56,7 +56,9 @@ export interface InvoiceInput {
 }
 
 export interface PaymentInput {
-  invoiceId: string;
+  /** The invoice being paid. Leave empty for money received on account; then `customerId` is required. */
+  invoiceId?: string | null;
+  customerId?: string | null;
   amount: number;
   paymentDate: string;
   paymentMethod: 'cash' | 'bank' | 'card' | 'online_payment' | 'cheque' | 'other';
