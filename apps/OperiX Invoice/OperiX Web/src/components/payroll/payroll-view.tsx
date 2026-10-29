@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { money } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
+import { LocalPayrollView } from "./local-payroll-view";
 
 export type PayrollSection =
   | "dashboard" | "employees" | "compensation" | "periods" | "runs" | "review"
@@ -36,7 +37,7 @@ const sections: Array<{ key: PayrollSection; label: string; icon: typeof Users }
   { key: "audit", label: "Audit", icon: LockKeyhole },
 ];
 
-export function PayrollView({ section = "dashboard", runId }: { section?: PayrollSection; runId?: string }) {
+function CloudPayrollView({ section = "dashboard", runId }: { section?: PayrollSection; runId?: string }) {
   const workspace = useWorkspace();
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
@@ -258,3 +259,10 @@ function AuditPanel({ rows }: { rows:Row[] }) { return <section className="card 
 function TableHead({ columns }: { columns:string[] }) { return <div className={`grid gap-3 bg-[#f7f9fc] p-3 text-[10px] font-semibold uppercase tracking-wide text-[#667085]`} style={{gridTemplateColumns:`repeat(${columns.length},minmax(0,1fr))`}}>{columns.map(value=><span key={value}>{value}</span>)}</div>; }
 function Status({ value }: { value:string }) { return <span className="w-fit rounded-full bg-[#edf4ff] px-2 py-1 text-[10px] font-medium text-[#004ffe]">{value.replaceAll("_"," ")}</span>; }
 function Select({ name,label,rows,optional=false }: {name:string;label:string;rows:Row[];optional?:boolean}) { return <label className="field">{label}<select name={name} required={!optional} className="input"><option value="">{optional?"None":`Select ${label.toLowerCase()}`}</option>{rows.map(row=><option key={String(row.id)} value={String(row.id)}>{String(row.code?`${row.code} · `:"")}{String(row.name)}</option>)}</select></label>; }
+
+/** On-device companies get the compact payroll that runs in the browser; everyone else keeps the full workflow. */
+export function PayrollView(props: { section?: PayrollSection; runId?: string }) {
+  const workspace = useWorkspace();
+  if (workspace.storage === "local") return <LocalPayrollView />;
+  return <CloudPayrollView {...props} />;
+}

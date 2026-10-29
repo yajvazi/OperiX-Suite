@@ -1,5 +1,6 @@
 "use client";
 
+import { LocalAccountingPage } from "./local-ledger-reports";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -116,7 +117,7 @@ const emptyLine = (): JournalLineDraft => ({
   credit: "0",
 });
 
-export function AccountingView() {
+function CloudAccountingView() {
   const workspace = useWorkspace();
   const locale = workspace.company?.default_language || "en";
   const t = copy[locale] || copy.en;
@@ -416,4 +417,10 @@ function PostingRules({ rules }: { rules: PostingRule[] }) {
 function Status({ value }: { value: string }) {
   const tone = value === "posted" || value === "open" || value === "active" ? "bg-[#ecfdf3] text-[#027a48]" : value === "locked" || value === "reversed" ? "bg-[#fff3f2] text-[#b42318]" : "bg-[#f2f4f7] text-[#475467]";
   return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium capitalize ${tone}`}>{value}</span>;
+}
+
+export function AccountingView() {
+  const workspace = useWorkspace();
+  if (workspace.storage === "local") return <LocalAccountingPage />;
+  return <CloudAccountingView />;
 }

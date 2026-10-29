@@ -34,7 +34,15 @@ export function FinanceOverview({ initialTab = "accounts" }: { initialTab?: "acc
       const store = await getLocalStore();
       const flow = await localReportRows(store, "operix_cash_flow");
       const balance = (type: string) => flow.filter((row) => row.cash_account_type === type).reduce((sum, row) => sum + Number(row.net_change || 0), 0);
-      const localAccounts = [{ id: "cash", name: "Cash", account_type: "cash", currency: "EUR", company_id: store.companyId, current_balance: balance("cash") }, { id: "bank", name: "Bank", account_type: "bank", currency: "EUR", company_id: store.companyId, current_balance: balance("bank") }] as Row[];
+      const bankAccounts = (await store.list("company_bank_accounts")).filter((row) => row.is_active !== false);
+      const tagged = new Map<string, number>();
+      for (const payment of await store.listPayments()) if (payment.payment_method !== "cash" && payment.company_bank_account_id) tagged.set(String(payment.company_bank_account_id), (tagged.get(String(payment.company_bank_account_id)) || 0) + Number(payment.amount || 0));
+      const taggedTotal = [...tagged.values()].reduce((sum, value) => sum + value, 0);
+      const localAccounts = [
+        { id: "cash", name: "Cash", account_type: "cash", currency: "EUR", company_id: store.companyId, current_balance: balance("cash") },
+        ...bankAccounts.map((row) => ({ id: String(row.id), name: [row.bank_name, row.account_name || row.iban || row.account_number].filter(Boolean).join(" · ") || "Bank account", account_type: "bank", currency: String(row.currency || "EUR"), company_id: store.companyId, current_balance: tagged.get(String(row.id)) || 0 })),
+        { id: "bank", name: bankAccounts.length ? "Bank · other movements" : "Bank", account_type: "bank", currency: "EUR", company_id: store.companyId, current_balance: balance("bank") - taggedTotal },
+      ] as Row[];
       setAccounts(localAccounts);
       setIncome((await store.list("other_income", { orderBy: "-income_date" })) as unknown as Row[]);
       setCategories(OTHER_INCOME_CATEGORIES.map((row) => ({ id: row.category_key, ...row })) as unknown as Row[]);

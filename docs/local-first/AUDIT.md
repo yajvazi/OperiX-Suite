@@ -238,7 +238,13 @@ private file system) instead of the cloud. Switch in Settings -> Data storage; t
 - Robustness: a second tab shows a clear message (one tab holds the database), the browser is asked for persistent
   storage, and a banner asks for a backup when none was downloaded in a week. Tested in Chromium and Firefox; Safari
   (WebKit) could not be run on the QA server.
-- Still cloud-only in local mode: fund accounts, declarations and electronic submission, payroll, accounting ledger reports, team, billing, developers, portal and payment links.
+- Also on the store: payroll (employees, monthly runs with the shared Kosovo rules, finalise/pay, payslips printed by the
+  browser, CSV), a derived ledger (`packages/data-store/src/ledger.ts`: balanced journal entries from invoices, payments,
+  bills, expenses, other income and payroll; trial balance, general ledger, journal page) and fund balances (cash, each
+  bank account, other bank movements). The chart of accounts is simplified and the payroll rates are a reviewed starting
+  point: both need the accountant's sign-off.
+- Cloud only by design (they need a server, other people or the tax authority): team and permissions, billing, developers
+  (API keys, webhooks), portal and payment links, declarations and electronic submission.
 - Needs HTTPS (or localhost) and a browser with OPFS. One tab at a time holds the database.
 - The OSS export now includes `packages/data-store`; `deploy/web-oss/package-lock.json` was regenerated for it.
 - QA: `qa/e2e-local.mjs` (customer, reload, backup, invoice, list, reports) passes against the QA tree.

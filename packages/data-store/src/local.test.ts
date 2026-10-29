@@ -245,3 +245,22 @@ test('money received on account is kept against the customer and can be reversed
   await store.reverseCustomerPayment(payment.id, 'Entered twice');
   assert.equal((await store.listPayments({ customerId: customer.id })).length, 0);
 });
+
+test('the ledger is balanced and agrees with the documents', async () => {
+  const { store } = await openStore();
+  const { buildLedger, trialBalance, generalLedger } = await import('./ledger.ts');
+  const customer = await store.save('clients', { name: 'Acme' });
+  const invoice = await store.saveInvoiceDocument({ clientId: customer.id, issueDate: '2026-03-01', lines: [line] });
+  await store.recordCustomerPayment({ invoiceId: invoice.id, amount: 100, paymentDate: '2026-03-02', paymentMethod: 'bank' });
+  await store.save('expenses', { date: '2026-03-03', category: 'Rent', amount: 50, payment_method: 'cash' });
+  await store.save('supplier_bills', { bill_number: 'B1', issue_date: '2026-03-04', total_amount: 118, tax_amount: 18, status: 'open' });
+  await store.save('payroll_runs', { run_number: 'PR-1', period_name: 'Mar 2026', period_end: '2026-03-31', status: 'finalised', totals: { gross: 500, employerPension: 25, employeePension: 25, tax: 10, net: 465 } });
+  const entries = await buildLedger(store);
+  assert.ok(entries.every((item) => Math.abs(item.lines.reduce((sum, row) => sum + row.debit - row.credit, 0)) < 0.005), 'every entry balances');
+  const rows = trialBalance(entries);
+  assert.equal(Math.round(rows.reduce((sum, row) => sum + row.debit - row.credit, 0) * 100), 0);
+  const receivable = generalLedger(entries, '1200');
+  assert.equal(receivable.at(-1)?.balance, 136, 'invoice 236 less payment 100');
+  assert.equal(rows.find((row) => row.code === '4000')?.credit, 200);
+  assert.equal(rows.find((row) => row.code === '6100')?.debit, 500);
+});
