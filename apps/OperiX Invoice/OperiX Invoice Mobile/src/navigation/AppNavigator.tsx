@@ -228,7 +228,7 @@ function SettingsNavigator() {
 function MainTabs() {
     const { isDark, primaryColor, language } = useTheme();
     return <Tab.Navigator id="main-tabs" initialRouteName="Home" screenOptions={{
-        ...getOperixBottomNavigationOptions(isDark, primaryColor),
+        ...(getOperixBottomNavigationOptions(isDark, primaryColor) as Record<string, unknown>),
     }}>
         <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('homeTab', language), tabBarAccessibilityLabel: t('homeTab', language), tabBarButtonTestID: 'nav-home-tab', tabBarIcon: ({ color }) => <House color={color} size={21} /> }} />
         <Tab.Screen name="Sales"

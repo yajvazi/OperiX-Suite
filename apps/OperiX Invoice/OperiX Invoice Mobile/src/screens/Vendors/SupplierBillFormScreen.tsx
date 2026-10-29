@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     grandTotalLabel: { fontSize: 18, fontWeight: 'bold' },
     grandTotalValue: { fontSize: 18, fontWeight: 'bold' },
     taxInput: { fontSize: 14, textAlign: 'right', borderBottomWidth: 1, paddingVertical: 2 },
-    vendorPickerKeyboard: { ...StyleSheet.absoluteFillObject, zIndex: 1000 },
+    vendorPickerKeyboard: { ...StyleSheet.absoluteFill, zIndex: 1000 },
     vendorPickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, minHeight: 300, maxHeight: '82%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

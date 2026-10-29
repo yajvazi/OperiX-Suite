@@ -301,11 +301,11 @@ const styles = StyleSheet.create({
     iconContainer: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
     title: { fontSize: 24, fontWeight: '800', marginBottom: 16, textAlign: 'center' },
     text: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
-    button: { width: '100%', minHeight: 50 },
+    button: { width: '100%' as const, minHeight: 50 },
     cancelText: { marginTop: 24, fontSize: 16, fontWeight: '600' },
 
     // Camera Overlay
-    overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+    overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 16 },
     backButton: { padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12 },
     headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
