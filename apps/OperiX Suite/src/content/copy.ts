@@ -4,7 +4,6 @@ export const urls = {
   signup: process.env.NEXT_PUBLIC_OPERIX_GET_STARTED_URL ?? "https://invoice.operixsuite.com/signup",
   signIn: process.env.NEXT_PUBLIC_OPERIX_SIGN_IN_URL ?? "https://invoice.operixsuite.com/login",
   app: process.env.NEXT_PUBLIC_OPERIX_INVOICE_URL ?? "https://invoice.operixsuite.com",
-  demo: process.env.NEXT_PUBLIC_OPERIX_INVOICE_DEMO_URL ?? "https://demo.invoice.operixsuite.com",
   help: "https://helpdesk.operixsuite.com",
   email: "support@operixinvoice.com",
 };
@@ -73,7 +72,7 @@ export type Copy = {
     cards: { title: string; text: string; cta: string; href: string }[];
     form: { name: string; email: string; topic: string; topics: string[]; message: string; send: string; note: string; subject: string };
   };
-  footer: { tagline: string; product: string; company: string; legal: string; links: { invoice: string; booking: string; pricing: string; demo: string; help: string; contact: string; privacy: string; terms: string; signIn: string }; rights: string; made: string };
+  footer: { tagline: string; product: string; company: string; legal: string; links: { invoice: string; booking: string; pricing: string; help: string; contact: string; privacy: string; terms: string; signIn: string }; rights: string; made: string };
   legal: { updated: string; privacy: { title: string; sections: { h: string; p: string[] }[] }; terms: { title: string; sections: { h: string; p: string[] }[] }; review: string };
   notFound: { title: string; text: string; cta: string };
   suiteLine: string;
@@ -93,7 +92,7 @@ const en: Copy = {
       accent: "your whole business.",
       sub: "Create invoices, sell at the counter, track expenses and keep VAT and reports in order — in the browser or on your phone. Start free, with your data stored on your own device.",
       primary: "Start free",
-      secondary: "Try the live demo",
+      secondary: "See pricing",
       note: ["No credit card", "Works offline", "English & Shqip", "Euro & Kosovo VAT"],
     },
     products: {
@@ -192,7 +191,7 @@ const en: Copy = {
         { q: "Which languages are supported?", a: "The web app and this website are available in English and Albanian (Shqip). Each invoice can be issued in English, Albanian or Serbian." },
       ],
     },
-    cta: { title: "Ready to put your invoicing in order?", sub: "Start free in a few minutes. Upgrade to the cloud only when you need it.", primary: "Start free", secondary: "Try the live demo" },
+    cta: { title: "Ready to put your invoicing in order?", sub: "Start free in a few minutes. Upgrade to the cloud only when you need it.", primary: "Start free", secondary: "See pricing" },
   },
   invoice: {
     hero: {
@@ -200,7 +199,7 @@ const en: Copy = {
       title: "Everything you need to bill, sell and keep your books.",
       sub: "A complete invoicing and business finance workspace for the web and your phone — built for small and growing businesses.",
       primary: "Start free",
-      secondary: "Try the live demo",
+      secondary: "See pricing",
     },
     groups: [
       { icon: "file", title: "Sales documents", text: "Look professional and stay organised.", items: ["Invoices, quotes, proformas, sales orders and delivery notes", "Convert a quote into an invoice in one click", "Recurring invoices and payment reminders", "Automatic numbering, status tracking and PDF output", "Customer-facing templates with your logo, stamp and signature"] },
@@ -290,14 +289,13 @@ const en: Copy = {
     cards: [
       { title: "Help Center", text: "Guides and answers for getting set up and using OperiX.", cta: "Open the Help Center", href: urls.help },
       { title: "Email us", text: "Write to us about pricing, setup or anything else.", cta: urls.email, href: `mailto:${urls.email}` },
-      { title: "Try the demo", text: "Explore OperiX Invoice with sample data. No sign-up needed.", cta: "Open the demo", href: urls.demo },
     ],
     form: { name: "Your name", email: "Your email", topic: "Topic", topics: ["OperiX Invoice", "Pricing", "OperiX Booking", "Something else"], message: "How can we help?", send: "Send by email", note: "This opens your email app with your message ready to send.", subject: "OperiX enquiry" },
   },
   footer: {
     tagline: "Invoicing and business finance for growing businesses.",
     product: "Product", company: "Company", legal: "Legal",
-    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Pricing", demo: "Live demo", help: "Help Center", contact: "Contact", privacy: "Privacy", terms: "Terms", signIn: "Sign in" },
+    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Pricing", help: "Help Center", contact: "Contact", privacy: "Privacy", terms: "Terms", signIn: "Sign in" },
     rights: "All rights reserved.", made: "Made in Kosovo",
   },
   legal: {
@@ -345,7 +343,7 @@ const sq: Copy = {
       accent: "gjithë biznesin tuaj.",
       sub: "Krijoni fatura, shitni në banak, ndiqni shpenzimet dhe mbani TVSH-në e raportet në rregull — në shfletues ose në telefon. Filloni falas, me të dhënat e ruajtura në pajisjen tuaj.",
       primary: "Filloni falas",
-      secondary: "Provoni demon",
+      secondary: "Shihni çmimet",
       note: ["Pa kartë krediti", "Punon pa internet", "Shqip dhe anglisht", "Euro dhe TVSH e Kosovës"],
     },
     products: {
@@ -444,7 +442,7 @@ const sq: Copy = {
         { q: "Cilat gjuhë mbështeten?", a: "Aplikacioni web dhe kjo faqe janë në shqip dhe anglisht. Çdo faturë mund të lëshohet në shqip, anglisht ose serbisht." },
       ],
     },
-    cta: { title: "Gati ta rregulloni faturimin?", sub: "Filloni falas për disa minuta. Kaloni në cloud vetëm kur ju duhet.", primary: "Filloni falas", secondary: "Provoni demon" },
+    cta: { title: "Gati ta rregulloni faturimin?", sub: "Filloni falas për disa minuta. Kaloni në cloud vetëm kur ju duhet.", primary: "Filloni falas", secondary: "Shihni çmimet" },
   },
   invoice: {
     hero: {
@@ -452,7 +450,7 @@ const sq: Copy = {
       title: "Gjithçka që ju duhet për të faturuar, shitur dhe mbajtur librat.",
       sub: "Hapësirë e plotë pune për faturim dhe financa të biznesit, për web dhe telefon — e krijuar për biznese të vogla dhe në rritje.",
       primary: "Filloni falas",
-      secondary: "Provoni demon",
+      secondary: "Shihni çmimet",
     },
     groups: [
       { icon: "file", title: "Dokumente shitjeje", text: "Dukuni profesionalë dhe qëndroni të organizuar.", items: ["Fatura, oferta, proformë, porosi shitjeje dhe fletëdërgesa", "Shndërroni një ofertë në faturë me një klik", "Fatura periodike dhe kujtesa pagese", "Numërim automatik, ndjekje statusi dhe PDF", "Shabllone me logon, vulën dhe nënshkrimin tuaj"] },
@@ -542,14 +540,13 @@ const sq: Copy = {
     cards: [
       { title: "Qendra e ndihmës", text: "Udhëzime dhe përgjigje për konfigurimin dhe përdorimin e OperiX.", cta: "Hapni qendrën e ndihmës", href: urls.help },
       { title: "Shkruani në email", text: "Na shkruani për çmimet, konfigurimin ose çdo gjë tjetër.", cta: urls.email, href: `mailto:${urls.email}` },
-      { title: "Provoni demon", text: "Eksploroni OperiX Invoice me të dhëna shembull. Pa regjistrim.", cta: "Hapni demon", href: urls.demo },
     ],
     form: { name: "Emri juaj", email: "Email-i juaj", topic: "Tema", topics: ["OperiX Invoice", "Çmimet", "OperiX Booking", "Diçka tjetër"], message: "Si mund t'ju ndihmojmë?", send: "Dërgo me email", note: "Kjo hap aplikacionin tuaj të email-it me mesazhin gati për dërgim.", subject: "Pyetje për OperiX" },
   },
   footer: {
     tagline: "Faturim dhe financa për biznese në rritje.",
     product: "Produkti", company: "Kompania", legal: "Ligjore",
-    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Çmimet", demo: "Demo", help: "Qendra e ndihmës", contact: "Kontakti", privacy: "Privatësia", terms: "Kushtet", signIn: "Hyni" },
+    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Çmimet", help: "Qendra e ndihmës", contact: "Kontakti", privacy: "Privatësia", terms: "Kushtet", signIn: "Hyni" },
     rights: "Të gjitha të drejtat e rezervuara.", made: "Bërë në Kosovë",
   },
   legal: {

@@ -1,10 +1,10 @@
-import { BookOpen, Mail, MonitorPlay } from "lucide-react";
+import { BookOpen, Mail } from "lucide-react";
 import { getCopy, type Lang } from "@/content/copy";
 import { ContactForm } from "./contact-form";
 
 export function ContactPage({ lang }: { lang: Lang }) {
   const c = getCopy(lang).contact;
-  const icons = [BookOpen, Mail, MonitorPlay];
+  const icons = [BookOpen, Mail];
   return <>
     <section className="page-hero"><div className="container center"><h1>{c.hero.title}</h1><p className="lead lead-center">{c.hero.sub}</p></div></section>
     <section className="section">

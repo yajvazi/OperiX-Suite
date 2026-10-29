@@ -19,7 +19,7 @@ export function HomePage({ lang }: { lang: Lang }) {
           <p className="lead">{h.hero.sub}</p>
           <div className="button-row">
             <a className="button button-lg" href={urls.signup}>{h.hero.primary} <ArrowRight size={18} /></a>
-            <a className="button button-lg button-secondary" href={urls.demo}>{h.hero.secondary}</a>
+            <Link className="button button-lg button-secondary" href={href(lang, "/pricing")}>{h.hero.secondary}</Link>
           </div>
           <ul className="hero-notes">{h.hero.note.map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
         </div>
@@ -136,7 +136,7 @@ export function HomePage({ lang }: { lang: Lang }) {
     <section className="cta-band">
       <div className="container cta-inner">
         <h2>{h.cta.title}</h2><p>{h.cta.sub}</p>
-        <div className="button-row button-row-center"><a className="button button-light button-lg" href={urls.signup}>{h.cta.primary}</a><a className="button button-outline-light button-lg" href={urls.demo}>{h.cta.secondary}</a></div>
+        <div className="button-row button-row-center"><a className="button button-light button-lg" href={urls.signup}>{h.cta.primary}</a><Link className="button button-outline-light button-lg" href={href(lang, "/pricing")}>{h.cta.secondary}</Link></div>
       </div>
     </section>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema(h.faq.items) }} />

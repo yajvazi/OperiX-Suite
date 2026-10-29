@@ -25,8 +25,8 @@ export function PhoneMock({ lang, variant = "invoices", className = "" }: { lang
       <div className="phone-top"><Menu size={16} /><strong>{variant === "pos" ? "POS" : t.title}</strong><span className="phone-avatar">O</span></div>
       {variant === "invoices" ? <>
         <div className="phone-search"><Search size={13} />{t.search}</div>
-        <div className="phone-stat"><span>{t.outstanding}</span><strong>€3,357.10</strong></div>
-        {[["Meridian Works", "€1,044.30", t.sent, "blue"], ["BluePeak Retail", "€2,968.88", t.paid, "green"], ["Orbitline Studio", "€1,156.40", t.overdue, "red"], ["Harborlight Clinic", "€660.80", t.paid, "green"]].map(([name, amount, status, tone]) => <div className="phone-row" key={name}><div><b>{name}</b><small>INV-2026-00{name.length + 20}</small></div><div><b>{amount}</b><i className={`tone-${tone}`}>{status}</i></div></div>)}
+        <div className="phone-stat"><span>{t.outstanding}</span><strong>€2,725.80</strong></div>
+        {[["Kosova Fresh Market", "€531.00", t.sent, "blue", "FAT-2026-000010"], ["Mira Design Studio", "€283.20", t.sent, "blue", "FAT-2026-000009"], ["Alba Logistics", "€849.60", t.sent, "blue", "FAT-2026-000008"], ["Kosova Fresh Market", "€1,062.00", t.paid, "green", "FAT-2026-000006"]].map(([name, amount, status, tone, number]) => <div className="phone-row" key={number}><div><b>{name}</b><small>{number}</small></div><div><b>{amount}</b><i className={`tone-${tone}`}>{status}</i></div></div>)}
       </> : <>
         <div className="phone-cart-title">{t.cart}</div>
         {[[t.item1, "1 × €45.00", "€45.00"], [t.item2, "2 × €4.50", "€9.00"], [t.item3, "1 × €3.00", "€3.00"]].map(([name, qty, amount]) => <div className="phone-row" key={name}><div><b>{name}</b><small>{qty}</small></div><div><b>{amount}</b></div></div>)}
