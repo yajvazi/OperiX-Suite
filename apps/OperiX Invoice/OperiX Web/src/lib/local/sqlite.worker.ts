@@ -9,14 +9,23 @@ let ready: Promise<Database> | null = null;
 
 function openDatabase(): Promise<Database> {
   if (!ready) {
-    ready = (async () => {
+    const lockMessage = "OperiX is open in another tab or window. Close the other one and reload this page.";
+    // A second tab waits for the first one to release the file system handles; do not wait forever.
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(lockMessage)), 15_000));
+    ready = Promise.race([(async () => {
       // Served from /public/sqlite (copied by scripts/copy-sqlite-wasm.mjs); a variable keeps bundlers from following it.
       const loaderUrl = new URL("/sqlite/index.mjs", self.location.origin).href;
       const { default: sqlite3InitModule } = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ loaderUrl);
       const sqlite3 = await sqlite3InitModule();
       const pool = await sqlite3.installOpfsSAHPoolVfs({ name: "operix-local", directory: "/operix-local", clearOnInit: false });
       return new pool.OpfsSAHPoolDb("/operix-local.db") as unknown as Database;
-    })();
+    })(), timeout]).catch((error) => {
+      ready = null;
+      const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+      // The browser file system lets one tab hold the database at a time.
+      if (/NoModificationAllowed|Access Handle|createSyncAccessHandle|locked/i.test(text)) throw new Error(lockMessage);
+      throw error;
+    });
   }
   return ready;
 }

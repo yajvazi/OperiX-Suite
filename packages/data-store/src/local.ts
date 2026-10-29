@@ -312,7 +312,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
         if (!input.customerId || !(await this.get('clients', input.customerId))) throw new Error('Choose the customer this payment is from.');
         return this.save('payments', {
           invoice_id: null, client_id: input.customerId, amount: round2(amount), payment_date: input.paymentDate,
-          payment_method: input.paymentMethod, bank_reference: input.bankReference ?? null, notes: input.notes ?? null,
+          payment_method: input.paymentMethod, company_bank_account_id: input.companyBankAccountId ?? null, bank_reference: input.bankReference ?? null, notes: input.notes ?? null,
           payment_number: input.paymentNumber || `PAY-${this.deviceCode}-${input.paymentDate.slice(0, 4)}-${String((await this.list('payments')).length + 1).padStart(5, '0')}`,
           accounting_state: 'posted',
         });
@@ -325,7 +325,7 @@ export class LocalDataStore implements DocumentStore, BackupCapable {
       if (round2(amount) > outstanding) throw new Error(`The payment exceeds the outstanding amount (${outstanding.toFixed(2)}).`);
       const payment = await this.save('payments', {
         invoice_id: invoice.id, client_id: invoice.client_id ?? null, amount: round2(amount), payment_date: input.paymentDate,
-        payment_method: input.paymentMethod, bank_reference: input.bankReference ?? null, notes: input.notes ?? null,
+        payment_method: input.paymentMethod, company_bank_account_id: input.companyBankAccountId ?? null, bank_reference: input.bankReference ?? null, notes: input.notes ?? null,
         payment_number: input.paymentNumber || `PAY-${this.deviceCode}-${input.paymentDate.slice(0, 4)}-${String((await this.list('payments')).length + 1).padStart(5, '0')}`,
         accounting_state: 'posted',
       });

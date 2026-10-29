@@ -149,7 +149,7 @@ export function DataTransferSettings() {
     <div className="rounded-xl border border-[#dbe5f5] bg-[#f8fbff] p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#eaf2ff] text-[#004ffe]"><Database size={20} /></span><div><h3 className="text-sm font-semibold">Data Import & Export</h3><p className="muted mt-1 text-xs">Move clients, products, vendors and expenses using tenant-scoped CSV or JSON files.</p></div></div>
-        <span className="rounded-full bg-white px-3 py-1 text-[11px] text-[#16794c]">RLS protected</span>
+        <span className="rounded-full bg-white px-3 py-1 text-[11px] text-[#16794c]">{workspace.storage === "local" ? "Stays on this device" : "RLS protected"}</span>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {entities.map((item) => <button type="button" key={item} onClick={() => changeEntity(item)} className={`rounded-lg border p-3 text-left text-xs ${entity === item ? "border-[#004ffe] bg-[#edf4ff] text-[#004ffe]" : "border-[#dbe5f5] bg-white"}`}><b>{dataTransferDefinitions[item].label}</b><span className="muted mt-1 block text-[11px]">{dataTransferDefinitions[item].description}</span></button>)}

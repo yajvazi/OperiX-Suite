@@ -8,7 +8,7 @@ export const LOCAL_TABLES = [
   'clients', 'products', 'vendors', 'expenses', 'supplier_bills', 'supplier_bill_items', 'vendor_payments', 'branches',
   'invoices', 'invoice_items', 'payments', 'inventory_stock_movements', 'companies',
   'document_source_links', 'commercial_document_events', 'invoice_templates',
-  'contracts', 'contract_templates', 'contract_events', 'other_income', 'held_orders',
+  'contracts', 'contract_templates', 'contract_events', 'other_income', 'held_orders', 'company_bank_accounts',
 ] as const;
 export type StoreTable = (typeof LOCAL_TABLES)[number];
 

@@ -115,9 +115,9 @@ export function useWorkspace() {
       setUser(authData.user);
       if (getStorageMode() === "local") {
         // Free tier: the business lives in this browser. The account only proves who is signed in.
+        setStorage("local");
         const store = await getLocalStore();
         const localCompany = (await store.getCompany()) as unknown as WorkspaceCompany;
-        setStorage("local");
         setProfile({ ...(localCompany as WorkspaceProfile), id: authData.user.id, company_id: store.companyId, active_company_id: store.companyId });
         setCompany(localCompany);
         setCompanies([localCompany]);
@@ -140,8 +140,8 @@ export function useWorkspace() {
       setPermissions(resolved.permissions);
       setScopes(resolved.scopes);
       setPlatformAdmin(resolved.platformAdmin);
-    } catch {
-      setError("We couldn't load your organization workspace. Please try again.");
+    } catch (caught) {
+      setError(getStorageMode() === "local" && caught instanceof Error && caught.message ? caught.message : "We couldn't load your organization workspace. Please try again.");
     } finally {
       setLoading(false);
     }

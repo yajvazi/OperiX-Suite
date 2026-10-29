@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Monitor, Moon, Pencil, Plus, Sun, Trash2, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { listLocalResource, removeLocalResource, saveLocalResource } from "@/lib/local/resource";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useTheme, type ThemePreference } from "./theme-provider";
 import { deactivateCompanyBankAccount, listCompanyBankAccounts, saveCompanyBankAccount } from "@invoice-monorepo/api/repositories";
@@ -148,7 +149,13 @@ export function BranchesBanksPanel() {
   const [showBank, setShowBank] = useState(false);
   const [message, setMessage] = useState({ text: "", ok: false });
 
+  const isLocal = workspace.storage === "local";
   const load = useCallback(async () => {
+    if (isLocal) {
+      setBranches((await listLocalResource("branches")).sort((a, b) => String(a.name).localeCompare(String(b.name))) as Row[]);
+      setBanks((await listLocalResource("company_bank_accounts")) as Row[]);
+      return;
+    }
     const supabase = createClient();
     if (!supabase || !companyId) return;
     const [branchResult, bankRows] = await Promise.all([
@@ -157,10 +164,16 @@ export function BranchesBanksPanel() {
     ]);
     setBranches((branchResult.data || []) as Row[]);
     setBanks(bankRows);
-  }, [companyId]);
+  }, [companyId, isLocal]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
   async function saveBranch() {
+    if (isLocal) {
+      if (!branchForm.code.trim() || !branchForm.name.trim()) { setMessage({ text: "Branch code and name are required.", ok: false }); return; }
+      await saveLocalResource("branches", { code: branchForm.code.trim().toUpperCase(), name: branchForm.name.trim(), registered_address: branchForm.registered_address.trim() || null, municipality: branchForm.municipality.trim() || null, is_active: true }, editingBranch || undefined);
+      setBranchForm(emptyBranch); setEditingBranch(null); setShowBranch(false); setMessage({ text: "Branch saved.", ok: true }); await load();
+      return;
+    }
     const supabase = createClient();
     if (!supabase || !companyId || !workspace.user) return;
     if (!canEdit) { setMessage({ text: "Company settings permission is required.", ok: false }); return; }
@@ -172,6 +185,7 @@ export function BranchesBanksPanel() {
   }
 
   async function toggleBranch(row: Row) {
+    if (isLocal) { await saveLocalResource("branches", { is_active: row.is_active === false }, String(row.id)); await load(); return; }
     const supabase = createClient();
     if (!supabase || !canEdit) return;
     const { error } = await supabase.from("branches").update({ is_active: row.is_active === false }).eq("id", String(row.id));
@@ -179,6 +193,14 @@ export function BranchesBanksPanel() {
   }
 
   async function saveBank() {
+    if (isLocal) {
+      if (!bankForm.bank_name.trim()) { setMessage({ text: "Bank name is required.", ok: false }); return; }
+      const others = (await listLocalResource("company_bank_accounts")).filter((row) => row.id !== editingBank);
+      if (bankForm.is_primary) for (const other of others) if (other.is_primary) await saveLocalResource("company_bank_accounts", { is_primary: false }, other.id);
+      await saveLocalResource("company_bank_accounts", { ...bankForm, is_active: true, is_primary: bankForm.is_primary || !others.length }, editingBank || undefined);
+      setBankForm(emptyBank); setEditingBank(null); setShowBank(false); setMessage({ text: "Bank account saved.", ok: true }); await load();
+      return;
+    }
     const supabase = createClient();
     if (!supabase || !companyId || !workspace.user) return;
     if (!canEditBank) { setMessage({ text: "Bank settings permission is required.", ok: false }); return; }
@@ -190,6 +212,7 @@ export function BranchesBanksPanel() {
   }
 
   async function removeBank(row: Row) {
+    if (isLocal) { if (window.confirm(`Remove ${String(row.bank_name)}?`)) { await removeLocalResource("company_bank_accounts", String(row.id)); await load(); } return; }
     const supabase = createClient();
     if (!supabase || !companyId || !canEditBank || !window.confirm(`Remove ${String(row.bank_name)}?`)) return;
     try { await deactivateCompanyBankAccount(supabase, String(row.id), companyId); await load(); } catch (error) { setMessage({ text: error instanceof Error ? error.message : "The bank account could not be removed.", ok: false }); }

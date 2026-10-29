@@ -146,7 +146,11 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   }, [config.table, workspace.companyId, workspace.storage, workspace.user]);
 
   useEffect(() => {
-    if (config.table !== "payments" || !workspace.companyId || workspace.storage === "local") return;
+    if (config.table !== "payments" || !workspace.companyId) return;
+    if (workspace.storage === "local") {
+      void listLocalResource("company_bank_accounts").then((rows) => setBankAccounts(rows.filter((row) => row.is_active !== false).map((row) => ({ id: String(row.id), label: [row.bank_name, row.account_name || row.iban || row.account_number].filter(Boolean).join(" · ") || "Bank account", isPrimary: Boolean(row.is_primary) })))).catch(() => setBankAccounts([]));
+      return;
+    }
     const supabase = createClient();
     if (!supabase) return;
     void listCompanyBankAccounts(supabase, workspace.companyId).then((rows) => setBankAccounts(rows.map((row) => ({ id: String(row.id), label: [row.bank_name, row.account_name || row.iban || row.account_number].filter(Boolean).join(" · ") || "Bank account", isPrimary: Boolean(row.is_primary) })))).catch(() => setBankAccounts([]));
@@ -295,6 +299,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
           amount: Number(payload.amount || 0),
           paymentDate: String(payload.payment_date || new Date().toISOString().slice(0, 10)),
           paymentMethod: method,
+          companyBankAccountId: method === "bank" ? String(formData.get("company_bank_account_id") || "") || null : null,
           bankReference: payload.bank_reference ? String(payload.bank_reference) : undefined,
           notes: payload.notes ? String(payload.notes) : undefined,
           paymentNumber: payload.payment_number ? String(payload.payment_number) : undefined,

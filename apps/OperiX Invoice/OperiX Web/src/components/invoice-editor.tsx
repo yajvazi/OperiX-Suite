@@ -8,6 +8,7 @@ import { cashAllowed, invoiceTotals, paymentState } from "@/lib/invoice-calculat
 import type { ClientRow, InvoiceDraft, InvoiceEditorItem, InvoiceRow, InvoiceTemplate, InvoiceTemplateConfig, PaymentMethod, ProductRow } from "@/lib/models";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalStore } from "@/lib/local/local-store";
+import { listLocalResource } from "@/lib/local/resource";
 import { useBusinessData } from "@/hooks/use-business-data";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { InvoiceDocument } from "./invoice-document";
@@ -108,7 +109,15 @@ export function InvoiceEditor() {
     return () => { cancelled = true; };
   }, [workspace.companyId, draft.branch_id, workspace.storage]);
   useEffect(() => {
-    if (!workspace.companyId || workspace.storage === "local") return;
+    if (!workspace.companyId) return;
+    if (workspace.storage === "local") {
+      void listLocalResource("branches").then((rows) => {
+        const active = rows.filter((row) => row.is_active !== false).sort((x, y) => String(x.name).localeCompare(String(y.name)));
+        setBranches(active.map((row) => ({ id: row.id, name: String(row.name), registered_address: row.registered_address ? String(row.registered_address) : undefined })));
+        if (!editId && active.length === 1) setDraft((current) => ({ ...current, branch_id: current.branch_id || active[0].id, pickup_branch_id: current.pickup_branch_id || active[0].id }));
+      }).catch(() => undefined);
+      return;
+    }
     const supabase = createClient();
     if (!supabase) return;
     void supabase.from("branches").select("id,name,registered_address").eq("company_id", workspace.companyId).eq("is_active", true).order("name").then(({ data, error }) => {

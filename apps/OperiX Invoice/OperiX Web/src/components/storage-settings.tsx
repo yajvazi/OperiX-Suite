@@ -8,6 +8,7 @@ import { CloudDataStore } from "@invoice-monorepo/data-store/cloud";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalStore } from "@/lib/local/local-store";
+import { markBackupDone } from "@/lib/local/backup-reminder";
 import { browserStorageSupported, setStorageMode } from "@/lib/local/storage-mode";
 
 function summarize(result: TransferResult) {
@@ -44,6 +45,7 @@ export function StorageSettings() {
     const link = document.createElement("a");
     link.href = url; link.download = `operix-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
     URL.revokeObjectURL(url);
+    markBackupDone();
     return "Backup created. Keep it somewhere safe.";
   });
 

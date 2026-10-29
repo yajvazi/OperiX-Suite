@@ -4,14 +4,16 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { chromium } from '@playwright/test';
+import * as pw from '@playwright/test';
+const browserName = process.argv.includes('--browser') ? process.argv[process.argv.indexOf('--browser') + 1] : 'chromium';
+const engine = pw[browserName];
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i === -1 ? d : process.argv[i + 1]; };
 const base = arg('base', 'http://127.0.0.1:3100'); const mock = arg('mock', 'http://127.0.0.1:55321');
 const out = path.join(here, 'out', 'local'); fs.mkdirSync(out, { recursive: true });
 const session = await (await fetch(`${mock}/__qa/session`)).json();
-const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const browser = await engine.launch(browserName === 'chromium' ? { args: ['--no-sandbox'] } : {});
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await context.addCookies([{ name: 'sb-invoice-auth-token', value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`, domain: new URL(base).hostname, path: '/' }]);
 await context.addInitScript(() => { try { if (!localStorage.getItem('operix.storageMode')) localStorage.setItem('operix.storageMode', 'local'); } catch {} });

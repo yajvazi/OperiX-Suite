@@ -34,6 +34,7 @@ import { useBusinessData } from "@/hooks/use-business-data";
 import type { InvoiceRow } from "@/lib/models";
 import { useTheme } from "./theme-provider";
 import { BillingStatusBanner } from "./billing-status-banner";
+import { LocalDataBanner } from "./local-data-banner";
 import {
   mobileNavigation,
   navigationSections,
@@ -410,6 +411,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           renderLink={renderTopbarLink}
         />
         <BillingStatusBanner />
+        <LocalDataBanner />
         <main className="app-main">{children}</main>
       </div>
 

@@ -24,6 +24,7 @@ import type { LucideIcon } from "lucide-react";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalStore } from "@/lib/local/local-store";
+import { LocalTaxRegisters } from "./local-tax-registers";
 import { localReportRows } from "@invoice-monorepo/data-store";
 import { money } from "@/lib/format";
 import { ErrorState, MetricCard, PageHeader, SectionCard } from "./ui";
@@ -325,7 +326,7 @@ export function ReportsView() {
   }
 
   return <div className="ux-page reports-page">
-    <PageHeader title="Reports" description="Financial statements generated from the accounting engine across the selected company group." actions={workspace.can("financial.export") ? <button type="button" className="btn" onClick={exportCsv}><Download size={16} /> Export</button> : null} />
+    <PageHeader title="Reports" description={workspace.storage === "local" ? "Summary and profit and loss from the records stored in this browser." : "Financial statements generated from the accounting engine across the selected company group."} actions={workspace.can("financial.export") ? <button type="button" className="btn" onClick={exportCsv}><Download size={16} /> Export</button> : null} />
     <section className="ux-metric-grid reports-metrics">
       <MetricCard label="Revenue" value={money(summary.revenue)} icon={BarChart3} tone="blue" />
       <MetricCard label="Expenses" value={money(summary.expenses)} icon={WalletCards} tone="red" />
@@ -368,6 +369,7 @@ export function ReportsView() {
     </SectionCard></div> : null}
     <SectionCard title="EFS status" description="Fiscalization certification is separate from ordinary invoicing." className="reports-chart-card"><div className="reports-control-row"><FileCheck2 size={18} /><strong>EFS NOT CERTIFIED</strong><span>Do not use a normal OperiX invoice as a certified fiscal receipt.</span></div></SectionCard>
     </> : null}
+    {workspace.storage === "local" ? <LocalTaxRegisters /> : null}
     <div id="balance-sheet" /><div id="cash-flow" /><div id="equity" /><div id="assets" /><div id="receivables" /><div id="payables" /><div id="purchase-book" /><div id="declarations" />
     {amendmentVisible ? <div className="resource-modal-backdrop" onMouseDown={() => setAmendmentVisible(false)}><section className="resource-modal" role="dialog" aria-modal="true" aria-labelledby="sales-book-amendment-title" onMouseDown={(event) => event.stopPropagation()}><header className="resource-modal-header"><div><h2 id="sales-book-amendment-title">Start Sales Book amendment</h2><p>Select the affected invoice and record the reason before editing.</p></div><button type="button" className="icon-btn" onClick={() => setAmendmentVisible(false)} aria-label="Close amendment dialog">×</button></header><div className="resource-modal-fields"><label className="field"><span>Affected invoice</span><select className="select" value={amendmentInvoiceId} onChange={(event) => setAmendmentInvoiceId(event.target.value)}><option value="">Select invoice</option>{salesBook.filter((row) => row.invoice_id).map((row) => <option key={String(row.invoice_id)} value={String(row.invoice_id)}>{String(row.invoice_number || row.invoice_id)} · {String(row.customer_name || "Walk-in customer")}</option>)}</select></label><label className="field"><span>Reason</span><textarea className="textarea min-h-28" value={amendmentReason} onChange={(event) => setAmendmentReason(event.target.value)} placeholder="Explain the correction" /></label></div><footer className="resource-modal-footer"><button type="button" className="btn" onClick={() => setAmendmentVisible(false)}>Cancel</button><button type="button" className="btn btn-primary" disabled={savingSalesBookAction || !amendmentInvoiceId || !amendmentReason.trim()} onClick={() => void startSalesBookAmendment()}>{savingSalesBookAction ? "Starting…" : "Continue to invoice"}</button></footer></section></div> : null}
   </div>;

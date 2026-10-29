@@ -3,13 +3,15 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { chromium } from '@playwright/test';
+import * as pw from '@playwright/test';
+const browserName = process.argv.includes('--browser') ? process.argv[process.argv.indexOf('--browser') + 1] : 'chromium';
+const engine = pw[browserName];
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const base = 'http://127.0.0.1:3100'; const mock = 'http://127.0.0.1:55321';
 const out = path.join(here, 'out', 'local'); fs.mkdirSync(out, { recursive: true });
 const session = await (await fetch(`${mock}/__qa/session`)).json();
-const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const browser = await engine.launch(browserName === 'chromium' ? { args: ['--no-sandbox'] } : {});
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
 await context.addCookies([{ name: 'sb-invoice-auth-token', value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`, domain: new URL(base).hostname, path: '/' }]);
 await context.addInitScript(() => { try { if (!localStorage.getItem('operix.storageMode')) localStorage.setItem('operix.storageMode', 'local'); } catch {} });
@@ -62,6 +64,21 @@ await page.waitForTimeout(1500);
 check('other income listed', (await page.locator('text=Interest Q3').count()) > 0);
 await page.screenshot({ path: path.join(out, 'income.png') });
 
+// branch, bank account, registers
+await page.goto(`${base}/settings?tab=branches`, { waitUntil: 'networkidle' });
+await page.waitForSelector('text=Branches', { timeout: 20000 });
+await page.locator('button:has-text("Add branch"), button:has-text("New branch")').first().click();
+await page.getByLabel('Code').fill('main'); await page.getByLabel('Name', { exact: true }).fill('Main shop');
+await page.locator('button:has-text("Save branch"), button:has-text("Add branch")').last().click();
+await page.waitForTimeout(800);
+check('branch saved', (await page.locator('text=Main shop').count()) > 0);
+await page.locator('button:has-text("Add bank"), button:has-text("New bank")').first().click();
+await page.getByLabel('Bank name *').fill('Test Bank'); await page.getByLabel('IBAN').fill('XK051212012345678906');
+await page.locator('button:has-text("Save account"), button:has-text("Add account")').last().click();
+await page.waitForTimeout(800);
+check('bank account saved', (await page.locator('text=Test Bank').count()) > 0);
+await page.goto(`${base}/reports`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1500);
+check('sales register lists the POS invoice', (await page.locator('text=/FAT-/').count()) > 0 && (await page.locator('text=Sales register').count()) > 0);
 check('no data requests to backend', dataRequests.length === 0, dataRequests.join(' ; '));
 await browser.close();
 process.exit(failures ? 1 : 0);
