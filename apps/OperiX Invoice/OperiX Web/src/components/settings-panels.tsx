@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Monitor, Moon, Pencil, Plus, Sun, Trash2, Upload } from "lucide-react";
+import { LanguageSwitch } from "./language-switch";
 import { createClient } from "@/lib/supabase/client";
 import { listLocalResource, removeLocalResource, saveLocalResource } from "@/lib/local/resource";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -36,6 +37,9 @@ export function AppearancePanel({ brandColor, onBrandColor }: { brandColor: stri
     <Heading title="Appearance" text="Display mode and brand colour. The display mode is stored on this device." />
     <h3 className="mt-6 text-sm font-semibold">App theme</h3>
     <div className="settings-choice-row mt-3" role="radiogroup" aria-label="App theme">{modes.map(({ value, label, icon: Icon }) => <button type="button" role="radio" aria-checked={preference === value} key={value} className={`settings-choice ${preference === value ? "is-active" : ""}`} onClick={() => setPreference(value)}><Icon size={16} /> {label}</button>)}</div>
+    <h3 className="mt-7 text-sm font-semibold">Language</h3>
+    <p className="muted mt-1 text-xs">The language of the menus and screens. Invoices keep the language chosen for each invoice.</p>
+    <LanguageSwitch />
     <h3 className="mt-7 text-sm font-semibold">Brand colour</h3>
     <p className="muted mt-1 text-xs">Used on invoices and documents. Save to apply.</p>
     <div className="mt-3 flex flex-wrap items-center gap-3">{BRAND_COLORS.map((color) => <button type="button" key={color} aria-label={`Brand colour ${color}`} aria-pressed={brandColor.toLowerCase() === color.toLowerCase()} className={`settings-swatch ${brandColor.toLowerCase() === color.toLowerCase() ? "is-active" : ""}`} style={{ background: color }} onClick={() => onBrandColor(color)}>{brandColor.toLowerCase() === color.toLowerCase() ? <Check size={14} color="#fff" /> : null}</button>)}

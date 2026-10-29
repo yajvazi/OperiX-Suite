@@ -356,9 +356,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const sidebarSections = [
     { label: "Workspace", items: compact([sidebarItem("/dashboard"), sidebarItem("/pos")]) },
     { label: "Manage", items: compact([
-      sidebarGroup("Sales", FileText, ["/invoices", "/quotes", "/contracts", "/payments"]),
       sidebarItem("/customers"),
       sidebarItem("/products"),
+      sidebarGroup("Sales", FileText, ["/invoices", "/quotes", "/contracts", "/payments"]),
       sidebarGroup("Purchases", WalletCards, ["/expenses", "/vendors", "/supplier-bills", "/vendor-payments"]),
       sidebarGroup("Money", HandCoins, ["/cash-bank", "/income", "/accounting", "/payroll"]),
       sidebarGroup("Reports", ReceiptText, ["/reports", "/tax-reports"]),

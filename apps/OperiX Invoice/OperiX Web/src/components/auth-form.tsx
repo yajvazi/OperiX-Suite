@@ -1,5 +1,6 @@
 "use client";
 
+import { LanguageSwitch } from "./language-switch";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, LockKeyhole, Mail } from "lucide-react";
@@ -98,6 +99,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <button className="btn btn-primary login-submit" disabled={loading}>{loading ? "Please wait…" : isLogin ? "Sign in" : "Create account"}<ArrowRight size={17} /></button>
         </form>
         <div className="login-footer">{isLogin ? <span>Protected by your OperiX account</span> : <span>Already have an account? <Link href="/login">Sign in</Link></span>}{isLogin ? <Link href="/auth/reset">Forgot password?</Link> : null}</div>
+        <div className="mt-4 flex justify-center"><LanguageSwitch compact /></div>
       </section>
     </main>
   );

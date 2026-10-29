@@ -7,7 +7,7 @@ type InvoiceLogoProps = {
 };
 
 export function InvoiceLogo({ href, className = "" }: InvoiceLogoProps) {
-  const logo = <span className={`operix-product-logo ${className}`.trim()}>
+  const logo = <span className={`operix-product-logo ${className}`.trim()} data-no-translate>
     <span className="operix-product-logo-mark" aria-hidden="true"><ReceiptText size={17} strokeWidth={2.1} /></span>
     <span className="operix-product-logo-copy"><strong>OperiX</strong><span>Invoice</span></span>
   </span>;
