@@ -13,4 +13,4 @@ export async function proxy(request: NextRequest) {
   return updateSession(request);
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|otf|woff|woff2|ttf)$).*)"] };
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|otf|woff|woff2|ttf|mjs|wasm)$).*)"] };

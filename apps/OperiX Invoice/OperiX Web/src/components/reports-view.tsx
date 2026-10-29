@@ -23,6 +23,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
+import { getLocalStore } from "@/lib/local/local-store";
+import { localReportRows } from "@invoice-monorepo/data-store";
 import { money } from "@/lib/format";
 import { ErrorState, MetricCard, PageHeader, SectionCard } from "./ui";
 import { createSalesBookAmendment, ensureSalesBookPeriod, listSalesBookPeriods, listSalesBookTransactions, markSalesBookDeclared, type SalesBookPeriodRow } from "@invoice-monorepo/api/repositories";
@@ -141,7 +143,13 @@ export function ReportsView() {
       setLoading(false);
       return;
     }
-    const [summaryResult, profitLossResult, trialBalanceResult, reconciliationResult] = await Promise.all([
+    const localResults = workspace.storage === "local" ? await getLocalStore().then(async (store) => ({
+      summary: await localReportRows(store, "operix_report_summary"),
+      profitLoss: await localReportRows(store, "operix_profit_loss"),
+    })) : null;
+    const [summaryResult, profitLossResult, trialBalanceResult, reconciliationResult] = localResults ? [
+      { data: localResults.summary, error: null }, { data: localResults.profitLoss, error: null }, { data: [], error: null }, { data: [], error: null },
+    ] as never : await Promise.all([
       supabase.from("operix_report_summary").select("*").in("company_id", workspace.companyIds),
       supabase.from("operix_profit_loss").select("*").in("company_id", workspace.companyIds).order("period_start", { ascending: false }).limit(100),
       supabase.from("operix_trial_balance").select("*").in("company_id", workspace.companyIds).order("account_code").limit(100),
@@ -168,7 +176,7 @@ export function ReportsView() {
     setTrialBalance((trialBalanceResult.data || []) as ReportRow[]);
     setReconciliation((reconciliationResult.data || [])[0] as ReportRow | undefined || null);
     setLoading(false);
-  }, [workspace.companyIds, workspace.loading]);
+  }, [workspace.companyIds, workspace.loading, workspace.storage]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadReports(), 0);
@@ -177,7 +185,7 @@ export function ReportsView() {
 
   const loadSalesBookPeriods = useCallback(async () => {
     const supabase = createClient();
-    if (!supabase || workspace.loading || !workspace.can("sales_book.view")) return;
+    if (!supabase || workspace.loading || workspace.storage === "local" || !workspace.can("sales_book.view")) return;
     if (!workspace.companyIds.length) { setSalesBookPeriods([]); setSelectedSalesBookPeriodId(null); setSalesBook([]); setSalesBookLoading(false); return; }
     setSalesBookLoading(true);
     setSalesBookError("");

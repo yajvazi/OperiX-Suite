@@ -17,7 +17,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 const WEB_APP = 'apps/OperiX Invoice/OperiX Web';
 const PACKAGES = [
-  'accounting', 'api', 'app-shell', 'billing', 'commercial-documents', 'invoice-template',
+  'accounting', 'api', 'app-shell', 'billing', 'commercial-documents', 'data-store', 'invoice-template',
   'money', 'operix-ui', 'payroll', 'public-api', 'report-templates', 'types',
 ];
 const INCLUDE_DIRS = [WEB_APP, ...PACKAGES.map((name) => `packages/${name}`)];

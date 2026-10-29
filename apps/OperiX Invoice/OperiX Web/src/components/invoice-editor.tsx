@@ -7,6 +7,7 @@ import { addDays, isoToday, money } from "@/lib/format";
 import { cashAllowed, invoiceTotals, paymentState } from "@/lib/invoice-calculations";
 import type { ClientRow, InvoiceDraft, InvoiceEditorItem, InvoiceRow, InvoiceTemplate, InvoiceTemplateConfig, PaymentMethod, ProductRow } from "@/lib/models";
 import { createClient } from "@/lib/supabase/client";
+import { getLocalStore } from "@/lib/local/local-store";
 import { useBusinessData } from "@/hooks/use-business-data";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { InvoiceDocument } from "./invoice-document";
@@ -84,7 +85,7 @@ export function InvoiceEditor() {
   }, [workspace.company?.currency, workspace.profile?.currency]);
 
   useEffect(() => {
-    if (!workspace.user) return;
+    if (!workspace.user || workspace.storage === "local") return;
     const supabase = createClient();
     if (!supabase) return;
     void supabase.from("invoice_templates").select("*").eq("user_id", workspace.user.id).eq("is_default", true).maybeSingle().then(({ data, error }) => {
@@ -94,10 +95,10 @@ export function InvoiceEditor() {
       setTemplateConfig((current) => ({ ...current, ...shared }));
       if (!editId) setDraft((current) => ({ ...current, due_date: addDays(current.issue_date, shared.defaultDueDays || 30), items: current.items.map((item) => ({ ...item, tax_rate: shared.defaultTaxRate ?? item.tax_rate })) }));
     });
-  }, [editId, workspace.user]);
+  }, [editId, workspace.storage, workspace.user]);
 
   useEffect(() => {
-    if (!workspace.companyId || !draft.branch_id) { setBranchStock({}); return; }
+    if (!workspace.companyId || !draft.branch_id || workspace.storage === "local") { setBranchStock({}); return; }
     const supabase = createClient();
     if (!supabase) return;
     let cancelled = false;
@@ -105,9 +106,9 @@ export function InvoiceEditor() {
       .then((rows) => { if (!cancelled) setBranchStock(Object.fromEntries(rows.map((row) => [row.product_id, Number(row.stock_quantity) || 0]))); })
       .catch(() => { if (!cancelled) setBranchStock({}); });
     return () => { cancelled = true; };
-  }, [workspace.companyId, draft.branch_id]);
+  }, [workspace.companyId, draft.branch_id, workspace.storage]);
   useEffect(() => {
-    if (!workspace.companyId) return;
+    if (!workspace.companyId || workspace.storage === "local") return;
     const supabase = createClient();
     if (!supabase) return;
     void supabase.from("branches").select("id,name,registered_address").eq("company_id", workspace.companyId).eq("is_active", true).order("name").then(({ data, error }) => {
@@ -120,7 +121,7 @@ export function InvoiceEditor() {
         });
       }
     });
-  }, [workspace.companyId]);
+  }, [workspace.companyId, workspace.storage]);
 
 
   useEffect(() => {
@@ -130,18 +131,22 @@ export function InvoiceEditor() {
     }
     const supabase = createClient();
     if (!supabase) return;
-    void listInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, {
-      clientId: draft.client_id,
-      select: "id,invoice_number,client_id,issue_date,due_date,status,type,subtype,commercial_document_type,commercial_status,total_amount,discount_percent,notes,items:invoice_items(*)",
-      limit: 100,
-    }).then((rows) => setSourceDocuments((rows as unknown as InvoiceRow[]).filter((row) => ["QUOTE", "PROFORMA", "SALES_ORDER", "INVOICE", "FINAL_INVOICE", "SIMPLIFIED_INVOICE"].includes(resolveCommercialDocumentType(row))))).catch(() => setSourceDocuments([]));
-  }, [companyScopeKey, draft.client_id, clients, workspace.companyIds, workspace.user]);
+    void (workspace.storage === "local"
+      ? getLocalStore().then((store) => store.listInvoices({ clientId: draft.client_id, limit: 100, fullItems: true }))
+      : listInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, {
+        clientId: draft.client_id,
+        select: "id,invoice_number,client_id,issue_date,due_date,status,type,subtype,commercial_document_type,commercial_status,total_amount,discount_percent,notes,items:invoice_items(*)",
+        limit: 100,
+      })).then((rows) => setSourceDocuments((rows as unknown as InvoiceRow[]).filter((row) => ["QUOTE", "PROFORMA", "SALES_ORDER", "INVOICE", "FINAL_INVOICE", "SIMPLIFIED_INVOICE"].includes(resolveCommercialDocumentType(row))))).catch(() => setSourceDocuments([]));
+  }, [companyScopeKey, draft.client_id, clients, workspace.companyIds, workspace.storage, workspace.user]);
 
   useEffect(() => {
     if (!editId || !workspace.user) return;
     const supabase = createClient();
     if (!supabase) return;
-    void getInvoice(supabase, editId, { userId: workspace.user.id, companyIds: workspace.companyIds }, "*, client:clients(*), items:invoice_items(*, product:products(image_url))").then((data) => {
+    void (workspace.storage === "local"
+      ? getLocalStore().then((store) => store.getInvoice(editId))
+      : getInvoice(supabase, editId, { userId: workspace.user.id, companyIds: workspace.companyIds }, "*, client:clients(*), items:invoice_items(*, product:products(image_url))")).then((data) => {
       if (!data) { setMessage("Invoice not found or not available in this workspace."); return; }
       const row = data as Record<string, unknown>;
       const itemRows = Array.isArray(row.items) ? row.items as Array<Record<string, unknown>> : [];
@@ -153,13 +158,15 @@ export function InvoiceEditor() {
       setDraft({ client_id: row.client_id ? String(row.client_id) : "", invoice_number: String(row.invoice_number || ""), issue_date: String(row.issue_date || today), due_date: String(row.due_date || row.issue_date || today), payment_method: String(row.payment_method || "bank") as PaymentMethod, currency: String(row.currency || workspace.company?.currency || workspace.profile?.currency || "EUR"), amount_received: Number(row.amount_received || 0), notes: String(row.notes || ""), status: String(row.status || "draft") as InvoiceDraft["status"], commercial_document_type: resolvedDocumentType, source_document_type: row.source_document_type ? String(row.source_document_type) : null, source_document_id: row.source_document_id ? String(row.source_document_id) : null, branch_id: row.branch_id ? String(row.branch_id) : null, delivery_method: row.delivery_method ? String(row.delivery_method) as InvoiceDraft["delivery_method"] : null, pickup_branch_id: row.pickup_branch_id ? String(row.pickup_branch_id) : null, delivery_details: String(row.delivery_details || ""), post_cod: Boolean(row.post_cod), discount_percent: Number(row.discount_percent || 0), show_product_pictures: Boolean(row.show_product_pictures), show_stamp: true, show_signature: true, buyer_signature_url: row.buyer_signature_url ? String(row.buyer_signature_url) : null, customer_signature_requested: Boolean(row.customer_signature_requested), customer_signature_status: String(row.customer_signature_status || "not_requested") as InvoiceDraft["customer_signature_status"], customer_signature_name: row.customer_signature_name ? String(row.customer_signature_name) : null, customer_signed_at: row.customer_signed_at ? String(row.customer_signed_at) : null, items: itemRows.map((item) => ({ id: String(item.id), product_id: item.product_id ? String(item.product_id) : undefined, description: String(item.description || ""), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), tax_included: Boolean(item.tax_included), discount: Number(item.discount || 0), unit: String(item.unit || "pcs"), sku: item.sku ? String(item.sku) : undefined, image_url: item.image_url ? String(item.image_url) : (item.product && typeof item.product === "object" && (item.product as Record<string, unknown>).image_url ? String((item.product as Record<string, unknown>).image_url) : undefined) })) });
       setTemplate(row.template_id === "thermal" || row.paper_size === "Receipt" ? "thermal" : "corporate");
     }).catch((loadError) => setMessage(loadError instanceof Error ? loadError.message : "The invoice could not be loaded."));
-  }, [companyScopeKey, editId, today, workspace.companyIds, workspace.company?.currency, workspace.profile?.currency, workspace.user]);
+  }, [companyScopeKey, editId, today, workspace.companyIds, workspace.company?.currency, workspace.profile?.currency, workspace.storage, workspace.user]);
 
   useEffect(() => {
     if (!convertId || editId || !workspace.user) return;
     const supabase = createClient();
     if (!supabase) return;
-    void getInvoice(supabase, convertId, { userId: workspace.user.id, companyIds: workspace.companyIds }, "*, client:clients(*), items:invoice_items(*, product:products(image_url))").then((data) => {
+    void (workspace.storage === "local"
+      ? getLocalStore().then((store) => store.getInvoice(convertId))
+      : getInvoice(supabase, convertId, { userId: workspace.user.id, companyIds: workspace.companyIds }, "*, client:clients(*), items:invoice_items(*, product:products(image_url))")).then((data) => {
       if (!data) { setMessage("The source document was not found or is not available in this workspace."); return; }
       const row = data as Record<string, unknown>;
       const source = String(row.invoice_number || "");
@@ -172,7 +179,7 @@ export function InvoiceEditor() {
       setDraft({ client_id: row.client_id ? String(row.client_id) : "", invoice_number: "", issue_date: today, due_date: row.due_date ? String(row.due_date) : addDays(today, 14), payment_method: String(row.payment_method || "bank") as PaymentMethod, currency: String(row.currency || workspace.company?.currency || workspace.profile?.currency || "EUR"), amount_received: 0, notes: String(row.notes || `Converted from ${sourceType.toLowerCase()}`), status: "draft", commercial_document_type: targetType, source_document_id: convertId, source_document_type: sourceType, discount_percent: Number(row.discount_percent || 0), show_product_pictures: Boolean(row.show_product_pictures), show_stamp: true, show_signature: true, customer_signature_requested: false, customer_signature_status: "not_requested", buyer_signature_url: null, items: itemRows.map((item) => ({ id: crypto.randomUUID(), product_id: item.product_id ? String(item.product_id) : undefined, description: String(item.description || ""), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), tax_included: Boolean(item.tax_included), discount: Number(item.discount || 0), unit: String(item.unit || "pcs"), sku: item.sku ? String(item.sku) : undefined, image_url: item.image_url ? String(item.image_url) : undefined })) });
       setMessage(source ? `Ready to convert ${source}. A new number will be assigned when saved.` : "Ready to convert this document.");
     }).catch((loadError) => setMessage(loadError instanceof Error ? loadError.message : "The source document could not be loaded."));
-  }, [companyScopeKey, convertId, editId, search, today, workspace.companyIds, workspace.company?.currency, workspace.profile?.currency, workspace.user]);
+  }, [companyScopeKey, convertId, editId, search, today, workspace.companyIds, workspace.company?.currency, workspace.profile?.currency, workspace.storage, workspace.user]);
 
   const totals = useMemo(() => invoiceTotals(draft), [draft]);
   const payment = paymentState(totals.total, draft.amount_received);
@@ -254,6 +261,38 @@ export function InvoiceEditor() {
     if (!domainDraft.lines.length || domainDraft.lines.some((item) => !item.description)) { setMessage("Add at least one completed item."); return; }
     if (status !== "draft" && domainDraft.customerSignatureRequested && !domainDraft.buyerSignatureUrl) { setMessage("Ask the customer to sign before creating the invoice."); setShowCustomerSignature(true); return; }
     setSaving(true); setMessage("");
+    if (workspace.storage === "local") {
+      try {
+        const store = await getLocalStore();
+        const { userId: _userId, companyId: _companyId, lines: _lines, status: draftStatus, currency: draftCurrency, notes: draftNotes, paymentMethod: draftPaymentMethod, idempotencyKey: draftKey, issueDate: _issue, dueDate: _due, clientId: _client, documentType: _type, commercialStatus: _commercial, invoiceNumber: _number, ...extraFields } = domainDraft;
+        void [_userId, _companyId, _lines, _issue, _due, _client, _type, _commercial, _number];
+        const issuingNow = documentType === "INVOICE" || (draftStatus !== undefined && draftStatus !== "draft");
+        const savedLocal = await store.saveInvoiceDocument({
+          id: editId || undefined,
+          documentType,
+          clientId: domainDraft.clientId,
+          issueDate: domainDraft.issueDate,
+          dueDate: domainDraft.dueDate,
+          currency: draftCurrency,
+          status: status === "draft" ? "draft" : issuingNow ? "issued" : "draft",
+          lines: domainDraft.lines,
+          notes: draftNotes ?? undefined,
+          paymentMethod: draftPaymentMethod,
+          idempotencyKey: draftKey ?? undefined,
+          draft: extraFields,
+        });
+        if (status !== "draft" && documentType === "INVOICE" && draft.payment_method === "cash" && !editId && Number(savedLocal.total_amount) > 0 && draft.amount_received >= Number(savedLocal.total_amount)) {
+          await store.recordCustomerPayment({ invoiceId: savedLocal.id, amount: Number(savedLocal.total_amount), paymentDate: domainDraft.issueDate, paymentMethod: "cash", notes: `Cash payment for ${String(savedLocal.invoice_number || "")}`.trim() });
+        }
+        saveIdempotencyKey.current = null;
+        setSaving(false);
+        router.push(`/invoices/${savedLocal.id}`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "The invoice could not be saved.");
+        setSaving(false);
+      }
+      return;
+    }
     const supabase = createClient();
     if (!supabase) { setMessage("Supabase is not configured."); setSaving(false); return; }
     try {
@@ -311,7 +350,7 @@ export function InvoiceEditor() {
   }
 
   async function print(receipt = false) { if (!canExportCurrent) { setMessage("Financial export permission is required."); return; } setMessage(""); try { await openInvoicePdf({ draft, client, company, receipt, template, config: templateConfig }, `${draft.invoice_number}.pdf`); } catch (error) { setMessage(error instanceof Error ? error.message : "The PDF could not be generated."); } }
-  async function download() { if (!canExportCurrent) { setMessage("Financial export permission is required."); return; } setMessage(""); const response = await fetch("/api/pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ draft, client, company, receipt: false, template, config: templateConfig }) }); if (!response.ok) { setMessage("The PDF could not be generated. Try printing the preview."); return; } const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${draft.invoice_number}.pdf`; link.click(); URL.revokeObjectURL(url); }
+  async function download() { if (!canExportCurrent) { setMessage("Financial export permission is required."); return; } setMessage(""); if (workspace.storage === "local") { await print(); return; } const response = await fetch("/api/pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ draft, client, company, receipt: false, template, config: templateConfig }) }); if (!response.ok) { setMessage("The PDF could not be generated. Try printing the preview."); return; } const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${draft.invoice_number}.pdf`; link.click(); URL.revokeObjectURL(url); }
   function nextMobileStep() { if (mobileStep === "customer") { setMessage(""); setMobileStep("items"); return; } if (mobileStep === "items") { if (!draft.items.length || draft.items.some((item) => !item.description)) { setMessage("Add at least one completed item before continuing."); return; } setMessage(""); setMobileStep("review"); return; } void save("sent"); }
 
   return <div className="mx-auto invoice-editor-page" data-mobile-step={mobileStep}>

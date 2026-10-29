@@ -216,3 +216,23 @@ needs the same rules in TypeScript. From `packages/api` and the mobile app, grou
   users, subscription, advanced settings, other income, invoice template editors) show a "cloud plan"
   notice in local mode (`components/mobile/CloudOnlyGate.tsx`) instead of failing.
 - Still to decide: on-device invoice templates, other income, contracts, and sales-book/tax reports for the free tier.
+
+## Web on-device mode (first cut)
+
+The web app can keep the business in the browser (SQLite compiled to WebAssembly, stored in the browser's
+private file system) instead of the cloud. Switch in Settings -> Data storage; the choice is kept in
+`localStorage` (`operix.storageMode`). The account is still required to sign in.
+
+- Database runs in a worker (`src/lib/local/sqlite.worker.ts`), talks to the shared `LocalDataStore` through
+  `worker-driver.ts`. The sqlite-wasm files are copied to `public/sqlite` by `scripts/copy-sqlite-wasm.mjs`
+  (runs before `dev` and `build`) and loaded as static files; bundlers cannot follow its internal workers.
+- `useWorkspace` returns a local workspace (single company, all permissions) and `storage`; `useBusinessData`
+  reads from the store. Moved onto the store: customers, products, vendors, expenses, supplier bills,
+  vendor payments, invoices (list, editor, detail, status, convert, delete), payments recorded against an
+  invoice, global search, reports (profit and loss, summary), company settings, backup export/import and
+  customer/product/supplier copy to and from the cloud. Printing/PDF is done by the browser (no server).
+- Still cloud-only in local mode: POS, contracts, other income, payments without an invoice, bank/fund accounts,
+  branches, tax book, payroll, accounting ledger reports, team, billing, developers, portal and payment links.
+- Needs HTTPS (or localhost) and a browser with OPFS. One tab at a time holds the database.
+- The OSS export now includes `packages/data-store`; `deploy/web-oss/package-lock.json` was regenerated for it.
+- QA: `qa/e2e-local.mjs` (customer, reload, backup, invoice, list, reports) passes against the QA tree.

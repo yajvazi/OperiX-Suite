@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-sqlite-wasm.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-sqlite-wasm.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -36,7 +38,9 @@
     "recharts": "^3.10.0",
     "zod": "^4.4.3",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "react-is": "19.2.3"
+    "react-is": "19.2.3",
+    "@invoice-monorepo/data-store": "*",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

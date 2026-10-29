@@ -5,6 +5,8 @@ import type { User } from "@supabase/supabase-js";
 import { resolveWorkspace } from "@invoice-monorepo/api/workspace";
 import { createClient } from "@/lib/supabase/client";
 import type { InvoiceTemplateConfig } from "@/lib/models";
+import { getStorageMode } from "@/lib/local/storage-mode";
+import { getLocalStore } from "@/lib/local/local-store";
 
 export interface WorkspaceProfile {
   id: string;
@@ -90,6 +92,7 @@ export function useWorkspace() {
   const [platformAdmin, setPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [storage, setStorage] = useState<"local" | "cloud">("cloud");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -110,6 +113,23 @@ export function useWorkspace() {
 
     try {
       setUser(authData.user);
+      if (getStorageMode() === "local") {
+        // Free tier: the business lives in this browser. The account only proves who is signed in.
+        const store = await getLocalStore();
+        const localCompany = (await store.getCompany()) as unknown as WorkspaceCompany;
+        setStorage("local");
+        setProfile({ ...(localCompany as WorkspaceProfile), id: authData.user.id, company_id: store.companyId, active_company_id: store.companyId });
+        setCompany(localCompany);
+        setCompanies([localCompany]);
+        setCompanyIds([store.companyId]);
+        setCompanyId(store.companyId);
+        setRoleCode("company_administrator");
+        setPermissions([]);
+        setScopes({});
+        setPlatformAdmin(false);
+        return;
+      }
+      setStorage("cloud");
       const resolved = await resolveWorkspace(supabase, authData.user.id, { membershipOnly: true });
       setProfile(resolved.profile as WorkspaceProfile);
       setCompany(resolved.company as WorkspaceCompany | null);
@@ -142,8 +162,9 @@ export function useWorkspace() {
     permissions,
     scopes,
     platformAdmin,
-    can: (permission: string) => platformAdmin || permissions.includes(permission),
-    scope: (resource: string) => scopes[resource] || "OWN",
+    storage,
+    can: (permission: string) => storage === "local" || platformAdmin || permissions.includes(permission),
+    scope: (resource: string) => (storage === "local" ? "ALL" : scopes[resource] || "OWN"),
     isGroup: companyIds.length > 1,
     loading,
     error,

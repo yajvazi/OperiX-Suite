@@ -4,13 +4,15 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Building2, Check, Code2, CreditCard, FileText, Globe2, Hash, Landmark, Mail, Palette, Save, ShieldCheck, UserRound, Users } from "lucide-react";
+import { Building2, Check, Code2, CreditCard, HardDrive, FileText, Globe2, Hash, Landmark, Mail, Palette, Save, ShieldCheck, UserRound, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import type { InvoiceTemplate, InvoiceTemplateConfig } from "@/lib/models";
 import { templateConfigFromRow, templateRowFromConfig, type InvoiceTemplateRow } from "@/lib/invoice-template-settings";
 import { LoadingSkeleton, PageHeader } from "./ui";
 import { DataTransferSettings } from "./data-transfer-settings";
+import { StorageSettings } from "./storage-settings";
+import { getLocalStore } from "@/lib/local/local-store";
 import { BillingPanel } from "./billing-panel";
 import { UsersAccessPanel } from "./users-access-panel";
 import { DevelopersPanel } from "./developers-panel";
@@ -29,6 +31,7 @@ const tabs=[
   {id:"email",label:"Email (SMTP)",icon:Mail},
   {id:"billing",label:"Billing & Subscription",icon:CreditCard},
   {id:"developers",label:"Developers",icon:Code2},
+  {id:"storage",label:"Data storage",icon:HardDrive},
   {id:"data-transfer",label:"Data Import / Export",icon:DatabaseIcon},
 ];
 
@@ -71,17 +74,22 @@ function SettingsViewContent(){
   function uploadSignature(event:React.ChangeEvent<HTMLInputElement>){const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>set("signature_url",String(reader.result||""));reader.readAsDataURL(file);}
 
   useEffect(()=>{const source=workspace.company||workspace.profile;if(!source)return;queueMicrotask(()=>{setForm(current=>({...current,...Object.fromEntries(Object.entries(source).filter(([key,value])=>!['id','created_at','updated_at'].includes(key)&&value!==null&&value!==undefined&&typeof value!=="object"))}));setTemplate({...defaultTemplate,...(workspace.profile?.template_config||{}),...(workspace.company?.template_config||{}),visibleColumns:{...defaultTemplate.visibleColumns,...workspace.profile?.template_config?.visibleColumns,...workspace.company?.template_config?.visibleColumns}});});},[workspace.company,workspace.profile]);
-  useEffect(()=>{if(!workspace.user)return;const supabase=createClient();if(!supabase)return;void supabase.from("invoice_templates").select("*").eq("user_id",workspace.user.id).eq("is_default",true).maybeSingle().then(({data,error})=>{if(error){setMessage(error.message);return;}if(data){const row=data as InvoiceTemplateRow;setTemplateId(row.id);setTemplateName(row.name||"Default Template");setTemplate(current=>({...current,...templateConfigFromRow(row),style:current.style,pageSize:current.pageSize}));}});},[workspace.user]);
-  useEffect(()=>{if(!workspace.companyId)return;const supabase=createClient();if(!supabase)return;void supabase.from("compliance_config_sets").select("id,config_type,name,description,compliance_config_versions(id,version,status,effective_from,effective_until,configuration)").eq("company_id",workspace.companyId).order("config_type").then(({data,error})=>{if(error)setMessage(error.message);else setComplianceConfigs((data||[]) as ComplianceConfigRow[]);});},[workspace.companyId]);
-  useEffect(()=>{if(!workspace.companyId)return;const supabase=createClient();if(!supabase)return;void supabase.rpc("get_efs_readiness",{p_company_id:workspace.companyId,p_installation_id:null}).then(({data})=>{if(data)setEfsReadiness(data as EfsReadinessRow);});},[workspace.companyId]);
-  useEffect(()=>{if(!workspace.companyId)return;const supabase=createClient();if(!supabase)return;void supabase.from("document_sequences").select("id,document_type,prefix,suffix,next_value,padding,current_period_key,reset_rule,branch_id").eq("company_id",workspace.companyId).is("branch_id",null).eq("is_active",true).order("document_type").then(({data,error})=>{if(error)setMessage(error.message);else setNumberingSequences((data||[]) as NumberSequenceRow[]);});},[workspace.companyId]);
+  useEffect(()=>{if(!workspace.user||workspace.storage==="local")return;const supabase=createClient();if(!supabase)return;void supabase.from("invoice_templates").select("*").eq("user_id",workspace.user.id).eq("is_default",true).maybeSingle().then(({data,error})=>{if(error){setMessage(error.message);return;}if(data){const row=data as InvoiceTemplateRow;setTemplateId(row.id);setTemplateName(row.name||"Default Template");setTemplate(current=>({...current,...templateConfigFromRow(row),style:current.style,pageSize:current.pageSize}));}});},[workspace.user,workspace.storage]);
+  useEffect(()=>{if(!workspace.companyId||workspace.storage==="local")return;const supabase=createClient();if(!supabase)return;void supabase.from("compliance_config_sets").select("id,config_type,name,description,compliance_config_versions(id,version,status,effective_from,effective_until,configuration)").eq("company_id",workspace.companyId).order("config_type").then(({data,error})=>{if(error)setMessage(error.message);else setComplianceConfigs((data||[]) as ComplianceConfigRow[]);});},[workspace.companyId,workspace.storage]);
+  useEffect(()=>{if(!workspace.companyId||workspace.storage==="local")return;const supabase=createClient();if(!supabase)return;void supabase.rpc("get_efs_readiness",{p_company_id:workspace.companyId,p_installation_id:null}).then(({data})=>{if(data)setEfsReadiness(data as EfsReadinessRow);});},[workspace.companyId,workspace.storage]);
+  useEffect(()=>{if(!workspace.companyId||workspace.storage==="local")return;const supabase=createClient();if(!supabase)return;void supabase.from("document_sequences").select("id,document_type,prefix,suffix,next_value,padding,current_period_key,reset_rule,branch_id").eq("company_id",workspace.companyId).is("branch_id",null).eq("is_active",true).order("document_type").then(({data,error})=>{if(error)setMessage(error.message);else setNumberingSequences((data||[]) as NumberSequenceRow[]);});},[workspace.companyId,workspace.storage]);
 
   const set=(key:string,value:string|number|boolean)=>setForm(current=>({...current,[key]:value}));
   async function save(){
     if(!workspace.user){setMessage("Your session has expired.");return;}
     if(!workspace.can("settings.company")&&!workspace.can("settings.invoice")&&!workspace.can("settings.tax")&&!workspace.can("settings.bank")&&!workspace.can("settings.integrations")){setMessage("You do not have permission to change company settings.");return;}
-    const supabase=createClient();if(!supabase){setMessage("Supabase is not configured.");return;}
     setSaving(true);setMessage("");setSuccess(false);
+    if(workspace.storage==="local"){
+      try{const store=await getLocalStore();await store.save("companies",{id:store.companyId,...Object.fromEntries(Object.entries({...form,template_config:template}).filter(([key])=>!["id","created_at","updated_at"].includes(key)))});await workspace.refresh();setSuccess(true);window.setTimeout(()=>setSuccess(false),2200);}
+      catch(error){setMessage(error instanceof Error?error.message:"The settings could not be saved.");}
+      setSaving(false);return;
+    }
+    const supabase=createClient();if(!supabase){setMessage("Supabase is not configured.");setSaving(false);return;}
     const payload={...form,template_config:template};
     const profilePayload=Object.fromEntries(Object.entries(payload).filter(([key])=>key!=="city"&&key!=="country"&&!companyOnlyFields.has(key)&&!['id','created_at','updated_at'].includes(key)));
     const profileResult=await supabase.from("profiles").update(profilePayload).eq("id",workspace.user.id);
@@ -104,7 +112,8 @@ function SettingsViewContent(){
   function chooseTemplate(style:InvoiceTemplate){setTemplate(current=>({...current,style,pageSize:style==="thermal"?"Receipt":"A4"}));}
   function toggleTemplate(key:keyof InvoiceTemplateConfig){setTemplate(current=>({...current,[key]:!current[key]}));}
 
-  const visibleTabs=tabs.filter(item=>item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="billing"?workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="compliance"?workspace.can("settings.tax"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
+  const cloudOnlyTabs=["users-access","billing","developers","email","compliance","branches","payments","profile"];
+  const visibleTabs=tabs.filter(item=>item.id==="storage"?true:workspace.storage==="local"&&cloudOnlyTabs.includes(item.id)?false:item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="billing"?workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="compliance"?workspace.can("settings.tax"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
   const tab=visibleTabs.some(item=>item.id===selectedTab)?selectedTab:(visibleTabs[0]?.id||selectedTab);
   if(!workspace.loading&&!visibleTabs.length){return <div className="p-4 lg:p-6 max-w-[1000px] mx-auto"><div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><h1 className="font-semibold">Settings access restricted</h1><p className="mt-1 text-xs">Your company administrator has not granted you access to company settings.</p></div></div>}
 
@@ -123,6 +132,7 @@ function SettingsViewContent(){
     {!workspace.loading&&tab==="payments"?<><SectionTitle title="Payment Methods" text="Payment links and bank details shared across both apps."/><div className="grid gap-4 mt-6"><SettingField label="Stripe payment link" value={form.payment_link_stripe} onChange={value=>set("payment_link_stripe",value)}/><SettingField label="PayPal payment link" value={form.payment_link_paypal} onChange={value=>set("payment_link_paypal",value)}/><div className="p-4 rounded border bg-[#f7f9fc] text-xs"><b>Bank transfer</b><p className="muted mt-1">{form.bank_name?`${form.bank_name} · ${form.bank_iban||form.bank_account}`:"Add bank details under Company Profile."}</p></div></div></>:null}
     {!workspace.loading&&tab==="billing"?<><SectionTitle title="Billing & Subscription" text="Your shared OperiX Invoice subscription, trial, usage, and secure Stripe management."/><div className="mt-6"><BillingPanel/></div></>:null}
     {!workspace.loading&&tab==="developers"?<><SectionTitle title="Developers" text="Manage tenant-scoped API access, webhooks, usage, logs, and documentation."/><div className="mt-6"><DevelopersPanel/></div></>:null}
+    {!workspace.loading&&tab==="storage"?<><SectionTitle title="Data storage" text="Where your business data lives, plus backups and copying between this browser and the cloud."/><StorageSettings/></>:null}
     {!workspace.loading&&tab==="data-transfer"?<><SectionTitle title="Data Import / Export" text="Transfer tenant-scoped clients, products, vendors and expenses without exposing records from another workspace."/><DataTransferSettings/></>:null}
     {!["billing","developers","users-access","profile","branches","email"].includes(tab) ? <footer className="mt-10 pt-5 border-t flex justify-end"><button className="btn btn-primary" onClick={save} disabled={saving||workspace.loading}>{success?<Check size={16}/>:<Save size={16}/>} {success?"Saved":saving?"Saving…":"Save Changes"}</button></footer> : null}
   </section></div></div>;

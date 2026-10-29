@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { resourceConfigs, type ResourceConfig } from "@/lib/resource-config";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { listLocalResource, removeLocalResource, saveLocalResource } from "@/lib/local/resource";
+import { getLocalStore } from "@/lib/local/local-store";
 import { PurchasesNav } from "@/components/purchases-nav";
 import { PortalLinksView } from "@/components/portal-links-view";
 import { ProductImportDialog } from "@/components/product-import-dialog";
@@ -80,9 +82,24 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   useEffect(() => {
     if (!createRequested) return;
     if (!prefillInvoiceId) { queueMicrotask(() => setModal(true)); return; }
+    if (workspace.loading) return;
+    let cancelled = false;
+    if (workspace.storage === "local") {
+      void (async () => {
+        const store = await getLocalStore();
+        const invoice = await store.getInvoice(prefillInvoiceId);
+        if (cancelled) return;
+        if (invoice) {
+          const payments = await store.listPayments({ invoiceId: prefillInvoiceId });
+          const outstanding = Math.max(0, Number(invoice.total_amount || 0) - payments.reduce((sum, row) => sum + Number(row.amount || 0), 0));
+          setPrefill({ invoice_id: String(invoice.id), client_id: invoice.client_id ? String(invoice.client_id) : "", amount: outstanding ? outstanding.toFixed(2) : "" });
+        }
+        setModal(true);
+      })();
+      return () => { cancelled = true; };
+    }
     const supabase = createClient();
     if (!supabase) { queueMicrotask(() => setModal(true)); return; }
-    let cancelled = false;
     void (async () => {
       const [{ data: invoice }, { data: paid }] = await Promise.all([
         supabase.from("invoices").select("id,client_id,total_amount,amount_received").eq("id", prefillInvoiceId).maybeSingle(),
@@ -97,7 +114,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
       setModal(true);
     })();
     return () => { cancelled = true; };
-  }, [createRequested, prefillInvoiceId]);
+  }, [createRequested, prefillInvoiceId, workspace.loading, workspace.storage]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -106,14 +123,19 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
     if (!relations.length || !workspace.companyIds.length) return;
     void Promise.all(relations.map(async (field) => {
       const relation = field.relation!;
+      if (workspace.storage === "local") {
+        const rows = await listLocalResource(relation.table);
+        const options = rows.map((option) => ({ id: String(option.id), label: String(option[relation.label] || "—") })).sort((a, b) => a.label.localeCompare(b.label));
+        return [field.key, options] as const;
+      }
       const { data: options } = await supabase.from(relation.table).select(`id,${relation.label}`).in("company_id", workspace.companyIds).order(relation.label);
       const rows = (options || []) as unknown as Array<Record<string, unknown>>;
       return [field.key, rows.map((option) => ({ id: String(option.id), label: String(option[relation.label] || "—") }))] as const;
     })).then((entries) => setRelationOptions(Object.fromEntries(entries)));
-  }, [companyScopeKey, config.fields, workspace.companyIds]);
+  }, [companyScopeKey, config.fields, workspace.companyIds, workspace.storage]);
 
   useEffect(() => {
-    if (config.table !== "products" || !workspace.companyId || !workspace.user) return;
+    if (config.table !== "products" || !workspace.companyId || !workspace.user || workspace.storage === "local") return;
     const supabase = createClient();
     if (!supabase) return;
     void listBranches(supabase, workspace.companyId).then(async (branches) => {
@@ -121,28 +143,34 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
       const preferred = await getPreferredBranchId(supabase, workspace.user!.id, workspace.companyId!).catch(() => null);
       setSelectedBranchId(preferred && branches.some((branch) => branch.id === preferred) ? preferred : branches.length === 1 ? branches[0].id : null);
     }).catch(() => setBranchOptions([]));
-  }, [config.table, workspace.companyId, workspace.user]);
+  }, [config.table, workspace.companyId, workspace.storage, workspace.user]);
 
   useEffect(() => {
-    if (config.table !== "payments" || !workspace.companyId) return;
+    if (config.table !== "payments" || !workspace.companyId || workspace.storage === "local") return;
     const supabase = createClient();
     if (!supabase) return;
     void listCompanyBankAccounts(supabase, workspace.companyId).then((rows) => setBankAccounts(rows.map((row) => ({ id: String(row.id), label: [row.bank_name, row.account_name || row.iban || row.account_number].filter(Boolean).join(" · ") || "Bank account", isPrimary: Boolean(row.is_primary) })))).catch(() => setBankAccounts([]));
-  }, [config.table, workspace.companyId]);
+  }, [config.table, workspace.companyId, workspace.storage]);
 
   const loadOpenInvoices = useCallback(async (clientId: string) => {
+    if (workspace.storage === "local") {
+      const invoices = await (await getLocalStore()).listInvoices({ clientId });
+      return invoices
+        .filter((row) => Number(row.total_amount || 0) - Number(row.amount_received || 0) > 0.004 && !["draft", "cancelled", "void"].includes(String(row.status || "").toLowerCase()))
+        .map((row) => ({ id: String(row.id), label: `${String(row.invoice_number || "Invoice")} · ${money(Number(row.total_amount || 0) - Number(row.amount_received || 0), workspace.company?.currency || "EUR")} due` }));
+    }
     const supabase = createClient();
     if (!supabase || !workspace.user) return [];
     const rows = await listOpenCustomerInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, clientId);
     return rows.map((row) => ({ id: String(row.id), label: `${String(row.invoice_number || "Invoice")} · ${money(Number(row.total_amount || 0) - Number(row.amount_received || 0), workspace.company?.currency || "EUR")} due` }));
-  }, [workspace.user, workspace.companyIds, workspace.company?.currency]);
+  }, [workspace.user, workspace.companyIds, workspace.company?.currency, workspace.storage]);
 
   useEffect(() => {
-    if (config.table !== "products" || !workspace.companyId || !selectedBranchId) return;
+    if (config.table !== "products" || !workspace.companyId || !selectedBranchId || workspace.storage === "local") return;
     const supabase = createClient();
     if (!supabase) return;
     void listProductBranchStock(supabase, workspace.companyId, selectedBranchId).then((rows) => setProductBranchStock(Object.fromEntries(rows.map((row) => [row.product_id, Number(row.stock_quantity) || 0])))).catch(() => setProductBranchStock({}));
-  }, [config.table, selectedBranchId, workspace.companyId, data.length]);
+  }, [config.table, selectedBranchId, workspace.companyId, workspace.storage, data.length]);
 
   const displayData = useMemo(() => config.table === "products"
     ? data.map((row) => productBranchStock[String(row.id)] === undefined ? row : { ...row, stock_quantity: productBranchStock[String(row.id)] })
@@ -150,6 +178,16 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
 
   useEffect(() => {
     if (config.table !== "clients" || !workspace.companyIds.length) return;
+    if (workspace.storage === "local") {
+      void getLocalStore().then((store) => store.listInvoices()).then((invoices) => {
+        const revenue = invoices.filter((row) => String(row.status || "").toLowerCase() === "paid").reduce<Record<string, number>>((result, row) => {
+          if (row.client_id) result[String(row.client_id)] = (result[String(row.client_id)] || 0) + Number(row.total_amount || 0);
+          return result;
+        }, {});
+        setCustomerRevenue(revenue);
+      }).catch(() => setCustomerRevenue({}));
+      return;
+    }
     const supabase = createClient();
     if (!supabase) return;
     void supabase.from("invoices").select("client_id,total_amount").in("company_id", workspace.companyIds).eq("status", "paid").then(({ data }) => {
@@ -159,7 +197,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
       }, {});
       setCustomerRevenue(revenue);
     });
-  }, [companyScopeKey, config.table, workspace.companyIds]);
+  }, [companyScopeKey, config.table, workspace.companyIds, workspace.storage]);
 
   const rows = useMemo(() => {
     const filtered = displayData.filter((row) => {
@@ -244,6 +282,33 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
         payload[field.key] = config.table === "clients" && field.key === "discount_percent" ? Math.round(boundedValue) : boundedValue;
       } else payload[field.key] = field.relation && !value ? null : String(value || "");
     });
+    if (workspace.storage === "local") {
+      if (config.table === "payments") {
+        const store = await getLocalStore();
+        if (!payload.invoice_id) throw new Error("On-device payments are recorded against an invoice. Choose the invoice this payment is for.");
+        const method = String(payload.payment_method || "bank") as "cash" | "bank" | "card" | "online_payment" | "cheque" | "other";
+        if (method === "cash" && !isCashPaymentAllowed(Number(payload.amount || 0))) throw new Error("Cash payments are limited to amounts below €300. Choose another method.");
+        if (editing?.id) await store.reverseCustomerPayment(String(editing.id), "Edited");
+        const recorded = await store.recordCustomerPayment({
+          invoiceId: String(payload.invoice_id),
+          amount: Number(payload.amount || 0),
+          paymentDate: String(payload.payment_date || new Date().toISOString().slice(0, 10)),
+          paymentMethod: method,
+          bankReference: payload.bank_reference ? String(payload.bank_reference) : undefined,
+          notes: payload.notes ? String(payload.notes) : undefined,
+          paymentNumber: payload.payment_number ? String(payload.payment_number) : undefined,
+        });
+        await refresh();
+        setSaving(false); setModal(false); setEditing(null);
+        window.open(`/transactions/preview?type=payments&id=${recorded.id}`, "_blank");
+        return;
+      }
+      const saved = await saveLocalResource(config.table, payload, editing?.id);
+      await refresh();
+      setSaving(false); setModal(false); setEditing(null);
+      if (config.table === "expenses") window.open(`/transactions/preview?type=${config.fixed?.type || config.table}&id=${saved.id}`, "_blank");
+      return;
+    }
     const supabase = createClient();
     if (!supabase) { setMessage("Supabase is not configured."); setSaving(false); return; }
     const { data: authData } = await supabase.auth.getUser();
@@ -308,7 +373,13 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
   async function remove(id: string) {
     if (!canDelete) { setMessage("You do not have permission to delete or reverse this resource."); return; }
     if (!window.confirm(config.table === "payments" ? "Remove this payment? A payment already posted to the accounts is reversed with an audit entry instead of being erased." : `Delete this ${config.singular.toLowerCase()}?`)) return;
-    const supabase = createClient();
+    const supabase = workspace.storage === "local" ? null : createClient();
+    if (workspace.storage === "local") {
+      try { await removeLocalResource(config.table, id); } catch (removeError) {
+        setMessage(removeError instanceof Error ? removeError.message : "The record could not be removed.");
+        return;
+      }
+    }
     if (supabase) {
       try {
         if (config.table === "payments") await deleteCustomerPayment(supabase, id, { userId: workspace.user?.id || "", companyIds: workspace.companyIds });

@@ -10,6 +10,7 @@ import { money, shortDate } from "@/lib/format";
 import { EmptyState, ErrorState, LoadingSkeleton, MetricCard, MobileListCard, PageHeader, StatusBadge } from "./ui";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
+import { getLocalStore } from "@/lib/local/local-store";
 import { listInvoices } from "@invoice-monorepo/api/repositories";
 import { documentTypeLabel, resolveCommercialDocumentType } from "@invoice-monorepo/commercial-documents";
 
@@ -39,7 +40,7 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
       if (workspace.loading) return;
       if (!workspace.user || !workspace.companyIds.length) { setFetched([]); setLoading(false); return; }
       try {
-        const rows = await listInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, type === "offer" ? { documentType: "QUOTE", legacyType: "offer" } : undefined);
+        const rows = workspace.storage === "local" ? await (await getLocalStore()).listInvoices({ fullItems: true }) : await listInvoices(supabase, { userId: workspace.user.id, companyIds: workspace.companyIds }, type === "offer" ? { documentType: "QUOTE", legacyType: "offer" } : undefined);
         if (!cancelled) setFetched(rows as unknown as InvoiceRow[]);
       } catch (requestError) {
         if (!cancelled) { setFetched([]); setError(requestError instanceof Error ? requestError.message : "Unable to load invoices."); }
@@ -49,7 +50,7 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
     }
     void load();
     return () => { cancelled = true; };
-  }, [type, workspace.companyIds, workspace.loading, workspace.user]);
+  }, [type, workspace.companyIds, workspace.loading, workspace.storage, workspace.user]);
   const source = useMemo(() => fetched.filter((row) => type === "invoice" ? resolveCommercialDocumentType(row) !== "QUOTE" : resolveCommercialDocumentType(row) === "QUOTE"), [fetched, type]);
   const requestedStatus = searchParams.get("status");
   const [active, setActive] = useState<InvoiceTab>(() => requestedStatus && tabs.includes(requestedStatus as InvoiceTab) ? requestedStatus as InvoiceTab : "all");

@@ -28,6 +28,7 @@ import {
 import { OperixMobileNavigation, OperixSidebar, OperixTopBar, type OperixSidebarLinkProps } from "@invoice-monorepo/app-shell";
 import { InvoiceLogo } from "./product-logo";
 import { createClient } from "@/lib/supabase/client";
+import { searchLocalResource } from "@/lib/local/resource";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useBusinessData } from "@/hooks/use-business-data";
 import type { InvoiceRow } from "@/lib/models";
@@ -135,16 +136,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (normalized.length < 2 || workspace.loading || !workspace.user || !workspace.companyIds.length) return;
     let active = true;
     const timer = window.setTimeout(() => {
-      const supabase = createClient();
-      if (!supabase) return;
+      const supabase = workspace.storage === "local" ? null : createClient();
+      if (!supabase && workspace.storage !== "local") return;
       const scope = `and(user_id.eq.${workspace.user!.id},company_id.is.null),company_id.in.(${workspace.companyIds.join(",")})`;
-      void Promise.all([
+      void Promise.all(supabase ? [
         supabase.from("invoices").select("id,invoice_number,total_amount,status,client:clients(name)").or(scope).ilike("invoice_number", `%${normalized}%`).limit(6),
         supabase.from("clients").select("id,name,email").or(scope).ilike("name", `%${normalized}%`).limit(6),
         supabase.from("products").select("id,name,sku,unit_price").or(scope).or(`name.ilike.%${normalized}%,sku.ilike.%${normalized}%`).limit(6),
         supabase.from("payments").select("id,payment_number,amount,payment_date,client:clients(name)").or(scope).ilike("payment_number", `%${normalized}%`).limit(6),
         supabase.from("vendors").select("id,name,email").or(scope).ilike("name", `%${normalized}%`).limit(6),
-      ]).then(([invoices, clients, products, payments, vendors]) => {
+      ] : [
+        searchLocalResource("invoices", ["invoice_number"], normalized, "*, client:clients(name)"),
+        searchLocalResource("clients", ["name"], normalized),
+        searchLocalResource("products", ["name", "sku"], normalized),
+        searchLocalResource("payments", ["payment_number"], normalized, "*, client:clients(name)"),
+        searchLocalResource("vendors", ["name"], normalized),
+      ] as never).then(([invoices, clients, products, payments, vendors]) => {
         if (!active) return;
         const groups: SearchGroup[] = [];
         const invoiceItems = (invoices.data || []).map((row) => ({
