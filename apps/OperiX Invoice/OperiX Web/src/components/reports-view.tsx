@@ -52,24 +52,27 @@ type ReportCard = {
 };
 
 const accountingReports: ReportCard[] = [
-  { label: "Trial Balance", description: "Debit and credit control", href: "#trial-balance", icon: Scale },
-  { label: "Profit & Loss", description: "Revenue, expenses and result", href: "#profit-loss", icon: TrendingUp },
-  { label: "Balance Sheet", description: "Assets, liabilities and equity", href: "#balance-sheet", icon: BarChart3 },
-  { label: "Cash Flow", description: "Cash and bank movement", href: "#cash-flow", icon: HandCoins },
-  { label: "Changes in Equity", description: "Owner and retained equity", href: "#equity", icon: ArrowDownUp },
-  { label: "General Ledger", description: "Every posted account line", href: "/accounting", icon: FileText },
-  { label: "Asset Register", description: "Fixed assets and depreciation", href: "#assets", icon: Landmark },
-  { label: "Inventory Register", description: "Stock cost and quantities", href: "/products", icon: Boxes },
-  { label: "Receivables Aging", description: "Customer balances by due date", href: "#receivables", icon: Users },
-  { label: "Payables Aging", description: "Supplier balances by due date", href: "#payables", icon: Users },
+  { label: "Trial Balance", description: "Debit and credit control", href: "/reports/trial_balance", icon: Scale },
+  { label: "Profit & Loss", description: "Revenue, expenses and result", href: "/reports/profit_loss", icon: TrendingUp },
+  { label: "Balance Sheet", description: "Assets, liabilities and equity", href: "/reports/balance_sheet", icon: BarChart3 },
+  { label: "Cash Flow", description: "Cash and bank movement", href: "/reports/cash_flow", icon: HandCoins },
+  { label: "Changes in Equity", description: "Owner and retained equity", href: "/reports/changes_equity", icon: ArrowDownUp },
+  { label: "General Ledger", description: "Every posted account line", href: "/reports/general_ledger", icon: FileText },
+  { label: "Asset Register", description: "Fixed assets and depreciation", href: "/reports/asset_register", icon: Landmark },
+  { label: "Inventory Register", description: "Stock cost and quantities", href: "/reports/inventory_register", icon: Boxes },
+  { label: "Receivables Aging", description: "Customer balances by due date", href: "/reports/ar_aging", icon: Users },
+  { label: "Payables Aging", description: "Supplier balances by due date", href: "/reports/ap_aging", icon: Users },
 ];
 
 const taxReports: ReportCard[] = [
   { label: "Sales Book", description: "Posted sales and output VAT", href: "#sales-book", icon: ReceiptText },
-  { label: "Purchase Book", description: "Supplier invoices and input VAT", href: "#purchase-book", icon: FileCheck2 },
-  { label: "Cash & Payments", description: "Cash-book and bank movements", href: "#cash-flow", icon: WalletCards },
+  { label: "Purchase Book", description: "Supplier invoices and input VAT", href: "/reports/purchase_book", icon: FileCheck2 },
+  { label: "Cash & Payments", description: "Cash-book and bank movements", href: "/reports/cash_book", icon: WalletCards },
   { label: "Payroll", description: "Payroll and statutory controls", href: "/payroll", icon: Landmark },
-  { label: "Declarations", description: "Preview and export status", href: "#declarations", icon: FileText },
+  { label: "Withholding Tax", description: "Verified withholding records", href: "/reports/withholding", icon: FileCheck2 },
+  { label: "Declarations", description: "Preview and export status", href: "/reports/declarations", icon: FileText },
+  { label: "Archived Documents", description: "Source documents linked to records", href: "/reports/archive", icon: FileText },
+  { label: "Tax Calendar", description: "Upcoming tax obligations", href: "/reports/tax_calendar", icon: FileText },
 ];
 
 const emptySummary: Summary = { revenue: 0, expenses: 0, net_profit: 0, assets: 0, liabilities_equity: 0, cash_flow: 0, ar_outstanding: 0, ap_outstanding: 0 };
@@ -350,7 +353,7 @@ export function ReportsView() {
     </SectionCard>
     </> : null}
     {workspace.storage !== "local" ? <>
-    <section id="tax-books"><h2 className="ux-section-heading">Tax center</h2><p className="ux-section-description">Tax books and declaration preparation remain linked to posted source data. Electronic submission is not represented here.</p>{reportCardGrid(taxReports, (card) => card.label === "Payroll" ? workspace.can("users.view") : workspace.can("reports.tax") || workspace.can("sales_book.view"))}</section>
+    <section id="tax-books"><h2 className="ux-section-heading">Tax center</h2><p className="ux-section-description">Tax books and declaration preparation remain linked to posted source data. Electronic submission is not represented here.</p>{reportCardGrid(taxReports, (card) => card.label === "Payroll" ? workspace.can("users.view") : card.label === "Sales Book" ? workspace.can("sales_book.view") : card.label === "Cash & Payments" ? workspace.can("reports.operational") : card.label === "Archived Documents" ? workspace.can("audit.view") : workspace.can("reports.tax"))}</section>
     {workspace.can("sales_book.view") || workspace.can("reports.tax") ? <div id="sales-book"><SectionCard title="Sales Book" description="Posted sales and output VAT from the Kosovo Sales Book period lifecycle. Cancelled, reversed, and unposted documents are excluded by the database view." className="reports-chart-card">
       {!salesBookApplicable ? <div className="mb-4 rounded-lg border border-[#dbe5f5] bg-[#f8fbff] p-4 text-xs"><strong>Sales Book not applicable</strong><p className="muted mt-1">No company in this workspace is registered for VAT.</p></div> : null}
       {salesBookApplicable && !salesBookConfigured ? <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900"><strong>Sales Book configuration required</strong><p className="mt-1">Set a supported VAT reporting frequency before preparing a Kosovo Sales Book.</p></div> : null}

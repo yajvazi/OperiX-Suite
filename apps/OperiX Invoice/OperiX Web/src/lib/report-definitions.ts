@@ -1,0 +1,40 @@
+// The cloud report sources behind the Reports and Taxes pages; the same list the mobile app uses.
+export type ReportOrder = { column: string; ascending?: boolean; nullsFirst?: boolean };
+export type ReportDefinition = {
+  title: { en: string; sq: string };
+  subtitle: { en: string; sq: string };
+  source: string;
+  amountKeys: string[];
+  rowAmountKey?: string;
+  orderBy?: ReportOrder[];
+};
+
+export const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
+  daily: { title: { en: 'Daily report', sq: 'Raporti ditor' }, subtitle: { en: 'Revenue, expenses and result by day.', sq: 'Të ardhurat, shpenzimet dhe rezultati sipas ditës.' }, source: 'operix_report_summary', amountKeys: ['net_profit'], orderBy: [{ column: 'company_id' }] },
+  trial_balance: { title: { en: 'Trial balance', sq: 'Bilanci provues' }, subtitle: { en: 'Debit and credit control.', sq: 'Kontrolli i debisë dhe kreditit.' }, source: 'operix_trial_balance', amountKeys: ['total_debit'], rowAmountKey: 'balance', orderBy: [{ column: 'account_code' }, { column: 'company_id' }, { column: 'account_id' }] },
+  profit_loss: { title: { en: 'Profit & loss', sq: 'Fitimi dhe humbja' }, subtitle: { en: 'Revenue, expenses and result.', sq: 'Të ardhurat, shpenzimet dhe rezultati.' }, source: 'operix_profit_loss', amountKeys: ['presentation_amount'], rowAmountKey: 'presentation_amount', orderBy: [{ column: 'period_start', ascending: false, nullsFirst: false }, { column: 'account_code' }, { column: 'company_id' }, { column: 'account_id' }] },
+  balance_sheet: { title: { en: 'Balance sheet', sq: 'Pasqyra e gjendjes' }, subtitle: { en: 'Assets, liabilities and equity.', sq: 'Aktivet, detyrimet dhe kapitali.' }, source: 'operix_balance_sheet', amountKeys: ['presentation_amount'], rowAmountKey: 'presentation_amount', orderBy: [{ column: 'account_code' }, { column: 'company_id' }, { column: 'account_id' }] },
+  cash_flow: { title: { en: 'Cash flow', sq: 'Rrjedha e parasë' }, subtitle: { en: 'Cash and bank movement.', sq: 'Lëvizja e arkës dhe bankës.' }, source: 'operix_cash_flow', amountKeys: ['net_change'], rowAmountKey: 'net_change', orderBy: [{ column: 'period_start', ascending: false, nullsFirst: false }, { column: 'cash_account_type' }, { column: 'company_id' }] },
+  cash_book: { title: { en: 'Cash & payments', sq: 'Para dhe pagesa' }, subtitle: { en: 'Cash and bank journals.', sq: 'Ditarët e arkës dhe bankës.' }, source: 'operix_cash_flow', amountKeys: ['net_change'], rowAmountKey: 'net_change', orderBy: [{ column: 'period_start', ascending: false, nullsFirst: false }, { column: 'cash_account_type' }, { column: 'company_id' }] },
+  changes_equity: { title: { en: 'Changes in equity', sq: 'Ndryshimet në kapital' }, subtitle: { en: 'Owner and retained equity.', sq: 'Kapitali i pronarit dhe i mbajtur.' }, source: 'operix_changes_in_equity', amountKeys: ['change_amount'], rowAmountKey: 'change_amount', orderBy: [{ column: 'period_start', ascending: false, nullsFirst: false }, { column: 'account_code' }, { column: 'company_id' }, { column: 'account_id' }] },
+  general_ledger: { title: { en: 'General ledger', sq: 'Libri kryesor' }, subtitle: { en: 'Every posted account line.', sq: 'Çdo rresht i postuar i llogarisë.' }, source: 'operix_general_ledger', amountKeys: ['signed_amount'], rowAmountKey: 'signed_amount', orderBy: [{ column: 'posting_date', ascending: false, nullsFirst: false }, { column: 'entry_number', ascending: false }, { column: 'line_number' }, { column: 'company_id' }, { column: 'journal_line_id' }] },
+  asset_register: { title: { en: 'Asset register', sq: 'Regjistri i aktiveve' }, subtitle: { en: 'Fixed assets and depreciation.', sq: 'Aktivet fikse dhe amortizimi.' }, source: 'operix_asset_register', amountKeys: ['acquisition_cost'], rowAmountKey: 'acquisition_cost', orderBy: [{ column: 'acquisition_date', ascending: false, nullsFirst: false }, { column: 'asset_number' }, { column: 'company_id' }, { column: 'fixed_asset_id' }] },
+  inventory_register: { title: { en: 'Inventory register', sq: 'Regjistri i inventarit' }, subtitle: { en: 'Stock cost and quantities.', sq: 'Kostoja dhe sasitë e stokut.' }, source: 'inventory_register', amountKeys: ['inventory_value'], rowAmountKey: 'inventory_value', orderBy: [{ column: 'name' }, { column: 'sku' }, { column: 'company_id' }, { column: 'product_id' }] },
+  ar_aging: { title: { en: 'Receivables aging', sq: 'Vjetërsimi i arkëtimeve' }, subtitle: { en: 'Customer balances by due date.', sq: 'Gjendjet e klientëve sipas afatit.' }, source: 'operix_ar_aging', amountKeys: ['outstanding_amount'], rowAmountKey: 'outstanding_amount', orderBy: [{ column: 'due_date', nullsFirst: false }, { column: 'invoice_number' }, { column: 'company_id' }, { column: 'invoice_id' }] },
+  ap_aging: { title: { en: 'Payables aging', sq: 'Vjetërsimi i pagesave' }, subtitle: { en: 'Supplier balances by due date.', sq: 'Gjendjet e furnitorëve sipas afatit.' }, source: 'operix_ap_open_items', amountKeys: ['outstanding_amount'], rowAmountKey: 'outstanding_amount', orderBy: [{ column: 'due_date', nullsFirst: false }, { column: 'bill_number' }, { column: 'company_id' }, { column: 'supplier_bill_id' }] },
+  sales_book: { title: { en: 'Sales book', sq: 'Libri i shitjes' }, subtitle: { en: 'Posted sales and output VAT.', sq: 'Shitjet e postuara dhe TVSH-ja në dalje.' }, source: 'kosovo_sales_book', amountKeys: ['total_amount'], rowAmountKey: 'total_amount', orderBy: [{ column: 'invoice_date', ascending: false, nullsFirst: false }, { column: 'invoice_number' }, { column: 'company_id' }, { column: 'invoice_id' }] },
+  purchase_book: { title: { en: 'Purchase book', sq: 'Libri i blerjes' }, subtitle: { en: 'Supplier invoices and input VAT.', sq: 'Faturat e furnitorëve dhe TVSH-ja në hyrje.' }, source: 'kosovo_purchase_book', amountKeys: ['total_amount'], rowAmountKey: 'total_amount', orderBy: [{ column: 'bill_date', ascending: false, nullsFirst: false }, { column: 'bill_number' }, { column: 'company_id' }, { column: 'supplier_bill_id' }] },
+  withholding: { title: { en: 'Withholding tax', sq: 'Tatimi në burim' }, subtitle: { en: 'Verified withholding records.', sq: 'Regjistrimet e verifikuara të tatimit në burim.' }, source: 'withholding_transactions', amountKeys: ['withheld_amount'], rowAmountKey: 'withheld_amount', orderBy: [{ column: 'payment_date', ascending: false, nullsFirst: false }, { column: 'created_at', ascending: false, nullsFirst: false }, { column: 'company_id' }, { column: 'id' }] },
+  declarations: { title: { en: 'Declarations', sq: 'Deklarimet' }, subtitle: { en: 'Declaration previews and status.', sq: 'Pamjet paraprake dhe statusi i deklarimeve.' }, source: 'tax_declarations', amountKeys: [], orderBy: [{ column: 'period_start', ascending: false, nullsFirst: false }, { column: 'declaration_type' }, { column: 'company_id' }, { column: 'id' }] },
+  archive: { title: { en: 'Archived documents', sq: 'Dokumentet e arkivuara' }, subtitle: { en: 'Source documents linked to records.', sq: 'Dokumentet burimore të lidhura me regjistrimet.' }, source: 'document_archive', amountKeys: ['byte_size'], rowAmountKey: 'byte_size', orderBy: [{ column: 'document_date', ascending: false, nullsFirst: false }, { column: 'file_name' }, { column: 'company_id' }, { column: 'id' }] },
+  tax_calendar: { title: { en: 'Tax calendar', sq: 'Kalendari tatimor' }, subtitle: { en: 'Upcoming tax obligations.', sq: 'Detyrimet e ardhshme tatimore.' }, source: 'kosovo_tax_calendar', amountKeys: [], orderBy: [{ column: 'due_date', nullsFirst: false }, { column: 'tax_type' }, { column: 'company_id' }, { column: 'id' }] },
+};
+
+export function permissionForReport(type: string) {
+  if (type === "sales_book") return "sales_book.view";
+  if (["purchase_book", "withholding", "declarations", "tax_calendar"].includes(type)) return "reports.tax";
+  if (type === "archive") return "audit.view";
+  if (type === "inventory_register") return "inventory.view";
+  if (["daily", "profit_loss"].includes(type)) return "reports.profit";
+  return "reports.operational";
+}
