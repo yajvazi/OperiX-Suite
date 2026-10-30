@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Cloud, ExternalLink, HardDrive, Server, Sparkles } from "lucide-react";
-import { PLAN_DEFINITIONS, type BillingInterval } from "@invoice-monorepo/billing";
 import { createClient } from "@/lib/supabase/client";
 import { clearWorkspaceSnapshot } from "@/hooks/use-workspace";
 import { browserStorageSupported, setStorageMode } from "@/lib/local/storage-mode";
 import { InvoiceLogo } from "./product-logo";
+import { cloudBenefits, PaywallPanel } from "./paywall-panel";
 
 type Choice = "cloud" | "selfhost" | "free";
 type Step = "about" | "choose" | "cloud" | "selfhost" | "free" | "plan";
@@ -19,14 +19,6 @@ const STEPS: Array<{ id: Step[]; label: string }> = [
   { id: ["plan"], label: "Plan" },
 ];
 
-const cloudBenefits = [
-  "Works on the web and in the mobile app, always in sync",
-  "Cloud backup: your data is safe even if you lose a device",
-  "Team members with roles and permissions",
-  "Customer portal links and online payments",
-  "Public API and integrations",
-  "Updates and support included",
-];
 const selfHostPoints = [
   "Free and open source (AGPL-3.0)",
   "Runs on your own server, so your data stays with you",
@@ -40,8 +32,6 @@ const freePoints = [
   "Change your mind later in Settings → Data storage",
 ];
 
-const money = (value: string) => `€${value}`;
-
 /** Step-by-step setup for accounts that have no company yet, for example after the first Google or Apple sign-in. */
 export function CompanyOnboarding() {
   const [step, setStep] = useState<Step>("about");
@@ -51,12 +41,9 @@ export function CompanyOnboarding() {
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [taxId, setTaxId] = useState("");
-  const [interval, setInterval] = useState<BillingInterval>("annual");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  const pricing = PLAN_DEFINITIONS.invoice.pricing;
-  const savings = useMemo(() => Math.round((1 - Number(pricing.annual.base) / (Number(pricing.monthly.base) * 12)) * 100), [pricing]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -93,20 +80,6 @@ export function CompanyOnboarding() {
     window.location.assign("/dashboard");
   }
 
-  async function subscribe() {
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch("/api/billing/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan: "invoice", interval }) });
-      const body = await response.json().catch(() => ({})) as { url?: string; error?: string };
-      if (!response.ok || !body.url) throw new Error(body.error || "Checkout is unavailable right now.");
-      window.location.assign(body.url);
-    } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Checkout is unavailable right now.");
-      setBusy(false);
-    }
-  }
-
   async function signOut() {
     await createClient()?.auth.signOut();
     window.location.assign("/login");
@@ -134,7 +107,7 @@ export function CompanyOnboarding() {
         </li>)}
       </ol>
 
-      <section className="ob-panel">
+      {step !== "plan" ? <section className="ob-panel">
         {step === "about" ? <>
           <span className="eyebrow"><Sparkles size={13} style={{ display: "inline", marginRight: 6 }} />Welcome</span>
           <h1>Welcome to OperiX</h1>
@@ -204,24 +177,12 @@ export function CompanyOnboarding() {
           <div className="ob-actions"><button type="button" className="btn" onClick={() => go("choose")}><ArrowLeft size={16} />Back</button><button type="button" className="btn btn-primary" onClick={startFree}>Start using OperiX<ArrowRight size={16} /></button></div>
         </> : null}
 
-        {step === "plan" ? <>
-          <span className="eyebrow">OperiX Cloud</span>
-          <h1>Your workspace is ready</h1>
-          <p className="ob-lead">Would you like to subscribe to OperiX Cloud now? You can also do it later from Settings → Billing.</p>
-          <div className="ob-toggle" role="group" aria-label="Billing period">
-            <button type="button" className={interval === "annual" ? "on" : ""} onClick={() => setInterval("annual")}>Yearly <span className="ob-badge ob-badge-green">Save {savings}%</span></button>
-            <button type="button" className={interval === "monthly" ? "on" : ""} onClick={() => setInterval("monthly")}>Monthly</button>
-          </div>
-          <div className="ob-price"><strong>{money(pricing[interval].base)}</strong><span>/{interval === "annual" ? "year" : "month"}</span><small>OperiX Invoice · {money(pricing[interval].additionalUser)} per extra user</small></div>
-          <ul className="ob-checks">{cloudBenefits.map((benefit) => <li key={benefit}><Check size={15} />{benefit}</li>)}</ul>
-          {message ? <p role="alert" className="form-error">{message}</p> : null}
-          <div className="ob-actions">
-            <button type="button" className="btn" onClick={() => window.location.assign("/dashboard")} disabled={busy}>Continue without subscribing</button>
-            <button type="button" className="btn btn-primary" onClick={() => void subscribe()} disabled={busy}>{busy ? "Please wait…" : "Subscribe"}<ArrowRight size={16} /></button>
-          </div>
-          <p className="ob-note">Not ready? OperiX is always free: you can keep using it free in this browser (Settings → Data storage) at any time.</p>
-        </> : null}
-      </section>
+      </section> : <PaywallPanel
+        title="Your workspace is ready"
+        lead="OperiX Cloud is a paid service. Subscribe to start using your cloud workspace, or use OperiX free in this browser."
+        freeLabel="Use free in this browser instead"
+        onFree={startFree}
+      />}
     </div>
   </main>;
 }

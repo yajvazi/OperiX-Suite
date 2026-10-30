@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -9,6 +9,8 @@ import { copyMasterData, type BackupFile, type StorageMode, type TransferResult 
 import { brand, getPalette } from '../../theme/brand';
 import { MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
 import { getCloudStore, getLocalStore, getStorageMode, setStorageMode } from '../../services/dataStore';
+import { PaywallView } from '../../components/billing/PaywallView';
+import { checkWorkspacePaywall, type WorkspacePaywall } from '../../services/paywall';
 
 /**
  * Where business data lives. "On this device" is free and keeps everything in a database on the phone;
@@ -23,6 +25,7 @@ export function StorageSettingsScreen({ navigation }: any) {
     const [busy, setBusy] = useState(false);
     const [deviceCode, setDeviceCode] = useState('');
     const [message, setMessage] = useState('');
+    const [paywall, setPaywall] = useState<WorkspacePaywall | null>(null);
 
     const load = useCallback(async () => {
         const current = await getStorageMode();
@@ -36,6 +39,13 @@ export function StorageSettingsScreen({ navigation }: any) {
     async function choose(next: StorageMode) {
         if (next === mode) return;
         const proceed = () => { void setStorageMode(next).then(load); };
+        // OperiX Cloud is a paid service on the hosted app: offer the subscription before switching to it.
+        if (next === 'cloud' && user?.id) {
+            setBusy(true);
+            const required = await checkWorkspacePaywall(user.id, { evenIfOnDevice: true });
+            setBusy(false);
+            if (required) { setPaywall(required); return; }
+        }
         if (next === 'local') {
             Alert.alert(
                 sq ? 'Ruaj në këtë pajisje' : 'Store data on this device',
@@ -139,7 +149,18 @@ export function StorageSettingsScreen({ navigation }: any) {
                 {message ? <Text style={[styles.text, { color: palette.text }]}>{message}</Text> : null}
             </>}
         </ScrollView>
-    </MobileScreen>;
+    <Modal visible={Boolean(paywall)} animationType="slide" onRequestClose={() => setPaywall(null)}>
+            {paywall ? <PaywallView
+                title={sq ? 'OperiX Cloud është veçori me pagesë' : 'OperiX Cloud is a paid feature'}
+                lead={sq ? 'Për t\'i mbajtur të dhënat në cloud, të sinkronizuara me uebin dhe ekipin, abonohuni te OperiX Cloud. Deri atëherë mund ta përdorni OperiX falas në këtë pajisje.' : 'To keep your data in the cloud, synced with the web app and your team, subscribe to OperiX Cloud. Until then you can keep using OperiX free on this device.'}
+                companyId={paywall.companyId}
+                canPay={paywall.canPay}
+                freeLabel={sq ? 'Qëndro te ruajtja falas në pajisje' : 'Stay on free device storage'}
+                onFree={() => setPaywall(null)}
+                onClose={() => setPaywall(null)}
+            /> : null}
+        </Modal>
+        </MobileScreen>;
 }
 
 const styles = StyleSheet.create({

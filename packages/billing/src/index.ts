@@ -364,3 +364,4 @@ export function separatePlanMonthlyTotal(totalTenants = 1, totalActiveUsers = 1)
 }
 
 export * from "./authorization";
+export * from "./paywall";

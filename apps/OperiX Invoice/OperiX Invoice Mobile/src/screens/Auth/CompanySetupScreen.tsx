@@ -37,9 +37,9 @@ const copy = {
         freeChecks: ['Create invoices, quotes and delivery notes, and track expenses and payments', 'Share PDFs and reports', 'Back up and restore your data with a file'],
         freeWarn: "Good to know: data lives only on this device. If you delete the app or lose the phone, it's gone unless you made a backup. There is no sync to the web and no team access. You can move to OperiX Cloud or your own server whenever you like.",
         freeStart: 'Start using OperiX',
-        planTitle: 'Your workspace is ready', planText: 'Would you like to subscribe to OperiX Cloud now? You can also do it later from Settings.',
+        planTitle: 'Your workspace is ready', planText: 'OperiX Cloud is a paid service. Subscribe to start using your cloud workspace, or use OperiX free on this device.',
         yearly: 'Yearly', monthly: 'Monthly', save: 'Save', perYear: '/year', perMonth: '/month', extraUser: 'per extra user',
-        subscribe: 'Subscribe', skip: 'Continue without subscribing', planFree: 'Not ready? OperiX is always free: you can keep using it free on this device at any time (Settings → Data storage).', checkoutFailed: 'Checkout is unavailable right now.',
+        subscribe: 'Subscribe', skip: 'Use free on this device instead', planFree: 'Not ready? OperiX is always free: you can keep using it free on this device at any time (Settings → Data storage).', checkoutFailed: 'Checkout is unavailable right now.',
         signOut: 'Sign out',
     },
     sq: {
@@ -63,9 +63,9 @@ const copy = {
         freeChecks: ['Krijoni fatura, oferta dhe fletëdërgesa, dhe ndiqni shpenzimet dhe pagesat', 'Ndani PDF dhe raporte', 'Bëni kopje rezervë dhe rikthejini të dhënat me një skedar'],
         freeWarn: 'Mirë të dihet: të dhënat ndodhen vetëm në këtë pajisje. Nëse fshini aplikacionin ose humbisni telefonin, humbasin nëse nuk keni bërë kopje rezervë. Nuk ka sinkronizim me uebin dhe as qasje për ekipin. Mund të kaloni te OperiX Cloud ose te serveri juaj kur të dëshironi.',
         freeStart: 'Filloni të përdorni OperiX',
-        planTitle: 'Hapësira juaj e punës është gati', planText: 'Dëshironi të abonoheni te OperiX Cloud tani? Mund ta bëni edhe më vonë nga Cilësimet.',
+        planTitle: 'Hapësira juaj e punës është gati', planText: 'OperiX Cloud është shërbim me pagesë. Abonohuni për të filluar të përdorni hapësirën tuaj në cloud, ose përdorni OperiX falas në këtë pajisje.',
         yearly: 'Vjetor', monthly: 'Mujor', save: 'Kurseni', perYear: '/vit', perMonth: '/muaj', extraUser: 'për përdorues shtesë',
-        subscribe: 'Abonohu', skip: 'Vazhdo pa u abonuar', planFree: 'Nuk jeni gati? OperiX është gjithmonë falas: mund ta përdorni falas në këtë pajisje në çdo kohë (Cilësimet → Ruajtja e të dhënave).', checkoutFailed: 'Pagesa nuk është e disponueshme tani.',
+        subscribe: 'Abonohu', skip: 'Përdor falas në këtë pajisje në vend të kësaj', planFree: 'Nuk jeni gati? OperiX është gjithmonë falas: mund ta përdorni falas në këtë pajisje në çdo kohë (Cilësimet → Ruajtja e të dhënave).', checkoutFailed: 'Pagesa nuk është e disponueshme tani.',
         signOut: 'Dil',
     },
 } as const;
@@ -245,7 +245,7 @@ export function CompanySetupScreen({ onDone }: { onDone: () => void }) {
                         {checks(text.cloudPoints)}
                         {error ? <Text style={styles.error}>{error}</Text> : null}
                         <Primary testID="onboarding-subscribe" label={text.subscribe} onPress={() => void subscribe()} disabled={busy} />
-                        <Secondary label={text.skip} onPress={onDone} />
+                        <Secondary label={text.skip} onPress={() => void startFree()} />
                         <Text style={[styles.lead, { color: palette.muted, marginTop: 10, fontSize: 12 }]}>{text.planFree}</Text>
                     </> : null}
                 </ScrollView>

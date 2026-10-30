@@ -1,6 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { decidePaywall } from "@invoice-monorepo/billing";
+import { PAYWALL_ENABLED } from "@/lib/features";
+import { PaywallPanel } from "./paywall-panel";
 import { Cloud, Download, HardDrive, Upload } from "lucide-react";
 import { resolveWorkspace } from "@invoice-monorepo/api/workspace";
 import { copyMasterData, type BackupFile, type StorageMode, type TransferResult } from "@invoice-monorepo/data-store";
@@ -26,9 +29,24 @@ export function StorageSettings() {
   const [message, setMessage] = useState("");
   const mode: StorageMode = workspace.storage;
   const supported = browserStorageSupported();
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallCanPay, setPaywallCanPay] = useState(true);
 
-  function choose(next: StorageMode) {
+  async function choose(next: StorageMode) {
     if (next === mode) return;
+    // OperiX Cloud is a paid service on the hosted deployment: offer the subscription before switching to it.
+    if (next === "cloud" && PAYWALL_ENABLED) {
+      setBusy(true);
+      try {
+        const response = await fetch("/api/billing/summary", { cache: "no-store" });
+        if (response.ok) {
+          const body = await response.json() as { summary?: Parameters<typeof decidePaywall>[0] };
+          const decision = decidePaywall(body.summary);
+          if (decision.requiresPayment) { setPaywallCanPay(decision.canPay); setShowPaywall(true); return; }
+        }
+      } catch { /* the status could not be read: let the switch continue, the database enforces limits itself */ }
+      finally { setBusy(false); }
+    }
     if (next === "local" && !window.confirm("New data will be stored only in this browser. Your existing cloud data is not deleted, but it is not shown here. Clearing site data or losing this computer without a backup means losing the data. Continue?")) return;
     setStorageMode(next);
     window.location.reload();
@@ -73,7 +91,7 @@ export function StorageSettings() {
   };
 
   const option = (value: StorageMode, title: string, text: string, Icon: typeof Cloud) => (
-    <button type="button" key={value} role="radio" aria-checked={mode === value} disabled={value === "local" && !supported} onClick={() => choose(value)}
+    <button type="button" key={value} role="radio" aria-checked={mode === value} disabled={value === "local" && !supported} onClick={() => void choose(value)}
       className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left ${mode === value ? "border-2 border-[#004ffe] bg-[#edf4ff]" : "border-[#dbe5f5] bg-white"}`} data-testid={`storage-mode-${value}`}>
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eaf2ff] text-[#004ffe]"><Icon size={20} /></span>
       <span><b className="block text-sm">{title}</b><span className="muted mt-1 block text-xs">{text}</span></span>
@@ -81,6 +99,13 @@ export function StorageSettings() {
   );
 
   return <div className="mt-6 grid gap-4">
+    {showPaywall ? <PaywallPanel
+      title="OperiX Cloud is a paid feature"
+      lead="To keep your data in the cloud, synced with the mobile app and your team, subscribe to OperiX Cloud. Until then you can keep using OperiX free in this browser."
+      canPay={paywallCanPay}
+      freeLabel="Stay on free browser storage"
+      onFree={() => setShowPaywall(false)}
+    /> : null}
     {option("local", "In this browser (free)", "Everything is stored in this browser on this computer and works offline. No cloud backup. Use the same browser each time.", HardDrive)}
     {option("cloud", "OperiX cloud", "Data is stored in the cloud: backups, the mobile app, teams and permissions.", Cloud)}
     {!supported ? <p className="rounded bg-[#fff8e6] p-3 text-xs text-[#8a5a00]">This browser cannot keep a private database (it needs HTTPS and the browser file system). Use the OperiX cloud, or a current Chrome, Edge, Firefox or Safari.</p> : null}

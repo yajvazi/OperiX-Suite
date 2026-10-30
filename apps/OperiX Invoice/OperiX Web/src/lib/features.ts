@@ -21,3 +21,7 @@ export function newDocumentHref(type?: "offer"): string {
 
 // Set NEXT_PUBLIC_SELF_HOSTED=true on your own server: hides the hosted billing and subscription screens.
 export const SELF_HOSTED = process.env.NEXT_PUBLIC_SELF_HOSTED === "true";
+
+// Hosted service: cloud workspaces without an active subscription see a paywall. Off by default (and always off for
+// self-hosted servers). Set NEXT_PUBLIC_PAYWALL_ENABLED=true before `next build` on the hosted deployment.
+export const PAYWALL_ENABLED = process.env.NEXT_PUBLIC_PAYWALL_ENABLED === "true" && !SELF_HOSTED;

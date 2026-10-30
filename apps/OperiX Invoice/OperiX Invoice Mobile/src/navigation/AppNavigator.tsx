@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -35,6 +35,9 @@ import { SignUpScreen } from '../screens/Auth/SignUpScreen';
 import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
 import { CompanySetupScreen } from '../screens/Auth/CompanySetupScreen';
+import { PaywallView } from '../components/billing/PaywallView';
+import { checkWorkspacePaywall, paywallEnabled, type WorkspacePaywall } from '../services/paywall';
+import { setStorageMode } from '../services/storageMode';
 import { WorkspaceRecoveryScreen } from '../screens/Auth/WorkspaceRecoveryScreen';
 
 import { HomeScreen } from '../screens/Home/HomeScreen';
@@ -325,13 +328,17 @@ function isMissingActiveWorkspaceError(error: unknown) {
 }
 
 export function AppNavigator() {
-    const { user, loading: authLoading, isOnboarding } = useAuth();
+    const { user, loading: authLoading, isOnboarding, signOut } = useAuth();
     const { isDark, language } = useTheme();
     const [isLocked, setIsLocked] = useState(false);
     const [checkingLock, setCheckingLock] = useState(true);
     const [isPending, setIsPending] = useState(false);
     const [workspaceState, setWorkspaceState] = useState<'checking' | 'ready' | 'missing' | 'nocompany'>('checking');
     const [workspaceRetry, setWorkspaceRetry] = useState(0);
+    // Hosted service: a cloud workspace without an active subscription sees the paywall instead of the app.
+    const [paywall, setPaywall] = useState<WorkspacePaywall | null>(null);
+    const [paywallChecking, setPaywallChecking] = useState(false);
+    const [paywallRetry, setPaywallRetry] = useState(0);
 
     useEffect(() => {
         if (user) {
@@ -368,6 +375,29 @@ export function AppNavigator() {
         return () => { active = false; };
     }, [user?.id, isOnboarding, workspaceRetry]);
 
+    useEffect(() => {
+        let active = true;
+        if (!user || isOnboarding || workspaceState !== 'ready' || !paywallEnabled()) {
+            setPaywall(null);
+            setPaywallChecking(false);
+            return () => { active = false; };
+        }
+        setPaywallChecking(true);
+        void checkWorkspacePaywall(user.id).then((result) => {
+            if (!active) return;
+            setPaywall(result);
+            setPaywallChecking(false);
+        });
+        return () => { active = false; };
+    }, [user?.id, isOnboarding, workspaceState, paywallRetry]);
+
+    // Coming back from Stripe checkout in the browser: look at the subscription again.
+    useEffect(() => {
+        if (!paywall) return undefined;
+        const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') setPaywallRetry((value) => value + 1); });
+        return () => subscription.remove();
+    }, [paywall]);
+
     const checkUserStatus = async () => {
         try {
             const [{ data: profile }, { data: employeeData }] = await Promise.all([
@@ -383,7 +413,7 @@ export function AppNavigator() {
         }
     };
 
-    if (authLoading || checkingLock || (user && workspaceState === 'checking')) {
+    if (authLoading || checkingLock || (user && (workspaceState === 'checking' || paywallChecking))) {
         return <View style={[styles.loading, { backgroundColor: isDark ? brand.colors.navySoft : brand.colors.background }]}><OperixLogo width={180} reversed={isDark} /><ActivityIndicator size="small" color={brand.colors.primary} style={styles.loadingIndicator} /><Text style={[styles.loadingText, { color: isDark ? '#94a3b8' : brand.colors.muted }]}>{t('openingWorkspace', language)}</Text></View>;
     }
     if (user && isOnboarding) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><AuthNavigator /></NavigationContainer>;
@@ -391,6 +421,21 @@ export function AppNavigator() {
     if (user && workspaceState === 'nocompany') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><CompanySetupScreen onDone={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && workspaceState === 'missing') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><WorkspaceRecoveryScreen onRetry={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && isLocked) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><BiometricOverlay onAuthenticated={() => setIsLocked(false)} /></NavigationContainer>;
+    if (user && paywall) {
+        const sq = language === 'sq';
+        return (
+            <PaywallView
+                title={sq ? 'Abonohuni për të vazhduar me OperiX Cloud' : 'Subscribe to keep using OperiX Cloud'}
+                lead={sq ? 'Kjo hapësirë pune nuk ka abonim aktiv të OperiX Cloud. Abonohuni për t\'i mbajtur të dhënat në cloud, të sinkronizuara me uebin dhe ekipin tuaj.' : "This workspace doesn't have an active OperiX Cloud subscription. Subscribe to keep your data in the cloud, synced with the web app and your team."}
+                companyId={paywall.companyId}
+                canPay={paywall.canPay}
+                freeLabel={sq ? 'Përdor falas në këtë pajisje' : 'Use free on this device'}
+                onFree={() => { void setStorageMode('local').then(() => { setPaywall(null); setWorkspaceRetry((value) => value + 1); }); }}
+                onRefresh={() => setPaywallRetry((value) => value + 1)}
+                onSignOut={() => { void signOut(); }}
+            />
+        );
+    }
     return <NavigationContainer linking={user ? invoiceLinking : undefined} theme={isDark ? CustomDarkTheme : CustomLightTheme}>{user ? <RootNavigator /> : <AuthNavigator />}</NavigationContainer>;
 }
 

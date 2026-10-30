@@ -208,6 +208,7 @@ All settings live in `.env.example` with comments. The important ones:
 | `NEXT_PUBLIC_INVOICE_APP_URL` | yes | Public address of this app. Used in QR codes on invoices and in links. |
 | `NEXT_PUBLIC_SELF_HOSTED` | recommended | `true` hides the hosted billing and subscription screens. |
 | `NEXT_PUBLIC_SERVER_NAME` | no | Name shown in the mobile app when connecting. |
+| `NEXT_PUBLIC_PAYWALL_ENABLED` | no | `true` shows a subscription paywall on cloud workspaces without an active Stripe subscription (hosted service). Always off when `NEXT_PUBLIC_SELF_HOSTED=true`. |
 | `NEXT_PUBLIC_POS_ENABLED` | no | `true` enables the point of sale. Read the [notice](#important-notices) first. |
 | `CRON_SECRET` | recommended | Protects `/api/cron/*` maintenance endpoints. |
 | `CHROME_EXECUTABLE_PATH` | for PDFs | Path to Chromium (set in the Docker image). |
