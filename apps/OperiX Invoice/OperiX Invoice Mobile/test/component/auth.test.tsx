@@ -91,12 +91,10 @@ describe('authentication screens', () => {
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'Sigurtë123!');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'Sigurtë123!');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        await waitFor(() => expect(signUp).toHaveBeenCalledWith('blerine@example.com', 'Sigurtë123!', expect.objectContaining({
-            data: expect.objectContaining({ first_name: '', last_name: '', tenant_name: '', phone: '' }),
-        })));
+        await waitFor(() => expect(signUp).toHaveBeenCalledWith('blerine@example.com', 'Sigurtë123!'));
     });
 
-    it('verifies the OTP before creating the tenant workspace', async () => {
+    it('asks for the emailed code after the account step; the onboarding collects the rest', async () => {
         const verifyEmailOtp = jest.fn(async () => ({ error: null }));
         const completeSignup = jest.fn(async () => ({ companyId: 'company-1', error: null }));
         const onNavigateToSignIn = jest.fn();
@@ -106,26 +104,14 @@ describe('authentication screens', () => {
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-password'), 'Secret123!');
         await fireEvent.changeText(screen.getByTestId('auth-sign-up-confirm-password'), 'Secret123!');
         await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-first-name'), 'Blerinë');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-last-name'), 'Krasniqi');
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-phone'), '044123456');
-        await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        await fireEvent.changeText(screen.getByTestId('auth-sign-up-tenant-name'), 'OperiX Test');
-        await fireEvent.press(screen.getByTestId('auth-sign-up-button'));
-        expect(completeSignup).not.toHaveBeenCalled();
         await waitFor(() => expect(screen.getByTestId('auth-otp-input')).toBeTruthy());
         await fireEvent.press(screen.getByTestId('auth-verify-button'));
         expect(verifyEmailOtp).not.toHaveBeenCalled();
         await fireEvent.changeText(screen.getByTestId('auth-otp-input'), '123456');
         await fireEvent.press(screen.getByTestId('auth-verify-button'));
         await waitFor(() => expect(verifyEmailOtp).toHaveBeenCalledWith('ada@example.com', '123456'));
-        await waitFor(() => expect(completeSignup).toHaveBeenCalledWith({
-            tenantName: 'OperiX Test',
-            firstName: 'Blerinë',
-            lastName: 'Krasniqi',
-            phone: '044123456',
-            taxId: '',
-        }));
+        // Name, company and plan are collected by the onboarding after sign-in, not here.
+        expect(completeSignup).not.toHaveBeenCalled();
         expect(onNavigateToSignIn).not.toHaveBeenCalled();
     });
 });
