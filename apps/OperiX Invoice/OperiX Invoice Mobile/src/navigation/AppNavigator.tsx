@@ -340,6 +340,9 @@ export function AppNavigator() {
     // Hosted service: a cloud workspace without an active subscription sees the paywall instead of the app.
     const [paywall, setPaywall] = useState<WorkspacePaywall | null>(null);
     const [paywallChecking, setPaywallChecking] = useState(false);
+    // Which account the two statuses above and below belong to, so a different account never inherits them.
+    const [workspaceFor, setWorkspaceFor] = useState<string | null>(null);
+    const [paywallFor, setPaywallFor] = useState<string | null>(null);
     const [paywallRetry, setPaywallRetry] = useState(0);
 
     useEffect(() => {
@@ -356,10 +359,12 @@ export function AppNavigator() {
         let active = true;
         if (!user || isOnboarding) {
             setWorkspaceState('ready');
+            setWorkspaceFor(user?.id ?? null);
             return () => { active = false; };
         }
 
         setWorkspaceState('checking');
+        setWorkspaceFor(user.id);
         void getWorkspaceScope(user.id)
             .then(() => {
                 if (active) setWorkspaceState('ready');
@@ -379,7 +384,7 @@ export function AppNavigator() {
 
     useEffect(() => {
         let active = true;
-        if (!user || isOnboarding || workspaceState !== 'ready' || !paywallEnabled()) {
+        if (!user || isOnboarding || workspaceState !== 'ready' || workspaceFor !== user.id || !paywallEnabled()) {
             setPaywall(null);
             setPaywallChecking(false);
             return () => { active = false; };
@@ -388,10 +393,11 @@ export function AppNavigator() {
         void checkWorkspacePaywall(user.id).then((result) => {
             if (!active) return;
             setPaywall(result);
+            setPaywallFor(user.id);
             setPaywallChecking(false);
         });
         return () => { active = false; };
-    }, [user?.id, isOnboarding, workspaceState, paywallRetry]);
+    }, [user?.id, isOnboarding, workspaceState, workspaceFor, paywallRetry]);
 
     // Coming back from Stripe checkout in the browser: look at the subscription again.
     useEffect(() => {
@@ -415,13 +421,17 @@ export function AppNavigator() {
         }
     };
 
-    if (authLoading || checkingLock || (user && (workspaceState === 'checking' || paywallChecking))) {
+    // A status that belongs to the previous account counts as "still checking": otherwise a new account would see the
+    // previous one's "ready" workspace (and open the Home screen) for a moment before its own check finishes.
+    const effectiveWorkspaceState = user && workspaceFor !== user.id ? 'checking' : workspaceState;
+    const paywallPending = Boolean(user && !isOnboarding && effectiveWorkspaceState === 'ready' && paywallEnabled() && paywallFor !== user.id);
+    if (authLoading || checkingLock || (user && (effectiveWorkspaceState === 'checking' || paywallChecking || paywallPending))) {
         return <View style={[styles.loading, { backgroundColor: isDark ? brand.colors.navySoft : brand.colors.background }]}><OperixLogo width={180} reversed={isDark} /><ActivityIndicator size="small" color={brand.colors.primary} style={styles.loadingIndicator} /><Text style={[styles.loadingText, { color: isDark ? '#94a3b8' : brand.colors.muted }]}>{t('openingWorkspace', language)}</Text></View>;
     }
     if (user && isOnboarding) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><AuthNavigator /></NavigationContainer>;
     if (user && isPending) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><ApprovalPendingScreen /></NavigationContainer>;
-    if (user && workspaceState === 'nocompany') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><CompanySetupScreen onDone={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
-    if (user && workspaceState === 'missing') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><WorkspaceRecoveryScreen onRetry={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
+    if (user && effectiveWorkspaceState === 'nocompany') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><CompanySetupScreen onDone={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
+    if (user && effectiveWorkspaceState === 'missing') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><WorkspaceRecoveryScreen onRetry={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && isLocked) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><BiometricOverlay onAuthenticated={() => setIsLocked(false)} /></NavigationContainer>;
     if (user && paywall) {
         const sq = language === 'sq';

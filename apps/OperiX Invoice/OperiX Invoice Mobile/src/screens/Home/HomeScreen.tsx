@@ -303,7 +303,8 @@ export function HomeScreen() {
             setData(nextData);
             writeMobileCache(cacheKey, nextData);
         } catch (fetchError: any) {
-            console.error('Home data error:', fetchError);
+            // An account without a company is sent to the company setup by the navigator; that is not a Home error.
+            if (!String(fetchError?.message || '').includes('No active company workspace is configured')) console.error('Home data error:', fetchError);
             setError(t('unableToLoad', language));
         } finally {
             setLoading(false);
