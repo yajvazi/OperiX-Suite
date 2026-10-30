@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { clearLocalSupabaseSession, isStaleSupabaseSessionError, isSupabaseConfigured, supabase } from '@invoice-monorepo/api';
+import { clearLocalSupabaseSession, isStaleSupabaseSessionError, isSupabaseConfigured, onSupabaseServerChange, supabase } from '@invoice-monorepo/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -42,6 +42,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [isOnboarding, setIsOnboarding] = useState(false);
+    // Bumped when the app is pointed at another (self-hosted) backend, so the session below is re-read from it.
+    const [serverVersion, setServerVersion] = useState(0);
+
+    useEffect(() => onSupabaseServerChange(() => {
+        setSession(null);
+        setUser(null);
+        setLoading(true);
+        setServerVersion((version) => version + 1);
+    }), []);
 
     useEffect(() => {
         let mounted = true;
@@ -114,7 +123,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             mounted = false;
             subscription.unsubscribe();
         };
-    }, []);
+    }, [serverVersion]);
 
     const signUp = async (email: string, password: string, options?: {
         data: {

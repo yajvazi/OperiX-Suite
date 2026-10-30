@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OperixMobileAppShell } from '@invoice-monorepo/ui';
 import { AppNavigator } from './navigation/AppNavigator';
 import { brand } from './theme/brand';
+import { restoreServerConnection } from './services/serverConnection';
 import { deactivatePushNotifications, registerPushNotifications } from './services/pushNotifications';
 
 const OblivianTextBold = require('../assets/fonts/OblivianText-Bold.otf');
@@ -54,6 +55,10 @@ function PushNotificationBootstrap() {
 export function App() {
     const [fontsLoaded] = useFonts({ Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, OblivianTextBold });
     const [typographyReady, setTypographyReady] = useState(false);
+    const [serverReady, setServerReady] = useState(false);
+
+    // A self-hosted server chosen earlier must be active before the session is read.
+    useEffect(() => { void restoreServerConnection().finally(() => setServerReady(true)); }, []);
 
     useEffect(() => {
         if (!fontsLoaded) return;
@@ -71,7 +76,7 @@ export function App() {
         SplashScreen.hideAsync().catch(() => undefined);
     }, [fontsLoaded]);
 
-    if (!fontsLoaded || !typographyReady) return null;
+    if (!fontsLoaded || !typographyReady || !serverReady) return null;
 
     return (
         <ThemeProvider>

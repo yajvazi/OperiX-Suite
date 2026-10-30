@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     StyleSheet,
     Text,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     ScrollView,
     TextInput,
@@ -14,7 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react-native';
 import { SvgXml } from 'react-native-svg';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
+import { onSupabaseServerChange, parseConnectCode } from '@invoice-monorepo/api';
 import { t } from '@invoice-monorepo/i18n';
+import { ServerConnectModal, ServerStatus, useServerCopy } from '../../components/auth/ServerConnectModal';
 import { AuthPreferences } from '../../components/auth/AuthPreferences';
 import { OperixLogo } from '../../components/OperixLogo';
 import { brand, getPalette } from '../../theme/brand';
@@ -41,6 +44,22 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const signInInFlight = useRef(false);
+    const serverText = useServerCopy();
+    const [serverOpen, setServerOpen] = useState(false);
+    const [linkedServer, setLinkedServer] = useState<string | undefined>();
+    const [, refreshServer] = useState(0);
+
+    useEffect(() => onSupabaseServerChange(() => refreshServer((n) => n + 1)), []);
+    useEffect(() => {
+        // A phone camera (or another app) can open operix-invoice://connect?server=... directly.
+        const open = (url: string | null | undefined) => {
+            const server = url?.startsWith('operix-invoice://connect') ? parseConnectCode(url) : null;
+            if (server) { setLinkedServer(server); setServerOpen(true); }
+        };
+        void Linking.getInitialURL().then(open);
+        const subscription = Linking.addEventListener('url', ({ url }) => open(url));
+        return () => subscription.remove();
+    }, []);
 
     const handleSignIn = async () => {
         if (signInInFlight.current) return;
@@ -93,9 +112,14 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     <View style={[styles.preferencePanel, { backgroundColor: palette.surfaceMuted, borderColor: palette.border }]}>
                         <AuthPreferences variant="footer" />
                     </View>
+                    <ServerStatus version={0} onChange={() => refreshServer((n) => n + 1)} />
+                    <TouchableOpacity testID="auth-own-server" accessibilityRole="button" style={styles.ownServer} onPress={() => { setLinkedServer(undefined); setServerOpen(true); }}>
+                        <Text style={[styles.link, { color: primaryColor }]}>{serverText.title}</Text>
+                    </TouchableOpacity>
                     <Text style={[styles.securityNote, { color: palette.muted }]}>{t('authSecurityNote', language)}</Text>
                 </View>
             </ScrollView>
+            <ServerConnectModal visible={serverOpen} initialAddress={linkedServer} onClose={() => setServerOpen(false)} />
             </KeyboardAvoidingView>
             </SafeAreaView>
         </View>
@@ -133,5 +157,6 @@ const styles = StyleSheet.create({
     signUpButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 13, borderWidth: 1, borderRadius: 11 },
     link: { fontSize: 12, fontWeight: '800' },
     preferencePanel: { marginTop: 10, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1, borderRadius: 14 },
+    ownServer: { minHeight: 40, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
     securityNote: { marginTop: 17, textAlign: 'center', fontSize: 10, lineHeight: 15 },
 });

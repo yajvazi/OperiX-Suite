@@ -29,22 +29,61 @@ export const isSupabaseConfigured = Boolean(
     && configuredSupabaseKey !== 'sb_publishable_...'
 );
 
-export const supabaseUrl = configuredSupabaseUrl || 'http://127.0.0.1:54321';
-const supabaseAnonKey = configuredSupabaseKey || 'sb_publishable_placeholder';
+const defaultSupabaseUrl = configuredSupabaseUrl || 'http://127.0.0.1:54321';
+const defaultSupabaseKey = configuredSupabaseKey || 'sb_publishable_placeholder';
 // The shared API package is imported by server-rendered Web routes as well as
 // the native app. AsyncStorage touches `window` while Supabase initializes, so
 // leave storage unset during SSR and let Supabase use its in-memory adapter.
 const authStorage = typeof window === 'undefined' ? undefined : AsyncStorage;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-        flowType: 'pkce',
-        ...(authStorage ? { storage: authStorage } : {}),
+function buildClient(url: string, key: string) {
+    return createClient(url, key, {
+        auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: false,
+            flowType: 'pkce',
+            ...(authStorage ? { storage: authStorage } : {}),
+        },
+    });
+}
+
+let activeUrl = defaultSupabaseUrl;
+let activeClient = buildClient(defaultSupabaseUrl, defaultSupabaseKey);
+const serverListeners = new Set<() => void>();
+
+/** Address of the backend currently in use (the hosted one unless a self-hosted server was chosen). */
+export const getSupabaseUrl = () => activeUrl;
+export const supabaseUrl = defaultSupabaseUrl;
+
+/**
+ * The shared client. It forwards to whichever backend is active, so the mobile
+ * app can switch to a self-hosted server at runtime without every caller
+ * having to re-import a new client.
+ */
+export const supabase: typeof activeClient = new Proxy({} as typeof activeClient, {
+    get(_target, property) {
+        const value = Reflect.get(activeClient, property, activeClient);
+        return typeof value === 'function' ? value.bind(activeClient) : value;
     },
 });
+
+/** Points the app at another backend (self-hosted) or back to the hosted one (no arguments). */
+export function setSupabaseServer(server?: { url: string; key: string } | null) {
+    const url = server?.url || defaultSupabaseUrl;
+    const key = server?.key || defaultSupabaseKey;
+    if (url === activeUrl && !server) return;
+    void activeClient.auth.stopAutoRefresh?.();
+    activeClient = buildClient(url, key);
+    activeUrl = url;
+    serverListeners.forEach((listener) => listener());
+}
+
+/** Called after the active backend changed; returns an unsubscribe function. */
+export function onSupabaseServerChange(listener: () => void) {
+    serverListeners.add(listener);
+    return () => { serverListeners.delete(listener); };
+}
 
 type SupabaseAuthErrorLike = {
     code?: unknown;

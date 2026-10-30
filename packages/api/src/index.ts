@@ -1,7 +1,9 @@
-export { clearLocalSupabaseSession, isStaleSupabaseSessionError, isSupabaseConfigured, supabase, supabaseUrl } from './supabase';
+export { clearLocalSupabaseSession, isStaleSupabaseSessionError, getSupabaseUrl, isSupabaseConfigured, onSupabaseServerChange, setSupabaseServer, supabase, supabaseUrl } from './supabase';
 export * from './domain';
 export * from './repositories';
 export * from './workspace';
 export * from './financial';
 export * from './expense-domain';
 export * from './data-transfer';
+export { buildConnectLink, CONNECT_SCHEME, fetchServerConfig, normalizeServerUrl, parseConnectCode } from './server-connect';
+export type { ServerConfig } from './server-connect';

@@ -4,7 +4,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Building2, Check, Code2, CreditCard, HardDrive, FileText, Globe2, Hash, Landmark, Mail, Palette, Save, UserRound, Users } from "lucide-react";
+import { Building2, Check, Code2, CreditCard, HardDrive, FileText, Globe2, Hash, Landmark, Mail, Palette, Save, Smartphone, UserRound, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import type { InvoiceTemplate, InvoiceTemplateConfig } from "@/lib/models";
@@ -15,6 +15,7 @@ import { StorageSettings } from "./storage-settings";
 import { getLocalStore } from "@/lib/local/local-store";
 import { BillingPanel } from "./billing-panel";
 import { UsersAccessPanel } from "./users-access-panel";
+import { MobileConnectPanel } from "./mobile-connect-panel";
 import { DevelopersPanel } from "./developers-panel";
 import { AppearancePanel, BranchesBanksPanel, BrandingFields, EmailPanel, ProfileSecurityPanel } from "./settings-panels";
 
@@ -29,6 +30,7 @@ const tabs=[
   {id:"payments",label:"Payment Methods",icon:CreditCard},
   {id:"email",label:"Email (SMTP)",icon:Mail},
   {id:"billing",label:"Billing & Subscription",icon:CreditCard},
+  {id:"mobile",label:"Mobile app",icon:Smartphone},
   {id:"developers",label:"Developers",icon:Code2},
   {id:"storage",label:"Data storage",icon:HardDrive},
   {id:"data-transfer",label:"Data Import / Export",icon:DatabaseIcon},
@@ -104,8 +106,8 @@ function SettingsViewContent(){
   function chooseTemplate(style:InvoiceTemplate){setTemplate(current=>({...current,style,pageSize:style==="thermal"?"Receipt":"A4"}));}
   function toggleTemplate(key:keyof InvoiceTemplateConfig){setTemplate(current=>({...current,[key]:!current[key]}));}
 
-  const cloudOnlyTabs=["users-access","billing","developers","email","payments","profile"];
-  const visibleTabs=tabs.filter(item=>item.id==="storage"?true:workspace.storage==="local"&&cloudOnlyTabs.includes(item.id)?false:item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="billing"?workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
+  const cloudOnlyTabs=["mobile","users-access","billing","developers","email","payments","profile"];
+  const visibleTabs=tabs.filter(item=>item.id==="storage"?true:workspace.storage==="local"&&cloudOnlyTabs.includes(item.id)?false:item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="mobile"?workspace.can("settings.integrations")||workspace.can("users.manage"):item.id==="billing"?workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
   const tab=visibleTabs.some(item=>item.id===selectedTab)?selectedTab:(visibleTabs[0]?.id||selectedTab);
   if(!workspace.loading&&!visibleTabs.length){return <div className="p-4 lg:p-6 max-w-[1000px] mx-auto"><div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><h1 className="font-semibold">Settings access restricted</h1><p className="mt-1 text-xs">Your company administrator has not granted you access to company settings.</p></div></div>}
 
@@ -121,10 +123,11 @@ function SettingsViewContent(){
     {!workspace.loading&&tab==="users-access"?<><SectionTitle title="Users & Access" text="Manage company users, granular permissions, data scopes, invitations, and billable seats."/><UsersAccessPanel/></>:null}
     {!workspace.loading&&tab==="payments"?<><SectionTitle title="Payment Methods" text="Payment links and bank details shared across both apps."/><div className="grid gap-4 mt-6"><SettingField label="Stripe payment link" value={form.payment_link_stripe} onChange={value=>set("payment_link_stripe",value)}/><SettingField label="PayPal payment link" value={form.payment_link_paypal} onChange={value=>set("payment_link_paypal",value)}/><div className="p-4 rounded border bg-[#f7f9fc] text-xs"><b>Bank transfer</b><p className="muted mt-1">{form.bank_name?`${form.bank_name} · ${form.bank_iban||form.bank_account}`:"Add bank details under Company Profile."}</p></div></div></>:null}
     {!workspace.loading&&tab==="billing"?<><SectionTitle title="Billing & Subscription" text="Your shared OperiX Invoice subscription, usage, and secure Stripe management."/><div className="mt-6"><BillingPanel/></div></>:null}
+    {!workspace.loading&&tab==="mobile"?<><SectionTitle title="Mobile app" text="Use the OperiX Invoice mobile app with this server."/><MobileConnectPanel/></>:null}
     {!workspace.loading&&tab==="developers"?<><SectionTitle title="Developers" text="Manage tenant-scoped API access, webhooks, usage, logs, and documentation."/><div className="mt-6"><DevelopersPanel/></div></>:null}
     {!workspace.loading&&tab==="storage"?<><SectionTitle title="Data storage" text="Where your business data lives, plus backups and copying between this browser and the cloud."/><StorageSettings/></>:null}
     {!workspace.loading&&tab==="data-transfer"?<><SectionTitle title="Data Import / Export" text="Transfer tenant-scoped clients, products, vendors and expenses without exposing records from another workspace."/><DataTransferSettings/></>:null}
-    {!["billing","developers","users-access","profile","branches","email"].includes(tab) ? <footer className="mt-10 pt-5 border-t flex justify-end"><button className="btn btn-primary" onClick={save} disabled={saving||workspace.loading}>{success?<Check size={16}/>:<Save size={16}/>} {success?"Saved":saving?"Saving…":"Save Changes"}</button></footer> : null}
+    {!["billing","developers","users-access","profile","branches","email","mobile"].includes(tab) ? <footer className="mt-10 pt-5 border-t flex justify-end"><button className="btn btn-primary" onClick={save} disabled={saving||workspace.loading}>{success?<Check size={16}/>:<Save size={16}/>} {success?"Saved":saving?"Saving…":"Save Changes"}</button></footer> : null}
   </section></div></div>;
 }
 
