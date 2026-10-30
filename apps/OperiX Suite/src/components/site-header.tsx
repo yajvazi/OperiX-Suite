@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getCopy, href, urls } from "@/content/copy";
+import { getCopy, href, localUrl, urls } from "@/content/copy";
 import { useLang } from "./use-lang";
 import { Logo } from "./logo";
 
@@ -42,8 +42,8 @@ export function SiteHeader() {
       </nav>
       <div className="header-actions">
         <Link className="lang-switch" href={href(other, path)} hrefLang={other} lang={other} aria-label={t.nav.language}>{other === "sq" ? "SQ" : "EN"}</Link>
-        <a className="header-link" href={urls.signIn}>{t.nav.signIn}</a>
-        <a className="button button-sm" href={urls.signup}>{t.nav.start}</a>
+        <a className="header-link" href={localUrl(urls.signIn, lang)}>{t.nav.signIn}</a>
+        <a className="button button-sm" href={localUrl(urls.signup, lang)}>{t.nav.start}</a>
         <button type="button" className="menu-toggle" aria-label={t.nav.menu} aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
       </div>
     </div>
@@ -53,8 +53,8 @@ export function SiteHeader() {
         {links.map((item) => <Link key={item.to} href={href(lang, item.to)} onClick={() => setOpen(false)}>{item.label}{item.soon ? <span className="pill pill-soon">{t.comingSoon}</span> : null}</Link>)}
       </nav>
       <div className="mobile-panel-actions">
-        <a className="button" href={urls.signup}>{t.nav.start}</a>
-        <a className="button button-secondary" href={urls.signIn}>{t.nav.signIn}</a>
+        <a className="button" href={localUrl(urls.signup, lang)}>{t.nav.start}</a>
+        <a className="button button-secondary" href={localUrl(urls.signIn, lang)}>{t.nav.signIn}</a>
         <Link className="lang-switch lang-switch-wide" href={href(other, path)} hrefLang={other} lang={other} onClick={() => setOpen(false)}>{other === "sq" ? "Shqip" : "English"}</Link>
       </div>
     </div> : null}

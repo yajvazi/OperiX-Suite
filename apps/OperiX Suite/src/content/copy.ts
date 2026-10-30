@@ -8,6 +8,13 @@ export const urls = {
   email: "support@operixinvoice.com",
 };
 
+/** Links to the app and the Help Center open in the language the visitor chose here. */
+export function localUrl(url: string, lang: Lang): string {
+  if (lang !== "sq") return url;
+  if (url.startsWith(urls.help)) return `${url.replace(/\/$/, "")}/sq`;
+  return `${url}${url.includes("?") ? "&" : "?"}lang=sq`;
+}
+
 export type IconName =
   | "file" | "cart" | "users" | "wallet" | "chart" | "coins" | "upload" | "globe" | "shield" | "phone" | "wifi"
   | "cloud" | "device" | "calendar" | "bell" | "scissors" | "credit" | "layers" | "clock" | "link" | "code" | "lock" | "scan" | "box";

@@ -1005,3 +1005,8 @@ p { color: var(--body); }
 .faq-category-links a { border-radius: 999px; }
 @media (max-width: 640px) { .support-grid, .troubleshooting-grid { grid-template-columns: 1fr; } }
 .desktop-nav a { white-space: nowrap; }
+
+/* Longer Albanian labels wrap instead of overflowing their buttons. */
+.button, .button-light, .button-ghost-light, .support-action, .dev-actions a { white-space: normal; overflow-wrap: anywhere; text-align: center; max-width: 100%; }
+.support-cta .support-action { white-space: normal; }
+.support-cta { flex-wrap: wrap; }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { getCopy, href, urls, type Lang } from "@/content/copy";
+import { getCopy, href, localUrl, urls, type Lang } from "@/content/copy";
 import { Icon } from "./icons";
 import { BrowserFrame } from "./mockups";
 import { Reveal } from "./reveal";
@@ -15,7 +15,7 @@ export function InvoicePage({ lang }: { lang: Lang }) {
           <span className="eyebrow"><span className="dot" />{p.hero.eyebrow}</span>
           <h1>{p.hero.title}</h1>
           <p className="lead">{p.hero.sub}</p>
-          <div className="button-row"><a className="button button-lg" href={urls.signup}>{p.hero.primary}</a><Link className="button button-lg button-secondary" href={href(lang, "/pricing")}>{p.hero.secondary}</Link></div>
+          <div className="button-row"><a className="button button-lg" href={localUrl(urls.signup, lang)}>{p.hero.primary}</a><Link className="button button-lg button-secondary" href={href(lang, "/pricing")}>{p.hero.secondary}</Link></div>
         </div>
         <BrowserFrame src="/shots/invoice-detail.webp" alt={lang === "sq" ? "Një faturë në OperiX Invoice me përmbledhje dhe pamje paraprake të dokumentit" : "An invoice in OperiX Invoice with its summary and document preview"} priority />
       </div>
@@ -38,7 +38,7 @@ export function InvoicePage({ lang }: { lang: Lang }) {
     <section className="cta-band">
       <div className="container cta-inner">
         <h2>{t.home.cta.title}</h2><p>{t.home.cta.sub}</p>
-        <div className="button-row button-row-center"><a className="button button-light button-lg" href={urls.signup}>{t.home.cta.primary}</a><Link className="button button-outline-light button-lg" href={href(lang, "/pricing")}>{t.home.cta.secondary}</Link></div>
+        <div className="button-row button-row-center"><a className="button button-light button-lg" href={localUrl(urls.signup, lang)}>{t.home.cta.primary}</a><Link className="button button-outline-light button-lg" href={href(lang, "/pricing")}>{t.home.cta.secondary}</Link></div>
       </div>
     </section>
   </>;

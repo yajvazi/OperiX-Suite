@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Check, Code2 } from "lucide-react";
-import { getCopy, href, urls, type Lang } from "@/content/copy";
+import { getCopy, href, localUrl, urls, type Lang } from "@/content/copy";
 import { euro, prices } from "@/content/prices";
 import { Faq, faqSchema } from "./faq";
 import { Icon } from "./icons";
@@ -18,7 +18,7 @@ export function HomePage({ lang }: { lang: Lang }) {
           <h1>{h.hero.title} <span className="accent">{h.hero.accent}</span></h1>
           <p className="lead">{h.hero.sub}</p>
           <div className="button-row">
-            <a className="button button-lg" href={urls.signup}>{h.hero.primary} <ArrowRight size={18} /></a>
+            <a className="button button-lg" href={localUrl(urls.signup, lang)}>{h.hero.primary} <ArrowRight size={18} /></a>
             <Link className="button button-lg button-secondary" href={href(lang, "/pricing")}>{h.hero.secondary}</Link>
           </div>
           <ul className="hero-notes">{h.hero.note.map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
@@ -40,7 +40,7 @@ export function HomePage({ lang }: { lang: Lang }) {
             <p>{h.products.invoice.text}</p>
             <ul className="checks">{h.products.invoice.bullets.map((item) => <li key={item}><Check size={16} />{item}</li>)}</ul>
             <div className="button-row">
-              <a className="button" href={urls.signup}>{h.products.invoice.primary}</a>
+              <a className="button" href={localUrl(urls.signup, lang)}>{h.products.invoice.primary}</a>
               <Link className="button button-secondary" href={href(lang, "/invoice")}>{h.products.invoice.secondary}</Link>
             </div>
           </Reveal>
@@ -136,7 +136,7 @@ export function HomePage({ lang }: { lang: Lang }) {
     <section className="cta-band">
       <div className="container cta-inner">
         <h2>{h.cta.title}</h2><p>{h.cta.sub}</p>
-        <div className="button-row button-row-center"><a className="button button-light button-lg" href={urls.signup}>{h.cta.primary}</a><Link className="button button-outline-light button-lg" href={href(lang, "/pricing")}>{h.cta.secondary}</Link></div>
+        <div className="button-row button-row-center"><a className="button button-light button-lg" href={localUrl(urls.signup, lang)}>{h.cta.primary}</a><Link className="button button-outline-light button-lg" href={href(lang, "/pricing")}>{h.cta.secondary}</Link></div>
       </div>
     </section>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema(h.faq.items) }} />

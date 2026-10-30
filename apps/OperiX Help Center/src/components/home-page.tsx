@@ -41,7 +41,6 @@ export function HomePage({ locale }: { locale: Locale }) {
     <section className="home-hero">
       <div className="hero-glow" aria-hidden="true" />
       <div className="site-container hero-inner">
-        <span className="hero-eyebrow">{t("homeEyebrow")}</span>
         <h1>{t("howCanWeHelp")}</h1>
         <p>{t("heroDescription")}</p>
         <HeroSearch locale={locale} placeholder={t("searchDocumentation")} />

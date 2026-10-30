@@ -7,13 +7,15 @@ import { copy } from "../content/ui";
 
 export function LanguageSwitcher({ locale }: { locale: Locale }) {
   const pathname = usePathname() || `/${locale}`;
-  const alternateLocale: Locale = locale === "en" ? "sq" : "en";
-  const alternatePath = pathname.replace(/^\/(en|sq)(?=\/|$)/, `/${alternateLocale}`);
+  // Same page in the other language; a path with no language prefix gets one.
+  const pathFor = (target: Locale) => /^\/(en|sq)(?=\/|$)/.test(pathname)
+    ? pathname.replace(/^\/(en|sq)(?=\/|$)/, `/${target}`)
+    : `/${target}${pathname === "/" ? "" : pathname}`;
   return (
     <div className="language-switcher mobile-language-switcher" aria-label={copy(locale, "languageLabel")}>
-      <Link className={locale === "en" ? "is-active" : ""} href={pathname.replace(/^\/(en|sq)(?=\/|$)/, "/en")} hrefLang="en">English</Link>
+      <Link className={locale === "en" ? "is-active" : ""} href={pathFor("en")} hrefLang="en">English</Link>
       <span aria-hidden="true">/</span>
-      <Link className={locale === "sq" ? "is-active" : ""} href={alternatePath} hrefLang="sq">Shqip</Link>
+      <Link className={locale === "sq" ? "is-active" : ""} href={pathFor("sq")} hrefLang="sq">Shqip</Link>
     </div>
   );
 }

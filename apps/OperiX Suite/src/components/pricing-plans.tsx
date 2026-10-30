@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { useState } from "react";
-import { getCopy, href, urls, type Lang } from "@/content/copy";
+import { getCopy, href, localUrl, urls, type Lang } from "@/content/copy";
 import { euro, prices } from "@/content/prices";
 
 export function PricingPlans({ lang }: { lang: Lang }) {
@@ -20,7 +20,7 @@ export function PricingPlans({ lang }: { lang: Lang }) {
       <article className="plan">
         <h3>{t.plans.free.name}</h3><p className="plan-tag">{t.plans.free.tagline}</p>
         <div className="plan-price"><strong>{t.freePrice}</strong></div>
-        <a className="button button-secondary button-block" href={urls.signup}>{t.plans.free.cta}</a>
+        <a className="button button-secondary button-block" href={localUrl(urls.signup, lang)}>{t.plans.free.cta}</a>
         <p className="plan-included">{t.included}</p>
         <ul className="checks checks-tight">{t.plans.free.items.map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
       </article>
@@ -28,7 +28,7 @@ export function PricingPlans({ lang }: { lang: Lang }) {
         <span className="plan-badge">{t.plans.invoice.popular}</span>
         <h3>{t.plans.invoice.name}</h3><p className="plan-tag">{t.plans.invoice.tagline}</p>
         <div className="plan-price"><strong>{priced("invoice")}</strong><span>{per}</span></div>
-        <a className="button button-block" href={urls.signup}>{t.plans.invoice.cta}</a>
+        <a className="button button-block" href={localUrl(urls.signup, lang)}>{t.plans.invoice.cta}</a>
         <p className="plan-included">{t.included}</p>
         <ul className="checks checks-tight">{t.plans.invoice.items.map((item) => <li key={item}><Check size={15} />{item}</li>)}</ul>
       </article>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { getCopy, href, urls } from "@/content/copy";
+import { getCopy, href, localUrl, urls } from "@/content/copy";
 import { useLang } from "./use-lang";
 import { Logo } from "./logo";
 
@@ -14,7 +14,7 @@ export function SiteFooter() {
       <div className="footer-brand">
         <Logo lang={lang} light />
         <p>{t.footer.tagline}</p>
-        <a className="button button-light button-sm" href={urls.signup}>{t.nav.start}</a>
+        <a className="button button-light button-sm" href={localUrl(urls.signup, lang)}>{t.nav.start}</a>
       </div>
       <div>
         <h3>{t.footer.product}</h3>
@@ -27,9 +27,9 @@ export function SiteFooter() {
       <div>
         <h3>{t.footer.company}</h3>
         <ul>
-          <li><a href={urls.help}>{l.help}</a></li>
+          <li><a href={localUrl(urls.help, lang)}>{l.help}</a></li>
           <li><Link href={href(lang, "/contact")}>{l.contact}</Link></li>
-          <li><a href={urls.signIn}>{l.signIn}</a></li>
+          <li><a href={localUrl(urls.signIn, lang)}>{l.signIn}</a></li>
         </ul>
       </div>
       <div>

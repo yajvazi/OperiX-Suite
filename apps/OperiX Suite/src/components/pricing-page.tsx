@@ -1,5 +1,5 @@
 import { Check, Minus } from "lucide-react";
-import { getCopy, urls, type Lang } from "@/content/copy";
+import { getCopy, localUrl, urls, type Lang } from "@/content/copy";
 import { Faq, faqSchema } from "./faq";
 import { Icon } from "./icons";
 import { PricingPlans } from "./pricing-plans";
@@ -28,7 +28,7 @@ export function PricingPage({ lang }: { lang: Lang }) {
       <div className="container narrow"><div className="section-head"><h2>{t.faq.title}</h2></div><Faq items={t.faq.items} /></div>
     </section>
     <section className="cta-band">
-      <div className="container cta-inner"><h2>{getCopy(lang).home.cta.title}</h2><p>{getCopy(lang).home.cta.sub}</p><div className="button-row button-row-center"><a className="button button-light button-lg" href={urls.signup}>{getCopy(lang).home.cta.primary}</a></div></div>
+      <div className="container cta-inner"><h2>{getCopy(lang).home.cta.title}</h2><p>{getCopy(lang).home.cta.sub}</p><div className="button-row button-row-center"><a className="button button-light button-lg" href={localUrl(urls.signup, lang)}>{getCopy(lang).home.cta.primary}</a></div></div>
     </section>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqSchema(t.faq.items) }} />
   </>;
