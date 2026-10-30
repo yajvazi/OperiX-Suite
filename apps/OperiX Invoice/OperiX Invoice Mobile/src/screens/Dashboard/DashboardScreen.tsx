@@ -22,6 +22,7 @@ import { getPalette } from '../../theme/brand';
 import { getActiveProductCompanyIds, getWorkspaceScope, scopedResource } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
 import { syncDailySalesWidget } from '../../services/iosWidgetService';
+import { buildDailySalesSnapshot } from '../../services/dailySalesSnapshot';
 
 const { width } = Dimensions.get('window');
 
@@ -120,14 +121,6 @@ export function DashboardScreen({ navigation }: any) {
                     .select('*')
                     .or(productScope);
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayKey = [
-                today.getFullYear(),
-                String(today.getMonth() + 1).padStart(2, '0'),
-                String(today.getDate()).padStart(2, '0'),
-            ].join('-');
-            const invoiceRows = (invoicesData || []) as any[];
             const widgetTenants = workspaceScope.companyIds.map((companyId) => {
                 const company = workspaceScope.companies.find((candidate) => candidate.id === companyId);
                 return {
@@ -137,28 +130,13 @@ export function DashboardScreen({ navigation }: any) {
                         : 'OperiX tenant'),
                 };
             });
-            const widgetSales = Object.fromEntries(widgetTenants.map((tenant) => {
-                const tenantInvoices = invoiceRows.filter((invoice) => {
-                    const invoiceCompanyId = invoice.company_id || workspaceScope.companyId;
-                    const invoiceDate = new Date(invoice.issue_date);
-                    invoiceDate.setHours(0, 0, 0, 0);
-                    return invoiceCompanyId === tenant.id
-                        && invoiceDate.getTime() === today.getTime();
-                });
-                return [tenant.id, {
-                    ...tenant,
-                    date: todayKey,
-                    currency: workspaceProfile.currency || 'EUR',
-                    sales: tenantInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0),
-                    orders: tenantInvoices.length,
-                }];
-            }));
             try {
-                syncDailySalesWidget(widgetTenants, {
-                    updatedAt: new Date().toISOString(),
+                syncDailySalesWidget(widgetTenants, buildDailySalesSnapshot({
+                    rows: (invoicesData || []) as any[],
+                    tenants: widgetTenants,
                     defaultTenantId: workspaceScope.companyId,
-                    tenants: widgetSales,
-                });
+                    currency: workspaceProfile.currency,
+                }));
             } catch (widgetError) {
                 console.warn('iOS sales widget sync unavailable:', widgetError);
             }

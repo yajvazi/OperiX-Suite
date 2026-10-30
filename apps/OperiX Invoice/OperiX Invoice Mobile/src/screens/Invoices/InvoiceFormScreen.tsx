@@ -1,3 +1,4 @@
+import { refreshDailySalesWidget } from '../../services/iosWidgetService';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -883,6 +884,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
             if (!invoiceId && savedInvoice.invoice_number) setInvoiceNumber(String(savedInvoice.invoice_number));
             const savedDocumentLabel = documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en');
+            // Keep the home-screen widget in step with what was just saved.
+            if (user?.id) void refreshDailySalesWidget(user.id, { force: true });
             setSavedPopup({ invoiceId: savedInvoice.id, message: t('documentSaved', language).replace('{document}', savedDocumentLabel) });
 
         } catch (error: unknown) {

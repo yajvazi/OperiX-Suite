@@ -40,21 +40,39 @@ struct OperixSalesWidgetConfiguration: WidgetConfigurationIntent {
     var tenant: OperixWidgetTenant?
 }
 
-private struct StoredTenant: Codable {
+private struct StoredTenant: Decodable {
     let id: String
     let name: String
 }
 
-private struct StoredTenantSales: Codable {
+private struct StoredTenantSales: Decodable {
     let tenantId: String
     let tenantName: String
     let date: String
     let currency: String
     let sales: Double
     let orders: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case tenantId, tenantName, id, name, date, currency, sales, orders
+    }
+
+    // Accepts both the current field names (tenantId/tenantName) and the older ones (id/name),
+    // so numbers written by an older app build are still shown.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decodeIfPresent(String.self, forKey: .tenantId) ?? container.decode(String.self, forKey: .id)
+        tenantId = id
+        tenantName = try container.decodeIfPresent(String.self, forKey: .tenantName)
+            ?? container.decodeIfPresent(String.self, forKey: .name) ?? "OperiX"
+        date = try container.decode(String.self, forKey: .date)
+        currency = try container.decodeIfPresent(String.self, forKey: .currency) ?? "EUR"
+        sales = try container.decodeIfPresent(Double.self, forKey: .sales) ?? 0
+        orders = try container.decodeIfPresent(Int.self, forKey: .orders) ?? 0
+    }
 }
 
-private struct StoredSalesSnapshot: Codable {
+private struct StoredSalesSnapshot: Decodable {
     let updatedAt: String
     let defaultTenantId: String?
     let tenants: [String: StoredTenantSales]
@@ -72,6 +90,12 @@ private struct OperixSalesEntry: TimelineEntry {
     var formattedSales: String {
         sales.formatted(.currency(code: currency))
     }
+}
+
+/// "yyyy-MM-dd" for the device's current day, the same format the app writes into the snapshot.
+private func operixDayKey(_ date: Date) -> String {
+    let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+    return String(format: "%04ld-%02ld-%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
 }
 
 private enum OperixWidgetStore {
@@ -122,19 +146,29 @@ private struct OperixSalesProvider: AppIntentTimelineProvider {
     }
 
     func snapshot(for configuration: OperixSalesWidgetConfiguration, in context: Context) async -> OperixSalesEntry {
-        makeEntry(for: configuration.tenant?.id)
+        makeEntry(for: configuration.tenant?.id, at: Date())
     }
 
     func timeline(for configuration: OperixSalesWidgetConfiguration, in context: Context) async -> Timeline<OperixSalesEntry> {
-        let entry = makeEntry(for: configuration.tenant?.id)
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
-        return Timeline(entries: [entry], policy: .after(nextRefresh))
+        let now = Date()
+        let calendar = Calendar.current
+        let tenantId = configuration.tenant?.id
+        var entries = [makeEntry(for: tenantId, at: now)]
+
+        // At midnight "today" changes: add an entry for the new day so yesterday's total is never shown as today's.
+        let midnight = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 5), matchingPolicy: .nextTime)
+        if let midnight {
+            entries.append(makeEntry(for: tenantId, at: midnight))
+        }
+        let soon = calendar.date(byAdding: .minute, value: 15, to: now) ?? now.addingTimeInterval(900)
+        let nextRefresh = min(soon, midnight ?? soon)
+        return Timeline(entries: entries, policy: .after(nextRefresh))
     }
 
-    private func makeEntry(for tenantId: String?) -> OperixSalesEntry {
+    private func makeEntry(for tenantId: String?, at date: Date) -> OperixSalesEntry {
         guard let sales = OperixWidgetStore.sales(for: tenantId) else {
             return OperixSalesEntry(
-                date: Date(),
+                date: date,
                 tenantName: "OperiX",
                 currency: "EUR",
                 sales: 0,
@@ -144,14 +178,16 @@ private struct OperixSalesProvider: AppIntentTimelineProvider {
             )
         }
 
+        // Numbers saved on an earlier day are not today's sales. Show zero for the new day and ask to sync.
+        let isToday = sales.date == operixDayKey(date)
         return OperixSalesEntry(
-            date: Date(),
+            date: date,
             tenantName: sales.tenantName,
             currency: sales.currency,
-            sales: sales.sales,
-            orders: sales.orders,
-            salesDate: sales.date,
-            hasData: true
+            sales: isToday ? sales.sales : 0,
+            orders: isToday ? sales.orders : 0,
+            salesDate: isToday ? sales.date : operixDayKey(date),
+            hasData: isToday
         )
     }
 }
@@ -193,7 +229,7 @@ private struct OperixSalesWidgetView: View {
                     Text(entry.tenantName)
                         .font(.caption)
                         .lineLimit(1)
-                    Text("\(entry.orders) orders")
+                    Text(entry.hasData ? "\(entry.orders) orders" : "Open OperiX to sync")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

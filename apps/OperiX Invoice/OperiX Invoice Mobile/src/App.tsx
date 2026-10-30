@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, TextInput } from 'react-native';
+import { AppState, Platform, Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { OperixMobileAppShell } from '@invoice-monorepo/ui';
 import { AppNavigator } from './navigation/AppNavigator';
 import { brand } from './theme/brand';
+import { clearDailySalesWidget, refreshDailySalesWidget } from './services/iosWidgetService';
 import { restoreServerConnection } from './services/serverConnection';
 import { deactivatePushNotifications, registerPushNotifications } from './services/pushNotifications';
 
@@ -52,6 +53,26 @@ function PushNotificationBootstrap() {
     return null;
 }
 
+/** Keeps the iOS home-screen widget current: refresh on sign-in, when the app opens and when it goes to the background. */
+function WidgetBootstrap() {
+    const { user } = useAuth();
+
+    useEffect(() => {
+        if (Platform.OS !== 'ios') return undefined;
+        if (!user?.id) {
+            clearDailySalesWidget();
+            return undefined;
+        }
+        void refreshDailySalesWidget(user.id, { force: true });
+        const subscription = AppState.addEventListener('change', (state) => {
+            if (state === 'active' || state === 'background') void refreshDailySalesWidget(user.id, { force: state === 'background' });
+        });
+        return () => subscription.remove();
+    }, [user?.id]);
+
+    return null;
+}
+
 export function App() {
     const [fontsLoaded] = useFonts({ Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, OblivianTextBold });
     const [typographyReady, setTypographyReady] = useState(false);
@@ -82,7 +103,7 @@ export function App() {
         <ThemeProvider>
             <AuthProvider>
                 <SafeAreaProvider>
-                    <OperixMobileAppShell product="invoice"><PushNotificationBootstrap /><ThemedAppContent /></OperixMobileAppShell>
+                    <OperixMobileAppShell product="invoice"><PushNotificationBootstrap /><WidgetBootstrap /><ThemedAppContent /></OperixMobileAppShell>
                 </SafeAreaProvider>
             </AuthProvider>
         </ThemeProvider>
