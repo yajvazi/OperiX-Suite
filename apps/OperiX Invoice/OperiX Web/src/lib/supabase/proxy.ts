@@ -5,7 +5,7 @@ import { isSupabaseConfigured, supabaseAuthCookieName, supabaseKey, supabaseUrl 
 // The POS completion screen only reads the just-created invoice from the
 // browser's local storage. It must remain reachable after the POS redirect,
 // even if the auth cookie is refreshed between those two navigations.
-const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/api/connect", "/api/webhooks/stripe", "/api/cron/billing-sync", "/api/internal/push-dispatch", "/pos/complete", "/demo", "/portal", "/qr", "/open", "/.well-known", "/privacy", "/terms", "/support"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/api/connect", "/api/webhooks/stripe", "/api/cron/billing-sync", "/api/internal/push-dispatch", "/email-templates", "/pos/complete", "/demo", "/portal", "/qr", "/open", "/.well-known", "/privacy", "/terms", "/support"];
 
 function isInvalidRefreshToken(error: unknown) {
   const authError = error as { code?: string; status?: number; message?: string } | null;
