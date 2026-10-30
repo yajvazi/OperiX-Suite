@@ -22,6 +22,8 @@ export interface SaveInvoiceOptions {
   existingInvoiceId?: string | null;
   postInvoice?: boolean;
   replacePostedInvoice?: boolean;
+  /** Company administrators only: correct a posted invoice that issued stock (returns the old stock, issues the new). */
+  adminStockCorrectionReason?: string;
   stockCheckout?: boolean;
   idempotencyKey?: string | null;
 }
@@ -319,7 +321,15 @@ export async function saveInvoiceDocument(client: SupabaseClient, options: SaveI
   const saveRpc = draft.externalReference !== undefined
     ? 'save_invoice_document_with_external_reference'
     : 'save_invoice_document';
-  const saved = options.replacePostedInvoice && existingInvoiceId
+  const saved = options.replacePostedInvoice && existingInvoiceId && options.adminStockCorrectionReason
+    ? await unwrap<unknown>(client.rpc('admin_correct_stock_invoice', {
+      p_invoice: persistence.invoice,
+      p_items: persistence.items,
+      p_invoice_id: existingInvoiceId,
+      p_reason: options.adminStockCorrectionReason,
+      p_idempotency_key: idempotencyKey,
+    }))
+    : options.replacePostedInvoice && existingInvoiceId
     ? await unwrap<unknown>(client.rpc('replace_posted_invoice_document', {
       p_invoice: persistence.invoice,
       p_items: persistence.items,

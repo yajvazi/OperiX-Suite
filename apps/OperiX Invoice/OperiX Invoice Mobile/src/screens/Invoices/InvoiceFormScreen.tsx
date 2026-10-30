@@ -199,6 +199,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const modalBackdropColor = isDark ? 'rgba(0,0,0,0.96)' : 'rgba(0,0,0,0.72)';
     const currency = profile?.currency || 'EUR';
     const canPermission = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
+    const isCompanyAdminUser = platformAdmin || workspaceRole === 'company_administrator';
+    // Set after an administrator confirms correcting an invoice that issued stock; the next save uses that workflow.
+    const stockCorrectionConfirmed = useRef(false);
     const canApplyDiscount = canPermission('invoice.apply_discount');
     const canChangeDates = canPermission('invoice.change_dates');
     const documentPermission = (typeOption: CommercialDocumentType) => typeOption === 'QUOTE' ? 'offer.create'
@@ -817,6 +820,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     // ignores services/non-stock products and is idempotent.
                     stockCheckout: !invoiceId && documentType === 'INVOICE' && canIssueDocument,
                     replacePostedInvoice: replaceInvoiceDocument,
+                    adminStockCorrectionReason: stockCorrectionConfirmed.current ? 'Corrected by an administrator in the mobile app' : undefined,
                     idempotencyKey: domainDraft.idempotencyKey,
                 });
                 savedInvoice = saved.invoice;
@@ -893,6 +897,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
         } catch (error: unknown) {
             const errorRecord = error && typeof error === 'object' ? error as { code?: string; message?: string } : {};
+            if (replaceInvoiceDocument && isCompanyAdminUser && !stockCorrectionConfirmed.current
+                && String(errorRecord.message || '').includes('must be corrected with a stock return')) {
+                // An administrator can correct it: return the old stock, replace the invoice, issue the new stock.
+                Alert.alert(t('adminStockCorrectionTitle', language), t('adminStockCorrectionMessage', language), [
+                    { text: t('cancel', language), style: 'cancel' },
+                    { text: t('adminStockCorrectionAction', language), onPress: () => { stockCorrectionConfirmed.current = true; void handleSave(); } },
+                ]);
+                return;
+            }
             // A validation message (blank line description, bad quantity...) is for the user, not a crash.
             if (errorRecord.code !== '42501' && (error as { name?: string } | null)?.name !== 'DomainValidationError') console.error('Save error:', error);
             const message = errorRecord.code === '23505' && String(errorRecord.message || '').includes('invoices_company_number_unique')
@@ -900,6 +913,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 : getLocalizedErrorMessage(error, language, 'saveError');
             Alert.alert(t('error', language), message);
         } finally {
+            stockCorrectionConfirmed.current = false;
             saveInFlight.current = false;
             setSaving(false);
         }
