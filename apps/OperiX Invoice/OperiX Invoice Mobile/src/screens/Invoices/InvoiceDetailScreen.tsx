@@ -12,10 +12,12 @@ import {
     StyleSheet,
     Linking,
     Modal,
+    TextInput,
 } from 'react-native';
 import { ArrowLeft, Edit, Share2, FileText, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard, Download, Printer, Receipt, X, MoreHorizontal, HandCoins, ChevronRight, UserRound } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
-import { supabase } from '@invoice-monorepo/api';
+import { activeLocalStore } from '../../services/localMode';
+import { adminDeleteInvoice, supabase } from '@invoice-monorepo/api';
 import { getInvoice, listCompanyAgents, listInvoicePayments } from '@invoice-monorepo/api/repositories';
 import { calculateInvoice } from '@invoice-monorepo/money';
 import { useAuth } from '@invoice-monorepo/hooks';
@@ -144,6 +146,13 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const [pdfUri, setPdfUri] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [showMore, setShowMore] = useState(false);
+    // Admin-only actions on invoices that were already posted.
+    const [adminDeleteOpen, setAdminDeleteOpen] = useState(false);
+    const [adminDeleteReason, setAdminDeleteReason] = useState('');
+    const [adminDeleteBusy, setAdminDeleteBusy] = useState(false);
+    const [adminDeleteError, setAdminDeleteError] = useState('');
+    const [onDeviceStore, setOnDeviceStore] = useState(false);
+    useEffect(() => { void activeLocalStore().then((store) => setOnDeviceStore(Boolean(store))); }, []);
     const [htmlContent, setHtmlContent] = useState('');
     const [payments, setPayments] = useState<Array<Record<string, any>>>([]);
     const [relatedDocuments, setRelatedDocuments] = useState<Array<Record<string, any>>>([]);
@@ -667,6 +676,31 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         );
     };
 
+    const handleAdminEditPosted = () => {
+        if (!invoice) return;
+        Alert.alert(t('adminEditPostedTitle', language), t('adminEditPostedMessage', language), [
+            { text: t('cancel', language), style: 'cancel' },
+            { text: t('adminEditPostedAction', language), onPress: () => navigation.navigate('InvoiceForm', { invoiceId: invoice.id }) },
+        ]);
+    };
+
+    const handleAdminDeletePosted = async () => {
+        if (!invoice) return;
+        const reason = adminDeleteReason.trim();
+        if (reason.length < 3) { setAdminDeleteError(t('adminDeleteReasonRequired', language)); return; }
+        setAdminDeleteBusy(true);
+        setAdminDeleteError('');
+        try {
+            await adminDeleteInvoice(supabase, invoice.id, reason);
+            setAdminDeleteOpen(false);
+            navigation.goBack();
+        } catch (error) {
+            setAdminDeleteError(getLocalizedErrorMessage(error, language, 'failedToDeleteInvoice'));
+        } finally {
+            setAdminDeleteBusy(false);
+        }
+    };
+
     const handleCopyInvoiceNumber = useCallback(async () => {
         if (!invoice?.invoice_number) return;
         try {
@@ -696,6 +730,12 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const salesBookPeriodLocked = ['DECLARED', 'AMENDED'].includes(String(salesBookPeriodStatus || '').toUpperCase());
     const canEditInvoice = can('invoice.edit') && !salesBookPeriodLocked && editable;
     const canDeleteInvoice = can('invoice.delete_draft') && !salesBookPeriodLocked && String((invoice as any).commercial_status || invoice.status || '').toUpperCase() === 'DRAFT';
+    const isDraftDocument = String((invoice as any).commercial_status || invoice.status || '').toUpperCase() === 'DRAFT';
+    // Company administrators can also edit or delete invoices that were already posted. The database reverses the
+    // accounting entries, keeps an audit record, and still refuses invoices in a declared Sales Book period.
+    const canAdminEditPosted = !onDeviceStore && !editable && documentType === 'INVOICE' && !salesBookPeriodLocked
+        && can('invoice.edit') && can('sales_invoice.edit') && can('journal.reverse');
+    const canAdminDeletePosted = !onDeviceStore && !isDraftDocument && can('sales_invoice.delete');
     const canExportInvoice = can('financial.export');
     const canConvertTo = (targetType: CommercialDocumentType) => {
         const targetPermission = permissionForInvoiceConversion(targetType);
@@ -786,6 +826,34 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
             <Modal visible={showMore} transparent animationType="slide" onRequestClose={() => setShowMore(false)}><View style={styles.mobileModalOverlay}><View style={[styles.mobileModalSheet, { backgroundColor: cardBg }]}><View style={styles.mobileSheetHandle} /><View style={styles.mobileSheetHeader}><View><Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('actions', language)}</Text><Text style={[styles.mobileItemMeta, { color: mutedColor }]}>{documentLabel} · {t('sourceDocumentKept', language)}</Text></View><TouchableOpacity accessibilityRole="button" onPress={() => setShowMore(false)}><X color={textColor} size={21} /></TouchableOpacity></View>{canEditInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); navigation.navigate('InvoiceForm', { invoiceId: invoice.id, documentType }); }} style={styles.mobileMoreRow}><Edit color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('editInvoice', language)}</Text></TouchableOpacity> : null}<TouchableOpacity testID="invoice-more-preview-button" accessibilityRole="button" onPress={() => { setShowMore(false); handlePreview(); }} style={styles.mobileMoreRow}><Eye color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('preview', language)}</Text></TouchableOpacity>{canExportInvoice ? <><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleGeneratePdf(); }} style={styles.mobileMoreRow}><Download color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('share', language)} PDF</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handlePrint(); }} style={styles.mobileMoreRow}><Printer color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('print', language)}</Text></TouchableOpacity></> : null}{documentType === 'QUOTE' && canConvertTo('SALES_ORDER') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('SALES_ORDER'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createOrder', language)}</Text></TouchableOpacity> : null}{documentType === 'QUOTE' && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'PROFORMA' && canConvertTo('ADVANCE_INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('ADVANCE_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createAdvanceInvoice', language)}</Text></TouchableOpacity> : null}{documentType === 'PROFORMA' && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE', language); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'SALES_ORDER' && canConvertTo('DELIVERY_NOTE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DELIVERY_NOTE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('deliveryNote', language)}</Text></TouchableOpacity> : null}{(documentType === 'SALES_ORDER' || documentType === 'DELIVERY_NOTE') && canConvertTo('INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('invoice', language)}</Text></TouchableOpacity> : null}{documentType === 'ADVANCE_INVOICE' && canConvertTo('FINAL_INVOICE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('FINAL_INVOICE'); }} style={styles.mobileMoreRow}><RefreshCw color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('createFinalInvoice', language)}</Text></TouchableOpacity> : null}{['INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType) && canConvertTo('CREDIT_NOTE') ? <TouchableOpacity testID="invoice-create-credit-note-button" accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('CREDIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('creditNote', language)}</Text></TouchableOpacity> : null}{['INVOICE', 'FINAL_INVOICE', 'SIMPLIFIED_INVOICE'].includes(documentType) && canConvertTo('DEBIT_NOTE') ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleConvert('DEBIT_NOTE'); }} style={styles.mobileMoreRow}><Receipt color={primaryColor} size={18} /><Text style={[styles.mobileMoreText, { color: textColor }]}>{t('create', language)} {t('debitNote', language)}</Text></TouchableOpacity> : null}<Text style={[styles.mobileMoreLabel, { color: mutedColor }]}>{t('changeStatus', language)}</Text><View style={styles.mobileStatusOptions}>{invoiceStatusOptions.map((option) => { const disabled = Boolean(updatingStatus) || !canTransitionInvoiceStatus(invoice, option.key) || !can(permissionForInvoiceStatus(invoice, option.key)); const selected = isInvoiceStatusSelected(invoice, option); return <TouchableOpacity key={option.key} testID={`invoice-status-${option.key}-button`} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} onPress={() => { setShowMore(false); void handleUpdateStatus(option.key); }} style={[styles.mobileStatusOption, { borderColor: selected ? primaryColor : borderColor, backgroundColor: selected ? `${primaryColor}14` : cardBg, opacity: disabled ? 0.45 : 1 }]}><Text style={[styles.mobileStatusOptionText, { color: selected ? primaryColor : mutedColor }]}>{option.key.charAt(0).toUpperCase() + option.key.slice(1)}</Text></TouchableOpacity>; })}</View>{canDeleteInvoice ? <TouchableOpacity accessibilityRole="button" onPress={() => { setShowMore(false); void handleDelete(); }} style={[styles.mobileMoreRow, { marginTop: 6 }]}><Trash2 color={brand.colors.error} size={18} /><Text style={[styles.mobileMoreText, { color: brand.colors.error }]}>{t('deleteInvoice', language)}</Text></TouchableOpacity> : null}</View></View></Modal>
 
+            <Modal visible={adminDeleteOpen} transparent animationType="fade" onRequestClose={() => { if (!adminDeleteBusy) setAdminDeleteOpen(false); }}>
+                <View style={styles.mobileModalOverlay}>
+                    <View style={[styles.mobileModalSheet, { backgroundColor: cardBg, padding: 20 }]}>
+                        <Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('adminDeletePostedTitle', language)}</Text>
+                        <Text style={[styles.mobileItemMeta, { color: mutedColor, marginTop: 8, lineHeight: 19 }]}>{t('adminDeletePostedMessage', language)}</Text>
+                        <Text style={[styles.mobileSectionTitle, { color: textColor, marginTop: 14 }]}>{t('adminDeleteReasonLabel', language)}</Text>
+                        <TextInput
+                            testID="invoice-delete-reason-input"
+                            value={adminDeleteReason}
+                            onChangeText={setAdminDeleteReason}
+                            placeholder={t('adminDeleteReasonPlaceholder', language)}
+                            placeholderTextColor={mutedColor}
+                            multiline
+                            style={{ minHeight: 70, marginTop: 8, padding: 12, borderWidth: 1, borderColor, borderRadius: 12, color: textColor, textAlignVertical: 'top' }}
+                        />
+                        {adminDeleteError ? <Text style={{ color: '#B42318', marginTop: 8, fontSize: 12 }}>{adminDeleteError}</Text> : null}
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                            <TouchableOpacity accessibilityRole="button" disabled={adminDeleteBusy} onPress={() => setAdminDeleteOpen(false)} style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 13, borderWidth: 1, borderColor }}>
+                                <Text style={{ color: textColor, fontWeight: '700' }}>{t('cancel', language)}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity testID="invoice-delete-confirm-button" accessibilityRole="button" disabled={adminDeleteBusy} onPress={() => void handleAdminDeletePosted()} style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#B42318', opacity: adminDeleteBusy ? 0.6 : 1 }}>
+                                {adminDeleteBusy ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>{t('adminDeleteAction', language)}</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <Modal visible={showPreview} animationType="slide"><View style={{ flex: 1, backgroundColor: bgColor }}><View style={styles.mobilePreviewHeader}><TouchableOpacity testID="invoice-preview-close-button" accessibilityRole="button" onPress={() => setShowPreview(false)}><X color={textColor} size={23} /></TouchableOpacity><Text style={[styles.mobileSheetTitle, { color: textColor }]}>{t('invoicePreview', language)}</Text><TouchableOpacity testID="invoice-preview-print-button" accessibilityRole="button" onPress={handlePrint}><Printer color={primaryColor} size={22} /></TouchableOpacity></View><WebView testID="invoice-preview-webview" source={{ html: htmlContent }} style={{ flex: 1 }} originWhitelist={['*']} /></View></Modal>
         </MobileScreen>
     );
@@ -821,15 +889,27 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     )}
                     {canManageInvoice && (
                         <>
-                            {canDeleteInvoice && <TouchableOpacity
+                            {(canDeleteInvoice || canAdminDeletePosted) && <TouchableOpacity
+                                testID="invoice-delete-button"
+                                accessibilityRole="button"
+                                accessibilityLabel={t('deleteInvoice', language)}
                                 style={[styles.smallActionBtn, { backgroundColor: '#fee2e2', marginRight: 8 }]}
-                                onPress={handleDelete}
+                                onPress={() => {
+                                    if (canDeleteInvoice) { handleDelete(); return; }
+                                    if (salesBookPeriodLocked) { Alert.alert(t('adminDeletePostedTitle', language), t('adminDeleteDeclared', language)); return; }
+                                    setAdminDeleteReason('');
+                                    setAdminDeleteError('');
+                                    setAdminDeleteOpen(true);
+                                }}
                             >
                                 <Trash2 color="#ef4444" size={20} />
                             </TouchableOpacity>}
-                            {canEditInvoice && <TouchableOpacity
+                            {(canEditInvoice || canAdminEditPosted) && <TouchableOpacity
+                                testID="invoice-edit-button"
+                                accessibilityRole="button"
+                                accessibilityLabel={t('edit', language)}
                                 style={[styles.smallActionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
-                                onPress={() => navigation.navigate('InvoiceForm', { invoiceId: invoice.id })}
+                                onPress={() => (canEditInvoice ? navigation.navigate('InvoiceForm', { invoiceId: invoice.id }) : handleAdminEditPosted())}
                             >
                                 <Edit color={textColor} size={20} />
                             </TouchableOpacity>}

@@ -805,6 +805,15 @@ export async function deleteInvoice(client: SupabaseClient, invoiceId: string) {
   await unwrap<unknown>(client.rpc('delete_invoice', { p_invoice_id: invoiceId }));
 }
 
+/**
+ * Company administrators only: deletes an invoice that was already posted. The database reverses its accounting
+ * entries, restores stock and keeps an audit record with the reason. Invoices declared in the Sales Book,
+ * with fiscal receipts, or tied to other documents are refused with a clear message.
+ */
+export async function adminDeleteInvoice(client: SupabaseClient, invoiceId: string, reason: string) {
+  await unwrap<unknown>(client.rpc('admin_delete_invoice', { p_invoice_id: invoiceId, p_reason: reason }));
+}
+
 export function transitionInvoiceStatus(client: SupabaseClient, invoiceId: string, status: string, eventType: string) {
   return client.rpc('transition_commercial_document', {
     p_document_id: invoiceId,
