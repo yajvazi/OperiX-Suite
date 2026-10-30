@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import {
     ChevronRight, Moon, Sun, Smartphone, Camera, Upload, X,
     Image as ImageIcon, PenTool, Stamp, Palette, FileText, CreditCard, Languages,
-    ShieldCheck, Briefcase, Users, Building, MapPin, Zap, LogOut, Plus, Edit2, Trash2, Share2, HardDrive
+    ShieldCheck, Briefcase, Users, Building, MapPin, Zap, LogOut, Plus, Edit2, Trash2, Share2, HardDrive, Bell
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -668,6 +668,13 @@ export function SettingsScreen({ navigation }: any) {
                     title={language === 'sq' ? 'Abonimi dhe pagesa' : 'Subscription & billing'}
                     description={language === 'sq' ? 'Shikoni planin, provën, përdorimin dhe statusin e pagesës' : 'View plan, trial, usage, and payment status'}
                     onPress={() => navigation.navigate('Subscription')}
+                    trailing={<ChevronRight color={palette.muted} size={18} />}
+                /> : null}
+                {!localMode ? <ShortcutRow
+                    icon={Bell}
+                    title={language === 'sq' ? 'Njoftimet' : 'Notifications'}
+                    description={language === 'sq' ? 'Zgjidhni çfarë njoftimesh merrni nga ekipi' : 'Choose which team notifications you get'}
+                    onPress={() => navigation.navigate('NotificationSettings')}
                     trailing={<ChevronRight color={palette.muted} size={18} />}
                 /> : null}
                 <ShortcutRow

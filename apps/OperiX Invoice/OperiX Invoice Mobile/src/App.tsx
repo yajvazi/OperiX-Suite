@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, Platform, Text, TextInput } from 'react-native';
+import { AppState, Linking, Platform, Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import {
     Poppins_400Regular,
     Poppins_500Medium,
@@ -16,7 +17,7 @@ import { AppNavigator } from './navigation/AppNavigator';
 import { brand } from './theme/brand';
 import { clearDailySalesWidget, refreshDailySalesWidget } from './services/iosWidgetService';
 import { restoreServerConnection } from './services/serverConnection';
-import { deactivatePushNotifications, registerPushNotifications } from './services/pushNotifications';
+import { deactivatePushNotifications, notificationLink, registerPushNotifications } from './services/pushNotifications';
 
 const OblivianTextBold = require('../assets/fonts/OblivianText-Bold.otf');
 
@@ -37,17 +38,35 @@ function ThemedAppContent() {
 
 function PushNotificationBootstrap() {
     const { user } = useAuth();
+    const { language } = useTheme();
 
     useEffect(() => {
         if (!user?.id) return undefined;
-        void registerPushNotifications(user.id).catch((error) => {
+        void registerPushNotifications(user.id, language).catch((error) => {
             console.warn('Push notification registration unavailable:', error);
         });
+        return undefined;
+    }, [user?.id, language]);
+
+    useEffect(() => {
+        if (!user?.id) return undefined;
         return () => {
             void deactivatePushNotifications(user.id).catch((error) => {
                 console.warn('Push notification cleanup unavailable:', error);
             });
         };
+    }, [user?.id]);
+
+    // Tapping a notification opens the invoice, payment or expense it is about.
+    useEffect(() => {
+        if (!user?.id || Platform.OS === 'web') return undefined;
+        const open = (response: Notifications.NotificationResponse | null | undefined) => {
+            const link = notificationLink(response);
+            if (link) void Linking.openURL(link).catch(() => undefined);
+        };
+        void Notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);
+        const subscription = Notifications.addNotificationResponseReceivedListener(open);
+        return () => subscription.remove();
     }, [user?.id]);
 
     return null;

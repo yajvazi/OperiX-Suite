@@ -216,6 +216,18 @@ All settings live in `.env.example` with comments. The important ones:
 
 ## Optional features
 
+- **Push notifications to your team (mobile app).** When someone issues an invoice, records a payment or expense,
+  a new member joins, stock runs low, and so on, the database queues a notification and the web app sends it to the
+  other people who may see that data. Setup: set `PUSH_DISPATCH_SECRET` (or reuse `CRON_SECRET`) on the web app, then in
+  the Supabase SQL editor:
+  ```sql
+  select vault.create_secret('https://YOUR-DOMAIN/api/internal/push-dispatch', 'push_dispatch_url');
+  select vault.create_secret('THE-SAME-SECRET', 'push_dispatch_secret');
+  ```
+  It needs the `pg_net` extension (enabled by default on Supabase). Calling `GET /api/internal/push-dispatch` with the
+  secret on a schedule is a safety net. Phones need a build that registers Expo push tokens; people choose what they
+  receive under Settings → Notifications in the app.
+
 - **Stripe subscriptions.** The code includes Stripe Billing (checkout, customer portal, webhooks). A private,
   self-hosted installation does not need it: leave `NEXT_PUBLIC_SELF_HOSTED=true`. To sell subscriptions to
   your own customers, create your products and prices with `scripts/billing/stripe-setup.mjs`

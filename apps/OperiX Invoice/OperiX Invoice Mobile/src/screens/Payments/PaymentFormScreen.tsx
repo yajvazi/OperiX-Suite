@@ -508,9 +508,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                 Alert.alert(t('paymentSaved', language), saved.allocationError.message);
             }
             if (!isEditing) {
-                if (!isLocalStorage) void notifyBusinessEvent('payment_received', companyId, String(saved.payment.id), {
-                    invoiceId: selectedInvoice?.id || null,
-                }).catch((notificationError) => console.warn('Payment notification could not be sent:', notificationError));
+                // The "payment received" notification to the rest of the workspace is queued by the database itself.
                 const selectedBankAccount = bankAccounts.find((account) => account.id === formData.company_bank_account_id);
                 if (!isLocalStorage && formData.payment_method === 'bank' && selectedBankAccount?.is_shared) {
                     void notifyBusinessEvent('shared_bank_activity', companyId, String(saved.payment.id), {
@@ -519,12 +517,7 @@ export function PaymentFormScreen({ navigation, route }: any) {
                         currency: 'EUR',
                     }).catch((notificationError) => console.warn('Shared bank notification could not be sent:', notificationError));
                 }
-                const invoiceOutstanding = selectedInvoice
-                    ? Number(selectedInvoice.total_amount || 0) - Number((selectedInvoice as any).amount_received || 0)
-                    : 0;
-                if (!isLocalStorage && selectedInvoice?.id && Number(formData.amount) >= Math.max(invoiceOutstanding, 0)) {
-                    void notifyBusinessEvent('invoice_paid', companyId, String(selectedInvoice.id)).catch((notificationError) => console.warn('Paid invoice notification could not be sent:', notificationError));
-                }
+                // "Invoice paid" is also queued by the database when the invoice becomes fully paid.
                 try {
                     const tenant = company as any;
                     await shareTransactionPdf({

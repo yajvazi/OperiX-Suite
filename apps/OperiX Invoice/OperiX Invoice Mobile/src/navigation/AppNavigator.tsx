@@ -97,6 +97,7 @@ import { StripeDashboardScreen } from '../screens/Settings/StripeDashboardScreen
 import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
 import { UsersAccessScreen } from '../screens/Settings/UsersAccessScreen';
 import { StorageSettingsScreen } from '../screens/Settings/StorageSettingsScreen';
+import { NotificationSettingsScreen } from '../screens/Settings/NotificationSettingsScreen';
 import { AdvancedSettingsScreen } from '../screens/Settings/AdvancedSettingsScreen';
 import { SubscriptionScreen } from '../screens/Settings/SubscriptionScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
@@ -225,6 +226,7 @@ function SettingsNavigator() {
         <SettingsStack.Screen name="ManageCompanies" component={GatedManageCompaniesScreen} />
         <SettingsStack.Screen name="UsersAccess" component={GatedUsersAccessScreen} />
         <SettingsStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
+        <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
         <SettingsStack.Screen name="AdvancedSettings" component={GatedAdvancedSettingsScreen} />
         <SettingsStack.Screen name="Subscription" component={GatedSubscriptionScreen} />
     </SettingsStack.Navigator>;

@@ -86,6 +86,7 @@ export type SettingsStackParamList = {
     ManageCompanies: undefined;
     UsersAccess: undefined;
     StorageSettings: undefined;
+    NotificationSettings: undefined;
     AdvancedSettings: undefined;
     Subscription: undefined;
 };

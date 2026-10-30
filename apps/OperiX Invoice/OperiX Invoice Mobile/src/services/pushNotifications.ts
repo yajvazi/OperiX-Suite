@@ -25,7 +25,7 @@ function notificationPermissionGranted(permission: Notifications.NotificationPer
         || ('status' in permission && permission.status === 'granted');
 }
 
-export async function registerPushNotifications(userId: string) {
+export async function registerPushNotifications(userId: string, language: string = 'en') {
     if (Platform.OS === 'web' || !Device.isDevice) return false;
 
     let permission = await Notifications.getPermissionsAsync();
@@ -46,6 +46,7 @@ export async function registerPushNotifications(userId: string) {
         company_id: companyId,
         expo_push_token: token,
         platform: Platform.OS,
+        language: language === 'sq' ? 'sq' : 'en',
         is_active: true,
         last_seen_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -62,6 +63,13 @@ export async function registerPushNotifications(userId: string) {
         });
     }
     return true;
+}
+
+/** Where a tapped notification should go: the link the server put in the message (an operix-invoice://open/... address). */
+export function notificationLink(response: Notifications.NotificationResponse | null | undefined): string | null {
+    const data = response?.notification?.request?.content?.data as { url?: unknown } | undefined;
+    const url = typeof data?.url === 'string' ? data.url : '';
+    return url.startsWith('operix-invoice://open/') ? url : null;
 }
 
 export async function deactivatePushNotifications(userId: string) {
