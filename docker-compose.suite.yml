@@ -7,7 +7,7 @@ services:
         NEXT_PUBLIC_SITE_URL: https://operixsuite.com
         NEXT_PUBLIC_OPERIX_CRM_URL: ${NEXT_PUBLIC_OPERIX_CRM_URL:-https://crm.operixsuite.com}
         NEXT_PUBLIC_OPERIX_CRM_ENABLED: ${NEXT_PUBLIC_OPERIX_CRM_ENABLED:-true}
-    image: operix-suite-marketing:build-20261030-menu
+    image: operix-suite-marketing:build-20261030-lang
     restart: unless-stopped
     environment:
       NODE_ENV: production
