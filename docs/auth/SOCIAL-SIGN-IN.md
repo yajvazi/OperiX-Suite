@@ -35,8 +35,9 @@ You need an Apple Developer Program membership.
    - Domains: your Supabase API host (no `https://`)
    - Return URL: the Supabase OAuth callback above
 3. *Keys* → create a key with "Sign in with Apple", download the `.p8` file once, note the Key ID and your Team ID.
-4. Generate the **client secret**: a JWT signed with the `.p8` key (ES256) with `iss` = Team ID, `sub` = Services ID,
-   `aud` = `https://appleid.apple.com`, expiry at most 6 months. Supabase documents a generator.
+4. Generate the **client secret** with `node scripts/auth/apple-client-secret.mjs --team <Team ID> --key-id <Key ID> --client-id <Services ID> --p8 <file.p8>`
+   (a JWT signed with the `.p8` key, ES256, with `iss` = Team ID, `sub` = Services ID,
+   `aud` = `https://appleid.apple.com`, valid 180 days).
 5. Supabase → *Authentication* → *Providers* → **Apple** → enable, set *Client IDs* to the Services ID
    (add the app bundle ID too, comma-separated), paste the generated secret, save.
 
