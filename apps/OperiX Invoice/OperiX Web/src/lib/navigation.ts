@@ -1,3 +1,4 @@
+import { SELF_HOSTED } from "@/lib/features";
 import { POS_ENABLED } from "@/lib/features";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -126,7 +127,7 @@ export const moreNavigation: Array<{ title: string; items: NavigationItem[] }> =
     items: [
       { href: "/settings?tab=company", label: "Company", icon: Building2, description: "Company profile and switching", permission: "settings.company" },
       { href: "/settings?tab=team", label: "Team / Users", icon: Users, description: "Workspace access", permission: "users.view" },
-      { href: "/settings?tab=billing", label: "Billing & Subscription", icon: CreditCard, description: "Trial, plan, usage, and subscription management", permission: "subscription.manage" },
+      ...(SELF_HOSTED ? [] : [{ href: "/settings?tab=billing", label: "Billing & Subscription", icon: CreditCard, description: "Trial, plan, usage, and subscription management", permission: "subscription.manage" }]),
       { href: "/settings?tab=payments", label: "Integrations", icon: Plug, description: "Connected services", permission: "settings.integrations" },
       { href: "/settings?tab=developers", label: "Developers", icon: Code2, description: "API keys, webhooks, usage, and docs", permission: "settings.integrations" },
       { href: "/settings", label: "Settings", icon: Settings2, description: "Preferences and security", permission: "settings.company" },

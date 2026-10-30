@@ -18,3 +18,6 @@ export function newDocumentHref(type?: "offer"): string {
   if (POS_ENABLED) return type === "offer" ? "/pos?type=offer" : "/pos";
   return type === "offer" ? "/invoices/new?type=offer" : "/invoices/new";
 }
+
+// Set NEXT_PUBLIC_SELF_HOSTED=true on your own server: hides the hosted billing and subscription screens.
+export const SELF_HOSTED = process.env.NEXT_PUBLIC_SELF_HOSTED === "true";

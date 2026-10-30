@@ -26,6 +26,6 @@ for local networks (localhost, 10.x, 192.168.x, 172.16-31.x, `.local`) for testi
 ## Not covered yet
 
 - A published, curated database schema (migrations currently mix several products): see `README.md`.
-- Billing/Stripe screens are hosted-service features; on a self-hosted server they should be hidden.
+- Billing screens are hidden when the web app is built with `NEXT_PUBLIC_SELF_HOSTED=true`, and the mobile app hides them while connected to your own server.
 - Push notifications go through the hosted service.
 - Google sign-in is configured per Supabase project.

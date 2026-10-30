@@ -1,3 +1,4 @@
+import { getConnectedServer } from '../../services/serverConnection';
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Image, Switch, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import Constants from 'expo-constants';
@@ -662,7 +663,7 @@ export function SettingsScreen({ navigation }: any) {
                         trailing={<ChevronRight color={palette.muted} size={18} />}
                     /> : null}
                 </> : null}
-                {!localMode && can('subscription.manage') ? <ShortcutRow
+                {!localMode && !getConnectedServer() && can('subscription.manage') ? <ShortcutRow
                     icon={CreditCard}
                     title={language === 'sq' ? 'Abonimi dhe pagesa' : 'Subscription & billing'}
                     description={language === 'sq' ? 'Shikoni planin, provën, përdorimin dhe statusin e pagesës' : 'View plan, trial, usage, and payment status'}

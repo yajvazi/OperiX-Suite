@@ -15,6 +15,7 @@ import { StorageSettings } from "./storage-settings";
 import { getLocalStore } from "@/lib/local/local-store";
 import { BillingPanel } from "./billing-panel";
 import { UsersAccessPanel } from "./users-access-panel";
+import { SELF_HOSTED } from "@/lib/features";
 import { MobileConnectPanel } from "./mobile-connect-panel";
 import { DevelopersPanel } from "./developers-panel";
 import { AppearancePanel, BranchesBanksPanel, BrandingFields, EmailPanel, ProfileSecurityPanel } from "./settings-panels";
@@ -107,7 +108,7 @@ function SettingsViewContent(){
   function toggleTemplate(key:keyof InvoiceTemplateConfig){setTemplate(current=>({...current,[key]:!current[key]}));}
 
   const cloudOnlyTabs=["mobile","users-access","billing","developers","email","payments","profile"];
-  const visibleTabs=tabs.filter(item=>item.id==="storage"?true:workspace.storage==="local"&&cloudOnlyTabs.includes(item.id)?false:item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="mobile"?workspace.can("settings.integrations")||workspace.can("users.manage"):item.id==="billing"?workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
+  const visibleTabs=tabs.filter(item=>item.id==="storage"?true:workspace.storage==="local"&&cloudOnlyTabs.includes(item.id)?false:item.id==="profile"||item.id==="appearance"?true:item.id==="branches"?workspace.can("settings.company")||workspace.can("settings.bank"):item.id==="email"?workspace.can("settings.integrations"):item.id==="users-access"?workspace.can("users.manage"):item.id==="mobile"?workspace.can("settings.integrations")||workspace.can("users.manage"):item.id==="billing"?!SELF_HOSTED&&workspace.can("subscription.manage"):item.id==="developers"?workspace.can("settings.integrations"):item.id==="data-transfer"?workspace.can("financial.export"):item.id==="payments"?workspace.can("settings.integrations")||workspace.can("settings.bank"):item.id==="templates"?workspace.can("settings.invoice"):workspace.can("settings.company"));
   const tab=visibleTabs.some(item=>item.id===selectedTab)?selectedTab:(visibleTabs[0]?.id||selectedTab);
   if(!workspace.loading&&!visibleTabs.length){return <div className="p-4 lg:p-6 max-w-[1000px] mx-auto"><div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><h1 className="font-semibold">Settings access restricted</h1><p className="mt-1 text-xs">Your company administrator has not granted you access to company settings.</p></div></div>}
 

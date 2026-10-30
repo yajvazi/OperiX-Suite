@@ -11,6 +11,7 @@ export function GET() {
     app: "operix-invoice",
     version: 1,
     name: (process.env.NEXT_PUBLIC_SERVER_NAME ?? "").trim() || "OperiX Invoice",
+    selfHosted: process.env.NEXT_PUBLIC_SELF_HOSTED === "true",
     supabaseUrl,
     supabaseKey,
   }, { headers: { "cache-control": "no-store", "access-control-allow-origin": "*" } });
