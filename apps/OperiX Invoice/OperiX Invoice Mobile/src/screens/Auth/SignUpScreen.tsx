@@ -47,6 +47,7 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [resendIn, setResendIn] = useState(0);
+    const [accountExists, setAccountExists] = useState(false);
     const sq = language === 'sq';
     const activeIndex = STEPS.indexOf(step);
 
@@ -73,7 +74,22 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
         setError('');
         try {
             const { error: signUpError } = await signUp(email.trim(), password);
-            if (signUpError) { setError(t('signUpFailed', language)); return; }
+            if (signUpError) {
+                // Tell people what actually went wrong instead of a vague failure.
+                const info = signUpError as { code?: string; status?: number; message?: string };
+                const text = String(info.message || '').toLowerCase();
+                if (info.code === 'user_already_exists' || text.includes('already registered')) {
+                    setError(sq ? 'Ekziston tashmë një llogari me këtë email. Hyni në vend të kësaj.' : 'An account with this email already exists. Sign in instead.');
+                    setAccountExists(true);
+                } else if (info.status === 429 || info.code === 'over_email_send_rate_limit' || text.includes('rate limit')) {
+                    setError(sq ? 'Shumë përpjekje. Provoni përsëri pas pak.' : 'Too many attempts. Please try again in a few minutes.');
+                } else if (info.code === 'weak_password') {
+                    setError(t('passwordMin', language));
+                } else {
+                    setError(t('signUpFailed', language));
+                }
+                return;
+            }
             // Some servers confirm accounts without an email. Then the user is signed in already and the app moves on by itself.
             const { data } = await supabase.auth.getSession();
             if (data.session) return;
@@ -141,8 +157,9 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                         <Text style={[styles.title, { color: palette.text }]}>{t('createAccount', language)}</Text>
                         <Text style={[styles.lead, { color: palette.muted }]}>{t('signupWelcomeSubtitle', language)}</Text>
                         {error ? <Text style={styles.error}>{error}</Text> : null}
+                        {accountExists ? <TouchableOpacity accessibilityRole="button" onPress={onNavigateToSignIn} style={[styles.secondary, { borderColor: palette.border }]}><Text style={{ color: primaryColor, fontWeight: '800', fontSize: 13 }}>{t('signIn', language)}</Text></TouchableOpacity> : null}
                         {field(`${t('email', language)} *`, (
-                            <TextInput testID="auth-sign-up-email" style={inputStyle} value={email} onChangeText={setEmail} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+                            <TextInput testID="auth-sign-up-email" style={inputStyle} value={email} onChangeText={(value) => { setEmail(value); setAccountExists(false); }} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
                         ))}
                         {field(`${t('password', language)} *`, (
                             <View>
@@ -234,6 +251,7 @@ const styles = StyleSheet.create({
     error: { marginBottom: 12, color: brand.colors.error, fontSize: 12, lineHeight: 17 },
     primary: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, borderRadius: 13 },
     primaryText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+    secondary: { minHeight: 46, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1, borderRadius: 12 },
     link: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     backRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     footer: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 18, paddingHorizontal: 14, borderWidth: 1, borderRadius: 14 },
