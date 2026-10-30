@@ -8,7 +8,9 @@ export function GET(request: Request) {
   const lang = new URL(request.url).searchParams.get("lang");
   const locale: Locale = lang === "sq" ? "sq" : "en";
   const product = productsByKey.invoice;
-  const published = getPublishedArticles(locale, "invoice", undefined, "mobile");
+  // Web-only guides are left out; an article counts for mobile when it says so.
+  const published = getPublishedArticles(locale, "invoice", undefined, "mobile")
+    .filter((article) => article.platform === "mobile" || article.platform === "both" || article.platforms?.includes("mobile"));
   const categories = product.categories
     .filter((category) => published.some((article) => article.category === category.slug))
     .sort((a, b) => a.order - b.order)
