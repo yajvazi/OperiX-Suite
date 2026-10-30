@@ -5,7 +5,7 @@ import { isSupabaseConfigured, supabaseAuthCookieName, supabaseKey, supabaseUrl 
 // The POS completion screen only reads the just-created invoice from the
 // browser's local storage. It must remain reachable after the POS redirect,
 // even if the auth cookie is refreshed between those two navigations.
-const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/api/connect", "/pos/complete", "/demo", "/portal", "/qr", "/open", "/.well-known", "/privacy", "/terms", "/support"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/auth", "/offline", "/api/health", "/api/connect", "/api/webhooks/stripe", "/api/cron/billing-sync", "/pos/complete", "/demo", "/portal", "/qr", "/open", "/.well-known", "/privacy", "/terms", "/support"];
 
 function isInvalidRefreshToken(error: unknown) {
   const authError = error as { code?: string; status?: number; message?: string } | null;
@@ -28,6 +28,9 @@ function clearAuthCookies(response: NextResponse, request: NextRequest) {
 
 export async function updateSession(request: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.next({ request });
+  // The mobile app calls the billing API with its own session ("Authorization: Bearer"), not a browser cookie.
+  // These routes verify that token themselves and answer 401 when it is missing or wrong.
+  if (request.nextUrl.pathname.startsWith("/api/billing/") && /^Bearer\s+\S+/i.test(request.headers.get("authorization") || "")) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const serverSupabaseUrl = process.env.SUPABASE_INTERNAL_URL?.trim() || supabaseUrl;
   const supabase = createServerClient(serverSupabaseUrl, supabaseKey, {

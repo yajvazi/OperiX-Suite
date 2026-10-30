@@ -47,3 +47,34 @@ export async function getInvoiceBillingSummary(companyId: string) {
         billable_users: Number(row.billable_users || 0),
     };
 }
+
+/**
+ * Web address that runs Stripe Billing for the workspace the app is connected to.
+ * Self-hosted servers (see serverConnection) bill through their own web app.
+ */
+function billingWebBase() {
+    const configured = process.env.EXPO_PUBLIC_INVOICE_BILLING_URL?.trim();
+    let fallback = 'https://invoice.operixsuite.com';
+    try { if (configured) fallback = new URL(configured).origin; } catch { /* keep the default */ }
+    return fallback;
+}
+
+async function billingRequest(path: string, body: Record<string, unknown>) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Please sign in again.');
+    const response = await fetch(`${billingWebBase()}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({})) as { url?: string; error?: string };
+    if (!response.ok || !payload.url) throw new Error(payload.error || 'Billing is unavailable right now. Please try again.');
+    return payload.url;
+}
+
+/** Returns a Stripe Checkout address. When the payment completes, the Stripe webhook activates the subscription. */
+export const createSubscriptionCheckout = (companyId: string, plan: 'invoice' | 'suite', interval: 'monthly' | 'annual') =>
+    billingRequest('/api/billing/checkout', { companyId, plan, interval });
+
+/** Returns a Stripe Customer Portal address (payment method, invoices, cancellation). */
+export const createBillingPortal = (companyId: string) => billingRequest('/api/billing/portal', { companyId });

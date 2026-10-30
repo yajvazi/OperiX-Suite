@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { authorizeInvoiceWorkspace, BillingError } from "@/lib/billing/server";
-import { createClient } from "@/lib/supabase/server";
+import { createRequestClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const client = await createClient();
+  const client = await createRequestClient(request);
   if (!client) return NextResponse.json({ error: "Billing is not configured." }, { status: 503 });
   const { data: { user }, error } = await client.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Authentication is required." }, { status: 401 });

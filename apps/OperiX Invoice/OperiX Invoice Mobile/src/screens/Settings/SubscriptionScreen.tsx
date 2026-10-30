@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { AlertTriangle, Check, CreditCard, ExternalLink, Users } from 'lucide-react-native';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { calculateSubscriptionPrice, formatBillingAmount, BILLING_CURRENCY } from '@invoice-monorepo/billing';
 import { brand, getPalette } from '../../theme/brand';
 import { getWorkspaceScope } from '../../services/workspace';
-import { getInvoiceBillingSummary, type MobileInvoiceBillingSummary } from '../../services/billingService';
+import { createBillingPortal, createSubscriptionCheckout, getInvoiceBillingSummary, type MobileInvoiceBillingSummary } from '../../services/billingService';
 import { MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
 
 function date(value: string | null) {
@@ -48,6 +48,32 @@ export function SubscriptionScreen({ navigation }: any) {
 
     useEffect(() => { void load(); }, [load]);
 
+    // Coming back from Stripe Checkout or the billing portal: re-read the plan (the webhook may already have activated it).
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void load(true); });
+        return () => subscription.remove();
+    }, [load]);
+
+    // Apple requires In-App Purchase for subscriptions sold inside iOS apps, so Stripe checkout is off on iOS
+    // unless the build explicitly opts in (for example for a storefront where external payment links are allowed).
+    const inAppCheckout = Platform.OS !== 'ios' || process.env.EXPO_PUBLIC_ALLOW_IOS_STRIPE_CHECKOUT === 'true';
+    const [busy, setBusy] = useState(false);
+    const [actionError, setActionError] = useState('');
+    const startBilling = async (kind: 'monthly' | 'annual' | 'portal') => {
+        if (!summary || busy) return;
+        setBusy(true);
+        setActionError('');
+        try {
+            const url = kind === 'portal' ? await createBillingPortal(summary.billing_account_company_id || summary.company_id) : await createSubscriptionCheckout(summary.billing_account_company_id || summary.company_id, plan, kind);
+            await WebBrowser.openBrowserAsync(url);
+            void load(true);
+        } catch (caught) {
+            setActionError(caught instanceof Error ? caught.message : 'Billing is unavailable right now.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const openBilling = () => {
         const url = process.env.EXPO_PUBLIC_INVOICE_BILLING_URL?.trim() || 'https://invoice.operixsuite.com/settings?tab=billing';
         void WebBrowser.openBrowserAsync(url);
@@ -83,7 +109,13 @@ export function SubscriptionScreen({ navigation }: any) {
                 <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}><Text style={[styles.muted, { color: mutedColor }]}>{interval === 'annual' ? 'Annual' : 'Monthly'} billing</Text><Text style={[styles.total, { color: textColor }]}>{formatBillingAmount(preview.total, BILLING_CURRENCY)}<Text style={[styles.totalSuffix, { color: mutedColor }]}>/{interval === 'annual' ? 'year' : 'month'}</Text></Text>{preview.lineItems.map((item) => <View key={item.key} style={styles.line}><Text style={[styles.muted, { color: mutedColor }]}>{item.label} · {item.quantity}</Text><Text style={[styles.lineAmount, { color: textColor }]}>{formatBillingAmount(item.amount, BILLING_CURRENCY)}</Text></View>)}<Text style={[styles.estimate, { color: mutedColor }]}>Estimated total from backend usage. Stripe prorations may change the immediate invoice.</Text></View>
 
                 <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}><Row label="Renewal / period end" value={date(summary.current_period_end)} textColor={textColor} mutedColor={mutedColor} /><Row label="Trial ends" value={date(summary.trial_ends_at)} textColor={textColor} mutedColor={mutedColor} />{summary.scheduled_plan ? <Row label="Scheduled plan" value={`${summary.scheduled_plan} · ${date(summary.scheduled_change_at)}`} textColor={textColor} mutedColor={mutedColor} /> : null}{summary.cancel_at_period_end ? <Row label="Cancellation" value={`At ${date(summary.current_period_end)}`} textColor="#B54708" mutedColor="#B54708" /> : null}</View>
-                {summary.billing_management_allowed ? <TouchableOpacity onPress={openBilling} style={[styles.primaryButton, { backgroundColor: primaryColor }]}><ExternalLink color="#fff" size={17} /><Text style={styles.primaryButtonText}>{hasSubscription ? 'Manage subscription on web' : 'Subscribe on web'}</Text></TouchableOpacity> : <Text style={[styles.muted, styles.centerText, { color: mutedColor }]}>Billing management is limited to workspace administrators.</Text>}
+                {summary.billing_management_allowed && inAppCheckout ? <>
+                    {actionError ? <Text style={[styles.muted, styles.centerText, { color: '#B42318' }]}>{actionError}</Text> : null}
+                    {hasSubscription && summary.status !== 'canceled' ? <TouchableOpacity testID="subscription-manage" disabled={busy} onPress={() => void startBilling('portal')} style={[styles.primaryButton, { backgroundColor: primaryColor }, busy && { opacity: 0.6 }]}>{busy ? <ActivityIndicator color="#fff" /> : <><CreditCard color="#fff" size={17} /><Text style={styles.primaryButtonText}>{language === 'sq' ? 'Menaxho abonimin' : 'Manage subscription'}</Text></>}</TouchableOpacity> : <>
+                        <TouchableOpacity testID="subscription-subscribe-annual" disabled={busy} onPress={() => void startBilling('annual')} style={[styles.primaryButton, { backgroundColor: primaryColor }, busy && { opacity: 0.6 }]}>{busy ? <ActivityIndicator color="#fff" /> : <><CreditCard color="#fff" size={17} /><Text style={styles.primaryButtonText}>{language === 'sq' ? 'Abonohu çdo vit' : 'Subscribe yearly'} · {formatBillingAmount(calculateSubscriptionPrice({ plan, interval: 'annual', totalTenants: summary.total_tenants, totalActiveUsers: summary.total_users }).total, BILLING_CURRENCY)}</Text></>}</TouchableOpacity>
+                        <TouchableOpacity testID="subscription-subscribe-monthly" disabled={busy} onPress={() => void startBilling('monthly')} style={[styles.secondaryButton, { borderColor }]}><Text style={[styles.secondaryButtonText, { color: primaryColor }]}>{language === 'sq' ? 'Abonohu çdo muaj' : 'Subscribe monthly'} · {formatBillingAmount(calculateSubscriptionPrice({ plan, interval: 'monthly', totalTenants: summary.total_tenants, totalActiveUsers: summary.total_users }).total, BILLING_CURRENCY)}</Text></TouchableOpacity>
+                    </>}
+                </> : summary.billing_management_allowed ? <TouchableOpacity onPress={openBilling} style={[styles.primaryButton, { backgroundColor: primaryColor }]}><ExternalLink color="#fff" size={17} /><Text style={styles.primaryButtonText}>{hasSubscription ? 'Manage subscription on web' : 'Subscribe on web'}</Text></TouchableOpacity> : <Text style={[styles.muted, styles.centerText, { color: mutedColor }]}>Billing management is limited to workspace administrators.</Text>}
                 {summary.billing_management_allowed ? <TouchableOpacity onPress={() => navigation.navigate('UsersAccess')} style={[styles.secondaryButton, { borderColor }]}><Users color={primaryColor} size={17} /><Text style={[styles.secondaryButtonText, { color: primaryColor }]}>Manage users</Text></TouchableOpacity> : null}
                 {plan === 'invoice' && suitePreview ? <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}><Text style={[styles.title, { color: textColor }]}>Recommended: OperiX Suite</Text><Text style={[styles.muted, { color: mutedColor }]}>Invoice + Booking with one shared meter: {formatBillingAmount(suitePreview.total, BILLING_CURRENCY)}/{interval === 'annual' ? 'year' : 'month'}.</Text></View> : null}
                 <Text style={[styles.footnote, { color: mutedColor }]}><Check color="#027A48" size={14} /> Entitlement and usage are read from the shared Supabase billing service.</Text>

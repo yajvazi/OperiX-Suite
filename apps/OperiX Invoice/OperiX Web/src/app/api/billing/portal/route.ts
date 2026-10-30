@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { BillingError, createInvoicePortalSession } from "@/lib/billing/server";
-import { createClient } from "@/lib/supabase/server";
+import { createRequestClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 const requestSchema = z.object({ companyId: z.string().uuid().optional() }).optional();
 
 export async function POST(request: Request) {
-  const client = await createClient();
+  const client = await createRequestClient(request);
   if (!client) return NextResponse.json({ error: "Billing is not configured." }, { status: 503 });
   const { data: { user }, error } = await client.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Authentication is required." }, { status: 401 });
