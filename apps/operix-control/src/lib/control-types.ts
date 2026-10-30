@@ -228,6 +228,20 @@ export type BillingOverview = {
   portal_url: string | null;
   stripe_account_hint: string | null;
   stripe_connected_at: string | null;
+  total_tenants?: number | null;
+  included_tenants?: number | null;
+  billable_tenants?: number | null;
+  total_users?: number | null;
+  included_users?: number | null;
+  billable_users?: number | null;
+  estimated_monthly_total?: number | string | null;
+  estimated_annual_total?: number | string | null;
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
+  cancel_at_period_end?: boolean | null;
+  grace_period_ends_at?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
 };
 
 export type ApiKeyRow = {
@@ -240,6 +254,23 @@ export type ApiKeyRow = {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
+};
+
+export type PublicApiOverviewRow = {
+  company_id: string;
+  organization: string;
+  addon_status: string;
+  api_addon_active: boolean;
+  invoice_api_active: boolean;
+  booking_api_active: boolean;
+  live_requests: number;
+  test_requests: number;
+  successful_live_requests: number;
+  failed_live_requests: number;
+  active_key_count: number;
+  active_webhook_count: number;
+  webhook_failure_count: number;
+  last_request_at: string | null;
 };
 
 export type WebhookRow = {
@@ -281,3 +312,71 @@ export type GroupAccessRow = { group_id: string; membership_id: string; app_key:
 export type FeatureFlagRow = { flag: string; enabled: boolean; configuration: Record<string, unknown>; updated_at: string };
 export type SearchResult = { entity_type: string; entity_id: string | null; title: string; subtitle: string | null; href: string };
 export type PlatformOrganizationRow = { id: string; organization: string | null; owner_id: string | null; plan: string | null; member_count: number; enabled_apps: number; status: string; created_at: string };
+export type PlatformBillingAccountRow = {
+  id: string;
+  company_id: string;
+  workspace_name: string | null;
+  plan: string;
+  status: string;
+  billing_interval: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  total_tenants: number;
+  billable_tenants: number;
+  total_users: number;
+  billable_users: number;
+  current_value: number | string;
+  mrr: number | string;
+  arr: number | string;
+  next_renewal_at: string | null;
+  cancel_at_period_end: boolean;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  past_due: boolean;
+  entitlements: Record<string, boolean>;
+  enterprise_contract_id: string | null;
+  created_at: string;
+};
+export type PlatformBillingMetric = { metric: string; value: number | string };
+export type ProductManualGrantRow = {
+  id: string;
+  company_id: string;
+  workspace_name: string | null;
+  product: string;
+  grant_type: string;
+  override_status: string;
+  reason: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+export type EnterpriseContractRow = {
+  id: string;
+  company_id: string;
+  workspace_name: string | null;
+  contract_name: string;
+  products: string[];
+  custom_price: number | string | null;
+  currency: string;
+  billing_interval: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  status: string;
+  seat_limit: number | null;
+  tenant_limit: number | null;
+  product_limits: Record<string, unknown>;
+  notes: string | null;
+};
+export type PlatformProductEntitlementRow = {
+  company_id: string;
+  workspace_name: string | null;
+  product: "invoice" | "booking" | "hr" | "desk" | string;
+  enabled: boolean;
+  source: string;
+  starts_at: string;
+  ends_at: string | null;
+  metadata: Record<string, unknown>;
+};

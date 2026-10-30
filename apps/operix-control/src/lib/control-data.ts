@@ -434,7 +434,7 @@ export async function setFeatureFlag(client: Client, companyId: string, flag: st
 }
 
 export async function getBillingOverview(client: Client, companyId: string) {
-  const { data, error } = await client.rpc("control_billing_overview", { p_company_id: requireUuid(companyId, "Organization") });
+  const { data, error } = await client.rpc("control_invoice_billing_overview", { p_company_id: requireUuid(companyId, "Organization") });
   if (error) throw error;
   return ((data || [])[0] || null) as BillingOverview | null;
 }
