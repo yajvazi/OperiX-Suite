@@ -36,7 +36,7 @@ const STATEMENTS: Card[] = [
   { key: "inventory_register", icon: Boxes, permission: "inventory.view" },
   { key: "ar_aging", icon: Users, permission: "reports.operational" },
   { key: "ap_aging", icon: Users, permission: "reports.operational" },
-  { key: "cash_balances", icon: WalletCards, href: "/cash-bank", permission: "settings.bank", title: { en: "Cash balances", sq: "Gjendjet e arkës" }, subtitle: { en: "Cash registers and bank accounts.", sq: "Arkat dhe llogaritë bankare." } },
+  { key: "cash_balances", icon: WalletCards, href: "/cash-bank/balances", permission: "settings.bank", title: { en: "Cash balances", sq: "Gjendjet e arkës" }, subtitle: { en: "Cash registers and bank accounts.", sq: "Arkat dhe llogaritë bankare." } },
 ];
 
 const TAXES: Card[] = [
@@ -48,6 +48,12 @@ const TAXES: Card[] = [
   { key: "declarations", icon: FileText, permission: "reports.tax" },
   { key: "archive", icon: Archive, permission: "audit.view" },
   { key: "tax_calendar", icon: CalendarDays, permission: "reports.tax" },
+];
+
+const EXPORTS: Card[] = [
+  { key: "export_invoices", icon: FileText, href: "/reports/export/invoices", permission: "financial.export", title: { en: "Export invoices", sq: "Eksporto faturat" }, subtitle: { en: "Download selected invoices as PDFs in one ZIP.", sq: "Shkarkoni faturat e zgjedhura si PDF në një ZIP." } },
+  { key: "export_expenses", icon: FileText, href: "/reports/export/expenses", permission: "financial.export", title: { en: "Export expenses", sq: "Eksporto shpenzimet" }, subtitle: { en: "Download expense documents as PDFs in one ZIP.", sq: "Shkarkoni dokumentet e shpenzimeve si PDF në një ZIP." } },
+  { key: "export_payments", icon: FileText, href: "/reports/export/payments", permission: "financial.export", title: { en: "Export payments", sq: "Eksporto pagesat" }, subtitle: { en: "Download payment receipts as PDFs in one ZIP.", sq: "Shkarkoni dëftesat e pagesave si PDF në një ZIP." } },
 ];
 
 const empty: Summary = { revenue: 0, expenses: 0, net_profit: 0, ar_outstanding: 0, ap_outstanding: 0 };
@@ -113,7 +119,7 @@ export function ReportsView() {
       const subtitle = card.subtitle || REPORT_DEFINITIONS[card.key]?.subtitle;
       return `${title?.[lang] || ""} ${subtitle?.[lang] || ""}`.toLowerCase().includes(needle);
     };
-    return { statements: STATEMENTS.filter(keep), taxes: TAXES.filter(keep) };
+    return { statements: STATEMENTS.filter(keep), taxes: TAXES.filter(keep), exports: local ? [] : EXPORTS.filter(keep) };
   }, [lang, local, needle, workspace]);
 
   const header = <PageHeader title={rt(lang, "Reports & taxes")} description={rt(lang, local ? "Summary and statements from the records stored in this browser." : "Financial statements, books and tax records from your posted accounting entries.")} />;
@@ -140,9 +146,10 @@ export function ReportsView() {
       <MetricCard label={rt(lang, "Payables")} value={money(summary.ap_outstanding)} icon={FileText} tone="slate" />
     </section>
     <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#dbe5f5] px-3 py-2"><Search size={16} /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={rt(lang, "Search reports…")} aria-label={rt(lang, "Search reports…")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
-    {!visible.statements.length && !visible.taxes.length ? <p className="muted rounded-lg border border-dashed p-8 text-center text-sm">{rt(lang, "No report matches your search.")}</p> : null}
+    {!visible.statements.length && !visible.taxes.length && !visible.exports.length ? <p className="muted rounded-lg border border-dashed p-8 text-center text-sm">{rt(lang, "No report matches your search.")}</p> : null}
     {visible.statements.length ? <section id="statements"><div className="mt-8 mb-1"><h2 className="text-lg font-bold tracking-tight">{rt(lang, "Financial statements")}</h2></div>{grid(visible.statements)}</section> : null}
     {visible.taxes.length ? <section id="tax-books"><div className="mt-8 mb-1"><h2 className="text-lg font-bold tracking-tight">{rt(lang, "Taxes & compliance")}</h2><p className="muted mt-1 text-xs">{rt(lang, "Tax books and declaration previews stay linked to posted source data. Electronic submission is not part of this page.")}</p></div>{grid(visible.taxes)}</section> : null}
+    {visible.exports.length ? <section id="exports"><div className="mt-8 mb-1"><h2 className="text-lg font-bold tracking-tight">{rt(lang, "Export documents")}</h2><p className="muted mt-1 text-xs">{rt(lang, "Download many documents at once as PDFs in a ZIP file.")}</p></div>{grid(visible.exports)}</section> : null}
     {!local && reconciles !== null ? <SectionCard title={rt(lang, "Control status")} description={rt(lang, "A report is only trustworthy when its accounting controls reconcile.")} className="reports-chart-card"><div className="reports-control-row"><CheckCircle2 size={18} /><strong>{rt(lang, reconciles ? "All reconciliation checks pass" : "Reconciliation requires attention")}</strong></div></SectionCard> : null}
     {local ? <><LocalLedgerReports /><LocalTaxRegisters /></> : null}
   </div>;

@@ -49,6 +49,8 @@ const SQ: Record<string, string> = {
   "Prepared": "Përgatitur",
   "Retry": "Provo përsëri",
   "Companies": "Kompanitë",
+  "Export documents": "Eksporto dokumentet",
+  "Download many documents at once as PDFs in a ZIP file.": "Shkarkoni shumë dokumente njëherësh si PDF në një skedar ZIP.",
   "Period": "Periudha",
 };
 
