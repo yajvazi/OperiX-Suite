@@ -165,6 +165,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [profile, setProfile] = useState<Profile | null>(null);
     const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
     const [platformAdmin, setPlatformAdmin] = useState(false);
+    const [workspaceRole, setWorkspaceRole] = useState('');
     const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
     const [customerSignatureRequested, setCustomerSignatureRequested] = useState(false);
     const [customerSignature, setCustomerSignature] = useState<string | null>(null);
@@ -263,6 +264,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const workspaceScope = await getWorkspaceScope(user.id);
         setWorkspacePermissions(workspaceScope.permissions);
         setPlatformAdmin(workspaceScope.platformAdmin);
+        setWorkspaceRole(String(workspaceScope.roleCode || ''));
         const { profile: workspaceProfile, company: activeCompany } = workspaceScope;
         const companyIds = workspaceScope.companyIds;
         const productCompanyIds = getActiveProductCompanyIds(workspaceScope);
@@ -594,7 +596,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                             : documentType === 'DEBIT_NOTE' ? 'invoice.debit'
                                 : 'invoice.create';
         const canCreateDocument = can(documentCreatePermission);
-        const canEditExistingDocument = can('invoice.edit');
+        // Company administrators can edit any invoice they can open; the database still enforces its own rules.
+        const canEditExistingDocument = can('invoice.edit') || workspaceScope.platformAdmin || workspaceScope.roleCode === 'company_administrator';
         const canIssueDocument = documentType === 'INVOICE' && can('invoice.issue');
         if ((!invoiceId && !canCreateDocument) || (invoiceId && !canEditExistingDocument && !salesBookAmendmentId) || (salesBookAmendmentId && !can('sales_book.manage'))) {
             Alert.alert(t('error', language), t('permissionDenied', language));
@@ -1759,7 +1762,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         Keyboard.dismiss();
                         void handleSave();
                     }}
-                    disabled={saving || workspacePermissions.length === 0 || Boolean(invoiceId && !workspacePermissions.includes('invoice.edit') && !salesBookAmendmentId)}
+                    disabled={saving || workspacePermissions.length === 0 || Boolean(invoiceId && !(workspacePermissions.includes('invoice.edit') || platformAdmin || workspaceRole === 'company_administrator') && !salesBookAmendmentId)}
                 >
                     {saving ? (
                         <ActivityIndicator color="#fff" size="small" />
