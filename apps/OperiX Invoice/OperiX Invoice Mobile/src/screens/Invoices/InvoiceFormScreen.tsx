@@ -825,7 +825,9 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 });
                 savedInvoice = saved.invoice;
 
-                if (savedInvoice.id && invoiceBranchId) {
+                // A replaced (posted) invoice keeps its branch and the database refuses direct changes to posted
+                // records, so the separate branch update only runs for invoices that were not posted before.
+                if (savedInvoice.id && invoiceBranchId && !replaceInvoiceDocument) {
                     await setInvoiceBranch(supabase, savedInvoice.id, invoiceBranchId);
                 }
 
