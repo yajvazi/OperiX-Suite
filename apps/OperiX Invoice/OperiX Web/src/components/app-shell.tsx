@@ -342,7 +342,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const companyName = workspace.company?.company_name || workspace.company?.name || workspace.profile?.company_name || "OperiX workspace";
   const firstName = workspace.profile?.first_name || workspace.user?.email?.split("@")[0] || "there";
-  const canNavigate = (item: NavigationItem) => !item.permission || workspace.can(item.permission);
+  const canNavigate = (item: NavigationItem) => item.anyPermission ? item.anyPermission.some((permission) => workspace.can(permission)) : !item.permission || workspace.can(item.permission);
   const visiblePrimaryNavigation = primaryNavigation.filter(canNavigate);
   const visibleNavigationSections = navigationSections.map((section) => ({ ...section, items: section.items.filter((item) => item.href !== "/settings" && item.href !== "/help").filter(canNavigate) })).filter((section) => section.items.length);
   const invoiceSidebarItems = visibleNavigationSections.flatMap((section) => section.items);
@@ -362,7 +362,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       sidebarGroup("Sales", FileText, ["/invoices", "/quotes", "/contracts", "/payments"]),
       sidebarGroup("Purchases", WalletCards, ["/expenses", "/vendors", "/supplier-bills", "/vendor-payments"]),
       sidebarGroup("Money", HandCoins, ["/cash-bank", "/income", "/accounting", "/payroll"]),
-      sidebarGroup("Reports", ReceiptText, ["/reports", "/tax-reports"]),
+      sidebarItem("/reports"),
     ]) },
   ].filter((section) => section.items.length);
   const visibleCreateActions = createActions.filter((action) => workspace.can(action.permission));

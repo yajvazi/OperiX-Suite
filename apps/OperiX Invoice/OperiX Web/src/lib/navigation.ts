@@ -15,7 +15,6 @@ import {
   Landmark,
   Package,
   Plug,
-  ReceiptText,
   ScrollText,
   Settings2,
   ShoppingCart,
@@ -30,6 +29,8 @@ export type NavigationItem = {
   icon: LucideIcon;
   description?: string;
   permission?: string;
+  /** Shown when the user holds any one of these. */
+  anyPermission?: string[];
 };
 
 export type NavigationSection = {
@@ -67,8 +68,7 @@ export const navigationSections: NavigationSection[] = [
       items: [
       { href: "/cash-bank", label: "Cash & Bank", icon: Landmark, description: "Cash, bank accounts, transfers and reconciliation", permission: "settings.bank" },
       { href: "/accounting", label: "Accounting", icon: BookOpenCheck, permission: "accounting_period.view" },
-      { href: "/reports", label: "Reports", icon: BarChart3, permission: "reports.operational" },
-      { href: "/tax-reports", label: "VAT / Tax", icon: ReceiptText, permission: "reports.tax" },
+      { href: "/reports", label: "Reports & Taxes", icon: BarChart3, anyPermission: ["reports.operational", "reports.profit", "reports.tax", "sales_book.view"] },
       { href: "/payroll", label: "Payroll", icon: WalletCards, permission: "users.view" },
       { href: "/settings?tab=compliance", label: "Fiscalization", icon: Landmark, permission: "settings.tax" },
     ],
