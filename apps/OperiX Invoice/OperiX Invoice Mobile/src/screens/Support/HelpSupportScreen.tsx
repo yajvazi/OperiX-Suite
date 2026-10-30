@@ -19,6 +19,7 @@ import { brand, getPalette } from '../../theme/brand';
 import { EmptyState, MobileHeader, MobileScreen, SearchField, SectionTitle } from '../../components/mobile/MobileUI';
 import { HelpArticleCard, HelpCategoryCard, HelpLanguageToggle } from '../../components/mobile/HelpCenterUI';
 import { MOBILE_DOC_CATEGORIES } from '../../generated/mobileDocs';
+import { helpCenterArticleUrl, loadLiveHelpIndex, searchLiveHelp, type LiveHelpArticle, type LiveHelpIndex } from '../../services/helpCenterLive';
 
 const CONTACT_URL = 'https://operixsuite.com/#contact';
 
@@ -71,6 +72,16 @@ export function HelpSupportScreen({ navigation, route }: Props) {
     const [query, setQuery] = useState('');
     const [recentIds, setRecentIds] = useState<string[]>([]);
     const copy = COPY[documentationLanguage];
+    const [liveIndex, setLiveIndex] = useState<LiveHelpIndex | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        setLiveIndex(null);
+        void loadLiveHelpIndex(documentationLanguage).then((index) => { if (active) setLiveIndex(index); });
+        return () => { active = false; };
+    }, [documentationLanguage]);
+
+    const openLiveArticle = (article: LiveHelpArticle) => navigation.navigate('HelpWebArticle', { url: helpCenterArticleUrl(article), title: article.title });
 
     useEffect(() => {
         if (!route.params?.language) setDocumentationLanguage(resolveDocumentationLanguage(language));
@@ -113,7 +124,35 @@ export function HelpSupportScreen({ navigation, route }: Props) {
 
                 <SearchField testID="help-search-input" value={query} onChangeText={setQuery} placeholder={copy.search} autoCorrect={false} />
 
-                {hasQuery ? (
+                {liveIndex ? (
+                    <View testID="help-live-articles">
+                        {searchLiveHelp(liveIndex, query).length === 0 ? (
+                            <EmptyState icon={LifeBuoy} title={copy.noResults} description={copy.noResultsDescription} />
+                        ) : (hasQuery ? [{ slug: 'results', name: copy.results }] : liveIndex.categories).map((category) => {
+                            const items = hasQuery ? searchLiveHelp(liveIndex, query) : liveIndex.articles.filter((article) => article.category === category.slug);
+                            if (!items.length) return null;
+                            return (
+                                <View key={category.slug} style={styles.sectionBlock}>
+                                    <SectionTitle title={category.name} action={`${items.length}`} />
+                                    {items.map((article) => (
+                                        <TouchableOpacity
+                                            key={article.id}
+                                            testID={`help-live-article-${article.id}`}
+                                            accessibilityRole="button"
+                                            onPress={() => openLiveArticle(article)}
+                                            style={[styles.supportCard, { backgroundColor: palette.surface, borderColor: palette.border, minHeight: 64, marginTop: 0, marginBottom: 9 }]}
+                                        >
+                                            <View style={styles.supportCopy}>
+                                                <Text style={[styles.supportTitle, { color: palette.text }]}>{article.title}</Text>
+                                                <Text numberOfLines={2} style={[styles.supportDescription, { color: palette.muted }]}>{article.description}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            );
+                        })}
+                    </View>
+                ) : hasQuery ? (
                     <View style={styles.sectionBlock}>
                         <SectionTitle title={copy.results} action={`${results.length} ${copy.resultCount}`} />
                         {results.length ? results.map((article) => <HelpArticleCard key={article.id} article={article} language={documentationLanguage} onPress={() => openArticle(article.id)} />) : (

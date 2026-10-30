@@ -99,6 +99,7 @@ import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 import { HelpSupportScreen } from '../screens/Support/HelpSupportScreen';
 import { HelpCategoryScreen } from '../screens/Support/HelpCategoryScreen';
 import { HelpArticleScreen } from '../screens/Support/HelpArticleScreen';
+import { HelpWebArticleScreen } from '../screens/Support/HelpWebArticleScreen';
 import { AboutScreen } from '../screens/About/AboutScreen';
 import { withCloudOnly } from '../components/mobile/CloudOnlyGate';
 
@@ -269,6 +270,7 @@ function RootNavigator() {
         <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <RootStack.Screen name="HelpCategory" component={HelpCategoryScreen} />
         <RootStack.Screen name="HelpArticle" component={HelpArticleScreen} />
+        <RootStack.Screen name="HelpWebArticle" component={HelpWebArticleScreen} />
         <RootStack.Screen name="About" component={AboutScreen} />
 
         <RootStack.Screen name="InvoiceForm" component={InvoiceFormScreen} />

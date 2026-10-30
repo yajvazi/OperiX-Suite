@@ -118,6 +118,7 @@ export type RootStackParamList = {
     HelpSupport: { language?: 'en' | 'sq' } | undefined;
     HelpCategory: { category: string; language?: 'en' | 'sq' };
     HelpArticle: { articleId: string; language?: 'en' | 'sq' };
+    HelpWebArticle: { url: string; title: string };
     About: undefined;
 
     InvoiceForm: InvoiceFormParams | undefined;
