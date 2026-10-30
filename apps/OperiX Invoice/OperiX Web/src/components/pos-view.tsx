@@ -244,6 +244,9 @@ export function PosView() {
         setTerminalsLoading(false);
         return;
       }
+      // First use: turns transactional POS on and creates a default branch and terminal if missing.
+      // People without POS permission get an error here and simply see the existing setup.
+      await supabase.rpc("ensure_pos_ready", { p_company_id: workspace.companyId });
       const { data, error } = await supabase
         .from("pos_terminals")
         .select("id,code,name,branch_id,warehouse_id,fiscal_location_id,cashier_shift_required")
