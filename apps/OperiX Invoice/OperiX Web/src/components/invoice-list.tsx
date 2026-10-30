@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingSkeleton, MetricCard, MobileListCard, Pa
 import { useWorkspace } from "@/hooks/use-workspace";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalStore } from "@/lib/local/local-store";
-import { listInvoices } from "@invoice-monorepo/api/repositories";
+import { deleteInvoice, listInvoices } from "@invoice-monorepo/api/repositories";
 import { documentTypeLabel, resolveCommercialDocumentType } from "@invoice-monorepo/commercial-documents";
 
 const tabs = ["all", "draft", "sent", "partial", "paid", "overdue", "cancelled"] as const;
@@ -51,6 +51,18 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
     void load();
     return () => { cancelled = true; };
   }, [type, workspace.companyIds, workspace.loading, workspace.storage, workspace.user]);
+  async function removeDraft(invoice: InvoiceRow) {
+    if (!window.confirm(`Delete ${invoice.invoice_number}? This cannot be undone.`)) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    try {
+      if (workspace.storage === "local") await (await getLocalStore()).deleteInvoice(invoice.id);
+      else await deleteInvoice(supabase, invoice.id);
+      setFetched((current) => current.filter((row) => row.id !== invoice.id));
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "The draft could not be deleted.");
+    }
+  }
   const source = useMemo(() => fetched.filter((row) => type === "invoice" ? resolveCommercialDocumentType(row) !== "QUOTE" : resolveCommercialDocumentType(row) === "QUOTE"), [fetched, type]);
   const requestedStatus = searchParams.get("status");
   const [active, setActive] = useState<InvoiceTab>(() => requestedStatus && tabs.includes(requestedStatus as InvoiceTab) ? requestedStatus as InvoiceTab : "all");
@@ -135,7 +147,7 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
     {loading ? <section className="ux-section-card"><LoadingSkeleton rows={6} /></section> : null}
     {!loading && !error && source.length ? <>
       <section data-testid="invoice.list" className="ux-section-card invoice-list-table-wrap">
-        {rows.length ? <table className="invoice-list-table"><thead><tr><th>{type === "invoice" ? "Document" : "Quote"}</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((invoice) => <InvoiceTableRow key={invoice.id} invoice={invoice} canEdit={workspace.can("invoice.edit")} />)}</tbody></table> : <EmptyState title="No matching documents" description="Try changing the search or filters." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />}
+        {rows.length ? <table className="invoice-list-table"><thead><tr><th>{type === "invoice" ? "Document" : "Quote"}</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((invoice) => <InvoiceTableRow key={invoice.id} invoice={invoice} canEdit={workspace.can("invoice.edit")} canDelete={workspace.can("invoice.delete_draft")} onDelete={removeDraft} />)}</tbody></table> : <EmptyState title="No matching documents" description="Try changing the search or filters." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />}
         <ListFooter page={page} pages={pages} count={filtered.length} label={type === "invoice" ? "invoices" : "quotes"} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(pages, value + 1))} />
       </section>
       <section className="invoice-mobile-cards">{rows.length ? rows.map((invoice) => <MobileListCard key={invoice.id} href={`/invoices/${invoice.id}`} icon={FileText} title={invoice.invoice_number} subtitle={`${documentTypeLabel(resolveCommercialDocumentType(invoice), "en")} · ${invoice.client?.name || "Citizen"}`} meta={`${shortDate(invoice.issue_date)}${invoice.due_date ? ` · Due ${shortDate(invoice.due_date)}` : ""}`} amount={money(invoice.total_amount, invoice.currency)} status={canonicalStatus(invoice)} />) : <EmptyState title="No matching documents" description="Try changing the search or filters." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />}<ListFooter page={page} pages={pages} count={filtered.length} label={type === "invoice" ? "invoices" : "quotes"} onPrevious={() => setPage((value) => Math.max(1, value - 1))} onNext={() => setPage((value) => Math.min(pages, value + 1))} /></section>
@@ -143,10 +155,10 @@ function InvoiceListContent({ type = "invoice" }: { type?: "invoice" | "offer" }
   </div>;
 }
 
-function InvoiceTableRow({ invoice, canEdit }: { invoice: InvoiceRow; canEdit: boolean }) {
+function InvoiceTableRow({ invoice, canEdit, canDelete, onDelete }: { invoice: InvoiceRow; canEdit: boolean; canDelete: boolean; onDelete: (invoice: InvoiceRow) => void }) {
   const router = useRouter();
   const type = resolveCommercialDocumentType(invoice);
-  return <tr tabIndex={0} onClick={() => router.push(`/invoices/${invoice.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(`/invoices/${invoice.id}`); } }}><td><Link href={`/invoices/${invoice.id}`} onClick={(event) => event.stopPropagation()}><strong>{invoice.invoice_number}</strong></Link><small className="muted block">{documentTypeLabel(type, "en")}</small></td><td><span className="invoice-customer"><strong>{invoice.client?.name || "Citizen"}</strong>{invoice.client_id ? null : <small>Walk-in customer</small>}</span></td><td>{shortDate(invoice.issue_date)}</td><td><strong>{money(invoice.total_amount, invoice.currency)}</strong></td><td><StatusBadge status={canonicalStatus(invoice)} /></td><td><details className="relative" onClick={(event) => event.stopPropagation()}><summary className="icon-btn list-none" aria-label={`Actions for ${invoice.invoice_number}`}><MoreHorizontal size={17} /></summary><div className="action-menu"><Link href={`/invoices/${invoice.id}`}>View document</Link>{canEdit && (type === "INVOICE" || type === "QUOTE") ? <Link href={`/invoices/new?edit=${invoice.id}`}>Edit</Link> : null}<Link href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`}>Preview PDF</Link></div></details></td></tr>;
+  return <tr tabIndex={0} onClick={() => router.push(`/invoices/${invoice.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(`/invoices/${invoice.id}`); } }}><td><Link href={`/invoices/${invoice.id}`} onClick={(event) => event.stopPropagation()}><strong>{invoice.invoice_number}</strong></Link><small className="muted block">{documentTypeLabel(type, "en")}</small></td><td><span className="invoice-customer"><strong>{invoice.client?.name || "Citizen"}</strong>{invoice.client_id ? null : <small>Walk-in customer</small>}</span></td><td>{shortDate(invoice.issue_date)}</td><td><strong>{money(invoice.total_amount, invoice.currency)}</strong></td><td><StatusBadge status={canonicalStatus(invoice)} /></td><td><details className="relative" onClick={(event) => event.stopPropagation()}><summary className="icon-btn list-none" aria-label={`Actions for ${invoice.invoice_number}`}><MoreHorizontal size={17} /></summary><div className="action-menu"><Link href={`/invoices/${invoice.id}`}>View document</Link>{canEdit && (type === "INVOICE" || type === "QUOTE") ? <Link href={`/invoices/new?edit=${invoice.id}`}>Edit</Link> : null}<Link href={`/invoices/preview/${encodeURIComponent(invoice.invoice_number)}`}>Preview PDF</Link>{canDelete && String((invoice as { commercial_status?: string | null }).commercial_status || invoice.status || "").toUpperCase() === "DRAFT" ? <button type="button" className="text-red-600" onClick={() => onDelete(invoice)}>Delete draft</button> : null}</div></details></td></tr>;
 }
 
 function ListFooter({ page, pages, count, label, onPrevious, onNext }: { page: number; pages: number; count: number; label: string; onPrevious: () => void; onNext: () => void }) {

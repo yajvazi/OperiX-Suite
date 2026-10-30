@@ -3,7 +3,8 @@
 /* eslint-disable @next/next/no-img-element -- logos and stamps are data URLs supplied by the company */
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Monitor, Moon, Pencil, Plus, Sun, Trash2, Upload } from "lucide-react";
+import { Check, Monitor, Moon, Pencil, Plus, Stamp, Sun, Trash2, Upload } from "lucide-react";
+import { stampDataUrl } from "@/lib/stamp";
 import { LanguageSwitch } from "./language-switch";
 import { createClient } from "@/lib/supabase/client";
 import { listLocalResource, removeLocalResource, saveLocalResource } from "@/lib/local/resource";
@@ -48,7 +49,12 @@ export function AppearancePanel({ brandColor, onBrandColor }: { brandColor: stri
 }
 
 /** Company logo and stamp — same data-URL storage the mobile app uses. */
-export function BrandingFields({ logo, stamp, onChange, disabled }: { logo: string; stamp: string; onChange: (key: "logo_url" | "stamp_url", value: string) => void; disabled?: boolean }) {
+export function BrandingFields({ logo, stamp, onChange, disabled, companyName = "", color = "#004FFE" }: { logo: string; stamp: string; onChange: (key: "logo_url" | "stamp_url", value: string) => void; disabled?: boolean; companyName?: string; color?: string }) {
+  const [creating, setCreating] = useState(false);
+  const [stampName, setStampName] = useState(companyName);
+  const [topText, setTopText] = useState("OFFICIAL");
+  const [bottomText, setBottomText] = useState("AUTHORIZED");
+  const preview = stampDataUrl(stampName.trim() || "Company", topText, bottomText, color);
   function pick(key: "logo_url" | "stamp_url", file?: File) {
     if (!file) return;
     if (file.size > 1024 * 1024) { window.alert("Choose an image smaller than 1 MB."); return; }
@@ -59,7 +65,14 @@ export function BrandingFields({ logo, stamp, onChange, disabled }: { logo: stri
   const picker = (key: "logo_url" | "stamp_url", label: string, value: string, hint: string) => <div className="settings-asset">
     <span className="text-xs font-semibold">{label}</span>
     <div className="settings-asset-preview">{value ? <img src={value} alt={label} /> : <span className="muted text-xs">{hint}</span>}</div>
-    <div className="flex gap-2"><label className={`btn ${disabled ? "opacity-50" : "cursor-pointer"}`}><Upload size={14} /> Upload<input type="file" accept="image/png,image/jpeg,image/svg+xml" className="sr-only" disabled={disabled} onChange={(event) => pick(key, event.target.files?.[0])} /></label>{value ? <button type="button" className="btn" disabled={disabled} onClick={() => onChange(key, "")}><Trash2 size={14} /> Remove</button> : null}</div>
+    <div className="flex gap-2"><label className={`btn ${disabled ? "opacity-50" : "cursor-pointer"}`}><Upload size={14} /> Upload<input type="file" accept="image/png,image/jpeg,image/svg+xml" className="sr-only" disabled={disabled} onChange={(event) => pick(key, event.target.files?.[0])} /></label>{key === "stamp_url" ? <button type="button" className="btn" disabled={disabled} onClick={() => { setStampName(companyName); setCreating((open) => !open); }}><Stamp size={14} /> Create stamp</button> : null}{value ? <button type="button" className="btn" disabled={disabled} onClick={() => onChange(key, "")}><Trash2 size={14} /> Remove</button> : null}</div>
+    {key === "stamp_url" && creating ? <div className="mt-3 grid gap-3 rounded-lg border border-[#dbe5f5] p-3">
+      <img src={preview} alt="Stamp preview" className="mx-auto h-40 w-40" />
+      <label className="field"><span>Company name</span><input className="input" value={stampName} onChange={(event) => setStampName(event.target.value)} /></label>
+      <label className="field"><span>Top text</span><input className="input" value={topText} onChange={(event) => setTopText(event.target.value)} /></label>
+      <label className="field"><span>Bottom text</span><input className="input" value={bottomText} onChange={(event) => setBottomText(event.target.value)} /></label>
+      <button type="button" className="btn btn-primary" disabled={!stampName.trim()} onClick={() => { onChange("stamp_url", preview); setCreating(false); }}><Check size={14} /> Use this stamp</button>
+    </div> : null}
   </div>;
   return <div className="grid gap-5 sm:grid-cols-2">{picker("logo_url", "Company logo", logo, "PNG, JPG or SVG, up to 1 MB")}{picker("stamp_url", "Official stamp", stamp, "Printed over the signature line")}</div>;
 }
