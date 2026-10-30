@@ -4807,10 +4807,11 @@ $$;
 --
 
 CREATE FUNCTION private.rbac_invoice_delete_guard()
-RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO ''
-    AS $$
+returns trigger
+language plpgsql
+security definer
+set search_path to ''
+as $$
 begin
   if coalesce((select auth.jwt() ->> 'role'), '') = 'service_role'
      or private.rbac_is_platform_admin() then
@@ -4819,6 +4820,7 @@ begin
   -- Controlled admin workflow: public.delete_invoice sets this flag after its own permission and safety checks.
   if coalesce(current_setting('app.invoice_delete_workflow', true), '') = 'authorized'
      and old.company_id is not null
+     and private.rbac_role_code(old.company_id) = 'company_administrator'
      and coalesce(private.has_company_permission(old.company_id, 'sales_invoice.delete'), false) then
     return old;
   end if;
@@ -49701,7 +49703,13 @@ begin
     raise exception 'Invoice not found' using errcode = 'P0002';
   end if;
   if invoice_row.company_id is null
-     or not coalesce(private.has_company_permission(invoice_row.company_id, 'sales_invoice.delete'), false) then
+     or not (
+       private.rbac_is_platform_admin()
+       or (
+         private.rbac_role_code(invoice_row.company_id) = 'company_administrator'
+         and coalesce(private.has_company_permission(invoice_row.company_id, 'sales_invoice.delete'), false)
+       )
+     ) then
     raise exception 'Only company administrators can delete invoices' using errcode = '42501';
   end if;
 

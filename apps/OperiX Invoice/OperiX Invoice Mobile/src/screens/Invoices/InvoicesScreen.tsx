@@ -21,6 +21,7 @@ import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
 import { formatCurrency, formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, scopedResource, hasWorkspacePermission } from '../../services/workspace';
 import { getDataStore } from '../../services/dataStore';
+import { AdminDeleteInvoiceModal } from '../../components/invoices/AdminDeleteInvoiceModal';
 import { localContractRows } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 
@@ -54,6 +55,10 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const [contractView, setContractView] = useState(() => route?.params?.tab === 'contract');
     const [canManageContracts, setCanManageContracts] = useState(false);
     const [canDeleteDraft, setCanDeleteDraft] = useState(false);
+    // Company administrators can also delete invoices that were already posted (with a reason; audited).
+    const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
+    const [onDevice, setOnDevice] = useState(false);
+    const [adminDeleteTarget, setAdminDeleteTarget] = useState<{ id: string; number: string } | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +98,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
         setCanManageContracts(allowedContracts);
         setCanDeleteDraft(hasWorkspacePermission({ permissions: workspace.permissions, platformAdmin: workspace.platformAdmin }, 'invoice.delete_draft'));
+        setIsCompanyAdmin(workspace.platformAdmin || workspace.roleCode === 'company_administrator');
+        setOnDevice((await getDataStore(user.id)).mode === 'local');
         if ((selectedType === 'contract' || contractView) && !allowedContracts) {
             setSelectedType('invoice');
             setContractView(false);
@@ -242,17 +249,22 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                             >
                                 <Eye color="#004FFE" size={18} />
                             </TouchableOpacity>
-                            {canDeleteDraft && String(item.status || '').toLowerCase() === 'draft' ? (
-                                <TouchableOpacity
-                                    testID={`invoice-delete-${item.id}-button`}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={t('deleteInvoice', language)}
-                                    style={[styles.previewIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}
-                                    onPress={() => handleDeleteDraft(item)}
-                                >
-                                    <Trash2 color="#ef4444" size={18} />
-                                </TouchableOpacity>
-                            ) : null}
+                            {(() => {
+                                const isDraft = String(item.status || '').toLowerCase() === 'draft';
+                                const canDelete = isDraft ? canDeleteDraft : (isCompanyAdmin && !onDevice && selectedType === 'invoice');
+                                if (!canDelete) return null;
+                                return (
+                                    <TouchableOpacity
+                                        testID={`invoice-delete-${item.id}-button`}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={t('deleteInvoice', language)}
+                                        style={[styles.previewIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}
+                                        onPress={() => (isDraft ? handleDeleteDraft(item) : setAdminDeleteTarget({ id: item.id, number: String((item as any).invoice_number || '') }))}
+                                    >
+                                        <Trash2 color="#ef4444" size={18} />
+                                    </TouchableOpacity>
+                                );
+                            })()}
                         </View>
                     </View>
                     <View style={styles.invoiceFooter}>
@@ -350,6 +362,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                     { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ProductForm' }) },
                 ]}
             />
+            <AdminDeleteInvoiceModal invoiceId={adminDeleteTarget?.id ?? null} invoiceNumber={adminDeleteTarget?.number} onClose={() => setAdminDeleteTarget(null)} onDeleted={() => { setAdminDeleteTarget(null); void fetchData(); }} />
         </View>
     );
 }

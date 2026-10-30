@@ -160,6 +160,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
             // Uses the URL scheme of the app that is running, so the browser hands control back to the right app.
             const redirectTo = AuthSession.makeRedirectUri({ path: 'auth-callback' });
+            console.log(`[oauth] ${provider} redirectTo=${redirectTo}`);
 
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider,
@@ -177,6 +178,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             );
 
             // Closing the browser without finishing is not an error.
+            console.log(`[oauth] ${provider} browser result=${res.type}${res.type === 'success' ? ` returned=${res.url.split('?')[0]}` : ''}`);
             if (res.type !== 'success') return { error: null };
 
             const callbackUrl = new URL(res.url);
