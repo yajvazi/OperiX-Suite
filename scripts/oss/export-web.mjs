@@ -167,6 +167,8 @@ function writeRootFiles(outDir) {
     fs.copyFileSync(source, path.join(outDir, file));
   }
   copyTree(path.join(deployDir, 'database'), path.join(outDir, 'database'));
+  fs.mkdirSync(path.join(outDir, 'docs'), { recursive: true });
+  fs.copyFileSync(path.join(repoRoot, 'docs', 'auth', 'SOCIAL-SIGN-IN.md'), path.join(outDir, 'docs', 'SOCIAL-SIGN-IN.md'));
   const stripeScript = path.join(repoRoot, 'scripts', 'billing', 'stripe-setup.mjs');
   if (fs.existsSync(stripeScript)) {
     fs.mkdirSync(path.join(outDir, 'scripts', 'billing'), { recursive: true });

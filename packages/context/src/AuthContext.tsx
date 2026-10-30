@@ -15,6 +15,7 @@ interface AuthContextType {
     signUp: (email: string, password: string, options?: { data: any }) => Promise<{ error: Error | null }>;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
     signInWithGoogle: () => Promise<{ error: Error | null }>;
+    signInWithApple?: () => Promise<{ error: Error | null }>;
     verifyEmailOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
     completeSignup: (input: {
         tenantName: string;
@@ -154,14 +155,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { error: error as Error | null };
     };
 
-    const signInWithGoogle = async () => {
+    const signInWithProvider = async (provider: 'google' | 'apple') => {
         if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
         try {
-            const redirectTo = AuthSession.makeRedirectUri({ scheme: 'operixbooking' });
-            console.log('Redirecting to:', redirectTo);
+            // Uses the URL scheme of the app that is running, so the browser hands control back to the right app.
+            const redirectTo = AuthSession.makeRedirectUri({ path: 'auth-callback' });
 
             const { data, error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
+                provider,
                 options: {
                     redirectTo,
                     skipBrowserRedirect: true,
@@ -175,23 +176,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 redirectTo
             );
 
-            if (res.type === 'success') {
-                const { url } = res;
-                const callbackUrl = new URL(url);
-                const code = callbackUrl.searchParams.get('code');
-                const oauthError = callbackUrl.searchParams.get('error_description') || callbackUrl.searchParams.get('error');
-                if (oauthError) throw new Error(oauthError);
-                if (!code) throw new Error('Google sign-in did not return an authorization code.');
-                const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-                if (sessionError) throw sessionError;
-            }
+            // Closing the browser without finishing is not an error.
+            if (res.type !== 'success') return { error: null };
+
+            const callbackUrl = new URL(res.url);
+            const code = callbackUrl.searchParams.get('code');
+            const oauthError = callbackUrl.searchParams.get('error_description') || callbackUrl.searchParams.get('error');
+            if (oauthError) throw new Error(oauthError);
+            if (!code) throw new Error('Sign-in did not return an authorization code.');
+            const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+            if (sessionError) throw sessionError;
             setIsOnboarding(false);
             return { error: null };
         } catch (error) {
-            console.error('Google Sign-In Error:', error);
+            console.error(`${provider} sign-in error:`, error);
             return { error: error as Error };
         }
     };
+
+    const signInWithGoogle = () => signInWithProvider('google');
+    const signInWithApple = () => signInWithProvider('apple');
 
     const verifyEmailOtp = async (email: string, token: string) => {
         if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
@@ -264,6 +268,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 signUp,
                 signIn,
                 signInWithGoogle,
+                signInWithApple,
                 verifyEmailOtp,
                 completeSignup,
                 deleteAccount,

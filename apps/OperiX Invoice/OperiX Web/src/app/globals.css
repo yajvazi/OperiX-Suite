@@ -1822,3 +1822,12 @@ body:has(.operix-shared-sidebar.is-open) { overflow: hidden; }
   .operix-shared-sidebar-brand { padding-bottom: 8px; }
   .operix-shared-sidebar-workspace-wrap { margin-bottom: 8px; }
 }
+
+.social-auth { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.social-divider { display: flex; align-items: center; gap: 10px; color: #98a2b3; font-size: 10px; }
+.social-divider::before, .social-divider::after { content: ""; flex: 1; height: 1px; background: #e4e9f0; }
+.social-button { width: 100%; min-height: 43px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #d5dce8; background: #fff; color: #111827; font-weight: 600; }
+.social-button.social-apple { background: #000; color: #fff; border-color: #000; }
+.social-button:disabled { opacity: .65; cursor: not-allowed; }
+html[data-theme="dark"] .social-button.social-google { background: transparent; color: var(--operix-ink); border-color: #344054; }
+html[data-theme="dark"] .social-button.social-apple { background: #fff; color: #000; border-color: #fff; }

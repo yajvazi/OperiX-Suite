@@ -1,4 +1,4 @@
-export { clearLocalSupabaseSession, isStaleSupabaseSessionError, getSupabaseUrl, isSupabaseConfigured, onSupabaseServerChange, setSupabaseServer, supabase, supabaseUrl } from './supabase';
+export { fetchEnabledSocialProviders, clearLocalSupabaseSession, isStaleSupabaseSessionError, getSupabaseUrl, isSupabaseConfigured, onSupabaseServerChange, setSupabaseServer, supabase, supabaseUrl } from './supabase';
 export * from './domain';
 export * from './repositories';
 export * from './workspace';
@@ -7,3 +7,4 @@ export * from './expense-domain';
 export * from './data-transfer';
 export { buildConnectLink, CONNECT_SCHEME, fetchServerConfig, normalizeServerUrl, parseConnectCode } from './server-connect';
 export type { ServerConfig } from './server-connect';
+export type { SocialProvider } from './supabase';

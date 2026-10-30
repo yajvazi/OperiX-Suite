@@ -34,6 +34,7 @@ import { SignInScreen } from '../screens/Auth/SignInScreen';
 import { SignUpScreen } from '../screens/Auth/SignUpScreen';
 import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
+import { CompanySetupScreen } from '../screens/Auth/CompanySetupScreen';
 import { WorkspaceRecoveryScreen } from '../screens/Auth/WorkspaceRecoveryScreen';
 
 import { HomeScreen } from '../screens/Home/HomeScreen';
@@ -329,7 +330,7 @@ export function AppNavigator() {
     const [isLocked, setIsLocked] = useState(false);
     const [checkingLock, setCheckingLock] = useState(true);
     const [isPending, setIsPending] = useState(false);
-    const [workspaceState, setWorkspaceState] = useState<'checking' | 'ready' | 'missing'>('checking');
+    const [workspaceState, setWorkspaceState] = useState<'checking' | 'ready' | 'missing' | 'nocompany'>('checking');
     const [workspaceRetry, setWorkspaceRetry] = useState(0);
 
     useEffect(() => {
@@ -360,7 +361,8 @@ export function AppNavigator() {
                 // the authenticated navigator here would let stale/cached UI
                 // reach protected screens while the workspace boundary is
                 // unknown.
-                setWorkspaceState('missing');
+                // A first-time Google/Apple account is valid but has no company yet: let it create one.
+                setWorkspaceState(isMissingActiveWorkspaceError(error) ? 'nocompany' : 'missing');
             });
 
         return () => { active = false; };
@@ -386,6 +388,7 @@ export function AppNavigator() {
     }
     if (user && isOnboarding) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><AuthNavigator /></NavigationContainer>;
     if (user && isPending) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><ApprovalPendingScreen /></NavigationContainer>;
+    if (user && workspaceState === 'nocompany') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><CompanySetupScreen onDone={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && workspaceState === 'missing') return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><WorkspaceRecoveryScreen onRetry={() => setWorkspaceRetry((value) => value + 1)} /></NavigationContainer>;
     if (user && isLocked) return <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}><BiometricOverlay onAuthenticated={() => setIsLocked(false)} /></NavigationContainer>;
     return <NavigationContainer linking={user ? invoiceLinking : undefined} theme={isDark ? CustomDarkTheme : CustomLightTheme}>{user ? <RootNavigator /> : <AuthNavigator />}</NavigationContainer>;

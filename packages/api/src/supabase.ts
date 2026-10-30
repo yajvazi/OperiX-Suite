@@ -49,6 +49,7 @@ function buildClient(url: string, key: string) {
 }
 
 let activeUrl = defaultSupabaseUrl;
+let activeKey = defaultSupabaseKey;
 let activeClient = buildClient(defaultSupabaseUrl, defaultSupabaseKey);
 const serverListeners = new Set<() => void>();
 
@@ -76,6 +77,7 @@ export function setSupabaseServer(server?: { url: string; key: string } | null) 
     void activeClient.auth.stopAutoRefresh?.();
     activeClient = buildClient(url, key);
     activeUrl = url;
+    activeKey = key;
     serverListeners.forEach((listener) => listener());
 }
 
@@ -115,4 +117,21 @@ export function isStaleSupabaseSessionError(error: unknown): boolean {
 /** Remove only the local session so a dead refresh token cannot be retried. */
 export async function clearLocalSupabaseSession(): Promise<void> {
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+}
+
+export type SocialProvider = 'google' | 'apple';
+
+/**
+ * Which social sign-in providers the active backend has switched on (Supabase publishes this at
+ * /auth/v1/settings). Buttons are only shown for providers that can actually work.
+ */
+export async function fetchEnabledSocialProviders(fetchImpl: typeof fetch = fetch): Promise<SocialProvider[]> {
+    try {
+        const response = await fetchImpl(`${activeUrl.replace(/\/+$/, '')}/auth/v1/settings`, { headers: { apikey: activeKey } });
+        if (!response.ok) return [];
+        const body = await response.json() as { external?: Record<string, boolean> };
+        return (['google', 'apple'] as const).filter((provider) => body.external?.[provider] === true);
+    } catch {
+        return [];
+    }
 }

@@ -1,3 +1,4 @@
+import { SocialAuthButtons } from '../../components/auth/SocialAuthButtons';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -436,6 +437,8 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                                 {loading ? <ActivityIndicator color="#fff" /> : <><Text style={styles.buttonText}>{step === 1 ? t('sendVerificationCode', language) : t('continue', language)}</Text><ArrowRight color="#fff" size={17} /></>}
                             </TouchableOpacity>
                         </View>
+
+                        {step === 1 ? <SocialAuthButtons onError={setError} /> : null}
 
                         <View style={styles.footer}>
                             <Text style={[styles.footerText, { color: palette.muted }]}>{t('alreadyHaveAccount', language)}</Text>

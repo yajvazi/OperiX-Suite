@@ -36,6 +36,7 @@ export function createAuthValue(overrides: Record<string, unknown> = {}) {
         signUp: jest.fn(async () => ({ error: null })),
         signIn: jest.fn(async () => ({ error: null })),
         signInWithGoogle: jest.fn(async () => ({ error: null })),
+        signInWithApple: jest.fn(async () => ({ error: null })),
         verifyEmailOtp: jest.fn(async () => ({ error: null })),
         completeSignup: jest.fn(async () => ({ companyId: 'company-1', error: null })),
         signOut: jest.fn(async () => undefined),

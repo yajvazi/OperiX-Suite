@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { InvoiceLogo } from "./product-logo";
+import { SocialAuthButtons } from "./social-auth-buttons";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const search = useSearchParams();
@@ -16,6 +17,10 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (search.get("error") === "oauth") queueMicrotask(() => setMessage("Sign-in with that account did not complete. Please try again."));
+  }, [search]);
 
   useEffect(() => {
     const rememberedEmail = window.localStorage.getItem("operix-login-email");
@@ -98,6 +103,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           {message ? <p role="alert" className="form-error">{message}</p> : null}
           <button className="btn btn-primary login-submit" disabled={loading}>{loading ? "Please wait…" : isLogin ? "Sign in" : "Create account"}<ArrowRight size={17} /></button>
         </form>
+        <SocialAuthButtons next={search.get("next")} onError={setMessage} />
         <div className="login-footer">{isLogin ? <span>Protected by your OperiX account</span> : <span>Already have an account? <Link href="/login">Sign in</Link></span>}{isLogin ? <Link href="/auth/reset">Forgot password?</Link> : null}</div>
         <div className="mt-4 flex justify-center"><LanguageSwitch compact /></div>
       </section>

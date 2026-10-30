@@ -51,14 +51,22 @@ describe('authentication screens', () => {
     it('renders a localized sign-in error for an auth failure and supports Google and sign-up actions', async () => {
         const signIn = jest.fn(async () => ({ error: new Error('Invalid login') }));
         const signInWithGoogle = jest.fn(async () => ({ error: null }));
+        const signInWithApple = jest.fn(async () => ({ error: null }));
         const onNavigateToSignUp = jest.fn();
-        const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={onNavigateToSignUp} />, { auth: { signIn, signInWithGoogle } });
+        // The server reports which social providers are switched on; the buttons only appear for those.
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ external: { google: true, apple: true } }) })) as unknown as typeof fetch;
+        const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={onNavigateToSignUp} />, { auth: { signIn, signInWithGoogle, signInWithApple } });
+        await waitFor(() => expect(screen.getByTestId('auth-google-button')).toBeTruthy());
         await fireEvent.changeText(screen.getByTestId('auth-email-input'), 'a@example.com');
         await fireEvent.changeText(screen.getByTestId('auth-password-input'), 'wrong');
         await fireEvent.press(screen.getByTestId('auth-sign-in-button'));
         await waitFor(() => expect(screen.getByText(/Sign in failed/)).toBeTruthy());
         await fireEvent.press(screen.getByTestId('auth-google-button'));
         await waitFor(() => expect(signInWithGoogle).toHaveBeenCalledTimes(1));
+        await fireEvent.press(screen.getByTestId('auth-apple-button'));
+        await waitFor(() => expect(signInWithApple).toHaveBeenCalledTimes(1));
+        global.fetch = originalFetch;
         await fireEvent.press(screen.getByTestId('auth-sign-up-link'));
         expect(onNavigateToSignUp).toHaveBeenCalledTimes(1);
     });

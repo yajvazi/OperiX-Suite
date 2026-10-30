@@ -90,6 +90,9 @@ Then follow steps 1 to 4 below.
 4. In **Authentication → Providers** keep *Email* enabled. For a private installation you may switch off
    "Allow new users to sign up" after you create your own account.
 5. Configure an SMTP server under **Authentication → SMTP** so confirmation and password-reset emails are delivered.
+6. Optional: enable **Google** and/or **Apple** under **Authentication → Providers**. The sign-in page then shows
+   "Continue with Google / Apple" automatically, and the mobile app does too. Add `operix-invoice://auth-callback` to the
+   redirect allow-list for the mobile app. Step-by-step instructions: [docs/SOCIAL-SIGN-IN.md](docs/SOCIAL-SIGN-IN.md).
 
 ## 2. Set up the database
 
