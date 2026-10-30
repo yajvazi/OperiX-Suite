@@ -17,6 +17,7 @@ import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { onSupabaseServerChange, parseConnectCode } from '@invoice-monorepo/api';
 import { t } from '@invoice-monorepo/i18n';
 import { SocialAuthButtons } from '../../components/auth/SocialAuthButtons';
+import { PlaceholderInput } from '../../components/auth/PlaceholderInput';
 import { ServerConnectModal, ServerStatus, useServerCopy } from '../../components/auth/ServerConnectModal';
 import { AuthPreferences } from '../../components/auth/AuthPreferences';
 import { OperixLogo } from '../../components/OperixLogo';
@@ -88,7 +89,7 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     <Text style={[styles.formTitle, { color: palette.text }]}>{t('authSignInTitle', language)}</Text>
                     <Text style={[styles.formSubtitle, { color: palette.muted }]}>{t('authSignInSubtitle', language)}</Text>
                     {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
-                    <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{t('email', language)}</Text><View style={[styles.field, { borderColor: palette.border }]}><Mail color={palette.muted} size={18} /><TextInput testID="auth-email-input" style={[styles.input, { color: palette.text }]} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /></View></View>
+                    <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{t('email', language)}</Text><View style={[styles.field, { borderColor: palette.border }]}><Mail color={palette.muted} size={18} /><PlaceholderInput testID="auth-email-input" style={[styles.input, { color: palette.text }]} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /></View></View>
                     <View style={styles.inputGroup}><Text style={[styles.label, { color: palette.textSecondary }]}>{t('password', language)}</Text><View style={[styles.field, { borderColor: palette.border }]}><LockKeyhole color={palette.muted} size={18} /><TextInput testID="auth-password-input" style={[styles.input, { color: palette.text }]} placeholder={t('enterPassword', language)} placeholderTextColor={palette.muted} value={password} onChangeText={setPassword} secureTextEntry /></View></View>
                     <TouchableOpacity testID="auth-sign-in-button" accessibilityRole="button" style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]} onPress={handleSignIn} disabled={loading}>{loading ? <ActivityIndicator color="#fff" /> : <><Text style={styles.buttonText}>{t('signIn', language)}</Text><ArrowRight color="#fff" size={17} /></>}</TouchableOpacity>
                     <SocialAuthButtons onError={setError} />

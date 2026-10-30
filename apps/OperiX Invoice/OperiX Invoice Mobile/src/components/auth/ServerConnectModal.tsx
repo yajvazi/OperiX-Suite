@@ -3,6 +3,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, StyleSheet, T
 import { QrCode, Server, X } from 'lucide-react-native';
 import { parseConnectCode, type ServerConfig } from '@invoice-monorepo/api';
 import { useTheme } from '@invoice-monorepo/hooks';
+import { PlaceholderInput } from './PlaceholderInput';
 import { BarcodeScannerModal } from '../mobile/BarcodeScannerModal';
 import { brand, getPalette } from '../../theme/brand';
 import { connectToServer, disconnectServer, getConnectedServer, lookUpServer } from '../../services/serverConnection';
@@ -107,7 +108,7 @@ export function ServerConnectModal({ visible, initialAddress, onClose }: { visib
                         <QrCode color="#fff" size={18} /><Text style={styles.primaryText}>{text.scan}</Text>
                     </TouchableOpacity>
                     <Text style={[styles.label, { color: palette.textSecondary }]}>{text.address}</Text>
-                    <TextInput testID="server-address" style={[styles.input, { borderColor: palette.border, color: palette.text }]} value={address} onChangeText={setAddress} placeholder={text.placeholder} placeholderTextColor={palette.muted} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+                    <PlaceholderInput testID="server-address" style={[styles.input, { borderColor: palette.border, color: palette.text }]} value={address} onChangeText={setAddress} placeholder={text.placeholder} placeholderTextColor={palette.muted} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
                     {error ? <Text style={styles.error}>{error}</Text> : null}
                     <TouchableOpacity testID="server-connect" accessibilityRole="button" style={[styles.outline, { borderColor: primaryColor }, busy && { opacity: 0.6 }]} onPress={() => search(address)} disabled={busy || !address.trim()}>
                         {busy ? <ActivityIndicator color={primaryColor} /> : <Text style={{ color: primaryColor, fontWeight: '800' }}>{text.connect}</Text>}

@@ -16,6 +16,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { t } from '@invoice-monorepo/i18n';
 import { AuthPreferences } from '../../components/auth/AuthPreferences';
+import { PlaceholderInput } from '../../components/auth/PlaceholderInput';
 import { SocialAuthButtons } from '../../components/auth/SocialAuthButtons';
 import { OperixLogo } from '../../components/OperixLogo';
 import { brand, getPalette } from '../../theme/brand';
@@ -159,7 +160,7 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                         {error ? <Text style={styles.error}>{error}</Text> : null}
                         {accountExists ? <TouchableOpacity accessibilityRole="button" onPress={onNavigateToSignIn} style={[styles.secondary, { borderColor: palette.border }]}><Text style={{ color: primaryColor, fontWeight: '800', fontSize: 13 }}>{t('signIn', language)}</Text></TouchableOpacity> : null}
                         {field(`${t('email', language)} *`, (
-                            <TextInput testID="auth-sign-up-email" style={inputStyle} value={email} onChangeText={(value) => { setEmail(value); setAccountExists(false); }} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+                            <PlaceholderInput testID="auth-sign-up-email" style={inputStyle} value={email} onChangeText={(value) => { setEmail(value); setAccountExists(false); }} placeholder={t('enterEmail', language)} placeholderTextColor={palette.muted} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
                         ))}
                         {field(`${t('password', language)} *`, (
                             <View>
