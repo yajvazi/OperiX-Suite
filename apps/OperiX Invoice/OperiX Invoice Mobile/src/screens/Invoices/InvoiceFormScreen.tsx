@@ -131,6 +131,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const isPosFlow = Array.isArray(posCart) && posCart.length > 0;
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savedPopup, setSavedPopup] = useState<{ invoiceId: string; message: string } | null>(null);
     const saveInFlight = useRef(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -196,6 +197,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const modalBackdropColor = isDark ? 'rgba(0,0,0,0.96)' : 'rgba(0,0,0,0.72)';
     const currency = profile?.currency || 'EUR';
     const canPermission = (permission: string) => platformAdmin || workspacePermissions.includes(permission);
+    const canApplyDiscount = canPermission('invoice.apply_discount');
+    const canChangeDates = canPermission('invoice.change_dates');
     const documentPermission = (typeOption: CommercialDocumentType) => typeOption === 'QUOTE' ? 'offer.create'
         : typeOption === 'PROFORMA' ? 'proforma.create'
             : typeOption === 'SALES_ORDER' ? 'order.create'
@@ -444,6 +447,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const handleAddItem = (product?: Product) => {
+        // The same product is never added as a second line; its quantity goes up instead.
+        const existingIndex = product?.id ? items.findIndex((line) => line.product_id === product.id) : -1;
+        if (existingIndex >= 0) {
+            handleUpdateItem(existingIndex, 'quantity', (Number(items[existingIndex].quantity) || 0) + 1);
+            closeProductPicker();
+            return;
+        }
         const currentGlobalDiscount = wholePercentageValue(discount);
         const newItem: Partial<InvoiceItem> = {
             id: `temp-${Crypto.randomUUID()}`,
@@ -591,6 +601,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         }
         if (items.length === 0) {
             Alert.alert(t('error', language), t('pleaseAddItem', language));
+            return;
+        }
+        const productIds = items.map((line) => line.product_id).filter(Boolean);
+        if (new Set(productIds).size !== productIds.length) {
+            Alert.alert(t('error', language), language === 'sq' ? 'I njëjti produkt shfaqet më shumë se një herë. Bashkojini rreshtat dhe rritni sasinë.' : 'The same product appears more than once. Merge the lines and raise the quantity instead.');
             return;
         }
         if (storeLocations.length > 0 && !invoiceBranchId) {
@@ -868,9 +883,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
             if (!invoiceId && savedInvoice.invoice_number) setInvoiceNumber(String(savedInvoice.invoice_number));
             const savedDocumentLabel = documentTypeLabel(documentType, language === 'sq' ? 'sq' : 'en');
-            Alert.alert(t('success', language), t('documentSaved', language).replace('{document}', savedDocumentLabel), [
-                { text: t('done', language), onPress: () => navigation.replace('InvoiceDetail', { invoiceId: savedInvoice.id, autoPreview: true, showStampOnInvoice: showInvoiceStamp, showSignatureOnInvoice: showInvoiceSignature }) }
-            ]);
+            setSavedPopup({ invoiceId: savedInvoice.id, message: t('documentSaved', language).replace('{document}', savedDocumentLabel) });
 
         } catch (error: unknown) {
             const errorRecord = error && typeof error === 'object' ? error as { code?: string; message?: string } : {};
@@ -887,6 +900,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const openDatePicker = (mode: 'issue' | 'due') => {
+        if (invoiceId && !canChangeDates) return;
         setDatePickerMode(mode);
         const currentDate = mode === 'issue' ? issueDate : (dueDate || new Date());
         if (Platform.OS === 'android') {
@@ -1150,6 +1164,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     testID="invoice-issue-date-button"
                                     accessibilityRole="button"
                                     style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                    disabled={Boolean(invoiceId) && !canChangeDates}
                                     onPress={() => openDatePicker('issue')}
                                 >
                                     <Calendar color={mutedColor} size={18} />
@@ -1368,7 +1383,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                             <Text style={[styles.inputLabel, { color: mutedColor }]}>{t('rabat', language)}</Text>
                                             <TextInput
                                                 testID={`invoice-item-discount-${index}`}
-                                                style={[styles.smallInput, { color: textColor, borderColor }]}
+                                                editable={canApplyDiscount}
+                                                style={[styles.smallInput, { color: textColor, borderColor, opacity: canApplyDiscount ? 1 : 0.5 }]}
                                                 value={String(item.discount || '')}
                                                 onChangeText={(text) => handleUpdateItem(index, 'discount', wholePercentageText(text))}
                                                 keyboardType="number-pad"
@@ -1405,6 +1421,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: 8, borderWidth: 1, borderColor }}>
                                             <TextInput
                                                 testID="invoice-document-discount-input"
+                                                editable={canApplyDiscount}
                                                 value={discount}
                                                 onChangeText={(text) => {
                                                     const nextDiscount = wholePercentageText(text);
@@ -2015,6 +2032,29 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+            <Modal visible={Boolean(savedPopup)} transparent animationType="fade" onRequestClose={() => undefined}>
+                <View testID="invoice-saved-popup" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                    <View style={{ width: '100%', maxWidth: 360, borderRadius: 20, padding: 24, alignItems: 'center', backgroundColor: cardBg }}>
+                        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#12B76A22', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                            <Check color="#12B76A" size={30} />
+                        </View>
+                        <Text style={{ color: textColor, fontSize: 18, fontWeight: '700', marginBottom: 6 }}>{t('success', language)}</Text>
+                        <Text style={{ color: textColor, fontSize: 15, textAlign: 'center', marginBottom: 20 }}>{savedPopup?.message}</Text>
+                        <TouchableOpacity
+                            testID="invoice-saved-popup-done-button"
+                            accessibilityRole="button"
+                            style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: primaryColor }}
+                            onPress={() => {
+                                const popup = savedPopup;
+                                setSavedPopup(null);
+                                if (popup) navigation.replace('InvoiceDetail', { invoiceId: popup.invoiceId, autoPreview: true, showStampOnInvoice: showInvoiceStamp, showSignatureOnInvoice: showInvoiceSignature });
+                            }}
+                        >
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('done', language)}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </Modal>
             <SignaturePadModal
                 visible={showCustomerSignaturePad}

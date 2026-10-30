@@ -5,6 +5,12 @@ const KEY = "operix.uiLanguage";
 export function getUiLanguage(): UiLanguage {
   if (typeof window === "undefined") return "en";
   try {
+    // Links from the marketing site and Help Center carry ?lang=sq|en; that choice is remembered.
+    const requested = new URLSearchParams(window.location.search).get("lang");
+    if (requested === "sq" || requested === "en") {
+      window.localStorage.setItem(KEY, requested);
+      return requested;
+    }
     const saved = window.localStorage.getItem(KEY);
     if (saved === "sq" || saved === "en") return saved;
   } catch { /* fall through to the browser language */ }

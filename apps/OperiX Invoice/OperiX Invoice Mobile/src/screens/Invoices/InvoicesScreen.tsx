@@ -8,17 +8,18 @@ import {
     StyleSheet,
     ScrollView,
     TextInput,
+    Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Search, QrCode, X, Eye } from 'lucide-react-native';
+import { Search, QrCode, X, Eye, Trash2 } from 'lucide-react-native';
 import { supabase } from '@invoice-monorepo/api';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Card, StatusBadge, FAB } from '@invoice-monorepo/ui';
 import { FileText, Users, Package, Wallet, DollarSign } from 'lucide-react-native';
 import { Invoice, InvoiceStatus, Profile } from '@invoice-monorepo/types';
-import { formatCurrency, formatDate, t } from '@invoice-monorepo/i18n';
-import { getWorkspaceScope, scopedResource } from '../../services/workspace';
+import { formatCurrency, formatDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { getWorkspaceScope, scopedResource, hasWorkspacePermission } from '../../services/workspace';
 import { getDataStore } from '../../services/dataStore';
 import { localContractRows } from '../../services/localMode';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
@@ -52,6 +53,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     const [selectedType, setSelectedType] = useState<'invoice' | 'offer' | 'contract'>('invoice');
     const [contractView, setContractView] = useState(() => route?.params?.tab === 'contract');
     const [canManageContracts, setCanManageContracts] = useState(false);
+    const [canDeleteDraft, setCanDeleteDraft] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +92,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         const { profile: workspaceProfile, companyIds } = workspace;
         const allowedContracts = workspace.platformAdmin || workspace.permissions.includes('contracts.manage');
         setCanManageContracts(allowedContracts);
+        setCanDeleteDraft(hasWorkspacePermission({ permissions: workspace.permissions, platformAdmin: workspace.platformAdmin }, 'invoice.delete_draft'));
         if ((selectedType === 'contract' || contractView) && !allowedContracts) {
             setSelectedType('invoice');
             setContractView(false);
@@ -152,6 +155,25 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         }
 
         setFilteredInvoices(filtered);
+    };
+
+    const handleDeleteDraft = (item: ListItem) => {
+        if (!user) return;
+        Alert.alert(t('deleteInvoice', language), t('deleteInvoiceConfirmation', language), [
+            { text: t('cancel', language), style: 'cancel' },
+            {
+                text: t('delete', language),
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await (await getDataStore(user.id)).deleteInvoice(item.id);
+                        await fetchData();
+                    } catch (error) {
+                        Alert.alert(t('error', language), getLocalizedErrorMessage(error, language, 'failedToDeleteInvoice'));
+                    }
+                },
+            },
+        ]);
     };
 
     const onRefresh = async () => {
@@ -220,6 +242,17 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                             >
                                 <Eye color="#004FFE" size={18} />
                             </TouchableOpacity>
+                            {canDeleteDraft && String(item.status || '').toLowerCase() === 'draft' ? (
+                                <TouchableOpacity
+                                    testID={`invoice-delete-${item.id}-button`}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('deleteInvoice', language)}
+                                    style={[styles.previewIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}
+                                    onPress={() => handleDeleteDraft(item)}
+                                >
+                                    <Trash2 color="#ef4444" size={18} />
+                                </TouchableOpacity>
+                            ) : null}
                         </View>
                     </View>
                     <View style={styles.invoiceFooter}>

@@ -155,7 +155,8 @@ describe('invoice creation workflow', () => {
         expect(options).toMatchObject({ existingInvoiceId: undefined, postInvoice: true, idempotencyKey: '00000000-0000-4000-8000-000000000001' });
         expect(options.draft).toMatchObject({ clientId: 'customer-a', companyId: 'company-a', documentType: 'INVOICE', currency: 'EUR' });
         expect(options.draft.lines).toEqual([expect.objectContaining({ productId: 'product-a', description: 'Shërbim premium', quantity: 3, unitPrice: 12.5, discountPercent: 10, taxRate: 18 })]);
-        expect(alert).toHaveBeenCalledWith(expect.any(String), expect.stringContaining('Invoice'), expect.any(Array));
+        await waitFor(() => expect(screen.getByTestId('invoice-saved-popup')).toBeTruthy());
+        expect(screen.getByText(/Invoice/)).toBeTruthy();
         alert.mockRestore();
     });
 
