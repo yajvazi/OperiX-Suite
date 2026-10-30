@@ -137,6 +137,8 @@ function writeRootFiles(outDir) {
     name: 'operix-invoice',
     version: '1.0.0',
     private: true,
+    license: 'AGPL-3.0-only',
+    description: 'OperiX Invoice: open-source invoicing and accounting web app',
     packageManager: privateRoot.packageManager,
     workspaces: [WEB_APP, ...PACKAGES.map((name) => `packages/${name}`)],
     scripts: {
@@ -156,38 +158,26 @@ function writeRootFiles(outDir) {
   if (fs.existsSync(committedLock)) fs.copyFileSync(committedLock, path.join(outDir, 'package-lock.json'));
   fs.writeFileSync(path.join(outDir, '.dockerignore'), ['**/node_modules', '**/.next', '.git', '.env', '.env.local', ''].join('\n'));
   fs.writeFileSync(path.join(outDir, '.gitignore'), ['node_modules', '.next', 'dist', 'coverage', '.turbo', '*.tsbuildinfo', '.env', '.env.*', '!.env.example', '.DS_Store', ''].join('\n'));
-  if (!fs.existsSync(path.join(outDir, 'README.md'))) {
-    fs.writeFileSync(path.join(outDir, 'README.md'), [
-      '# OperiX Invoice (web)',
-      '',
-      'Invoicing and accounting for businesses.',
-      '',
-      '## Important: fiscal receipts',
-      '',
-      'This edition is for business-to-business invoicing. It is **not** an ATK-certified fiscal',
-      'software (SEF) and does not issue fiscal receipts. The POS module is disabled by default',
-      '(`NEXT_PUBLIC_POS_ENABLED`). Consumer sales in Kosovo must be registered through a',
-      'certified SEF.',
-      '',
-      '## Where your data lives',
-      '',
-      'Sign-in uses a Supabase project (see `.env.example`). Business data can then be kept either in the',
-      'browser on your own computer (Settings -> Data storage -> "In this browser", free, works offline, back it',
-      'up with the backup file) or in the Supabase database. The browser database is SQLite compiled to',
-      'WebAssembly (`@sqlite.org/sqlite-wasm`); its files are copied to `public/sqlite` before `dev` and `build`.',
-      'It needs HTTPS or localhost and holds the data per browser profile.',
-      '',
-      '## Getting started',
-      '',
-      '```sh',
-      'npm install --legacy-peer-deps',
-      'cp "apps/OperiX Invoice/OperiX Web/.env.example" "apps/OperiX Invoice/OperiX Web/.env.local"',
-      'npm run dev',
-      '```',
-      '',
-      'License: to be decided before the first public release.',
-      '',
-    ].join('\n'));
+  // Public-facing files live in deploy/web-oss (README, licence, contributing and security notes,
+  // production compose file, database baseline) and are copied into the generated tree as-is.
+  const deployDir = path.join(repoRoot, 'deploy', 'web-oss');
+  for (const file of ['README.md', 'LICENSE', 'CONTRIBUTING.md', 'SECURITY.md', 'docker-compose.yml']) {
+    const source = path.join(deployDir, file);
+    if (!fs.existsSync(source)) throw new Error(`Missing deploy/web-oss/${file}`);
+    fs.copyFileSync(source, path.join(outDir, file));
+  }
+  copyTree(path.join(deployDir, 'database'), path.join(outDir, 'database'));
+  const stripeScript = path.join(repoRoot, 'scripts', 'billing', 'stripe-setup.mjs');
+  if (fs.existsSync(stripeScript)) {
+    fs.mkdirSync(path.join(outDir, 'scripts', 'billing'), { recursive: true });
+    fs.copyFileSync(stripeScript, path.join(outDir, 'scripts', 'billing', 'stripe-setup.mjs'));
+  }
+  // Same example settings at the top level and next to the app, without the hosted service's addresses.
+  const exampleSource = path.join(outDir, WEB_APP, '.env.example');
+  if (fs.existsSync(exampleSource)) {
+    const example = fs.readFileSync(exampleSource, 'utf8').replace(/https:\/\/crm\.operixsuite\.com/g, 'https://crm.example.com');
+    fs.writeFileSync(exampleSource, example);
+    fs.writeFileSync(path.join(outDir, '.env.example'), example);
   }
 }
 

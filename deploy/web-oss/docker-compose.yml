@@ -1,0 +1,27 @@
+# Production container for the web app. Supabase runs separately (hosted or self-hosted).
+#
+#   cp .env.example "apps/OperiX Invoice/OperiX Web/.env.production"   # then edit it
+#   docker compose up -d --build
+#
+# NEXT_PUBLIC_* values are compiled in at build time, so rebuild after changing them.
+services:
+  operix-web:
+    build:
+      context: .
+      dockerfile: apps/OperiX Invoice/OperiX Web/Dockerfile
+    image: operix-invoice-web:latest
+    restart: unless-stopped
+    env_file:
+      - apps/OperiX Invoice/OperiX Web/.env.production
+    environment:
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      CHROME_EXECUTABLE_PATH: /usr/bin/chromium
+    ports:
+      - "127.0.0.1:3000:3000"   # put an HTTPS reverse proxy in front
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
