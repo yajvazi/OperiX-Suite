@@ -34,6 +34,7 @@ import {
   saveProductBranchStock,
   saveScopedResource,
 } from "@invoice-monorepo/api/repositories";
+import { getUiLanguage } from "@/lib/i18n/language";
 import { isCashPaymentAllowed, resolvePaymentFundAccount, type PaymentFundMethod } from "@invoice-monorepo/api/domain";
 
 type ResourceRow = Record<string, unknown> & { id: string };
@@ -443,7 +444,7 @@ function ResourcePageContent({ resourceKey, title, description, embedded = false
         exportRows = (result.data || []) as Array<Record<string, unknown>>;
       }
       const company = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: workspace.company?.city || "", country: workspace.company?.country || "", website: source?.website || "", taxId: source?.tax_id || "", bankName: source?.bank_name || "", bankAccount: source?.bank_account || "", iban: source?.bank_iban || "", swift: source?.bank_swift || "", logoUrl: source?.logo_url || "" };
-      const response = await fetch("/api/transactions/pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ template: config.pdfTemplate, title: config.title, company, rows: exportRows, reportPeriod }) });
+      const response = await fetch("/api/transactions/pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ language: getUiLanguage(), template: config.pdfTemplate, title: config.title, company, rows: exportRows, reportPeriod }) });
       if (!response.ok) { const detail = await response.json().catch(() => null); throw new Error(detail?.error || "The PDF could not be generated."); }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

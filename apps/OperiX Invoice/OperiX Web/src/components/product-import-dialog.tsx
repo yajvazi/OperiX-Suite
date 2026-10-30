@@ -3,6 +3,7 @@
 import {useMemo,useRef,useState} from "react";
 import {ArrowLeft,CheckCircle2,Download,FileSpreadsheet,Upload,X} from "lucide-react";
 import {createClient} from "@/lib/supabase/client";
+import {getUiLanguage} from "@/lib/i18n/language";
 import {useWorkspace} from "@/hooks/use-workspace";
 import {
   autoMapColumns,mappedRecord,normalizeProductImportRow,parseCsv,parseImportNumber,
@@ -102,7 +103,7 @@ export function ProductImportDialog({onClose,onImported}:{onClose:()=>void;onImp
     try{
       const source=workspace.company||workspace.profile;
       const response=await fetch("/api/products/import/pdf",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
-        batch:result.batch,items:result.items,company:{
+        language:getUiLanguage(),batch:result.batch,items:result.items,company:{
           name:source?.company_name||workspace.company?.name||"",taxId:source?.tax_id||"",address:source?.address||"",
           city:workspace.company?.city||"",country:workspace.company?.country||"",email:source?.email||"",
           phone:source?.phone||"",website:source?.website||"",bankName:source?.bank_name||"",

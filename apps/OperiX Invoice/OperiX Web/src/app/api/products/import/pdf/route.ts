@@ -1,3 +1,4 @@
+import { translateReportHtml } from "@invoice-monorepo/report-templates";
 import {NextResponse} from "next/server";
 import puppeteer from "puppeteer-core";
 import {z} from "zod";
@@ -8,6 +9,7 @@ export const runtime="nodejs";
 
 const optional=z.union([z.string(),z.number(),z.null()]).optional();
 const schema=z.object({
+  language:z.enum(["en","sq"]).optional(),
   company:z.object({name:z.string().optional(),taxId:z.string().optional(),address:z.string().optional(),city:z.string().optional(),country:z.string().optional(),email:z.string().optional(),phone:z.string().optional(),website:z.string().optional(),bankName:z.string().optional(),iban:z.string().optional()}).optional(),
   batch:z.record(z.string(),z.unknown()),
   items:z.array(z.object({
@@ -19,11 +21,18 @@ const schema=z.object({
   ignored:optional,
 });
 type Payload=z.infer<typeof schema>;
+const PRODUCT_EN:Record<string,string>={"Adresa:":"Address:","Akciza":"Excise","Baza dog.":"Customs base","Blerja në detale":"Purchase details","Data DUDI:":"SAD date:","Data e pranimit:":"Receipt date:","Data:":"Date:","Detajet bankare:":"Bank details:","Dogana":"Customs","Dokumenti i blerjes":"Purchase document","Emri:":"Name:","Furnitori":"Supplier","Kontrolloi":"Checked by","Kushtet:":"Terms:","Njësia":"Unit","Njësia Org.:":"Org. unit:","Nr.":"No.","Nr. biznes/TVSH:":"Business/VAT no.:","Nr. fiskal:":"Fiscal no.:","Nr. i faturës:":"Invoice no.:","Nr. unik/fiskal:":"Unique/fiscal no.:","Pranimi dhe dogana":"Receipt and customs","Pranoi":"Received by","Përpiloi":"Prepared by","Përshkrimi":"Description","Rabati %":"Discount %","Sasia":"Quantity","Shifra":"Code","Shpenzimet":"Costs","Shtesat":"Additions","Skadimi:":"Due:","TVSH":"VAT","TVSH %":"VAT %","Transporti":"Transport","Valuta:":"Currency:","Vlera":"Value","Vlera furn.":"Supplier value","kushtuese":"landed","me TVSH":"with VAT","ngarkesa":"load","Çm. furn.":"Supplier price","Çm. pas rab.":"Price after disc.","Çm. valutë":"Price (currency)","Çmimi/Vlera":"Price/Value"};
 const esc=(value:unknown)=>String(value??"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]!));
-const money=(value:unknown)=>new Intl.NumberFormat("sq-AL",{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0)||0);
+let numberLocale="sq-AL";
+const money=(value:unknown)=>new Intl.NumberFormat(numberLocale,{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0)||0);
 const date=(value:unknown)=>{if(!value)return "—";const parsed=new Date(`${String(value).slice(0,10)}T12:00:00`);return Number.isNaN(parsed.getTime())?esc(value):new Intl.DateTimeFormat("sq-AL",{day:"2-digit",month:"2-digit",year:"numeric"}).format(parsed);};
 
 export function renderProductCalculation(payload:Payload){
+  numberLocale=payload.language==="en"?"en-GB":"sq-AL";
+  return translateReportHtml(renderProductCalculationAlbanian(payload),payload.language,PRODUCT_EN);
+}
+
+function renderProductCalculationAlbanian(payload:Payload){
   const {batch,items}=payload,company=payload.company||{};
   const totals=items.reduce((result,item)=>({
     supplier:result.supplier+item.supplier_value,

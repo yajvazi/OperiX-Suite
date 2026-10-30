@@ -44,6 +44,7 @@ const entrySchema = z.object({
 });
 
 const payloadSchema = z.object({
+  language: z.enum(["en", "sq"]).optional(),
   customer: z.object({
     name: z.string(),
     taxId: z.string().optional(),

@@ -1,3 +1,5 @@
+import { translateReportHtml } from "./translate";
+
 export type TransactionReportTemplate =
   "expense-register" | "income-payment" | "sales-ledger" | "vendor-ledger";
 
@@ -22,6 +24,8 @@ export type TransactionReportCompany = {
 };
 
 export type TransactionReportPayload = {
+  /** Language of the printed report; Albanian by default. */
+  language?: "en" | "sq";
   template: TransactionReportTemplate;
   title: string;
   company?: TransactionReportCompany;
@@ -48,8 +52,9 @@ const esc = (value: unknown) =>
       })[char]!,
   );
 const num = (value: unknown) => Number(value || 0) || 0;
+let numberLocale = "sq-AL";
 const money = (value: unknown) =>
-  new Intl.NumberFormat("sq-AL", {
+  new Intl.NumberFormat(numberLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(num(value));
@@ -344,7 +349,9 @@ export const isLandscapeTransactionReport = (
 ) => template === "sales-ledger" || template === "vendor-ledger";
 
 export function renderTransactionReportHtml(payload: TransactionReportPayload) {
-  if (payload.template === "expense-register") return expenseReport(payload);
-  if (payload.template === "income-payment") return incomeReport(payload);
-  return ledgerReport(payload, payload.template === "vendor-ledger");
+  numberLocale = payload.language === "en" ? "en-GB" : "sq-AL";
+  const html = payload.template === "expense-register" ? expenseReport(payload)
+    : payload.template === "income-payment" ? incomeReport(payload)
+    : ledgerReport(payload, payload.template === "vendor-ledger");
+  return translateReportHtml(html, payload.language);
 }

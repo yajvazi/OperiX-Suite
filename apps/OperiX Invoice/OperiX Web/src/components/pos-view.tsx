@@ -534,6 +534,7 @@ export function PosView() {
       website: source?.website || "",
       signatureUrl: source?.signature_url,
       stampUrl: source?.stamp_url,
+      language: source?.invoice_language,
     };
     localStorage.setItem("operix-print-draft", JSON.stringify({ draft, client: selectedClient, company, template: "corporate", config: source?.template_config }));
     router.push(`/pos/complete/${encodeURIComponent(draft.invoice_number)}?print=1`);

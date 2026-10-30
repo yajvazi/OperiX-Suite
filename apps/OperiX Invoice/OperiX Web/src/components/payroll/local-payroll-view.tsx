@@ -1,5 +1,6 @@
 "use client";
 
+import { getUiLanguage } from "@/lib/i18n/language";
 import { useCallback, useEffect, useState } from "react";
 import { Banknote, Download, FileText, Play, Plus, Trash2, Users } from "lucide-react";
 import { renderPayslipHtml } from "@invoice-monorepo/payroll";
@@ -81,7 +82,7 @@ export function LocalPayrollView() {
       employee: { employeeNumber: item.employeeNumber, firstName: first, lastName: rest.join(" "), position: item.position, department: item.department },
       currency, grossPay: item.result.grossPay, employeePension: item.result.employeePension, employerPension: item.result.employerPension, personalIncomeTax: item.result.personalIncomeTax,
       otherDeductions: item.result.otherDeductions, netSalary: item.result.netSalary, employerCost: item.result.employerCost, lines: item.result.lines,
-    }, { language: workspace.company?.default_language === "en" ? "en" : "sq" }));
+    }, { language: getUiLanguage() }));
   }
   function exportRun(run: Run) {
     const rows = [["Employee", "Gross", "Employee pension", "Employer pension", "Income tax", "Net", "Employer cost"], ...run.items.map((item) => [item.name, item.result.grossPay, item.result.employeePension, item.result.employerPension, item.result.personalIncomeTax, item.result.netSalary, item.result.employerCost])];

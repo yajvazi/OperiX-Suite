@@ -1,3 +1,4 @@
+import { translateReportHtml } from "./translate";
 export type LedgerKind = "invoice" | "payment";
 
 export interface CustomerLedgerInvoice {
@@ -125,6 +126,8 @@ export interface ReportCompany {
 }
 
 export interface CustomerLedgerReport {
+  /** Language of the printed report; Albanian by default. */
+  language?: "en" | "sq";
   customer: LedgerParty;
   company: ReportCompany;
   range: { from: string; to: string };
@@ -311,8 +314,9 @@ const esc = (value: unknown) =>
       })[character]!,
   );
 
+let numberLocale = "sq-AL";
 const money = (value: number) =>
-  new Intl.NumberFormat("sq-AL", {
+  new Intl.NumberFormat(numberLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -323,6 +327,11 @@ const reportDate = (value: string) => {
 };
 
 export function renderCustomerLedgerHtml(payload: CustomerLedgerReport) {
+  numberLocale = payload.language === "en" ? "en-GB" : "sq-AL";
+  return translateReportHtml(renderCustomerLedgerAlbanian(payload), payload.language);
+}
+
+function renderCustomerLedgerAlbanian(payload: CustomerLedgerReport) {
   const { customer, company, range, summary, entries } = payload;
   const signature = company.showSignature !== false && company.signatureUrl
     ? `<div class="signature-block"><div class="signature-asset"><img src="${esc(company.signatureUrl)}" alt="Nënshkrimi"/></div><div class="signature-line"></div><div class="signature-label">Nënshkrimi</div></div>`
@@ -383,3 +392,4 @@ export function renderCustomerLedgerHtml(payload: CustomerLedgerReport) {
 }
 
 export * from "./transactions";
+export { translateReportHtml, type ReportLanguage } from "./translate";

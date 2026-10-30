@@ -29,6 +29,7 @@ const companySchema = z
   .optional();
 
 const schema = z.object({
+  language: z.enum(["en", "sq"]).optional(),
   template: z.enum([
     "expense-register",
     "income-payment",

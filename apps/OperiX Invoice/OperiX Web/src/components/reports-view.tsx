@@ -25,6 +25,7 @@ type ReportRow = Record<string, unknown>;
 type Card = { key: string; icon: LucideIcon; href?: string; permission: string; title?: { en: string; sq: string }; subtitle?: { en: string; sq: string } };
 
 const STATEMENTS: Card[] = [
+  { key: "daily", icon: CalendarDays, permission: "reports.profit" },
   { key: "trial_balance", icon: Scale, permission: "reports.operational" },
   { key: "profit_loss", icon: TrendingUp, permission: "reports.profit" },
   { key: "balance_sheet", icon: BarChart3, permission: "reports.operational" },
@@ -35,6 +36,7 @@ const STATEMENTS: Card[] = [
   { key: "inventory_register", icon: Boxes, permission: "inventory.view" },
   { key: "ar_aging", icon: Users, permission: "reports.operational" },
   { key: "ap_aging", icon: Users, permission: "reports.operational" },
+  { key: "cash_balances", icon: WalletCards, href: "/cash-bank", permission: "settings.bank", title: { en: "Cash balances", sq: "Gjendjet e arkës" }, subtitle: { en: "Cash registers and bank accounts.", sq: "Arkat dhe llogaritë bankare." } },
 ];
 
 const TAXES: Card[] = [
@@ -139,8 +141,8 @@ export function ReportsView() {
     </section>
     <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#dbe5f5] px-3 py-2"><Search size={16} /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={rt(lang, "Search reports…")} aria-label={rt(lang, "Search reports…")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
     {!visible.statements.length && !visible.taxes.length ? <p className="muted rounded-lg border border-dashed p-8 text-center text-sm">{rt(lang, "No report matches your search.")}</p> : null}
-    {visible.statements.length ? <section id="statements"><h2 className="ux-section-heading">{rt(lang, "Financial statements")}</h2>{grid(visible.statements)}</section> : null}
-    {visible.taxes.length ? <section id="tax-books"><h2 className="ux-section-heading">{rt(lang, "Taxes & compliance")}</h2><p className="ux-section-description">{rt(lang, "Tax books and declaration previews stay linked to posted source data. Electronic submission is not part of this page.")}</p>{grid(visible.taxes)}</section> : null}
+    {visible.statements.length ? <section id="statements"><div className="mt-8 mb-1"><h2 className="text-lg font-bold tracking-tight">{rt(lang, "Financial statements")}</h2></div>{grid(visible.statements)}</section> : null}
+    {visible.taxes.length ? <section id="tax-books"><div className="mt-8 mb-1"><h2 className="text-lg font-bold tracking-tight">{rt(lang, "Taxes & compliance")}</h2><p className="muted mt-1 text-xs">{rt(lang, "Tax books and declaration previews stay linked to posted source data. Electronic submission is not part of this page.")}</p></div>{grid(visible.taxes)}</section> : null}
     {!local && reconciles !== null ? <SectionCard title={rt(lang, "Control status")} description={rt(lang, "A report is only trustworthy when its accounting controls reconcile.")} className="reports-chart-card"><div className="reports-control-row"><CheckCircle2 size={18} /><strong>{rt(lang, reconciles ? "All reconciliation checks pass" : "Reconciliation requires attention")}</strong></div></SectionCard> : null}
     {local ? <><LocalLedgerReports /><LocalTaxRegisters /></> : null}
   </div>;

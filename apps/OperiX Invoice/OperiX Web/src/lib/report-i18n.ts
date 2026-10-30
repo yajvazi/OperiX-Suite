@@ -48,6 +48,8 @@ const SQ: Record<string, string> = {
   "Sort": "Rendit",
   "Prepared": "Përgatitur",
   "Retry": "Provo përsëri",
+  "Companies": "Kompanitë",
+  "Period": "Periudha",
 };
 
 export function rt(lang: UiLanguage, text: string) {
@@ -67,7 +69,7 @@ const COLUMN_SQ: Record<string, string> = {
   created_at: "Krijuar më", updated_at: "Përditësuar më", presentation_amount: "Shuma", balance: "Bilanci", outstanding_amount: "Shuma e papaguar", debit: "Debi", credit: "Kredi",
   total_debit: "Debia gjithsej", total_credit: "Krediti gjithsej", signed_amount: "Shuma me shenjë", net_change: "Ndryshimi neto", change_amount: "Shuma e ndryshimit",
   cash_account_type: "Lloji i llogarisë së arkës", acquisition_cost: "Kostoja e blerjes", inventory_value: "Vlera e inventarit", quantity: "Sasia", unit_cost: "Kosto për njësi",
-  aging_bucket: "Grupi i vjetërsimit", days_overdue: "Ditë vonesë", byte_size: "Madhësia (bajt)", document_type: "Lloji i dokumentit", reference: "Referenca", memo: "Memo",
+  first_posting_date: "Data e parë e postimit", last_posting_date: "Data e fundit e postimit", aging_bucket: "Grupi i vjetërsimit", days_overdue: "Ditë vonesë", byte_size: "Madhësia (bajt)", document_type: "Lloji i dokumentit", reference: "Referenca", memo: "Memo",
 };
 
 export function columnLabel(lang: UiLanguage, column: string) {
@@ -77,3 +79,14 @@ export function columnLabel(lang: UiLanguage, column: string) {
 
 export const MONEY_COLUMN = /(amount|balance|debit|credit|total|vat|cost|value|net_change|presentation|price|base)/i;
 export const DATE_COLUMN = /(date|period_start|period_end|created_at|updated_at)$/i;
+
+const VALUE_SQ: Record<string, string> = {
+  asset: "Aktiv", liability: "Detyrim", equity: "Kapital", revenue: "Të ardhura", expense: "Shpenzim", income: "Të ardhura", cost: "Kosto",
+  draft: "Draft", posted: "Postuar", open: "Hapur", closed: "Mbyllur", paid: "Paguar", overdue: "Me vonesë", partial: "Pjesërisht", pending: "Në pritje",
+  declared: "Deklaruar", cash: "Arkë", bank: "Bankë", current: "Aktuale", active: "Aktiv", inactive: "Joaktiv",
+};
+
+/** Status-like values stored in English are shown in the chosen language. */
+export function valueLabel(lang: UiLanguage, value: string) {
+  return lang === "sq" ? VALUE_SQ[value.toLowerCase()] ?? value : value;
+}

@@ -10,7 +10,7 @@ import { getLocalStore } from "@/lib/local/local-store";
 import { getUiLanguage } from "@/lib/i18n/language";
 import { money } from "@/lib/format";
 import { REPORT_DEFINITIONS, permissionForReport, type ReportDefinition } from "@/lib/report-definitions";
-import { DATE_COLUMN, MONEY_COLUMN, columnLabel, rt } from "@/lib/report-i18n";
+import { DATE_COLUMN, MONEY_COLUMN, columnLabel, rt, valueLabel } from "@/lib/report-i18n";
 import { ErrorState, MetricCard, PageHeader } from "./ui";
 import { SalesBookReport } from "./sales-book-report";
 
@@ -34,11 +34,11 @@ function plain(value: unknown) {
   return String(value);
 }
 
-function display(column: string, value: unknown) {
+function display(column: string, value: unknown, lang: "en" | "sq" = "en") {
   if (value === null || value === undefined || value === "") return "—";
   if (MONEY_COLUMN.test(column) && !DATE_COLUMN.test(column) && value !== "" && !Number.isNaN(Number(value)) && typeof value !== "boolean") return money(Number(value));
   if (DATE_COLUMN.test(column) && typeof value === "string") return value.slice(0, 10);
-  return plain(value);
+  return typeof value === "string" && !MONEY_COLUMN.test(column) ? valueLabel(lang, value) : plain(value);
 }
 
 function escapeHtml(value: unknown) {
@@ -140,6 +140,9 @@ function GenericReport({ type }: { type: string }) {
   const total = visible.reduce((sum, row) => sum + numericValue(row, definition.rowAmountKey ? [definition.rowAmountKey] : definition.amountKeys), 0);
   const fileBase = `operix-${type.replaceAll("_", "-")}-${new Date().toISOString().slice(0, 10)}`;
   const filtered = Boolean(query || from || to);
+  const companyCount = new Set(visible.map((row) => String(row.company_id || row.__company_name || ""))).size;
+  const days = dateColumn ? visible.map((row) => String(row[dateColumn] ?? "").slice(0, 10)).filter(Boolean).sort() : [];
+  const periodLabel = days.length ? (days[0] === days[days.length - 1] ? days[0] : `${days[0]} – ${days[days.length - 1]}`) : "—";
 
   function downloadCsv() {
     if (!canExport) return;
@@ -158,7 +161,7 @@ function GenericReport({ type }: { type: string }) {
     if (!canExport) return;
     const company = workspace.company?.company_name || "";
     const head = columns.map((column) => `<th>${escapeHtml(columnLabel(lang, column))}</th>`).join("");
-    const body = visible.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(display(column, row[column]))}</td>`).join("")}</tr>`).join("");
+    const body = visible.map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(display(column, row[column], lang))}</td>`).join("")}</tr>`).join("");
     const meta = [company, subtitle, `${rt(lang, "Prepared")} ${new Date().toLocaleDateString(lang === "sq" ? "sq-XK" : "en-GB")}`, `${visible.length} ${rt(lang, "rows")}`].filter(Boolean).join(" · ");
     const html = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${escapeHtml(`${company} ${title}`)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#172033;font-size:10px}h1{font-size:18px;margin:0}p{color:#667085;margin:4px 0 14px}table{width:100%;border-collapse:collapse}th{background:#f2f5fb;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.04em}th,td{border-bottom:1px solid #e4e9f0;padding:6px 7px;word-break:break-word}tr{page-break-inside:avoid}</style></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(meta)}</p><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table><script>window.onload=function(){window.print()}</script></body></html>`;
     const popup = window.open("", "_blank");
@@ -182,9 +185,10 @@ function GenericReport({ type }: { type: string }) {
       </div>}
     />
     {error ? <ErrorState message={rt(lang, error)} onRetry={() => setRetry((value) => value + 1)} /> : null}
-    <section className="ux-metric-grid reports-metrics">
+    <section className="grid gap-3 sm:grid-cols-3">
       <MetricCard label={rt(lang, "Rows")} value={String(visible.length)} icon={FileText} tone="blue" />
-      {definition.amountKeys.length ? <MetricCard label={rt(lang, "Total")} value={money(total)} icon={FileText} tone="green" /> : null}
+      <MetricCard label={definition.amountKeys.length ? rt(lang, "Total") : rt(lang, "Period")} value={definition.amountKeys.length ? money(total) : periodLabel} icon={FileText} tone="green" />
+      <MetricCard label={rt(lang, "Companies")} value={String(companyCount)} icon={FileText} tone="slate" />
     </section>
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <div className="flex min-w-60 flex-1 items-center gap-2 rounded-lg border border-[#dbe5f5] px-3 py-2"><Search size={16} /><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={rt(lang, "Search this report…")} aria-label={rt(lang, "Search this report…")} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
@@ -195,8 +199,8 @@ function GenericReport({ type }: { type: string }) {
       <table className="data-table">
         <thead><tr>{columns.map((column) => <th key={column} className={MONEY_COLUMN.test(column) && !DATE_COLUMN.test(column) ? "numeric" : undefined}><button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort(column)} aria-label={`${rt(lang, "Sort")}: ${columnLabel(lang, column)}`}>{columnLabel(lang, column)}<ArrowDownUp size={11} className={sort?.column === column ? "" : "opacity-30"} /></button></th>)}</tr></thead>
         <tbody>{visible.slice(0, SHOWN_ROWS).map((row, index) => <Fragment key={String(row.id || row.journal_line_id || row.invoice_id || index)}>
-          <tr tabIndex={0} className="cursor-pointer" onClick={() => setOpenRow(openRow === index ? null : index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpenRow(openRow === index ? null : index); } }}>{columns.map((column) => <td key={column} className={MONEY_COLUMN.test(column) && !DATE_COLUMN.test(column) ? "numeric" : undefined}>{display(column, row[column])}</td>)}</tr>
-          {openRow === index ? <tr><td colSpan={columns.length}><div className="grid gap-x-6 gap-y-2 p-3 text-xs sm:grid-cols-2 lg:grid-cols-3" aria-label={rt(lang, "Details")}>{Object.keys(row).filter((column) => !TECHNICAL_COLUMNS.has(column) || column === "id").filter((column) => column !== "tenant_name").map((column) => <div key={column}><span className="muted block">{columnLabel(lang, column)}</span><strong className="break-words">{display(column, row[column])}</strong></div>)}</div></td></tr> : null}
+          <tr tabIndex={0} className="cursor-pointer" onClick={() => setOpenRow(openRow === index ? null : index)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpenRow(openRow === index ? null : index); } }}>{columns.map((column) => <td key={column} className={MONEY_COLUMN.test(column) && !DATE_COLUMN.test(column) ? "numeric" : undefined}>{display(column, row[column], lang)}</td>)}</tr>
+          {openRow === index ? <tr><td colSpan={columns.length}><div className="grid gap-x-6 gap-y-2 p-3 text-xs sm:grid-cols-2 lg:grid-cols-3" aria-label={rt(lang, "Details")}>{Object.keys(row).filter((column) => !TECHNICAL_COLUMNS.has(column) || column === "id").filter((column) => column !== "tenant_name").map((column) => <div key={column}><span className="muted block">{columnLabel(lang, column)}</span><strong className="break-words">{display(column, row[column], lang)}</strong></div>)}</div></td></tr> : null}
         </Fragment>)}</tbody>
       </table>
       <p className="muted mt-2 text-xs">{visible.length > SHOWN_ROWS ? `${rt(lang, "Showing the first")} ${SHOWN_ROWS} ${rt(lang, "rows. CSV and PDF include all")} ${visible.length}. ` : ""}{rt(lang, "Click a row to see all its details.")}</p>

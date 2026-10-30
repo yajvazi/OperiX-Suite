@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { listCustomerInvoices, listCustomerPayments } from "@invoice-monorepo/api/repositories";
 import { buildCustomerLedger, type CustomerLedgerInvoice, type CustomerLedgerPayment } from "@/lib/customer-ledger";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { getUiLanguage } from "@/lib/i18n/language";
 
 type Customer = Record<string, unknown> & { id: string };
 
@@ -78,6 +79,7 @@ export function CustomerLedgerDialog({ customer, onClose }: { customer: Customer
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          language: getUiLanguage(),
           customer: {
             name: String(customer.name || "Customer"),
             taxId: String(customer.tax_id || customer.nui || ""),

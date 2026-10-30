@@ -88,26 +88,6 @@ const copy = {
     refresh: "Rifresko",
     empty: "Ende nuk ka të dhëna kontabël.",
   },
-  sr: {
-    title: "Računovodstvo",
-    subtitle: "Dvojno knjigovodstvo, periodi, glavna knjiga i pravila knjiženja.",
-    overview: "Pregled",
-    accounts: "Kontni plan",
-    journals: "Dnevnik",
-    periods: "Računovodstveni periodi",
-    rules: "Pravila knjiženja",
-    initialize: "Pokreni računovodstvo",
-    initializeText: "Kreirajte početni kontni plan, fiskalnu godinu i mesečne periode.",
-    review: "Početna mapiranja zahtevaju stručnu proveru pre produkcione upotrebe.",
-    debit: "Duguje",
-    credit: "Potražuje",
-    balance: "Saldo",
-    createJournal: "Novi dnevnik",
-    post: "Knjiži",
-    reverse: "Storniraj",
-    refresh: "Osveži",
-    empty: "Još nema računovodstvenih podataka.",
-  },
 } as const;
 
 const emptyLine = (): JournalLineDraft => ({
@@ -298,7 +278,7 @@ function Overview({
   balance: TrialBalanceRow[];
   journals: JournalEntry[];
   periods: AccountingPeriod[];
-  t: (typeof copy)["en"] | (typeof copy)["sq"] | (typeof copy)["sr"];
+  t: (typeof copy)["en"] | (typeof copy)["sq"];
 }) {
   const debit = balance.reduce((sum, row) => sum + Number(row.total_debit || 0), 0);
   const credit = balance.reduce((sum, row) => sum + Number(row.total_credit || 0), 0);
@@ -347,7 +327,7 @@ function Accounts({ accounts, companyId, reload, canManage }: { accounts: Accoun
   return <section className="card mt-4 overflow-hidden"><header className="flex items-center justify-between border-b p-4"><div><h2 className="font-semibold">Chart of accounts</h2><p className="muted mt-1 text-xs">Company-specific accounts and statement mappings.</p></div>{canManage ? <button className="btn" onClick={() => setOpen((value) => !value)}><Plus size={16} />Add account</button> : null}</header>{open ? <div className="grid gap-3 border-b bg-[#f8fafc] p-4 md:grid-cols-5"><input className="input" placeholder="Code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /><input className="input md:col-span-2" placeholder="Account name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /><select className="select" value={form.account_type} onChange={(event) => setForm({ ...form, account_type: event.target.value })}>{["asset","liability","equity","revenue","expense"].map(value => <option key={value}>{value}</option>)}</select><div className="flex gap-2"><select className="select min-w-0 flex-1" value={form.normal_balance} onChange={(event) => setForm({ ...form, normal_balance: event.target.value })}><option value="debit">Debit</option><option value="credit">Credit</option></select><button className="btn btn-primary" onClick={save}>Save</button></div>{error ? <p className="text-xs text-[#d92d20] md:col-span-5">{error}</p> : null}</div> : null}<div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-xs"><thead className="bg-[#f8fafc] text-[#667085]"><tr><th className="p-3">Code</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">Nature</th><th className="p-3">Posting</th><th className="p-3">Status</th></tr></thead><tbody>{accounts.map(account => <tr key={account.id} className="border-t"><td className="p-3 font-semibold">{account.code}</td><td className="p-3">{account.name}</td><td className="p-3 capitalize">{account.account_type}</td><td className="p-3 capitalize">{account.normal_balance}</td><td className="p-3">{account.posting_allowed ? "Allowed" : "Header only"}</td><td className="p-3">{account.active ? "Active" : "Inactive"}</td></tr>)}</tbody></table></div></section>;
 }
 
-function Journals({ accounts, journals, companyId, reload, t, canCreate, canPost, canReverse }: { accounts: AccountingAccount[]; journals: JournalEntry[]; companyId: string; reload: () => Promise<void>; t: (typeof copy)["en"] | (typeof copy)["sq"] | (typeof copy)["sr"]; canCreate: boolean; canPost: boolean; canReverse: boolean }) {
+function Journals({ accounts, journals, companyId, reload, t, canCreate, canPost, canReverse }: { accounts: AccountingAccount[]; journals: JournalEntry[]; companyId: string; reload: () => Promise<void>; t: (typeof copy)["en"] | (typeof copy)["sq"]; canCreate: boolean; canPost: boolean; canReverse: boolean }) {
   const today = new Date().toISOString().slice(0, 10);
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState("");
