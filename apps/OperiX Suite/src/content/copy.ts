@@ -6,6 +6,7 @@ export const urls = {
   app: process.env.NEXT_PUBLIC_OPERIX_INVOICE_URL ?? "https://invoice.operixsuite.com",
   help: "https://helpdesk.operixsuite.com",
   email: "support@operixinvoice.com",
+  repo: "https://github.com/yajvazi/operix-invoice-web",
 };
 
 /** Links to the app and the Help Center open in the language the visitor chose here. */
@@ -20,6 +21,18 @@ export type IconName =
   | "cloud" | "device" | "calendar" | "bell" | "scissors" | "credit" | "layers" | "clock" | "link" | "code" | "lock" | "scan" | "box";
 
 type Feature = { icon: IconName; title: string; text: string };
+export type SelfHostingCopy = {
+  meta: { title: string; description: string };
+  hero: { label: string; title: string; sub: string; free: string; github: string; ask: string; license: string };
+  features: { label: string; title: string; sub: string; items: Feature[] };
+  how: { label: string; title: string; sub: string; steps: { title: string; text: string; code?: string }[] };
+  requirements: { title: string; items: string[] };
+  compare: { title: string; head: [string, string, string]; rows: { label: string; self: string; cloud: string }[] };
+  notices: { title: string; items: string[] };
+  license: { title: string; text: string };
+  cta: { title: string; sub: string; github: string; ask: string };
+  subject: string;
+};
 type Faq = { q: string; a: string };
 
 export type Copy = {
@@ -39,7 +52,7 @@ export type Copy = {
       cloud: { title: string; badge: string; text: string; items: string[] };
     };
     platforms: { label: string; title: string; sub: string; web: { title: string; text: string; items: string[] }; mobile: { title: string; text: string; items: string[] } };
-    selfhost: { label: string; title: string; sub: string; points: { icon: IconName; title: string; text: string }[]; cta: string; note: string; subject: string };
+    selfhost: { label: string; title: string; sub: string; points: { icon: IconName; title: string; text: string }[]; cta: string; note: string; subject: string; free: string };
     steps: { label: string; title: string; items: { title: string; text: string }[] };
     pricing: { label: string; title: string; sub: string; cta: string };
     faq: { label: string; title: string; items: Faq[] };
@@ -79,7 +92,8 @@ export type Copy = {
     cards: { title: string; text: string; cta: string; href: string }[];
     form: { name: string; email: string; topic: string; topics: string[]; message: string; send: string; note: string; subject: string };
   };
-  footer: { tagline: string; product: string; company: string; legal: string; links: { invoice: string; booking: string; pricing: string; help: string; contact: string; privacy: string; terms: string; signIn: string }; rights: string; made: string };
+  selfhosting: SelfHostingCopy;
+  footer: { tagline: string; product: string; company: string; legal: string; links: { invoice: string; booking: string; pricing: string; selfhost: string; help: string; contact: string; privacy: string; terms: string; signIn: string }; rights: string; made: string };
   legal: { updated: string; privacy: { title: string; sections: { h: string; p: string[] }[] }; terms: { title: string; sections: { h: string; p: string[] }[] }; review: string };
   notFound: { title: string; text: string; cta: string };
   suiteLine: string;
@@ -171,8 +185,9 @@ const en: Copy = {
         { icon: "cloud", title: "Your own cloud", text: "Run your own cloud subscription for your team, with storage, backups and user accounts under your control." },
       ],
       cta: "Ask about self-hosting",
-      note: "Prefer not to manage servers? OperiX Cloud runs it for you.",
+      note: "Free, always: host it yourself and OperiX Invoice stays free for as long as you want, with no licence fee and no subscription. Prefer not to manage servers? OperiX Cloud runs it for you.",
       subject: "Self-hosting OperiX Invoice",
+      free: "Free forever when you host it yourself",
     },
     steps: {
       label: "Get started",
@@ -251,7 +266,7 @@ const en: Copy = {
       booking: { name: "OperiX Booking", tagline: "Appointments and reservations.", cta: "Get notified", badge: "Coming soon", items: ["Calendar and online booking page", "Services, staff and customers", "Reminders", "Web and mobile"] },
     },
     freePrice: "€0", included: "What's included",
-    selfhost: { title: "Prefer to host it yourself?", text: "The OperiX Invoice web app is open source. Run it on your own server, use the mobile app with your own account, and run your own cloud subscription.", cta: "Ask about self-hosting" },
+    selfhost: { title: "Prefer to host it yourself?", text: "The OperiX Invoice web app is open source. Run it on your own server, use the mobile app with your own account, and run your own cloud subscription. It stays free for as long as you want.", cta: "Ask about self-hosting" },
     addons: {
       title: "Add what you need",
       sub: "Each paid plan includes one workspace and one active user. Add more at any time.",
@@ -298,10 +313,70 @@ const en: Copy = {
     ],
     form: { name: "Your name", email: "Your email", topic: "Topic", topics: ["OperiX Invoice", "Pricing", "OperiX Booking", "Something else"], message: "How can we help?", send: "Send by email", note: "This opens your email app with your message ready to send.", subject: "OperiX enquiry" },
   },
+  selfhosting: {
+    meta: { title: "Self-hosting OperiX Invoice", description: "OperiX Invoice is open source. Host it on your own server, keep every record under your control and connect the mobile app. Free for as long as you want." },
+    hero: {
+      label: "Open source",
+      title: "Run OperiX Invoice on your own server.",
+      sub: "The OperiX Invoice web app is open source. Host it yourself, keep every record on your own infrastructure, and connect the mobile app to your server.",
+      free: "Free forever when you host it yourself",
+      github: "View the code on GitHub",
+      ask: "Ask about self-hosting",
+      license: "Licensed under GNU AGPL-3.0",
+    },
+    features: {
+      label: "What you get",
+      title: "The whole web app, on your terms",
+      sub: "Self-hosting is not a cut-down edition. It is the same web app, running where you decide.",
+      items: [
+        { icon: "file", title: "Full invoicing and accounting", text: "Invoices, quotes, delivery and credit notes, customers and products, expenses and vendor bills, payments, double-entry accounting, VAT and tax reports, payroll and a customer portal." },
+        { icon: "lock", title: "Your data stays with you", text: "Business data lives in a Postgres database you control, protected by row-level security, on hosted or self-hosted Supabase." },
+        { icon: "phone", title: "Connect the mobile app", text: "Scan a QR code from the web app's settings and the OperiX Invoice mobile app signs in to your own server." },
+        { icon: "box", title: "Runs in Docker", text: "One container behind an HTTPS reverse proxy. A single vCPU and 2 GB of memory is a reasonable place to start." },
+        { icon: "globe", title: "English and Albanian", text: "The interface, documents and reports work in both languages." },
+        { icon: "code", title: "Open source, free forever", text: "Read it, change it and run it for as long as you want. There is no licence fee and no subscription." },
+      ],
+    },
+    how: {
+      label: "Get started",
+      title: "Up and running in five steps",
+      sub: "The README in the repository has the full guide, with every setting explained.",
+      steps: [
+        { title: "Get the code", text: "Clone the repository from GitHub.", code: "git clone https://github.com/yajvazi/operix-invoice-web.git" },
+        { title: "Create the backend", text: "Create a Supabase project, hosted or self-hosted, and note its URL and keys. Keep email sign-in switched on." },
+        { title: "Set up the database", text: "Run the three SQL files in the database folder, in order, on a new empty database.", code: "psql \"$DATABASE_URL\" -f database/01-schema.sql" },
+        { title: "Configure and run", text: "Copy the example environment file, fill it in, then build and start the container.", code: "docker compose up -d --build" },
+        { title: "Connect the mobile app", text: "Open Settings in the web app, scan the QR code with the mobile app and sign in with your account." },
+      ],
+    },
+    requirements: { title: "What you need", items: ["Docker 24 or newer (or Node.js 22 to run it without Docker)", "A Supabase project, hosted or self-hosted", "A domain with HTTPS, which the mobile app requires", "About 1 vCPU and 2 GB of memory for the web app, plus your Supabase"] },
+    compare: {
+      title: "Self-hosting or OperiX Cloud",
+      head: ["", "Host it yourself", "OperiX Cloud"],
+      rows: [
+        { label: "Price", self: "Free, always", cloud: "From €2.99 a month" },
+        { label: "Servers and updates", self: "You run them", cloud: "We run them" },
+        { label: "Backups and security", self: "Your responsibility", cloud: "We take care of them" },
+        { label: "Mobile app", self: "Connect with a QR code", cloud: "Sign in, nothing to set up" },
+        { label: "Help", self: "The guide in the repository", cloud: "Help Center and email" },
+      ],
+    },
+    notices: {
+      title: "Good to know",
+      items: [
+        "This edition is for business-to-business invoicing. It is not certified fiscal software, and the point of sale is switched off by default.",
+        "Charts of accounts, VAT rules and payroll rules are a starting point. Have an accountant review them before you rely on them.",
+        "If you host it for other people, you are the operator: backups, security updates and privacy compliance are yours.",
+      ],
+    },
+    license: { title: "Open-source licence", text: "OperiX Invoice is licensed under the GNU AGPL-3.0. You can use, study and change it freely. If you run a modified version as a service for other people, you must offer them the source of your changes." },
+    cta: { title: "Ready to host it yourself?", sub: "Read the guide, take the code, or write to us if you would like help getting set up.", github: "Open the repository", ask: "Ask about self-hosting" },
+    subject: "Self-hosting OperiX Invoice",
+  },
   footer: {
     tagline: "Invoicing and business finance for growing businesses.",
     product: "Product", company: "Company", legal: "Legal",
-    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Pricing", help: "Help Center", contact: "Contact", privacy: "Privacy", terms: "Terms", signIn: "Sign in" },
+    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Pricing", selfhost: "Self-hosting", help: "Help Center", contact: "Contact", privacy: "Privacy", terms: "Terms", signIn: "Sign in" },
     rights: "All rights reserved.", made: "Made in Kosovo",
   },
   legal: {
@@ -414,15 +489,16 @@ const sq: Copy = {
     selfhost: {
       label: "Kod i hapur",
       title: "Kod i hapur. Ekzekutojeni në serverin tuaj.",
-      sub: "Aplikacioni web i OperiX Invoice është me kod të hapur. Strehojeni vetë, mbani kontrollin e plotë të të dhënave dhe lidheni aplikacionin celular me serverin tuaj.",
+      sub: "Aplikacioni web i OperiX Invoice është me kod të hapur. Hostojeni në serverin tuaj, mbani kontrollin e plotë të të dhënave dhe lidheni aplikacionin celular me serverin tuaj.",
       points: [
         { icon: "code", title: "Aplikacion web me kod të hapur", text: "Lexoni kodin, ndryshojeni dhe ekzekutojeni aplikacionin web të OperiX Invoice në infrastrukturën tuaj." },
         { icon: "phone", title: "Aplikacioni celular në serverin tuaj", text: "Hyni në aplikacionin celular të OperiX me llogarinë në serverin tuaj." },
         { icon: "cloud", title: "Cloud-i juaj", text: "Ekzekutoni abonimin tuaj cloud për ekipin, me ruajtjen, kopjet rezervë dhe llogaritë e përdoruesve nën kontrollin tuaj." },
       ],
-      cta: "Pyesni për vetë-strehim",
-      note: "Nuk doni të menaxhoni servera? OperiX Cloud e ekzekuton për ju.",
-      subject: "Vetë-strehimi i OperiX Invoice",
+      cta: "Pyesni për hostim në serverin tuaj",
+      note: "Falas, gjithmonë: hostojeni në serverin tuaj dhe OperiX Invoice mbetet falas për sa kohë që e doni, pa licencë dhe pa abonim. Nuk doni të menaxhoni servera? OperiX Cloud e ekzekuton për ju.",
+      subject: "Hostimi i OperiX Invoice në serverin tuaj",
+      free: "Falas përgjithmonë kur e hostoni në serverin tuaj",
     },
     steps: {
       label: "Si të filloni",
@@ -441,7 +517,7 @@ const sq: Copy = {
         { q: "A është OperiX Invoice vërtet falas?", a: "Po. Plani në pajisje është falas dhe përfshin faturim, POS, shpenzime, raporte dhe paga. Të dhënat mbeten në shfletuesin ose telefonin tuaj. Planet me pagesë shtojnë ruajtje në cloud, sinkronizim mes pajisjeve, qasje për ekipin dhe veçori online." },
         { q: "Çfarë është OperiX Booking?", a: "OperiX Booking është produkti ynë për planifikim dhe rezervime për biznese me takime. Vjen së shpejti. Mund të kërkoni të njoftoheni kur të hapet." },
         { q: "Çfarë është OperiX Suite?", a: "OperiX Suite është paketa e ardhshme që bashkon Invoice dhe Booking nën një abonim dhe një hapësirë pune. Vjen së shpejti, bashkë me OperiX Booking." },
-        { q: "A mund ta ekzekutoj OperiX në serverin tim?", a: "Po. Aplikacioni web i OperiX Invoice është me kod të hapur, ndaj mund ta strehoni vetë. Mund ta përdorni edhe aplikacionin celular me llogarinë në serverin tuaj dhe të ekzekutoni abonimin tuaj cloud. Na kontaktoni nëse dëshironi ndihmë për konfigurimin." },
+        { q: "A mund ta ekzekutoj OperiX në serverin tim?", a: "Po. Aplikacioni web i OperiX Invoice është me kod të hapur, ndaj mund ta hostoni në serverin tuaj. Mund ta përdorni edhe aplikacionin celular me llogarinë në serverin tuaj dhe të ekzekutoni abonimin tuaj cloud. Na kontaktoni nëse dëshironi ndihmë për konfigurimin." },
         { q: "A janë të sigurta të dhënat nëse i mbaj në pajisje?", a: "Të dhënat ruhen vetëm në pajisjen që përdorni, ndaj shkarkoni rregullisht një kopje rezervë. OperiX ju kujton, dhe kopjen mund ta riktheni në një shfletues tjetër ose në aplikacionin celular." },
         { q: "A mbështet TVSH-në dhe pagat e Kosovës?", a: "Po. Dokumentet mbajnë normat e TVSH-së së Kosovës dhe kolonat e librave, ndërsa pagat ndjekin rregullat e kontributeve dhe tatimit të Kosovës. Rekomandojmë që kontabilisti juaj ta shqyrtojë konfigurimin." },
         { q: "A lidhet OperiX elektronikisht me Administratën Tatimore?", a: "Aktualisht jo. OperiX përgatit librat e shitjeve e blerjeve dhe raportet, por nuk dorëzon deklarata ose të dhëna fiskale në mënyrë elektronike." },
@@ -501,7 +577,7 @@ const sq: Copy = {
       booking: { name: "OperiX Booking", tagline: "Takime dhe rezervime.", cta: "Njoftomë", badge: "Së shpejti", items: ["Kalendar dhe faqe rezervimi online", "Shërbime, staf dhe klientë", "Kujtesa", "Web dhe celular"] },
     },
     freePrice: "€0", included: "Çfarë përfshihet",
-    selfhost: { title: "Preferoni ta strehoni vetë?", text: "Aplikacioni web i OperiX Invoice është me kod të hapur. Ekzekutojeni në serverin tuaj, përdorni aplikacionin celular me llogarinë tuaj dhe ekzekutoni abonimin tuaj cloud.", cta: "Pyesni për vetë-strehim" },
+    selfhost: { title: "Preferoni ta hostoni në serverin tuaj?", text: "Aplikacioni web i OperiX Invoice është me kod të hapur. Ekzekutojeni në serverin tuaj, përdorni aplikacionin celular me llogarinë tuaj dhe ekzekutoni abonimin tuaj cloud. Mbetet falas për sa kohë që e doni.", cta: "Pyesni për hostim në serverin tuaj" },
     addons: {
       title: "Shtoni çfarë ju duhet",
       sub: "Çdo plan me pagesë përfshin një hapësirë pune dhe një përdorues aktiv. Shtoni më shumë kur të doni.",
@@ -548,10 +624,70 @@ const sq: Copy = {
     ],
     form: { name: "Emri juaj", email: "Email-i juaj", topic: "Tema", topics: ["OperiX Invoice", "Çmimet", "OperiX Booking", "Diçka tjetër"], message: "Si mund t'ju ndihmojmë?", send: "Dërgo me email", note: "Kjo hap aplikacionin tuaj të email-it me mesazhin gati për dërgim.", subject: "Pyetje për OperiX" },
   },
+  selfhosting: {
+    meta: { title: "Hostimi i OperiX Invoice në serverin tuaj", description: "OperiX Invoice është me kod të hapur. Hostojeni në serverin tuaj, mbani çdo regjistrim nën kontrollin tuaj dhe lidhni aplikacionin celular. Falas për sa kohë që e doni." },
+    hero: {
+      label: "Kod i hapur",
+      title: "Ekzekutoni OperiX Invoice në serverin tuaj.",
+      sub: "Aplikacioni web i OperiX Invoice është me kod të hapur. Hostojeni vetë, mbani çdo regjistrim në infrastrukturën tuaj dhe lidheni aplikacionin celular me serverin tuaj.",
+      free: "Falas përgjithmonë kur e hostoni në serverin tuaj",
+      github: "Shihni kodin në GitHub",
+      ask: "Pyesni për hostim në serverin tuaj",
+      license: "Licencuar nën GNU AGPL-3.0",
+    },
+    features: {
+      label: "Çfarë merrni",
+      title: "I gjithë aplikacioni web, me kushtet tuaja",
+      sub: "Hostimi në serverin tuaj nuk është version i cunguar. Është i njëjti aplikacion web, që ekzekutohet atje ku vendosni ju.",
+      items: [
+        { icon: "file", title: "Faturim dhe kontabilitet i plotë", text: "Fatura, oferta, fletë-dërgesa dhe nota krediti, klientë dhe produkte, shpenzime dhe fatura furnitorësh, pagesa, kontabilitet me hyrje të dyfishtë, raporte TVSH dhe tatimore, paga dhe portal për klientët." },
+        { icon: "lock", title: "Të dhënat mbeten tek ju", text: "Të dhënat e biznesit ruhen në një bazë të dhënash Postgres që e kontrolloni ju, e mbrojtur me rregulla në nivel rreshti, në Supabase të hostuar ose në serverin tuaj." },
+        { icon: "phone", title: "Lidhni aplikacionin celular", text: "Skanoni një kod QR nga cilësimet e aplikacionit web dhe aplikacioni celular OperiX Invoice hyn në serverin tuaj." },
+        { icon: "box", title: "Punon në Docker", text: "Një kontejner pas një reverse proxy me HTTPS. Një vCPU dhe 2 GB memorie janë një fillim i arsyeshëm." },
+        { icon: "globe", title: "Shqip dhe anglisht", text: "Ndërfaqja, dokumentet dhe raportet punojnë në të dyja gjuhët." },
+        { icon: "code", title: "Kod i hapur, falas përgjithmonë", text: "Lexojeni, ndryshojeni dhe ekzekutojeni për sa kohë që e doni. Nuk ka tarifë licence dhe nuk ka abonim." },
+      ],
+    },
+    how: {
+      label: "Si të filloni",
+      title: "Gati për pesë hapa",
+      sub: "README në depo ka udhëzuesin e plotë, me çdo cilësim të shpjeguar.",
+      steps: [
+        { title: "Merrni kodin", text: "Klononi depon nga GitHub.", code: "git clone https://github.com/yajvazi/operix-invoice-web.git" },
+        { title: "Krijoni backend-in", text: "Krijoni një projekt Supabase, të hostuar ose në serverin tuaj, dhe shënoni URL-në dhe çelësat e tij. Mbajeni të aktivizuar hyrjen me email." },
+        { title: "Ngrini bazën e të dhënave", text: "Ekzekutoni tre skedarët SQL në dosjen database, sipas radhës, në një bazë të re e të zbrazët.", code: "psql \"$DATABASE_URL\" -f database/01-schema.sql" },
+        { title: "Konfiguroni dhe ekzekutoni", text: "Kopjoni skedarin shembull të mjedisit, plotësojeni, pastaj ndërtoni dhe nisni kontejnerin.", code: "docker compose up -d --build" },
+        { title: "Lidhni aplikacionin celular", text: "Hapni Cilësimet në aplikacionin web, skanoni kodin QR me aplikacionin celular dhe hyni me llogarinë tuaj." },
+      ],
+    },
+    requirements: { title: "Çfarë ju duhet", items: ["Docker 24 ose më i ri (ose Node.js 22 për ta ekzekutuar pa Docker)", "Një projekt Supabase, i hostuar ose në serverin tuaj", "Një domen me HTTPS, që e kërkon aplikacioni celular", "Rreth 1 vCPU dhe 2 GB memorie për aplikacionin web, plus Supabase-in tuaj"] },
+    compare: {
+      title: "Hostim në serverin tuaj ose OperiX Cloud",
+      head: ["", "Hostojeni vetë", "OperiX Cloud"],
+      rows: [
+        { label: "Çmimi", self: "Falas, gjithmonë", cloud: "Nga €2.99 në muaj" },
+        { label: "Serverat dhe përditësimet", self: "I ekzekutoni ju", cloud: "I ekzekutojmë ne" },
+        { label: "Kopjet rezervë dhe siguria", self: "Përgjegjësia juaj", cloud: "Kujdesemi ne" },
+        { label: "Aplikacioni celular", self: "Lidhet me kod QR", cloud: "Hyni, pa asgjë për të ngritur" },
+        { label: "Ndihma", self: "Udhëzuesi në depo", cloud: "Qendra e ndihmës dhe email" },
+      ],
+    },
+    notices: {
+      title: "Mirë është ta dini",
+      items: [
+        "Ky version është për faturim biznes-me-biznes. Nuk është softuer fiskal i certifikuar dhe pika e shitjes është e çaktivizuar si parazgjedhje.",
+        "Planet kontabël, rregullat e TVSH-së dhe të pagave janë një pikënisje. Kërkoni që t'i shqyrtojë një kontabilist para se të mbështeteni tek ato.",
+        "Nëse e hostoni për persona të tjerë, ju jeni operatori: kopjet rezervë, përditësimet e sigurisë dhe pajtueshmëria me privatësinë janë përgjegjësia juaj.",
+      ],
+    },
+    license: { title: "Licenca e kodit të hapur", text: "OperiX Invoice është i licencuar nën GNU AGPL-3.0. Mund ta përdorni, studioni dhe ndryshoni lirisht. Nëse ekzekutoni një version të ndryshuar si shërbim për persona të tjerë, duhet t'u ofroni atyre kodin burimor të ndryshimeve tuaja." },
+    cta: { title: "Gati ta hostoni në serverin tuaj?", sub: "Lexoni udhëzuesin, merrni kodin, ose na shkruani nëse doni ndihmë me ngritjen.", github: "Hapni depon", ask: "Pyesni për hostim në serverin tuaj" },
+    subject: "Hostimi i OperiX Invoice në serverin tuaj",
+  },
   footer: {
     tagline: "Faturim dhe financa për biznese në rritje.",
     product: "Produkti", company: "Kompania", legal: "Ligjore",
-    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Çmimet", help: "Qendra e ndihmës", contact: "Kontakti", privacy: "Privatësia", terms: "Kushtet", signIn: "Hyni" },
+    links: { invoice: "OperiX Invoice", booking: "OperiX Booking", pricing: "Çmimet", selfhost: "Hostim në server", help: "Qendra e ndihmës", contact: "Kontakti", privacy: "Privatësia", terms: "Kushtet", signIn: "Hyni" },
     rights: "Të gjitha të drejtat e rezervuara.", made: "Bërë në Kosovë",
   },
   legal: {

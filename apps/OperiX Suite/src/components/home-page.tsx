@@ -96,13 +96,13 @@ export function HomePage({ lang }: { lang: Lang }) {
 
     <section className="section section-selfhost" id="open-source">
       <div className="container">
-        <Reveal className="section-head"><span className="label"><Code2 size={14} /> {h.selfhost.label}</span><h2>{h.selfhost.title}</h2><p>{h.selfhost.sub}</p></Reveal>
+        <Reveal className="section-head"><span className="label"><Code2 size={14} /> {h.selfhost.label}</span><h2>{h.selfhost.title}</h2><p>{h.selfhost.sub}</p><p><span className="pill pill-live">{h.selfhost.free}</span></p></Reveal>
         <div className="selfhost-grid">
           {h.selfhost.points.map((point, index) => <Reveal key={point.title} className="selfhost-card" delay={index * 70}><span className="icon-tile"><Icon name={point.icon} /></span><h3>{point.title}</h3><p>{point.text}</p></Reveal>)}
         </div>
         <Reveal className="selfhost-foot">
           <p className="selfhost-note">{h.selfhost.note}</p>
-          <a className="button" href={`mailto:${urls.email}?subject=${encodeURIComponent(h.selfhost.subject)}`}>{h.selfhost.cta}</a>
+          <Link className="button" href={href(lang, "/self-hosting")}>{h.selfhost.cta}</Link>
         </Reveal>
       </div>
     </section>

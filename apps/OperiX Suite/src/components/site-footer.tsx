@@ -22,6 +22,7 @@ export function SiteFooter() {
           <li><Link href={href(lang, "/invoice")}>{l.invoice}</Link></li>
           <li><Link href={href(lang, "/booking")}>{l.booking} <span className="pill pill-soon pill-dark">{t.comingSoon}</span></Link></li>
           <li><Link href={href(lang, "/pricing")}>{l.pricing}</Link></li>
+          <li><Link href={href(lang, "/self-hosting")}>{l.selfhost}</Link></li>
         </ul>
       </div>
       <div>

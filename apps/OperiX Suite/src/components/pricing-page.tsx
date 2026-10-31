@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { Check, Minus } from "lucide-react";
-import { getCopy, localUrl, urls, type Lang } from "@/content/copy";
+import { getCopy, href, localUrl, urls, type Lang } from "@/content/copy";
 import { Faq, faqSchema } from "./faq";
 import { Icon } from "./icons";
 import { PricingPlans } from "./pricing-plans";
@@ -13,7 +14,7 @@ export function PricingPage({ lang }: { lang: Lang }) {
     </section>
     <section className="section section-pricing"><div className="container"><PricingPlans lang={lang} /><p className="fine-print">{t.vat}</p></div></section>
     <section className="section">
-      <div className="container"><div className="selfhost-banner"><span className="icon-tile"><Icon name="code" /></span><div><h2>{t.selfhost.title}</h2><p>{t.selfhost.text}</p></div><a className="button button-secondary" href={`mailto:${urls.email}?subject=${encodeURIComponent(getCopy(lang).home.selfhost.subject)}`}>{t.selfhost.cta}</a></div></div>
+      <div className="container"><div className="selfhost-banner"><span className="icon-tile"><Icon name="code" /></span><div><h2>{t.selfhost.title}</h2><p>{t.selfhost.text}</p></div><Link className="button button-secondary" href={href(lang, "/self-hosting")}>{t.selfhost.cta}</Link></div></div>
     </section>
     <section className="section section-tint">
       <div className="container narrow">

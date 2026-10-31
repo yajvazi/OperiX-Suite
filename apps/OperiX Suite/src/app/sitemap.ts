@@ -3,7 +3,7 @@ import { href } from "@/content/copy";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://operixsuite.com";
-  const paths = ["/", "/invoice", "/booking", "/pricing", "/contact", "/privacy", "/terms"];
+  const paths = ["/", "/invoice", "/booking", "/pricing", "/self-hosting", "/contact", "/privacy", "/terms"];
   return paths.flatMap((path) => (["en", "sq"] as const).map((lang) => ({
     url: `${base}${href(lang, path)}`,
     lastModified: new Date(),
