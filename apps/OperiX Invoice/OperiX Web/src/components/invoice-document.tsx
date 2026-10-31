@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ClientRow, InvoiceDraft, InvoiceTemplate, InvoiceTemplateConfig } from "@/lib/models";
 import { invoiceMarkup } from "@/lib/invoice-html";
 
-export interface DocumentCompany { name:string; email:string; phone:string; address:string; city:string; taxId:string; businessId?:string; vatNumber?:string; bankName:string; iban:string; website:string; logoUrl?:string; signatureUrl?:string; stampUrl?:string; language?:string; }
+export interface DocumentCompany { name:string; email:string; phone:string; address:string; city:string; taxId:string; businessId?:string; vatNumber?:string; bankName:string; iban:string; website:string; logoUrl?:string; signatureUrl?:string; stampUrl?:string; language?:string; bankAccount?:string; bankSwift?:string; primaryColor?:string; isGrayscale?:boolean; paymentLinkStripe?:string; paymentLinkPaypal?:string; terms?:string; }
 export const defaultCompany:DocumentCompany={name:"",email:"",phone:"",address:"",city:"",taxId:"",bankName:"",iban:"",website:""};
 
 // The template stylesheet is written for standalone print pages (html/body, generic class names such as

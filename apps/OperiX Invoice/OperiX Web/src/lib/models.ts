@@ -26,6 +26,8 @@ export interface InvoiceDraft {
   customer_signature_status?: "not_requested" | "pending" | "signed" | "declined";
   customer_signature_name?: string | null;
   customer_signed_at?: string | null;
+  /** Printed on the document like the mobile app does: who created it, the branch, change given and the paper size. */
+  agent_name?: string; branch_name?: string; change_amount?: number; payment_status?: string; paper_size?: string;
 }
 
 export interface InvoiceTemplateConfig {

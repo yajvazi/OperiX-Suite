@@ -7,7 +7,7 @@ import { Activity, ArrowLeft, CalendarDays, CreditCard, Download, Edit3, Eye, Fi
 import { createClient } from "@/lib/supabase/client";
 import { getLocalStore } from "@/lib/local/local-store";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { deleteInvoice, getInvoice, getInvoiceByNumber, listInvoicePayments, transitionInvoiceStatus } from "@invoice-monorepo/api/repositories";
+import { deleteInvoice, getAgentSignature, getInvoice, listCompanyAgents, getInvoiceByNumber, listInvoicePayments, transitionInvoiceStatus } from "@invoice-monorepo/api/repositories";
 import { CONVERSION_PATHS, DOCUMENT_DEFINITIONS, documentTypeLabel, isImmutableCommercialStatus, resolveCommercialDocumentType, type CommercialDocumentType } from "@invoice-monorepo/commercial-documents";
 import type { ClientRow, InvoiceDraft, InvoiceRow, PaymentRow } from "@/lib/models";
 import { money, shortDate } from "@/lib/format";
@@ -67,6 +67,7 @@ export function InvoiceDetail({ id, invoiceNumber }: { id?: string; invoiceNumbe
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [salesBookPeriodStatus, setSalesBookPeriodStatus] = useState<string | null>(null);
+  const [agentSignature, setAgentSignature] = useState<string | null>(null);
   const [tab, setTab] = useState<DetailTab>("payments");
   const [reloadToken, setReloadToken] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -94,8 +95,29 @@ export function InvoiceDetail({ id, invoiceNumber }: { id?: string; invoiceNumbe
         setSalesBookPeriodStatus(periodResult.data?.status ? String(periodResult.data.status).toUpperCase() : null);
       } else setSalesBookPeriodStatus(null);
       setDraft({
-        client_id: value(rowRecord, "client_id"), invoice_number: value(rowRecord, "invoice_number"), issue_date: value(rowRecord, "issue_date"), due_date: value(rowRecord, "due_date") || value(rowRecord, "issue_date"), payment_method: (value(rowRecord, "payment_method") || "bank") as InvoiceDraft["payment_method"], currency: value(rowRecord, "currency") || workspace.company?.currency || workspace.profile?.currency || "EUR", amount_received: Number(rowRecord.amount_received || 0), notes: value(rowRecord, "notes"), status: (value(rowRecord, "status") || "draft") as InvoiceDraft["status"], commercial_document_type: type, source_document_type: value(rowRecord, "source_document_type") || null, source_document_id: value(rowRecord, "source_document_id") || null, delivery_method: (value(rowRecord, "delivery_method") || null) as InvoiceDraft["delivery_method"], pickup_branch_id: value(rowRecord, "pickup_branch_id") || null, delivery_details: value(rowRecord, "delivery_details"), show_product_pictures: Boolean(rowRecord.show_product_pictures), show_stamp: true, show_signature: true, qrReference: value(rowRecord, "public_qr_token") || undefined, buyer_signature_url: value(rowRecord, "buyer_signature_url") || null, customer_signature_requested: Boolean(rowRecord.customer_signature_requested), customer_signature_status: (value(rowRecord, "customer_signature_status") || "not_requested") as InvoiceDraft["customer_signature_status"], customer_signature_name: value(rowRecord, "customer_signature_name") || null, customer_signed_at: value(rowRecord, "customer_signed_at") || null, items: itemRows.map((item) => ({ id: value(item, "id"), product_id: value(item, "product_id") || undefined, description: value(item, "description"), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), tax_included: Boolean(item.tax_included), discount: Number(item.discount || 0), unit: value(item, "unit") || "pcs", sku: value(item, "sku") || undefined, image_url: value(item, "image_url") || undefined }))
+        client_id: value(rowRecord, "client_id"), invoice_number: value(rowRecord, "invoice_number"), issue_date: value(rowRecord, "issue_date"), due_date: value(rowRecord, "due_date") || value(rowRecord, "issue_date"), payment_method: (value(rowRecord, "payment_method") || "bank") as InvoiceDraft["payment_method"], currency: value(rowRecord, "currency") || workspace.company?.currency || workspace.profile?.currency || "EUR", amount_received: Number(rowRecord.amount_received || 0), notes: value(rowRecord, "notes"), status: (value(rowRecord, "status") || "draft") as InvoiceDraft["status"], commercial_document_type: type, source_document_type: value(rowRecord, "source_document_type") || null, source_document_id: value(rowRecord, "source_document_id") || null, delivery_method: (value(rowRecord, "delivery_method") || null) as InvoiceDraft["delivery_method"], pickup_branch_id: value(rowRecord, "pickup_branch_id") || null, delivery_details: value(rowRecord, "delivery_details"), show_product_pictures: Boolean(rowRecord.show_product_pictures), show_stamp: true, show_signature: true, qrReference: value(rowRecord, "public_qr_token") || undefined, buyer_signature_url: value(rowRecord, "buyer_signature_url") || null, customer_signature_requested: Boolean(rowRecord.customer_signature_requested), customer_signature_status: (value(rowRecord, "customer_signature_status") || "not_requested") as InvoiceDraft["customer_signature_status"], customer_signature_name: value(rowRecord, "customer_signature_name") || null, customer_signed_at: value(rowRecord, "customer_signed_at") || null, change_amount: Number(rowRecord.change_amount || 0), payment_status: value(rowRecord, "payment_status") || undefined, paper_size: value(rowRecord, "paper_size") || undefined, items: itemRows.map((item) => ({ id: value(item, "id"), product_id: value(item, "product_id") || undefined, description: value(item, "description"), quantity: Number(item.quantity || 0), unit_price: Number(item.unit_price || 0), tax_rate: Number(item.tax_rate || 0), tax_included: Boolean(item.tax_included), discount: Number(item.discount || 0), unit: value(item, "unit") || "pcs", sku: value(item, "sku") || undefined, image_url: value(item, "image_url") || undefined }))
       });
+      setAgentSignature(null);
+      if (!isLocal) {
+        // The document names the agent who created it, the branch, and carries that agent's own signature.
+        const creatorId = value(rowRecord, "user_id");
+        const invoiceCompanyId = value(rowRecord, "company_id") || workspace.companyIds[0];
+        void (async () => {
+          try {
+            const [agents, branchResult, signature] = await Promise.all([
+              listCompanyAgents(supabase, invoiceCompanyId).catch(() => []),
+              rowRecord.branch_id ? supabase.from("branches").select("name,code").eq("id", String(rowRecord.branch_id)).maybeSingle() : Promise.resolve({ data: null }),
+              creatorId ? getAgentSignature(supabase, invoiceCompanyId, creatorId).catch(() => null) : Promise.resolve(null),
+            ]);
+            const agent = agents.find((candidate) => candidate.user_id === creatorId);
+            const agentName = [agent?.first_name, agent?.last_name].filter(Boolean).join(" ").trim();
+            const branch = branchResult.data as { name?: string | null; code?: string | null } | null;
+            if (cancelled) return;
+            setAgentSignature(signature);
+            setDraft((current) => current ? { ...current, agent_name: agentName || undefined, branch_name: (branch?.name || branch?.code || undefined) as string | undefined } : current);
+          } catch { /* the document is still complete without them */ }
+        })();
+      }
       if (isLocal) {
         const store = await getLocalStore();
         setSourceBooking(null);
@@ -145,7 +167,7 @@ export function InvoiceDetail({ id, invoiceNumber }: { id?: string; invoiceNumbe
   const canDelete = workspace.can("invoice.delete_draft") && commercialStatus === "DRAFT" && !salesBookPeriodLocked;
   const canCreatePayment = workspace.can("payment.create");
   const canRecordPayment = outstanding > 0.005 && canCreatePayment && !["QUOTE", "SALES_ORDER", "DELIVERY_NOTE"].includes(documentType);
-  const company: DocumentCompany = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "), taxId: source?.tax_id || workspace.company?.fiscal_number || workspace.company?.vat_number || "", businessId: workspace.company?.unique_business_number, vatNumber: workspace.company?.vat_number, bankName: source?.bank_name || "", iban: source?.bank_iban || "", website: source?.website || "", logoUrl: source?.logo_url, signatureUrl: source?.signature_url, stampUrl: source?.stamp_url, language: source?.invoice_language };
+  const company: DocumentCompany = { name: source?.company_name || workspace.company?.name || "", email: source?.email || "", phone: source?.phone || "", address: source?.address || "", city: [workspace.company?.city, workspace.company?.country].filter(Boolean).join(", "), taxId: source?.tax_id || workspace.company?.fiscal_number || workspace.company?.vat_number || "", businessId: workspace.company?.unique_business_number, vatNumber: workspace.company?.vat_number, bankName: source?.bank_name || "", iban: source?.bank_iban || "", website: source?.website || "", logoUrl: source?.logo_url, signatureUrl: agentSignature || source?.signature_url, stampUrl: source?.stamp_url, language: source?.invoice_language, bankAccount: source?.bank_account, bankSwift: source?.bank_swift, primaryColor: source?.primary_color, isGrayscale: source?.is_grayscale, paymentLinkStripe: source?.payment_link_stripe, paymentLinkPaypal: source?.payment_link_paypal, terms: source?.terms_conditions };
 
   async function print(receipt = false) { if (!draft) return; try { await openInvoicePdf({ draft, client: invoice?.client || undefined, company, receipt, template: invoice?.paper_size === "Receipt" ? "thermal" : "corporate", config: workspace.company?.template_config || workspace.profile?.template_config }, `${draft.invoice_number}.pdf`); } catch (printError) { setNotice(printError instanceof Error ? printError.message : "The PDF could not be generated."); } }
   async function download() { if (!draft) return; if (workspace.storage === "local") { await print(); return; } const response = await fetch("/api/pdf", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ invoice_id: invoice?.id, draft, client: invoice?.client, company, receipt: false, template: invoice?.paper_size === "Receipt" ? "thermal" : "corporate", config: workspace.company?.template_config || workspace.profile?.template_config }) }); if (!response.ok) { setNotice("The PDF could not be generated."); return; } const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = `${draft.invoice_number}.pdf`; link.click(); URL.revokeObjectURL(url); }

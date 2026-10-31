@@ -75,19 +75,18 @@ export function ReportsView() {
     if (!workspace.companyIds.length) { setSummary(empty); setLoading(false); return; }
     try {
       let rows: ReportRow[];
-      let reconciliation: ReportRow | undefined;
       if (local) {
         rows = await localReportRows(await getLocalStore(), "operix_report_summary") as ReportRow[];
       } else {
         const supabase = createClient();
         if (!supabase) throw new Error("Supabase is not configured.");
-        const [summaryResult, reconciliationResult] = await Promise.all([
-          supabase.from("operix_report_summary").select("*").in("company_id", workspace.companyIds),
-          supabase.from("operix_financial_reconciliation").select("*").in("company_id", workspace.companyIds),
-        ]);
+        // The control status is secondary and the slower of the two views, so it must not hold the page back.
+        void Promise.resolve(supabase.from("operix_financial_reconciliation").select("*").in("company_id", workspace.companyIds))
+          .then((result) => { const row = (result.data || [])[0] as ReportRow | undefined; setReconciles(row ? Boolean(row.reconciles) : null); })
+          .catch(() => setReconciles(null));
+        const summaryResult = await supabase.from("operix_report_summary").select("*").in("company_id", workspace.companyIds);
         if (summaryResult.error) throw summaryResult.error;
         rows = (summaryResult.data || []) as ReportRow[];
-        reconciliation = ((reconciliationResult.data || [])[0] as ReportRow | undefined);
       }
       setSummary(rows.reduce<Summary>((result, row) => ({
         revenue: result.revenue + num(row, "revenue"),
@@ -96,7 +95,7 @@ export function ReportsView() {
         ar_outstanding: result.ar_outstanding + num(row, "ar_outstanding"),
         ap_outstanding: result.ap_outstanding + num(row, "ap_outstanding"),
       }), empty));
-      setReconciles(reconciliation ? Boolean(reconciliation.reconciles) : null);
+      if (local) setReconciles(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "The report could not be loaded.");
     } finally {

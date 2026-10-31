@@ -28,6 +28,9 @@ export interface WorkspaceProfile {
   invoice_language?: string;
   terms_conditions?: string;
   primary_color?: string;
+  is_grayscale?: boolean;
+  payment_link_stripe?: string;
+  payment_link_paypal?: string;
   logo_url?: string;
   signature_url?: string;
   stamp_url?: string;
@@ -73,6 +76,9 @@ export interface WorkspaceCompany {
   invoice_language?: string;
   terms_conditions?: string;
   primary_color?: string;
+  is_grayscale?: boolean;
+  payment_link_stripe?: string;
+  payment_link_paypal?: string;
   logo_url?: string;
   signature_url?: string;
   stamp_url?: string;

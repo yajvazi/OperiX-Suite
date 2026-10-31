@@ -533,7 +533,7 @@ export function PosView() {
       iban: source?.bank_iban || "",
       website: source?.website || "",
       signatureUrl: source?.signature_url,
-      stampUrl: source?.stamp_url,
+      stampUrl: source?.stamp_url, bankAccount: source?.bank_account, bankSwift: source?.bank_swift, primaryColor: source?.primary_color, isGrayscale: source?.is_grayscale, paymentLinkStripe: source?.payment_link_stripe, paymentLinkPaypal: source?.payment_link_paypal, terms: source?.terms_conditions,
       language: source?.invoice_language,
     };
     localStorage.setItem("operix-print-draft", JSON.stringify({ draft, client: selectedClient, company, template: "corporate", config: source?.template_config }));
