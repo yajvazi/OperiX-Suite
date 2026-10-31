@@ -50247,3 +50247,300 @@ $$;
 drop trigger if exists push_on_subscription on public.subscription_accounts;
 create trigger push_on_subscription after update of status on public.subscription_accounts for each row execute function private.push_on_subscription();
 
+
+-- ---------------------------------------------------------------- 20261030170000_fix_billing_metrics_ambiguity
+-- control_product_billing_metrics() returns a column named "value" and its body also uses "value", so PL/pgSQL
+-- reported the name as ambiguous and the platform billing page could not load. Prefer the table column.
+CREATE OR REPLACE FUNCTION public.control_product_billing_metrics()
+ RETURNS TABLE(metric text, value numeric)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+#variable_conflict use_column
+begin
+  if not public.control_is_platform_admin() then raise exception 'Platform administrator access required' using errcode = '42501'; end if;
+  return query
+  with accounts as (
+    select account.*,
+      private.operix_effective_status(account.status, account.trial_ends_at, account.current_period_end, account.grace_period_ends_at, account.manual_override_status, account.manual_override_expires_at) as effective_status
+    from public.subscription_accounts account
+  ), paid as (
+    select account.* from accounts account where private.operix_status_has_access(account.status, account.trial_ends_at, account.current_period_end, account.grace_period_ends_at, account.manual_override_status, account.manual_override_expires_at) and account.effective_status <> 'trialing'
+  ), values as (
+    select paid.product, paid.billing_interval, private.operix_plan_value(paid.product, paid.billing_interval, usage.billable_tenants, usage.billable_users) as value
+    from paid left join public.subscription_usage usage on usage.company_id = paid.company_id
+  ), enterprise_values as (
+    select contract.billing_interval, contract.custom_price as value
+    from public.enterprise_contracts contract
+    where contract.status = 'active'
+      and contract.starts_at <= now()
+      and (contract.ends_at is null or contract.ends_at > now())
+      and contract.custom_price is not null
+      and contract.billing_interval in ('monthly', 'annual')
+  ), trial_keys as (
+    -- Conversion is an organization metric. A Suite clock can have linked
+    -- Invoice/Booking history rows, and a customer can also have explored
+    -- two standalone products; neither should inflate the denominator.
+    select
+      trial.company_id,
+      case
+        when bool_or(trial.status = 'trialing' and trial.ends_at > now()) then 'trialing'
+        when bool_or(trial.status = 'completed') then 'completed'
+        when bool_or(trial.status = 'expired' or trial.ends_at <= now()) then 'expired'
+        else max(trial.status)
+      end as status
+    from public.subscription_trials trial
+    group by trial.company_id
+  ), trials as (
+    select count(*) filter (where status = 'trialing')::numeric as active_trials,
+      count(*) filter (where status = 'expired')::numeric as expired_trials,
+      count(*)::numeric as all_trials
+    from trial_keys
+  )
+  select 'invoice_subscriptions', count(*) filter (where product = 'invoice')::numeric from accounts
+  union all select 'booking_subscriptions', count(*) filter (where product = 'booking')::numeric from accounts
+  union all select 'suite_subscriptions', count(*) filter (where product = 'suite')::numeric from accounts
+  union all select 'monthly_subscriptions', count(*) filter (where billing_interval = 'monthly' and effective_status <> 'expired')::numeric from accounts
+  union all select 'annual_subscriptions', count(*) filter (where billing_interval = 'annual' and effective_status <> 'expired')::numeric from accounts
+  union all select 'active_trials', trials.active_trials from trials
+  union all select 'expired_trials', trials.expired_trials from trials
+  union all select 'trial_conversion_rate', case when trials.all_trials = 0 then 0 else round((select count(distinct company_id)::numeric from paid) / trials.all_trials * 100, 2) end from trials
+  union all select 'mrr', coalesce((select sum(case when billing_interval = 'annual' then value / 12 else value end) from values), 0) + coalesce((select sum(case when billing_interval = 'annual' then value / 12 else value end) from enterprise_values), 0)
+  union all select 'arr', coalesce((select sum(case when billing_interval = 'annual' then value else value * 12 end) from values), 0) + coalesce((select sum(case when billing_interval = 'annual' then value else value * 12 end) from enterprise_values), 0)
+  union all select 'active_subscriptions', count(*) filter (where effective_status in ('active', 'past_due', 'canceled'))::numeric from accounts
+  union all select 'past_due_accounts', count(*) filter (where status = 'past_due')::numeric from accounts
+  union all select 'canceled_accounts', count(*) filter (where status = 'canceled')::numeric from accounts
+  union all select 'enterprise_customers', count(distinct company_id)::numeric from public.enterprise_contracts where status in ('trialing', 'active') and starts_at <= now() and (ends_at is null or ends_at > now());
+end;
+$function$
+
+;
+
+-- ---------------------------------------------------------------- 20261031090000_agent_signatures
+-- Each agent can have their own signature. The invoice PDF prints the creating agent's signature and falls back
+-- to the company signature when the agent has none. Agents set their own; company administrators can set or clear any member's.
+alter table public.profiles
+  add column if not exists agent_signature_url text;
+
+alter table public.profiles
+  drop constraint if exists profiles_agent_signature_size;
+alter table public.profiles
+  add constraint profiles_agent_signature_size check (agent_signature_url is null or length(agent_signature_url) <= 2000000);
+
+comment on column public.profiles.agent_signature_url is
+  'The agent''s own handwritten signature (data URL). Read through get_agent_signature, written through set_agent_signature.';
+
+create or replace function public.get_agent_signature(p_company_id uuid, p_user_id uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller uuid := (select auth.uid());
+  result text;
+begin
+  if caller is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  if caller <> p_user_id and not (
+    private.has_company_permission(p_company_id, 'roles.manage')
+    or private.has_company_permission(p_company_id, 'accounting.read')
+    or private.has_company_permission(p_company_id, 'sales_invoice.view')
+  ) then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.memberships m
+    where m.company_id = p_company_id and m.user_id = p_user_id and coalesce(m.status, 'active') <> 'revoked'
+  ) then
+    return null;
+  end if;
+  select profile.agent_signature_url into result from public.profiles profile where profile.id = p_user_id;
+  return nullif(result, '');
+end;
+$$;
+
+create or replace function public.set_agent_signature(p_company_id uuid, p_user_id uuid, p_signature text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller uuid := (select auth.uid());
+begin
+  if caller is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  if caller <> p_user_id and not private.has_company_permission(p_company_id, 'roles.manage') then
+    raise exception 'Only the agent or a company administrator can change this signature' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.memberships m
+    where m.company_id = p_company_id and m.user_id = p_user_id and coalesce(m.status, 'active') <> 'revoked'
+  ) then
+    raise exception 'The user is not a member of this company' using errcode = '42501';
+  end if;
+  if p_signature is not null and p_signature <> '' and p_signature not like 'data:image/%' then
+    raise exception 'The signature must be an image' using errcode = '22023';
+  end if;
+  update public.profiles set agent_signature_url = nullif(p_signature, '') where id = p_user_id;
+end;
+$$;
+
+revoke all on function public.get_agent_signature(uuid, uuid) from public, anon;
+revoke all on function public.set_agent_signature(uuid, uuid, text) from public, anon;
+grant execute on function public.get_agent_signature(uuid, uuid) to authenticated;
+grant execute on function public.set_agent_signature(uuid, uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------- 20261031100000_permission_check_cache
+-- The row-level security policies call private.has_company_permission() for every row they read. The check is a
+-- heavy query (about 0.7 ms), and the report views read the journal tables many times, so the Reports page spent
+-- seconds just on permission checks. Remember each answer for the rest of the current transaction (one API request).
+-- The cache is keyed by the caller's claims, the company and the permission, and it is reset whenever any table the
+-- check reads is written to, so a change made mid-transaction is never answered from a stale cache.
+
+-- The original check, unchanged.
+CREATE OR REPLACE FUNCTION private.has_company_permission_uncached(p_company_id uuid, p_permission text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  with requested as (
+    select lower(trim(coalesce(p_permission, ''))) as permission_code,
+      private.rbac_canonical_permission(p_permission) as canonical_code
+  ),
+  access as (
+    select private.company_is_active(p_company_id) as company_active,
+      private.rbac_is_platform_admin() as platform_admin,
+      private.rbac_role_code(p_company_id) as actor_role,
+      private.rbac_actor_membership(p_company_id) as membership_id
+  ),
+  role_access as (
+    select access.*,
+      exists (
+        select 1
+        from public.membership_permission_overrides override
+        where override.membership_id = access.membership_id
+          and override.permission_code = requested.canonical_code
+          and override.enabled = false
+      ) as explicitly_denied,
+      exists (
+        select 1
+        from public.membership_permission_overrides override
+        where override.membership_id = access.membership_id
+          and override.permission_code = requested.canonical_code
+          and override.enabled = true
+      ) as explicitly_enabled,
+      exists (
+        select 1
+        from public.membership_role_assignments assignment
+        join public.app_role_permissions role_permission on role_permission.role_id = assignment.role_id
+        where assignment.membership_id = access.membership_id
+          and role_permission.permission_code = requested.canonical_code
+      ) as role_grant
+    from access cross join requested
+  ),
+  app_gate as (
+    select private.control_permission_app_key(p_permission) as app_key
+  )
+  select coalesce(role_access.company_active, false)
+    and (
+      role_access.platform_admin
+      or (
+        not private.rbac_is_platform_permission(requested.permission_code)
+        and (
+          role_access.actor_role = 'company_administrator'
+          or not private.rbac_is_invoice_permission(requested.canonical_code)
+          or (
+            private.rbac_permission_assignable(role_access.actor_role, requested.canonical_code)
+            and not role_access.explicitly_denied
+            and (role_access.explicitly_enabled or role_access.role_grant)
+          )
+        )
+      )
+    )
+    and (
+      app_gate.app_key is null
+      or role_access.platform_admin
+      or (
+        exists (
+          select 1 from public.company_app_entitlements entitlement
+          where entitlement.company_id = p_company_id
+            and entitlement.app_key = app_gate.app_key
+            and entitlement.enabled
+        )
+        and (
+          role_access.actor_role = 'company_administrator'
+          or exists (
+            select 1 from public.memberships membership
+            where membership.id = role_access.membership_id
+              and coalesce(membership.status, 'active') = 'active'
+              and not exists (
+                select 1 from public.membership_app_access access
+                where access.membership_id = membership.id
+                  and access.app_key = app_gate.app_key
+                  and access.enabled = false
+              )
+          )
+        )
+      )
+    )
+  from role_access cross join requested cross join app_gate;
+$function$
+
+;
+
+create or replace function private.bump_permission_cache()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  perform set_config('operix.pc_epoch', clock_timestamp()::text || random()::text, true);
+  return null;
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'companies', 'memberships', 'membership_permission_overrides', 'membership_role_assignments',
+    'membership_app_access', 'control_platform_admins', 'company_app_entitlements', 'app_role_permissions'
+  ] loop
+    execute format('drop trigger if exists operix_bump_permission_cache on public.%I', t);
+    execute format('create trigger operix_bump_permission_cache after insert or update or delete or truncate on public.%I for each statement execute function private.bump_permission_cache()', t);
+  end loop;
+end;
+$$;
+
+create or replace function private.has_company_permission(p_company_id uuid, p_permission text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  cache_key text;
+  cached text;
+  result boolean;
+begin
+  cache_key := 'operix.pc_' || md5(
+    coalesce(current_setting('operix.pc_epoch', true), '') || '|' ||
+    coalesce(current_setting('request.jwt.claims', true), '') || '|' ||
+    coalesce(p_company_id::text, '') || '|' || coalesce(p_permission, ''));
+  cached := current_setting(cache_key, true);
+  if cached is not null and cached <> '' then
+    return cached = 't';
+  end if;
+  result := private.has_company_permission_uncached(p_company_id, p_permission);
+  perform set_config(cache_key, case when result then 't' else 'f' end, true);
+  return result;
+end;
+$$;
