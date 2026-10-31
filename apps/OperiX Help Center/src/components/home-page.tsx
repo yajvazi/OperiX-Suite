@@ -33,7 +33,7 @@ export function HomePage({ locale }: { locale: Locale }) {
     { icon: <ShoppingCart size={22} />, title: sq ? "Pika e shitjes" : "Point of sale", text: sq ? "Shitje në banak, porosi të mbajtura, barkod dhe stok." : "Sell at the counter, hold orders, scan barcodes and track stock.", href: docsPath(locale, "invoice", "pos") },
     { icon: <ChartNoAxesCombined size={22} />, title: sq ? "Raporte dhe TVSH" : "Reports & VAT", text: sq ? "Libra shitjesh e blerjesh, fitim e humbje, libri i përgjithshëm." : "Sales and purchase registers, profit & loss and the ledger.", href: docsPath(locale, "invoice", "reports") },
     { icon: <Smartphone size={22} />, title: sq ? "Aplikacioni celular" : "Mobile app", text: sq ? "Përdorni OperiX në telefon: fatura, POS, skanim dhe përdorim pa internet." : "Use OperiX on your phone: invoices, POS, scanning and offline use.", href: docsPath(locale, "invoice", "mobile-app") },
-    { icon: <ServerCog size={22} />, title: sq ? "Vetë-strehimi" : "Self-hosting", text: sq ? "Ekzekutoni aplikacionin web me kod të hapur në serverin tuaj." : "Run the open-source web app on your own server.", href: docsPath(locale, "invoice", "self-hosting") },
+    { icon: <ServerCog size={22} />, title: sq ? "Hostim në serverin tuaj" : "Self-hosting", text: sq ? "Ekzekutoni aplikacionin web me kod të hapur në serverin tuaj." : "Run the open-source web app on your own server.", href: docsPath(locale, "invoice", "self-hosting") },
     { icon: <Code2 size={22} />, title: sq ? "API për zhvilluesit" : "API for developers", text: sq ? "Lidhni sistemet tuaja me OperiX Invoice." : "Connect your own systems to OperiX Invoice.", href: apiPath(locale) },
   ];
 

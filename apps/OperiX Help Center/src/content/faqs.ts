@@ -160,8 +160,8 @@ const source: FaqSource[] = [
     id: "self-host", category: "Invoice",
     q: { en: "Can I run OperiX Invoice on my own server?", sq: "A mund ta ekzekutoj OperiX Invoice në serverin tim?" },
     a: {
-      en: "The web app is open source and can be self-hosted. Today a self-hosted copy is meant for On this device storage with Supabase sign-in. See the Self-Hosting guides for requirements and limits.",
-      sq: "Aplikacioni web është me kod të hapur dhe mund të vetë-strehohet. Sot një kopje e vetë-strehuar është e menduar për ruajtjen Në këtë pajisje me hyrje Supabase. Shihni udhëzuesit e Vetë-strehimit për kërkesat dhe kufizimet.",
+      en: "Yes. The web app is open source (GNU AGPL-3.0) and free for as long as you host it yourself. The repository includes the database setup for a Supabase project, so you can store your data in your own cloud database or keep it in each browser. See the Self-Hosting guides for requirements and limits.",
+      sq: "Po. Aplikacioni web është me kod të hapur (GNU AGPL-3.0) dhe falas për sa kohë që e hostoni në serverin tuaj. Depoja përfshin ngritjen e bazës së të dhënave për një projekt Supabase, ndaj mund t’i ruani të dhënat në bazën tuaj cloud ose t’i mbani në çdo shfletues. Shihni udhëzuesit e hostimit në serverin tuaj për kërkesat dhe kufizimet.",
     },
   },
   {

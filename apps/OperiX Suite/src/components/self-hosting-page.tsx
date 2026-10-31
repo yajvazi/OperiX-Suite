@@ -1,11 +1,12 @@
+import Link from "next/link";
 import { Check, Github } from "lucide-react";
-import { getCopy, urls, type Lang } from "@/content/copy";
+import { getCopy, href, urls, type Lang } from "@/content/copy";
 import { Icon } from "./icons";
 import { Reveal } from "./reveal";
 
 export function SelfHostingPage({ lang }: { lang: Lang }) {
   const t = getCopy(lang).selfhosting;
-  const mail = `mailto:${urls.email}?subject=${encodeURIComponent(t.subject)}`;
+  const ask = `${href(lang, "/contact")}?topic=self-hosting`;
   return <>
     <section className="page-hero page-hero-selfhost">
       <div className="container center">
@@ -15,7 +16,7 @@ export function SelfHostingPage({ lang }: { lang: Lang }) {
         <p className="selfhost-free"><span className="pill pill-live">{t.hero.free}</span></p>
         <div className="button-row button-row-center">
           <a className="button button-lg" href={urls.repo} target="_blank" rel="noopener noreferrer"><Github size={18} /> {t.hero.github}</a>
-          <a className="button button-secondary button-lg" href={mail}>{t.hero.ask}</a>
+          <Link className="button button-secondary button-lg" href={ask}>{t.hero.ask}</Link>
         </div>
         <p className="fine-print">{t.hero.license}</p>
       </div>
@@ -66,7 +67,7 @@ export function SelfHostingPage({ lang }: { lang: Lang }) {
         <h2>{t.cta.title}</h2><p>{t.cta.sub}</p>
         <div className="button-row button-row-center">
           <a className="button button-light button-lg" href={urls.repo} target="_blank" rel="noopener noreferrer"><Github size={18} /> {t.cta.github}</a>
-          <a className="button button-secondary button-lg" href={mail}>{t.cta.ask}</a>
+          <Link className="button button-secondary button-lg" href={ask}>{t.cta.ask}</Link>
         </div>
       </div>
     </section>

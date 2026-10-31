@@ -6,7 +6,7 @@ services:
       args:
         INDEXING_ALLOWED: ${INDEXING_ALLOWED:-true}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://helpdesk.operixsuite.com}
-    image: operix-help-center:build-20261030-lang
+    image: operix-help-center:build-20261031-features
     container_name: operix-help-center
     restart: unless-stopped
     environment:

@@ -30,7 +30,7 @@ const categoryNamesSq: Record<string, string> = {
   "users-and-permissions": "Përdoruesit dhe lejet",
   notifications: "Njoftimet",
   "mobile-app": "Aplikacioni celular",
-  "self-hosting": "Vetë-strehimi",
+  "self-hosting": "Hostim në serverin tuaj",
   troubleshooting: "Zgjidhja e problemeve",
   faq: "Pyetje të shpeshta",
   bookings: "Rezervimet",

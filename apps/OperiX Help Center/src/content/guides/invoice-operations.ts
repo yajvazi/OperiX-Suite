@@ -294,7 +294,7 @@ export const operationsGuides: Article[] = guides([
         b.ul(["Mënyra Në këtë pajisje përdor një terminal të vetëm të quajtur Kjo pajisje. Nuk duhet konfiguruar asgjë.", "Në OperiX Cloud duhet të jetë aktiv një terminal POS para se të përfundoni ose mbani një shitje. Nëse nuk ka asnjë, shihni mesazhin që nuk është konfiguruar terminal aktiv. Zgjidhni së pari një terminal.", "Degët (Cilësimet → Degët dhe bankat) mbajnë stokun dhe numërimin për çdo lokacion."]),
         b.h2("receipts", "Kuponët"),
         b.p("Hapni faturën dhe zgjidhni Më shumë → Printo kuponin për printim në format kuponi, ose përdorni shabllonin Thermal Receipt te Cilësimet → Shabllonet e faturave. Printon shfletuesi, ndaj mund të përdorni çdo printer që e përdor kompjuteri juaj."),
-        b.tip("POS është i fshehur si parazgjedhje në versionin me kod të hapur dhe mund të aktivizohet me cilësimin NEXT_PUBLIC_POS_ENABLED. Shihni Vetë-strehimi."),
+        b.tip("POS është i fshehur si parazgjedhje në versionin me kod të hapur dhe mund të aktivizohet me cilësimin NEXT_PUBLIC_POS_ENABLED. Shihni Hostim në serverin tuaj."),
       ],
     },
   },

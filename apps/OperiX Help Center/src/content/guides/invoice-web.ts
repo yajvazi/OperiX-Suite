@@ -1,5 +1,6 @@
 import type { Article } from "../types";
 import { b, guides, type GuideInput } from "../author";
+import { general } from "./links";
 
 /**
  * Hand-written Web guides for OperiX Invoice. They replace the placeholder Web articles of the generated catalog and keep
@@ -39,12 +40,17 @@ const part1: GuideInput[] = [
           { title: "Confirm your email.", text: "When email confirmation is required you will see “Check your email to confirm your OperiX account.” Open the message and follow the link; it returns you to the app signed in." },
         ]),
         b.h2("sign-in", "Sign in"),
+        b.p("Sign-in starts with your email and a 6-digit code that is sent to you. You do not need your password, but signing in with a password still works."),
         b.steps([
           { title: "Open the sign-in page.", text: "Go to /login. The page is titled “Sign in to Invoice”." },
-          { title: "Enter your Email address and Password.", text: "OperiX remembers your email address in this browser so you do not have to type it again next time. Your password is never stored." },
-          { title: "Select Sign in.", text: "You land on Home. If you were sent to the sign-in page from another screen, you return to that screen after signing in." },
+          { title: "Enter your Email address.", text: "OperiX remembers your email address in this browser so you do not have to type it again next time." },
+          { title: "Select Send me a code, or press Enter.", text: "A message titled “Your OperiX sign-in code” arrives with a 6-digit code." },
+          { title: "Enter the code.", text: "The page signs you in on the sixth digit. You can also select Verify code. You land on Home, or on the screen you were sent from." },
         ]),
-        b.p("If the email or password is wrong, the page shows “The email or password you entered is incorrect.” For security the message does not say which of the two is wrong."),
+        b.h3("sign-in-password", "Sign in with a password instead"),
+        b.p("Select Sign in with a password under the button, enter your Email address and Password, and select Sign in. Select Use an emailed code instead to go back."),
+        b.p("If the code is wrong or has expired the page shows “The code is incorrect or has expired.” If the address has no account it shows “There is no account with this email. Create one below.” With a password, a wrong email or password shows “The email or password you entered is incorrect.”; for security the message does not say which of the two is wrong."),
+        b.link("Sign in with an emailed code", "Details, limits and tips.", general("en", "sign-in-with-an-emailed-code")),
         b.h2("reset-password", "Forgot your password"),
         b.steps([
           { title: "Select “Forgot password?” on the sign-in page." },
@@ -77,7 +83,7 @@ const part1: GuideInput[] = [
       ],
       sq: [
         b.h2("overview", "Përmbledhje"),
-        b.p("Me një llogari OperiX hyni në OperiX Invoice në web dhe në telefon. Aplikacioni web ndodhet te invoice.operixsuite.com (ose te adresa e instalimit tuaj, nëse e strehoni vetë). Ky udhëzues përfshin çdo ekran që hasni para se të arrini te Ballina."),
+        b.p("Me një llogari OperiX hyni në OperiX Invoice në web dhe në telefon. Aplikacioni web ndodhet te invoice.operixsuite.com (ose te adresa e instalimit tuaj, nëse e hostoni në serverin tuaj). Ky udhëzues përfshin çdo ekran që hasni para se të arrini te Ballina."),
         b.note("Hyrja kërkohet në të dyja mënyrat e ruajtjes. Edhe nëse të dhënat e biznesit mbahen “Në këtë pajisje”, llogaria vetëm vërteton kush ka hyrë; nuk dërgon të dhënat e biznesit në cloud. Shihni “Zgjidhni ku ruhen të dhënat” te Fillimi."),
         b.h2("create-account", "Krijoni një llogari"),
         b.steps([
@@ -87,12 +93,17 @@ const part1: GuideInput[] = [
           { title: "Konfirmoni emailin.", text: "Kur kërkohet konfirmimi, shihni “Kontrolloni emailin për të konfirmuar llogarinë tuaj OperiX.” Hapni mesazhin dhe ndiqni lidhjen; ajo ju kthen në aplikacion të hyrë." },
         ]),
         b.h2("sign-in", "Hyni"),
+        b.p("Hyrja fillon me emailin tuaj dhe një kod 6-shifror që ju dërgohet. Nuk ju duhet fjalëkalimi, por hyrja me fjalëkalim vazhdon të punojë."),
         b.steps([
           { title: "Hapni faqen e hyrjes.", text: "Shkoni te /login. Faqja titullohet “Hyni në Invoice”." },
-          { title: "Shkruani Adresën e emailit dhe Fjalëkalimin.", text: "OperiX e mban mend adresën e emailit në këtë shfletues, që të mos e shkruani sërish herën tjetër. Fjalëkalimi nuk ruhet kurrë." },
-          { title: "Zgjidhni Hyr.", text: "Arrini te Ballina. Nëse u ridrejtuat te faqja e hyrjes nga një ekran tjetër, pas hyrjes ktheheni te ai ekran." },
+          { title: "Shkruani Adresën e emailit.", text: "OperiX e mban mend adresën e emailit në këtë shfletues, që të mos e shkruani sërish herën tjetër." },
+          { title: "Zgjidhni Dërgo kodin, ose shtypni Enter.", text: "Mbërrin një mesazh me titull “Your OperiX sign-in code” me një kod 6-shifror." },
+          { title: "Shkruani kodin.", text: "Faqja ju fut në shifrën e gjashtë. Mund të zgjidhni edhe Verifiko kodin. Arrini te Ballina, ose te ekrani nga ku u dërguat." },
         ]),
-        b.p("Nëse emaili ose fjalëkalimi është i gabuar, faqja shfaq “Emaili ose fjalëkalimi që shkruat është i pasaktë.” Për siguri, mesazhi nuk tregon cili nga të dy është i gabuar."),
+        b.h3("sign-in-password", "Hyni me fjalëkalim në vend të kodit"),
+        b.p("Zgjidhni Hyr me fjalëkalim nën butonin, shkruani Adresën e emailit dhe Fjalëkalimin, dhe zgjidhni Hyr. Zgjidhni Hyr me kod me email për t’u kthyer."),
+        b.p("Nëse kodi është i gabuar ose ka skaduar, faqja shfaq “Kodi është i pasaktë ose ka skaduar.” Nëse adresa nuk ka llogari shfaq “Nuk ka llogari me këtë email. Krijoni një llogari më poshtë.” Me fjalëkalim, një email ose fjalëkalim i gabuar shfaq “Emaili ose fjalëkalimi që shkruat është i pasaktë.”; për siguri, mesazhi nuk tregon cili nga të dy është i gabuar."),
+        b.link("Hyni me një kod me email", "Detaje, kufizime dhe këshilla.", general("sq", "sign-in-with-an-emailed-code")),
         b.h2("reset-password", "Keni harruar fjalëkalimin"),
         b.steps([
           { title: "Zgjidhni “Keni harruar fjalëkalimin?” te faqja e hyrjes." },
@@ -115,7 +126,7 @@ const part1: GuideInput[] = [
         b.p("Hapni butonin e rrumbullakët të profilit lart djathtas (ose pjesën e profilit në fund të shiritit anësor) dhe zgjidhni Dil. Në një kompjuter të përbashkët gjithmonë dilni. Në mënyrën “Në këtë pajisje”, të dhënat e biznesit mbeten në shfletues edhe pas daljes."),
         b.h2("messages", "Mesazhet që mund të shihni"),
         b.table(["Mesazhi", "Çfarë do të thotë dhe çfarë të bëni"], [
-          ["Hyrja nuk është e disponueshme në këtë mjedis. Ju lutem kontaktoni administratorin.", "Instalimi nuk ka shërbim hyrjeje të konfiguruar. Nëse e strehoni vetë OperiX, kontrolloni cilësimet e Supabase në skedarin e mjedisit."],
+          ["Hyrja nuk është e disponueshme në këtë mjedis. Ju lutem kontaktoni administratorin.", "Instalimi nuk ka shërbim hyrjeje të konfiguruar. Nëse e hostoni OperiX në serverin tuaj, kontrolloni cilësimet e Supabase në skedarin e mjedisit."],
           ["Vërtetimi është përkohësisht i padisponueshëm. Ju lutem provoni përsëri pas pak.", "Problem i përkohshëm lidhjeje. Prisni pak dhe provoni sërish."],
           ["Sesioni juaj ka skaduar. Ju lutem hyni përsëri.", "Ju kanë nxjerrë jashtë. Hyni sërish; të dhënat nuk humbin."],
           ["Nuk mundëm ta krijonim llogarinë tuaj. Ju lutem kontrolloni të dhënat dhe provoni përsëri.", "Kontrolloni që emaili është i vlefshëm dhe fjalëkalimi ka të paktën 6 karaktere."],
@@ -2084,7 +2095,7 @@ const part4: GuideInput[] = [
         b.h2("sign-in", "Hyrja"),
         b.table(["Problemi", "Çfarë të bëni"], [
           ["“Emaili ose fjalëkalimi që shkruat është i pasaktë.”", "Kontrolloni për gabime shkrimi dhe caps lock. Përdorni Keni harruar fjalëkalimin? për të caktuar një të ri."],
-          ["“Hyrja nuk është e disponueshme në këtë mjedis.”", "Instalimit i mungon shërbimi i hyrjes. Kontaktoni administratorin (ose kontrolloni cilësimet e Supabase nëse e strehoni vetë)."],
+          ["“Hyrja nuk është e disponueshme në këtë mjedis.”", "Instalimit i mungon shërbimi i hyrjes. Kontaktoni administratorin (ose kontrolloni cilësimet e Supabase nëse e hostoni në serverin tuaj)."],
           ["“Sesioni juaj ka skaduar. Ju lutem hyni përsëri.”", "Hyni sërish. Të dhënat nuk humbin."],
           ["Lidhja e ftesës nuk punon", "Mund të ketë skaduar. Kërkojini administratorit një ftesë të re."],
         ]),

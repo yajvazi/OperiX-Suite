@@ -5,7 +5,7 @@ import { b, guides } from "../author";
  * Additional OperiX Booking guides (English and Albanian). OperiX Booking is not open yet, so every guide
  * describes what the product does and avoids pricing, trials and purchasing. Labels follow the Booking apps.
  */
-const SUPPORT_EMAIL = "support@operixinvoice.com";
+const SUPPORT_EMAIL = "support@operixsuite.com";
 
 export const bookingExtraGuides: Article[] = guides([
   // ───────────────────────── Getting started ─────────────────────────

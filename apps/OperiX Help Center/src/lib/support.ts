@@ -3,7 +3,7 @@ export function supportUrl() {
 }
 
 /** Where people can write to the OperiX team. */
-export const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "support@operixinvoice.com";
+export const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "support@operixsuite.com";
 
 export function supportMailto(subject: string) {
   return `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}`;

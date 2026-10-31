@@ -1,6 +1,7 @@
 import type { Article } from "../types";
 import { billingGuides } from "./invoice-billing";
 import { mobileSelfHostGuides } from "./invoice-mobile-selfhost";
+import { newFeatureGuides } from "./invoice-new-features";
 import { operationsGuides } from "./invoice-operations";
 import { storageGuides } from "./invoice-storage";
 import { troubleshootingGuides } from "./invoice-troubleshooting";
@@ -11,5 +12,6 @@ export const invoiceGuides: Article[] = [
   ...billingGuides,
   ...operationsGuides,
   ...mobileSelfHostGuides,
+  ...newFeatureGuides,
   ...troubleshootingGuides,
 ];

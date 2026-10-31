@@ -5,7 +5,7 @@ export const urls = {
   signIn: process.env.NEXT_PUBLIC_OPERIX_SIGN_IN_URL ?? "https://invoice.operixsuite.com/login",
   app: process.env.NEXT_PUBLIC_OPERIX_INVOICE_URL ?? "https://invoice.operixsuite.com",
   help: "https://helpdesk.operixsuite.com",
-  email: "support@operixinvoice.com",
+  email: "support@operixsuite.com",
   repo: "https://github.com/yajvazi/operix-invoice-web",
 };
 
@@ -90,7 +90,7 @@ export type Copy = {
   contact: {
     hero: { title: string; sub: string };
     cards: { title: string; text: string; cta: string; href: string }[];
-    form: { name: string; email: string; topic: string; topics: string[]; message: string; send: string; note: string; subject: string };
+    form: { name: string; email: string; topic: string; topics: string[]; message: string; send: string; note: string; subject: string; fallback: string };
   };
   selfhosting: SelfHostingCopy;
   footer: { tagline: string; product: string; company: string; legal: string; links: { invoice: string; booking: string; pricing: string; selfhost: string; help: string; contact: string; privacy: string; terms: string; signIn: string }; rights: string; made: string };
@@ -311,7 +311,7 @@ const en: Copy = {
       { title: "Help Center", text: "Guides and answers for getting set up and using OperiX.", cta: "Open the Help Center", href: urls.help },
       { title: "Email us", text: "Write to us about pricing, setup or anything else.", cta: urls.email, href: `mailto:${urls.email}` },
     ],
-    form: { name: "Your name", email: "Your email", topic: "Topic", topics: ["OperiX Invoice", "Pricing", "OperiX Booking", "Something else"], message: "How can we help?", send: "Send by email", note: "This opens your email app with your message ready to send.", subject: "OperiX enquiry" },
+    form: { name: "Your name", email: "Your email", topic: "Topic", topics: ["OperiX Invoice", "Pricing", "Self-hosting", "OperiX Booking", "Something else"], message: "How can we help?", send: "Send by email", note: "This opens your email app with your message ready to send.", subject: "OperiX enquiry", fallback: "If your email app did not open, write to us at" },
   },
   selfhosting: {
     meta: { title: "Self-hosting OperiX Invoice", description: "OperiX Invoice is open source. Host it on your own server, keep every record under your control and connect the mobile app. Free for as long as you want." },
@@ -622,7 +622,7 @@ const sq: Copy = {
       { title: "Qendra e ndihmës", text: "Udhëzime dhe përgjigje për konfigurimin dhe përdorimin e OperiX.", cta: "Hapni qendrën e ndihmës", href: urls.help },
       { title: "Shkruani në email", text: "Na shkruani për çmimet, konfigurimin ose çdo gjë tjetër.", cta: urls.email, href: `mailto:${urls.email}` },
     ],
-    form: { name: "Emri juaj", email: "Email-i juaj", topic: "Tema", topics: ["OperiX Invoice", "Çmimet", "OperiX Booking", "Diçka tjetër"], message: "Si mund t'ju ndihmojmë?", send: "Dërgo me email", note: "Kjo hap aplikacionin tuaj të email-it me mesazhin gati për dërgim.", subject: "Pyetje për OperiX" },
+    form: { name: "Emri juaj", email: "Email-i juaj", topic: "Tema", topics: ["OperiX Invoice", "Çmimet", "Hostim në serverin tuaj", "OperiX Booking", "Diçka tjetër"], message: "Si mund t'ju ndihmojmë?", send: "Dërgo me email", note: "Kjo hap aplikacionin tuaj të email-it me mesazhin gati për dërgim.", subject: "Pyetje për OperiX", fallback: "Nëse aplikacioni juaj i email-it nuk u hap, na shkruani te" },
   },
   selfhosting: {
     meta: { title: "Hostimi i OperiX Invoice në serverin tuaj", description: "OperiX Invoice është me kod të hapur. Hostojeni në serverin tuaj, mbani çdo regjistrim nën kontrollin tuaj dhe lidhni aplikacionin celular. Falas për sa kohë që e doni." },
@@ -681,7 +681,7 @@ const sq: Copy = {
       ],
     },
     license: { title: "Licenca e kodit të hapur", text: "OperiX Invoice është i licencuar nën GNU AGPL-3.0. Mund ta përdorni, studioni dhe ndryshoni lirisht. Nëse ekzekutoni një version të ndryshuar si shërbim për persona të tjerë, duhet t'u ofroni atyre kodin burimor të ndryshimeve tuaja." },
-    cta: { title: "Gati ta hostoni në serverin tuaj?", sub: "Lexoni udhëzuesin, merrni kodin, ose na shkruani nëse doni ndihmë me ngritjen.", github: "Hapni depon", ask: "Pyesni për hostim në serverin tuaj" },
+    cta: { title: "Gati ta hostoni në serverin tuaj?", sub: "Lexoni udhëzuesin, merrni kodin, ose na shkruani nëse doni ndihmë me ngritjen.", github: "Hostoje", ask: "Pyesni për hostim në serverin tuaj" },
     subject: "Hostimi i OperiX Invoice në serverin tuaj",
   },
   footer: {
