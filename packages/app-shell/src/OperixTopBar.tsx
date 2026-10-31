@@ -8,6 +8,8 @@ export type OperixAppSwitcherItem = {
   href?: string;
   current?: boolean;
   available?: boolean;
+  /** Shown instead of "Unavailable" when `available` is false, for example "In development". */
+  unavailableLabel?: string;
   locked?: boolean;
   lockedHref?: string;
   lockedLabel?: string;
@@ -33,7 +35,7 @@ function defaultLink({ href, className, children, onClick, "aria-label": ariaLab
 
 export function OperixAppSwitcher({ apps = [] }: { apps?: OperixAppSwitcherItem[] }) {
   const [open, setOpen] = React.useState(false);
-  return <div className="operix-shared-topbar-app-switcher"><button type="button" className="operix-shared-app-switcher-button" aria-expanded={open} aria-label="Open OperiX application switcher" onClick={() => setOpen((value) => !value)}><Grid2X2 size={17} /><span>Apps</span><ChevronDown size={14} /></button>{open ? <div className="operix-shared-topbar-popover" role="menu">{apps.map((app) => app.available === false ? <span key={app.id} className="operix-shared-app-link is-disabled"><span className="operix-shared-app-icon">{app.icon}</span><span>{app.label}</span><small>Unavailable</small></span> : app.locked ? <a key={app.id} href={app.lockedHref || app.href || "#"} className="operix-shared-app-link is-locked" onClick={() => setOpen(false)} aria-label={`${app.label} — Enterprise access required`}>{app.icon ? <span className="operix-shared-app-icon">{app.icon}</span> : null}<span>{app.label}</span><small>{app.lockedLabel || "Enterprise"}</small></a> : <a key={app.id} href={app.href || "#"} className={`operix-shared-app-link ${app.current ? "is-current" : ""}`} onClick={() => setOpen(false)}>{app.icon ? <span className="operix-shared-app-icon">{app.icon}</span> : null}<span>{app.label}</span>{app.current ? <span className="operix-shared-app-current-dot" /> : null}</a>)}</div> : null}</div>;
+  return <div className="operix-shared-topbar-app-switcher"><button type="button" className="operix-shared-app-switcher-button" aria-expanded={open} aria-label="Open OperiX application switcher" onClick={() => setOpen((value) => !value)}><Grid2X2 size={17} /><span>Apps</span><ChevronDown size={14} /></button>{open ? <div className="operix-shared-topbar-popover" role="menu">{apps.map((app) => app.available === false ? <span key={app.id} className="operix-shared-app-link is-disabled"><span className="operix-shared-app-icon">{app.icon}</span><span>{app.label}</span><small>{app.unavailableLabel || "Unavailable"}</small></span> : app.locked ? <a key={app.id} href={app.lockedHref || app.href || "#"} className="operix-shared-app-link is-locked" onClick={() => setOpen(false)} aria-label={`${app.label} — Enterprise access required`}>{app.icon ? <span className="operix-shared-app-icon">{app.icon}</span> : null}<span>{app.label}</span><small>{app.lockedLabel || "Enterprise"}</small></a> : <a key={app.id} href={app.href || "#"} className={`operix-shared-app-link ${app.current ? "is-current" : ""}`} onClick={() => setOpen(false)}>{app.icon ? <span className="operix-shared-app-icon">{app.icon}</span> : null}<span>{app.label}</span>{app.current ? <span className="operix-shared-app-current-dot" /> : null}</a>)}</div> : null}</div>;
 }
 
 export function OperixNotifications({ count = 0, label = "Notifications", onClick, children }: { count?: number; label?: string; onClick?: () => void; children?: ReactNode }) {

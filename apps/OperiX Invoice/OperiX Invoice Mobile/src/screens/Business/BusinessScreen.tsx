@@ -16,13 +16,14 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AlertTriangle, ArrowRightLeft, Banknote, Box, Building2, Check, ChevronDown, ChevronRight, CircleDollarSign, Package, Plus, QrCode, Receipt, Search, Tag, Truck, WalletCards, X } from 'lucide-react-native';
+import { AlertTriangle, ArrowRightLeft, Banknote, Box, Building2, Check, ChevronDown, ChevronRight, CircleDollarSign, Package, Plus, QrCode, Receipt, Search, Tag, Trash2, Truck, Users, WalletCards, X } from 'lucide-react-native';
 import { SvgXml } from 'react-native-svg';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { formatCurrency, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { serviceIconNameFromValue, serviceIconSvg } from '@invoice-monorepo/invoice-template';
 import { getPreferredBranchId, listBranches, listProductBranchStock, supabase, transferProductBranchStock } from '@invoice-monorepo/api';
 import * as Crypto from 'expo-crypto';
+import { getDataStore } from '../../services/dataStore';
 import { brand, getPalette } from '../../theme/brand';
 import { getActiveTenantCompanyIds, getWorkspaceScope, hasWorkspacePermission, scopedResource } from '../../services/workspace';
 import { activeLocalStore } from '../../services/localMode';
@@ -36,8 +37,9 @@ import {
     MobileScreen,
     SearchField,
 } from '../../components/mobile/MobileUI';
+import { ModalBackdrop } from '../../components/mobile/ModalBackdrop';
 
-type BusinessSection = 'products' | 'inventory' | 'expenses' | 'vendors' | 'income';
+type BusinessSection = 'products' | 'inventory' | 'expenses' | 'vendors' | 'income' | 'clients';
 type BusinessItem = Record<string, any>;
 
 const sections: Array<{ key: BusinessSection; labelKey: TranslationKey; icon: React.ComponentType<{ color?: string; size?: number }>; permission: string }> = [
@@ -46,6 +48,7 @@ const sections: Array<{ key: BusinessSection; labelKey: TranslationKey; icon: Re
     { key: 'expenses', labelKey: 'expenses', icon: WalletCards, permission: 'expense.view_own' },
     { key: 'vendors', labelKey: 'vendors', icon: Truck, permission: 'expense.view_all' },
     { key: 'income', labelKey: 'incomePayment', icon: CircleDollarSign, permission: 'payment.view' },
+    { key: 'clients', labelKey: 'clients', icon: Users, permission: 'customer.view' },
 ];
 
 export function BusinessScreen() {
@@ -100,14 +103,16 @@ export function BusinessScreen() {
             const local = await activeLocalStore();
             if (local) {
                 // On the device: plain records, no branches or branch stock.
-                const table = section === 'vendors' ? 'vendors' : section === 'expenses' || section === 'income' ? 'expenses' : 'products';
+                const table = section === 'clients' ? 'clients' : section === 'vendors' ? 'vendors' : section === 'expenses' || section === 'income' ? 'expenses' : 'products';
                 let rows = await local.list(table, { orderBy: table === 'expenses' ? '-date' : 'name', limit: 80 });
                 if (table === 'expenses') rows = rows.filter((row) => (section === 'income' ? row.type === 'income' : row.type !== 'income'));
                 setItems(rows as unknown as BusinessItem[]);
                 return;
             }
             let result;
-            if (section === 'vendors') {
+            if (section === 'clients') {
+                result = await supabase.from('clients').select('id,name,email,phone,city,discount_percent,created_at').or(scope).order('name').limit(300);
+            } else if (section === 'vendors') {
                 result = await supabase.from('vendors').select('id,name,email,phone,city,created_at').or(scope).order('name').limit(80);
             } else if (section === 'expenses' || section === 'income') {
                 result = await supabase.from('expenses').select('id,amount,category,description,date,type,vendor_name,invoice_number,created_at').or(scope).eq('type', section === 'income' ? 'income' : 'expense').order('date', { ascending: false }).limit(80);
@@ -156,16 +161,17 @@ export function BusinessScreen() {
         const query = search.trim().toLowerCase();
         return items.filter((item) => {
             if (section === 'inventory' && !item.track_stock) return false;
-            const itemCategory = section === 'vendors' ? item.city : item.category;
+            const itemCategory = section === 'vendors' || section === 'clients' ? item.city : item.category;
             if (categoryFilter !== 'ALL' && itemCategory !== categoryFilter) return false;
             if (!query) return true;
-            return [item.name, item.category, item.sku, item.barcode, item.description, item.vendor?.name, item.email].filter(Boolean).join(' ').toLowerCase().includes(query);
+            return [item.name, item.category, item.sku, item.barcode, item.description, item.vendor?.name, item.email, item.phone, item.city].filter(Boolean).join(' ').toLowerCase().includes(query);
         });
     }, [categoryFilter, items, search, section]);
 
     const openCreate = () => {
         if (section === 'income') return;
         if ((section === 'products' || section === 'inventory') && can('product.create')) navigation.navigate('ProductForm');
+        else if (section === 'clients' && can('customer.create')) navigation.navigate('ClientForm');
         else if (section === 'vendors' && can('expense.manage')) navigation.navigate('VendorForm');
         else if (section === 'expenses' && can('expense.create')) navigation.navigate('ExpenseForm', { type: 'expense' });
     };
@@ -292,13 +298,55 @@ export function BusinessScreen() {
         <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('VendorForm', { vendorId: item.id })} style={[styles.listCard, { backgroundColor: palette.surface, borderColor: palette.border }]}><View style={styles.rowTop}><View style={[styles.iconBox, { backgroundColor: '#EAF2FF' }]}><Building2 color={brand.colors.primary} size={18} /></View><View style={styles.copy}><Text style={[styles.primary, { color: palette.text }]}>{item.name}</Text><Text style={[styles.secondary, { color: palette.muted }]} numberOfLines={1}>{item.email || item.phone || item.city || t('noContactDetailsYet', language)}</Text></View><ChevronRight color={palette.muted} size={18} /></View></TouchableOpacity>
     );
 
-    const renderItem = ({ item }: { item: BusinessItem }) => section === 'vendors' ? renderVendor(item) : section === 'expenses' || section === 'income' ? renderExpense(item) : renderProduct(item);
+    const confirmDeleteClient = (item: BusinessItem) => Alert.alert(
+        t('delete', language),
+        t('deleteClientConfirmation', language),
+        [
+            { text: t('cancel', language), style: 'cancel' },
+            {
+                text: t('delete', language),
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        if (!user?.id) throw new Error(t('loginRequired', language));
+                        const store = await getDataStore(user.id);
+                        await store.remove('clients', String(item.id));
+                        setItems((current) => current.filter((client) => client.id !== item.id));
+                    } catch (deleteError) {
+                        Alert.alert(t('error', language), deleteError instanceof Error ? deleteError.message : t('failedToDeleteClient', language));
+                    }
+                },
+            },
+        ],
+    );
+
+    const renderClient = (item: BusinessItem) => (
+        <View style={[styles.listCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <View style={styles.rowTop}>
+                <TouchableOpacity testID={`business-client-${item.id}`} accessibilityRole="button" onPress={() => navigation.navigate('ClientForm', { clientId: item.id })} style={[styles.rowTop, { flex: 1 }]}>
+                    <View style={[styles.iconBox, { backgroundColor: '#EAF2FF' }]}><Text style={{ color: brand.colors.primary, fontFamily: brand.fonts.semibold, fontSize: 15 }}>{String(item.name || '?').charAt(0).toUpperCase()}</Text></View>
+                    <View style={styles.copy}>
+                        <Text style={[styles.primary, { color: palette.text }]} numberOfLines={1}>{item.name}</Text>
+                        <Text style={[styles.secondary, { color: palette.muted }]} numberOfLines={1}>{[item.email, item.phone, item.city].filter(Boolean).join(' · ') || t('noContactDetailsYet', language)}</Text>
+                    </View>
+                    <ChevronRight color={palette.muted} size={18} />
+                </TouchableOpacity>
+                {can('customer.delete') ? (
+                    <TouchableOpacity testID={`business-client-delete-${item.id}`} accessibilityRole="button" accessibilityLabel={t('delete', language)} onPress={() => confirmDeleteClient(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.rowAction}>
+                        <Trash2 color={brand.colors.error} size={18} />
+                    </TouchableOpacity>
+                ) : null}
+            </View>
+        </View>
+    );
+
+    const renderItem = ({ item }: { item: BusinessItem }) => section === 'clients' ? renderClient(item) : section === 'vendors' ? renderVendor(item) : section === 'expenses' || section === 'income' ? renderExpense(item) : renderProduct(item);
     const productSection = section === 'products' || section === 'inventory';
     const selectedSection = sections.find((item) => item.key === section) || sections[0];
     const SelectedSectionIcon = selectedSection.icon;
     const categoryFilters = useMemo(() => {
         const values = items
-            .map((item) => section === 'vendors' ? item.city : item.category)
+            .map((item) => section === 'vendors' || section === 'clients' ? item.city : item.category)
             .filter((value): value is string => Boolean(value));
         return ['ALL', ...Array.from(new Set(values))];
     }, [items, section]);
@@ -381,7 +429,7 @@ export function BusinessScreen() {
             </View>
             </KeyboardAvoidingView>
             <Modal visible={showStockTransfer} transparent animationType="slide" onRequestClose={() => setShowStockTransfer(false)}>
-                <View style={[styles.transferModalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.5)' }]}>
+                <View style={[styles.transferModalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.78)' : 'rgba(0,0,0,0.5)' }]}><ModalBackdrop onPress={() => setShowStockTransfer(false)} />
                     <View style={[styles.transferModalSheet, { backgroundColor: palette.surface }]}>
                         <View style={[styles.transferModalHeader, { borderBottomColor: palette.border }]}>
                             <View style={[styles.transferHeaderIcon, { backgroundColor: `${primaryColor}18` }]}><ArrowRightLeft color={primaryColor} size={20} /></View>
@@ -556,6 +604,7 @@ const styles = StyleSheet.create({
     listCard: { borderWidth: 1, borderRadius: 17, padding: 14, marginBottom: 9 },
     rowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     rowBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(148,163,184,0.16)' },
+    rowAction: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
     iconBox: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     copy: { flex: 1 },
     primary: { fontSize: 14, fontFamily: brand.fonts.semibold },

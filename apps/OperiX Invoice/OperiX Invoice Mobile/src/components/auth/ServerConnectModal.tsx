@@ -7,6 +7,7 @@ import { PlaceholderInput } from './PlaceholderInput';
 import { BarcodeScannerModal } from '../mobile/BarcodeScannerModal';
 import { brand, getPalette } from '../../theme/brand';
 import { connectToServer, disconnectServer, getConnectedServer, lookUpServer } from '../../services/serverConnection';
+import { ModalBackdrop } from '../mobile/ModalBackdrop';
 
 const copy = {
     en: {
@@ -84,7 +85,7 @@ export function ServerConnectModal({ visible, initialAddress, onClose }: { visib
     };
 
     return <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}><ModalBackdrop onPress={onClose} />
             <View style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={styles.header}>
                     <Server color={primaryColor} size={20} />

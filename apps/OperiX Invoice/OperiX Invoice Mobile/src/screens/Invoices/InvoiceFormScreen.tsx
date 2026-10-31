@@ -56,7 +56,7 @@ import { Invoice, InvoiceItem, Client, Product, Profile, PaymentMethod } from '@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { formatCurrency, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { calculateInvoice } from '@invoice-monorepo/money';
-import { applySalesBookAmendment, buildSalesBookAmendmentPayload, completePosSale, getInvoice, getPreferredBranchId, listBranches, listCustomers, listInvoices, listProductBranchStock, listProducts, saveCustomerPayment, saveInvoiceDocument, setInvoiceBranch, setInvoiceDeliveryDetails, setInvoiceProductPictures, type InvoiceDraftInput } from '@invoice-monorepo/api/repositories';
+import { applySalesBookAmendment, buildSalesBookAmendmentPayload, completePosSale, getAgentSignature, getInvoice, getPreferredBranchId, listBranches, listCustomers, listInvoices, listProductBranchStock, listProducts, saveCustomerPayment, saveInvoiceDocument, setInvoiceBranch, setInvoiceDeliveryDetails, setInvoiceProductPictures, type InvoiceDraftInput } from '@invoice-monorepo/api/repositories';
 import type { CommercialDocumentType } from '@invoice-monorepo/commercial-documents';
 import {
     COMMERCIAL_DOCUMENT_TYPES,
@@ -73,6 +73,7 @@ import { openExternalLink } from '../../services/externalLinks';
 import { getHelpdeskArticleUrl } from '../../services/helpDocumentation';
 import { mobileCacheKey, readMobileCache, writeMobileCache } from '../../services/mobileCache';
 import * as Crypto from 'expo-crypto';
+import { ModalBackdrop } from '../../components/mobile/ModalBackdrop';
 interface InvoiceFormScreenProps {
     navigation: any;
     route: any;
@@ -243,6 +244,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             void refreshClients();
         }, [user?.id, loading])
     );
+    // A customer created from this form's picker comes back as a route param: select it as soon as the list has it.
+    useEffect(() => {
+        const createdId = route.params?.createdClientId as string | undefined;
+        if (!createdId) return;
+        const created = clients.find((client) => client.id === createdId);
+        if (!created) return;
+        setSelectedClient(created);
+        setLinkedSourceDocumentId(null);
+        setDiscount(created.discount_percent ? (wholePercentageText(String(created.discount_percent)) || '0') : '0');
+        navigation.setParams({ createdClientId: undefined });
+    }, [clients, route.params?.createdClientId]);
     const refreshClients = async () => {
         if (!user) return;
         try {
@@ -976,6 +988,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             || String((user as any)?.user_metadata?.full_name || '').trim()
             || [String((user as any)?.user_metadata?.first_name || ''), String((user as any)?.user_metadata?.last_name || '')].filter(Boolean).join(' ').trim();
 
+        // The agent's own signature signs the document; the company signature is the fallback.
+        let agentSignature: string | null = null;
+        if (companyId && user?.id) {
+            try { agentSignature = await getAgentSignature(supabase, companyId, user.id); } catch { agentSignature = null; }
+        }
+
         // Mock invoice data for preview
         const invoiceData: any = {
             company: {
@@ -985,7 +1003,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 country: profile?.country || '',
                 email: profile?.email || '',
                 phone: profile?.phone || '',
-                signatureUrl: profile?.signature_url,
+                signatureUrl: agentSignature || profile?.signature_url,
                 stampUrl: profile?.stamp_url,
                 logoUrl: profile?.logo_url,
                 bankName: profile?.bank_name,
@@ -1817,7 +1835,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             </Modal>
             {/* Client Picker Modal */}
             <Modal visible={showClientPicker} animationType="slide" transparent onRequestClose={closeClientPicker}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}><ModalBackdrop onPress={closeClientPicker} />
                                         <View style={[styles.modalContent, styles.modalContentTall, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('selectCustomer', language)}</Text>
@@ -1838,6 +1856,18 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     onChangeText={setClientSearch}
                                 />
                             </View>
+                            <TouchableOpacity
+                                testID="invoice-create-customer-button"
+                                accessibilityRole="button"
+                                style={[styles.modalAddNew, { borderColor: primaryColor, marginTop: 0, marginBottom: 10 }]}
+                                onPress={() => {
+                                    closeClientPicker();
+                                    navigation.navigate('ClientForm', { returnTo: 'InvoiceForm' });
+                                }}
+                            >
+                                <Plus color={primaryColor} size={20} />
+                                <Text style={{ color: primaryColor, fontWeight: '600', marginLeft: 8 }}>{t('createNewCustomer', language)}</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 testID="invoice-walk-in-customer-option"
                                 style={[styles.modalItem, { borderBottomColor: borderColor }]}
@@ -1884,25 +1914,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     {selectedClient?.id === client.id && <Check color={primaryColor} size={20} />}
                                 </TouchableOpacity>
                             ))}
-                            <TouchableOpacity
-                                testID="invoice-create-customer-button"
-                                accessibilityRole="button"
-                                style={[styles.modalAddNew, { borderColor: primaryColor }]}
-                                onPress={() => {
-                                    closeClientPicker();
-                                    navigation.navigate('ClientForm');
-                                }}
-                            >
-                                <Plus color={primaryColor} size={20} />
-                                <Text style={{ color: primaryColor, fontWeight: '600', marginLeft: 8 }}>{t('createNewCustomer', language)}</Text>
-                            </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
             {/* Store pickup location picker */}
             <Modal visible={showPickupBranchPicker} animationType="slide" transparent onRequestClose={() => setShowPickupBranchPicker(false)}>
-                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}><ModalBackdrop onPress={() => setShowPickupBranchPicker(false)} />
                     <View style={[styles.modalContent, styles.branchPickerContent, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                         <Text style={[styles.modalTitle, { color: textColor }]}>{language === 'sq' ? 'Zgjidhni degën' : 'Select branch'}</Text>
@@ -1945,7 +1963,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             </Modal>
             {/* Related commercial document picker */}
             <Modal visible={showLinkedDocumentPicker} animationType="slide" transparent onRequestClose={() => setShowLinkedDocumentPicker(false)}>
-                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                <View style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}><ModalBackdrop onPress={() => setShowLinkedDocumentPicker(false)} />
                     <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <View>
@@ -1987,7 +2005,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             {/* Product Picker Modal */}
             <BarcodeScannerModal visible={scanningProduct} onScanned={handleProductScanned} onClose={() => setScanningProduct(false)} />
             <Modal visible={showProductPicker && !scanningProduct} animationType="slide" transparent onRequestClose={closeProductPicker}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.modalOverlay, { backgroundColor: modalBackdropColor }]}><ModalBackdrop onPress={closeProductPicker} />
                                         <View style={[styles.modalContent, styles.modalContentTall, { backgroundColor: isDark ? '#151517' : '#fff' }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
                             <Text style={[styles.modalTitle, { color: textColor }]}>{t('addItem', language)}</Text>
@@ -2091,7 +2109,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             />
             {showDueDateOptions ? (
                 <Modal visible transparent animationType="fade" onRequestClose={() => setShowDueDateOptions(false)}>
-                    <View style={[styles.dueDateOptionsOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}>
+                    <View style={[styles.dueDateOptionsOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}><ModalBackdrop onPress={() => setShowDueDateOptions(false)} />
                         <View style={[styles.dueDateOptionsCard, { backgroundColor: cardBg }]}>
                             <Text style={[styles.datePickerTitle, { color: textColor }]}>{t('dueDate', language)}</Text>
                             {(['one_week', 'two_weeks', 'one_month', 'two_months', 'three_months', 'custom'] as DueDatePreset[]).map((preset) => (
@@ -2114,7 +2132,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             ) : null}
             {showDatePicker && Platform.OS === 'ios' ? (
                 <Modal visible transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
-                    <View style={[styles.datePickerOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}>
+                    <View style={[styles.datePickerOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.45)' }]}><ModalBackdrop onPress={() => setShowDatePicker(false)} />
                         <View style={[styles.datePickerCard, { backgroundColor: cardBg }]}>
                             <View style={[styles.datePickerHeader, { borderBottomColor: borderColor }]}>
                                 <TouchableOpacity testID="invoice-date-picker-cancel" onPress={() => setShowDatePicker(false)}>

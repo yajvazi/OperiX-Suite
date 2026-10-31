@@ -20,7 +20,7 @@ const appleLogoXml = (color: string) => `
 </svg>`;
 
 /** "Continue with Google / Apple". Shows only the providers the connected server has enabled. */
-export function SocialAuthButtons({ onError, dividerAbove = true }: { onError: (message: string) => void; dividerAbove?: boolean }) {
+export function SocialAuthButtons({ onError, dividerAbove = true, layout = 'stack' }: { onError: (message: string) => void; dividerAbove?: boolean; layout?: 'stack' | 'row' }) {
     const { signInWithGoogle, signInWithApple } = useAuth();
     const { isDark, language } = useTheme();
     const palette = getPalette(isDark);
@@ -47,9 +47,9 @@ export function SocialAuthButtons({ onError, dividerAbove = true }: { onError: (
     };
 
     const button = (provider: SocialProvider) => {
-        const label = provider === 'google' ? t('continueWithGoogle', language) : (language === 'sq' ? 'Vazhdo me Apple' : 'Continue with Apple');
+        const label = layout === 'row' ? (provider === 'google' ? 'Google' : 'Apple') : provider === 'google' ? t('continueWithGoogle', language) : (language === 'sq' ? 'Vazhdo me Apple' : 'Continue with Apple');
         return <TouchableOpacity key={provider} testID={`auth-${provider}-button`} accessibilityRole="button" disabled={busy !== null}
-            style={[styles.button, { backgroundColor: provider === 'apple' ? (isDark ? '#fff' : '#000') : palette.surfaceMuted, borderColor: palette.borderStrong }]}
+            style={[styles.button, layout === 'row' && styles.rowButton, { backgroundColor: provider === 'apple' ? (isDark ? '#fff' : '#000') : palette.surfaceMuted, borderColor: palette.borderStrong }]}
             onPress={() => void run(provider)}>
             {busy === provider ? <ActivityIndicator color={provider === 'apple' ? (isDark ? '#000' : '#fff') : palette.text} /> : <>
                 <SvgXml xml={provider === 'google' ? googleLogoXml : appleLogoXml(isDark ? '#000' : '#fff')} width={20} height={20} />
@@ -60,12 +60,14 @@ export function SocialAuthButtons({ onError, dividerAbove = true }: { onError: (
 
     return <View>
         {dividerAbove ? <View style={styles.divider}><View style={[styles.line, { backgroundColor: palette.border }]} /><Text style={[styles.dividerText, { color: palette.muted }]}>{t('or', language)}</Text><View style={[styles.line, { backgroundColor: palette.border }]} /></View> : null}
-        <View style={styles.stack}>{providers.map(button)}</View>
+        <View style={layout === 'row' ? styles.row : styles.stack}>{providers.map(button)}</View>
     </View>;
 }
 
 const styles = StyleSheet.create({
     stack: { gap: 10 },
+    row: { flexDirection: 'row', gap: 10 },
+    rowButton: { flex: 1 },
     button: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderRadius: 14 },
     text: { fontSize: 13, fontWeight: '600' },
     divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 18 },

@@ -14,6 +14,7 @@ import { getWorkspaceScope } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 import type { RootStackParamList } from '../../navigation/types';
 import { ErrorState, LoadingState, MobileHeader, MobileScreen } from '../../components/mobile/MobileUI';
+import { ModalBackdrop } from '../../components/mobile/ModalBackdrop';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -659,7 +660,7 @@ export function CashBalancesScreen() {
             )}
 
             <Modal visible={modal !== null} animationType="slide" transparent onRequestClose={closeModal}>
-                <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><ModalBackdrop onPress={closeModal} />
                     <View style={[styles.modalCard, { backgroundColor: palette.surface }]}>
                         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
                             {modal === 'stripe_payout' ? <>

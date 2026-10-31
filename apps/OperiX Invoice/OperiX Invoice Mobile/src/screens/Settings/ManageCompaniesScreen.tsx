@@ -29,7 +29,7 @@ import { supabase } from '@invoice-monorepo/api';
 import { useAuth, useTheme } from '@invoice-monorepo/hooks';
 import { Button, Card, Input } from '@invoice-monorepo/ui';
 import { Company, Membership } from '@invoice-monorepo/types';
-import { formatDate as formatLocalizedDate, getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
+import { formatDate as formatLocalizedDate, getLocalizedErrorMessage, t, type TranslationKey } from '@invoice-monorepo/i18n';
 import { getWorkspaceScope, invalidateWorkspaceScope } from '../../services/workspace';
 import { notifyBusinessEvent } from '../../services/pushNotifications';
 
@@ -90,32 +90,32 @@ type CompanyEditForm = {
     tax_id: string;
 };
 
-const permissionCategoryLabels: Record<string, string> = {
-    invoices: 'Invoices',
-    documents: 'Documents',
-    payments: 'Payments',
-    expenses: 'Expenses',
-    customers: 'Customers',
-    products: 'Products',
-    inventory: 'Inventory',
-    reports: 'Reports',
-    accounting: 'Accounting',
-    users: 'Users',
-    security: 'Security',
-    settings: 'Settings',
+const permissionCategoryLabels: Record<string, TranslationKey> = {
+    invoices: 'pcInvoices',
+    documents: 'pcDocuments',
+    payments: 'pcPayments',
+    expenses: 'pcExpenses',
+    customers: 'pcCustomers',
+    products: 'pcProducts',
+    inventory: 'pcInventory',
+    reports: 'pcReports',
+    accounting: 'pcAccounting',
+    users: 'pcUsers',
+    security: 'pcSecurity',
+    settings: 'pcSettings',
 };
 
-const scopeResources: Array<{ resource: string; label: string }> = [
-    { resource: 'invoice', label: 'Invoices' },
-    { resource: 'offer', label: 'Offers' },
-    { resource: 'proforma', label: 'Pro-formas' },
-    { resource: 'order', label: 'Orders' },
-    { resource: 'delivery_note', label: 'Delivery notes' },
-    { resource: 'customer', label: 'Customers' },
-    { resource: 'expense', label: 'Expenses' },
-    { resource: 'payment', label: 'Payments' },
-    { resource: 'product', label: 'Products' },
-    { resource: 'inventory', label: 'Inventory' },
+const scopeResources: Array<{ resource: string; labelKey: TranslationKey }> = [
+    { resource: 'invoice', labelKey: 'pcInvoices' },
+    { resource: 'offer', labelKey: 'pcOffers' },
+    { resource: 'proforma', labelKey: 'pcProformas' },
+    { resource: 'order', labelKey: 'pcOrders' },
+    { resource: 'delivery_note', labelKey: 'pcDeliveryNotes' },
+    { resource: 'customer', labelKey: 'pcCustomers' },
+    { resource: 'expense', labelKey: 'pcExpenses' },
+    { resource: 'payment', labelKey: 'pcPayments' },
+    { resource: 'product', labelKey: 'pcProducts' },
+    { resource: 'inventory', labelKey: 'pcInventory' },
 ];
 
 const sensitivePermissionCodes = new Set([
@@ -970,9 +970,9 @@ export function ManageCompaniesScreen({ navigation }: any) {
                         onPress={() => openMemberAccessEditor(member)}
                         style={[styles.accessEditorToggle, { borderColor: primaryColor, backgroundColor: accessEditorMemberId === member.membership_id ? `${primaryColor}14` : 'transparent' }]}
                         accessibilityRole="button"
-                        accessibilityLabel="Edit permissions and data scopes"
+                        accessibilityLabel={t('pcEditAccess', language)}
                     >
-                        <Text style={[styles.accessEditorToggleText, { color: primaryColor }]}>Permissions &amp; scopes</Text>
+                        <Text style={[styles.accessEditorToggleText, { color: primaryColor }]}>{t('pcPermissionsScopes', language)}</Text>
                     </TouchableOpacity>
                 )}
                 {canManageMember && accessEditorMemberId === member.membership_id && renderMemberAccessEditor(member)}
@@ -989,17 +989,17 @@ export function ManageCompaniesScreen({ navigation }: any) {
 
         return (
             <View style={[styles.accessEditor, { backgroundColor: inputBg, borderColor }]}>
-                <Text style={[styles.subsectionTitle, { color: textColor }]}>Permissions</Text>
-                <Text style={[styles.helperText, { color: mutedColor }]}>Role defaults can be adjusted by the tenant Admin. Platform permissions and Super Admin are never assignable here.</Text>
+                <Text style={[styles.subsectionTitle, { color: textColor }]}>{t('pcPermissions', language)}</Text>
+                <Text style={[styles.helperText, { color: mutedColor }]}>{t('pcRoleDefaults', language)}</Text>
                 {Object.entries(groupedPermissions).map(([category, permissions]) => (
                     <View key={category} style={[styles.permissionGroup, { borderColor }]}>
-                        <Text style={[styles.permissionGroupTitle, { color: textColor }]}>{permissionCategoryLabels[category] || category}</Text>
+                        <Text style={[styles.permissionGroupTitle, { color: textColor }]}>{permissionCategoryLabels[category] ? t(permissionCategoryLabels[category], language) : category}</Text>
                         {permissions.map((permission) => (
                             <View key={permission.code} style={[styles.permissionRow, { borderTopColor: borderColor }]}>
                                 <View style={styles.permissionCopy}>
                                     <Text style={[styles.permissionName, { color: textColor }]}>{permission.name}</Text>
                                     {permission.description ? <Text style={[styles.permissionDescription, { color: mutedColor }]}>{permission.description}</Text> : null}
-                                    {permission.is_sensitive ? <Text style={styles.sensitiveLabel}>Sensitive · audited</Text> : null}
+                                    {permission.is_sensitive ? <Text style={styles.sensitiveLabel}>{t('pcSensitiveAudited', language)}</Text> : null}
                                 </View>
                                 <Switch
                                     value={Boolean(editingPermissions[permission.code])}
@@ -1011,11 +1011,11 @@ export function ManageCompaniesScreen({ navigation }: any) {
                         ))}
                     </View>
                 ))}
-                <Text style={[styles.subsectionTitle, { color: textColor, marginTop: 16 }]}>Data scopes</Text>
-                <Text style={[styles.helperText, { color: mutedColor }]}>OWN, ASSIGNED, and ALL are enforced by database policies for scoped records.</Text>
-                {scopeResources.map(({ resource, label }) => (
+                <Text style={[styles.subsectionTitle, { color: textColor, marginTop: 16 }]}>{t('pcDataScopes', language)}</Text>
+                <Text style={[styles.helperText, { color: mutedColor }]}>{t('pcScopesNote', language)}</Text>
+                {scopeResources.map(({ resource, labelKey }) => (
                     <View key={resource} style={styles.scopeRow}>
-                        <Text style={[styles.scopeLabel, { color: textColor }]}>{label}</Text>
+                        <Text style={[styles.scopeLabel, { color: textColor }]}>{t(labelKey, language)}</Text>
                         <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeChoices}>
                             {(['OWN', 'ASSIGNED', 'ALL'] as Scope[]).map((scope) => (
                                 <TouchableOpacity
@@ -1023,7 +1023,7 @@ export function ManageCompaniesScreen({ navigation }: any) {
                                     onPress={() => setEditingScopes((current) => ({ ...current, [resource]: scope }))}
                                     style={[styles.scopeChoice, { borderColor: editingScopes[resource] === scope ? primaryColor : borderColor, backgroundColor: editingScopes[resource] === scope ? primaryColor : 'transparent' }]}
                                 >
-                                    <Text style={{ color: editingScopes[resource] === scope ? '#fff' : mutedColor, fontSize: 10, fontWeight: '700' }}>{scope === 'OWN' ? 'Own' : scope === 'ASSIGNED' ? 'Assigned' : 'All'}</Text>
+                                    <Text style={{ color: editingScopes[resource] === scope ? '#fff' : mutedColor, fontSize: 10, fontWeight: '700' }}>{scope === 'OWN' ? t('pcScopeOwn', language) : scope === 'ASSIGNED' ? t('pcScopeAssigned', language) : t('pcScopeAll', language)}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -1031,10 +1031,10 @@ export function ManageCompaniesScreen({ navigation }: any) {
                 ))}
                 {sensitiveEnabled ? (
                     <View style={styles.sensitiveNotice}>
-                        <Text style={styles.sensitiveNoticeText}>Sensitive access is enabled. Refunds, voids, exports, profit reports, inventory adjustments, and accounting-period changes are audited.</Text>
+                        <Text style={styles.sensitiveNoticeText}>{t('pcSensitiveNotice', language)}</Text>
                     </View>
                 ) : null}
-                <Button title="Save access" onPress={() => { void saveMemberAccess(member); }} loading={managementLoading} style={{ marginTop: 14 }} />
+                <Button title={t('pcSaveAccess', language)} onPress={() => { void saveMemberAccess(member); }} loading={managementLoading} style={{ marginTop: 14 }} />
             </View>
         );
     }

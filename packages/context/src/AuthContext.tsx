@@ -17,6 +17,8 @@ interface AuthContextType {
     signInWithGoogle: () => Promise<{ error: Error | null }>;
     signInWithApple?: () => Promise<{ error: Error | null }>;
     verifyEmailOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+    /** Emails a one-time sign-in code to an existing account. Finish with verifyEmailOtp. */
+    sendSignInCode: (email: string) => Promise<{ error: Error | null }>;
     completeSignup: (input: {
         tenantName: string;
         firstName: string;
@@ -199,6 +201,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const signInWithGoogle = () => signInWithProvider('google');
     const signInWithApple = () => signInWithProvider('apple');
 
+    const sendSignInCode = async (email: string) => {
+        if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
+        // Sign-in only: an unknown address must not silently create an account (sign-up has its own flow and onboarding).
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+        return { error: error as Error | null };
+    };
+
     const verifyEmailOtp = async (email: string, token: string) => {
         if (!isSupabaseConfigured) return { error: missingSupabaseConfiguration() };
         const { error } = await supabase.auth.verifyOtp({
@@ -272,6 +281,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 signInWithGoogle,
                 signInWithApple,
                 verifyEmailOtp,
+                sendSignInCode,
                 completeSignup,
                 deleteAccount,
                 signOut,

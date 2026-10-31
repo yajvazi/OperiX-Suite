@@ -336,7 +336,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const appLinks = useMemo(() => [
     { label: "OperiX Invoice", href: "/dashboard", current: true, tone: "invoice", icon: ReceiptText, locked: false, lockedHref: undefined as string | undefined },
-    { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays, current: false, locked: false, lockedHref: undefined as string | undefined },
+    { label: "OperiX Booking", href: externalUrl("NEXT_PUBLIC_OPERIX_BOOKING_URL", "https://booking.operixsuite.com"), tone: "booking", icon: CalendarDays, current: false, locked: false, lockedHref: undefined as string | undefined, available: false },
     { label: "Help Center", href: externalUrl("NEXT_PUBLIC_OPERIX_HELP_CENTER_URL", "https://helpdesk.operixsuite.com"), tone: "help", icon: CircleHelp, current: false, locked: false, lockedHref: undefined as string | undefined },
   ], []);
 
@@ -368,7 +368,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const visibleCreateActions = createActions.filter((action) => workspace.can(action.permission));
   const renderSidebarLink = ({ href, className, children, onClick, "aria-current": ariaCurrent }: OperixSidebarLinkProps) => <Link href={href} className={className} onClick={onClick} aria-current={ariaCurrent}>{children}</Link>;
   const renderTopbarLink = ({ href, className, children, onClick, "aria-label": ariaLabel }: { href: string; className: string; children: React.ReactNode; onClick?: () => void; "aria-label"?: string }) => <Link href={href} className={className} onClick={onClick} aria-label={ariaLabel}>{children}</Link>;
-  const topbarApps = appLinks.map((app) => { const Icon = app.icon; return { id: app.tone, label: app.label, href: app.href, locked: app.locked, lockedHref: app.lockedHref, current: app.current, icon: <Icon size={14} strokeWidth={2.1} /> }; });
+  const topbarApps = appLinks.map((app) => { const Icon = app.icon; return { id: app.tone, label: app.label, href: app.href, locked: app.locked, lockedHref: app.lockedHref, available: app.available, unavailableLabel: app.available === false ? "In development" : undefined, current: app.current, icon: <Icon size={14} strokeWidth={2.1} /> }; });
 
   async function install() {
     if (!installEvent) return;

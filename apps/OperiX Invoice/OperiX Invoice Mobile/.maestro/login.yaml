@@ -7,6 +7,8 @@ appId: ${MAESTRO_APP_ID}
       id: auth-email-input
     timeout: 30000
 - tapOn:
+    id: auth-use-password
+- tapOn:
     id: auth-email-input
 - inputText: ${E2E_EMAIL}
 - tapOn:

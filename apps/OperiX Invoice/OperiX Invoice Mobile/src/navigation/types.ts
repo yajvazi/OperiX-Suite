@@ -26,6 +26,8 @@ export type InvoiceFormParams = {
     posCustomerId?: string;
     posPaymentMethod?: 'cash' | 'card' | 'debt' | 'other';
     posIdempotencyKey?: string;
+    /** Set by the customer form so a customer created from this form is selected on return. */
+    createdClientId?: string;
 };
 
 export type LegacyInvoicesStackParamList = {
@@ -40,7 +42,7 @@ export type LegacyInvoicesStackParamList = {
     SalesBook: undefined;
     PaymentForm: { paymentId?: string; invoiceId?: string; clientId?: string } | undefined;
     PaymentsList: undefined;
-    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' | 'InvoiceForm' } | undefined;
     CustomerLedger: { clientId?: string } | undefined;
     VendorLedger: { vendorId?: string } | undefined;
     VendorForm: { vendorId?: string; returnToExpense?: boolean } | undefined;
@@ -61,7 +63,7 @@ export type LegacyManagementStackParamList = {
     VendorsList: undefined;
     ExpenseForm: { expenseId?: string; type?: string; scannedData?: unknown; selectedVendorName?: string; selectedVendorId?: string } | undefined;
     ExpensesList: undefined;
-    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' | 'InvoiceForm' } | undefined;
     ProductForm: { productId?: string; scannedSKU?: string; restoredData?: unknown } | undefined;
     VendorForm: { vendorId?: string; returnToExpense?: boolean } | undefined;
     VendorPaymentForm: { paymentId?: string } | undefined;
@@ -76,7 +78,7 @@ export type LegacyExpensesStackParamList = {
 };
 
 export type SettingsStackParamList = {
-    SettingsMain: undefined;
+    SettingsMain: { section?: string } | undefined;
     TemplateEditor: undefined;
     ContractTemplates: undefined;
     ContractTemplateEditor: { templateId?: string } | undefined;
@@ -131,7 +133,7 @@ export type RootStackParamList = {
     OtherIncome: undefined;
     OtherIncomeForm: undefined;
     FinancialAccounts: undefined;
-    ClientForm: { clientId?: string; returnTo?: 'POS' } | undefined;
+    ClientForm: { clientId?: string; returnTo?: 'POS' | 'InvoiceForm' } | undefined;
     CustomerDetail: { clientId: string };
     ProductsList: undefined;
     ProductForm: { productId?: string; scannedSKU?: string; restoredData?: unknown } | undefined;

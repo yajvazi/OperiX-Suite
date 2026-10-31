@@ -4,6 +4,7 @@ import { adminDeleteInvoice, supabase } from '@invoice-monorepo/api';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { getLocalizedErrorMessage, t } from '@invoice-monorepo/i18n';
 import { getPalette } from '../../theme/brand';
+import { ModalBackdrop } from '../mobile/ModalBackdrop';
 
 /**
  * Company administrators only: deletes an invoice that was already posted. A written reason is required; the
@@ -40,7 +41,7 @@ export function AdminDeleteInvoiceModal({ invoiceId, invoiceNumber, onClose, onD
 
     return (
         <Modal visible={Boolean(invoiceId)} transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}>
-            <View style={styles.overlay}>
+            <View style={styles.overlay}><ModalBackdrop onPress={() => { if (!busy) onClose(); }} />
                 <View style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                     <Text style={[styles.title, { color: palette.text }]}>{t('adminDeletePostedTitle', language)}{invoiceNumber ? ` · ${invoiceNumber}` : ''}</Text>
                     <Text style={[styles.message, { color: palette.muted }]}>{t('adminDeletePostedMessage', language)}</Text>

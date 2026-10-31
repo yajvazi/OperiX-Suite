@@ -20,15 +20,32 @@ describe('authentication screens', () => {
     it('does not call authentication for an incomplete sign-in form', async () => {
         const signIn = jest.fn(async () => ({ error: null }));
         const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={jest.fn()} />, { auth: { signIn } });
+        await fireEvent.press(screen.getByTestId('auth-use-password'));
         await fireEvent.press(screen.getByTestId('auth-sign-in-button'));
         expect(signIn).not.toHaveBeenCalled();
         expect(screen.getByText('Please fill in all fields')).toBeTruthy();
+    });
+
+    it('signs in with an emailed one-time code', async () => {
+        const sendSignInCode = jest.fn(async () => ({ error: null }));
+        const verifyEmailOtp = jest.fn(async () => ({ error: null }));
+        const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={jest.fn()} />, { auth: { sendSignInCode, verifyEmailOtp } });
+        await fireEvent.press(screen.getByTestId('auth-send-code-button'));
+        expect(sendSignInCode).not.toHaveBeenCalled();
+        await fireEvent.changeText(screen.getByTestId('auth-email-input'), '  blerina@example.com ');
+        await fireEvent.press(screen.getByTestId('auth-send-code-button'));
+        await waitFor(() => expect(sendSignInCode).toHaveBeenCalledWith('blerina@example.com'));
+        await waitFor(() => expect(screen.getByTestId('auth-otp-input')).toBeTruthy());
+        await fireEvent.changeText(screen.getByTestId('auth-otp-input'), '123456');
+        await fireEvent.press(screen.getByTestId('auth-verify-code-button'));
+        await waitFor(() => expect(verifyEmailOtp).toHaveBeenCalledWith('blerina@example.com', '123456'));
     });
 
     it('trims the email, calls sign-in once, and disables repeated presses while pending', async () => {
         let resolveSignIn!: (value: { error: null }) => void;
         const signIn = jest.fn(() => new Promise<{ error: null }>((resolve) => { resolveSignIn = resolve; }));
         const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={jest.fn()} />, { auth: { signIn } });
+        await fireEvent.press(screen.getByTestId('auth-use-password'));
         await fireEvent.changeText(screen.getByTestId('auth-email-input'), '  blerina@example.com  ');
         await fireEvent.changeText(screen.getByTestId('auth-password-input'), 'correct horse battery staple');
         let firstPress!: Promise<unknown>;
@@ -58,14 +75,15 @@ describe('authentication screens', () => {
         global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ external: { google: true, apple: true } }) })) as unknown as typeof fetch;
         const screen = await renderWithProviders(<SignInScreen onNavigateToSignUp={onNavigateToSignUp} />, { auth: { signIn, signInWithGoogle, signInWithApple } });
         await waitFor(() => expect(screen.getByTestId('auth-google-button')).toBeTruthy());
-        await fireEvent.changeText(screen.getByTestId('auth-email-input'), 'a@example.com');
-        await fireEvent.changeText(screen.getByTestId('auth-password-input'), 'wrong');
-        await fireEvent.press(screen.getByTestId('auth-sign-in-button'));
-        await waitFor(() => expect(screen.getByText(/Sign in failed/)).toBeTruthy());
         await fireEvent.press(screen.getByTestId('auth-google-button'));
         await waitFor(() => expect(signInWithGoogle).toHaveBeenCalledTimes(1));
         await fireEvent.press(screen.getByTestId('auth-apple-button'));
         await waitFor(() => expect(signInWithApple).toHaveBeenCalledTimes(1));
+        await fireEvent.press(screen.getByTestId('auth-use-password'));
+        await fireEvent.changeText(screen.getByTestId('auth-email-input'), 'a@example.com');
+        await fireEvent.changeText(screen.getByTestId('auth-password-input'), 'wrong');
+        await fireEvent.press(screen.getByTestId('auth-sign-in-button'));
+        await waitFor(() => expect(screen.getByText(/Sign in failed/)).toBeTruthy());
         global.fetch = originalFetch;
         await fireEvent.press(screen.getByTestId('auth-sign-up-link'));
         expect(onNavigateToSignUp).toHaveBeenCalledTimes(1);

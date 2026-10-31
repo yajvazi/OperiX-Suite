@@ -29,6 +29,8 @@ export interface WidgetInvoiceRow {
     issue_date?: string | null;
     total_amount?: number | string | null;
     status?: string | null;
+    commercial_document_type?: string | null;
+    type?: string | null;
     document_type?: string | null;
 }
 
@@ -64,7 +66,7 @@ export function buildDailySalesSnapshot(input: {
         for (const row of input.rows) {
             if ((row.company_id || input.defaultTenantId) !== tenant.id) continue;
             if (rowDateKey(row.issue_date) !== todayKey) continue;
-            const type = String(row.document_type || 'INVOICE').toUpperCase();
+            const type = String(row.commercial_document_type || row.document_type || row.type || 'INVOICE').toUpperCase();
             if (NON_SALES_TYPES.has(type)) continue;
             if (NON_SALES_STATUSES.has(String(row.status || '').toLowerCase())) continue;
             const amount = Number(row.total_amount || 0);

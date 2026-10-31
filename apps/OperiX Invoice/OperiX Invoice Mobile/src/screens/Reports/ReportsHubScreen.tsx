@@ -26,7 +26,7 @@ import { MetricCard, MobileHeader, MobileScreen, SectionTitle } from '../../comp
 
 type ReportKey = 'cash_balances' | 'trial_balance' | 'profit_loss' | 'balance_sheet' | 'cash_flow' | 'changes_equity' | 'general_ledger' | 'asset_register' | 'inventory_register' | 'ar_aging' | 'ap_aging';
 
-const REPORT_CARDS: Array<{
+export const REPORT_CARDS: Array<{
     key: ReportKey;
     titleKey: TranslationKey;
     descriptionKey: TranslationKey;

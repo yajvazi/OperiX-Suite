@@ -281,12 +281,12 @@ export function StripeDashboardScreen({ navigation }: any) {
 
                 {summary.balances.length > 0 ? (
                     <Card style={[styles.emptyCard, { marginBottom: 18 }]}>
-                        <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 8 }]}>Stripe balances</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 8 }]}>{t('stripeBalances', language)}</Text>
                         {summary.balances.map((balance) => (
                             <View key={`${balance.stripe_store_id}-${balance.currency}`} style={styles.transactionRow}>
                                 <View style={styles.transactionInfo}>
                                     <Text style={[styles.transactionType, { color: textColor }]}>{summary.stores.find((store) => store.id === balance.stripe_store_id)?.store_name || 'Stripe'} · {balance.currency}</Text>
-                                    <Text style={[styles.transactionDesc, { color: mutedColor }]}>Available · Pending</Text>
+                                    <Text style={[styles.transactionDesc, { color: mutedColor }]}>{t('stripeAvailablePending', language)}</Text>
                                 </View>
                                 <Text style={[styles.transactionAmount, { color: '#12B76A' }]}>
                                     {formatCurrency(balance.available_balance, balance.currency)}
@@ -351,7 +351,7 @@ export function StripeDashboardScreen({ navigation }: any) {
 
                 {summary.onlineInvoices.length > 0 ? (
                     <>
-                        <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>Online sale invoices</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>{t('stripeOnlineInvoices', language)}</Text>
                         {summary.onlineInvoices.map((invoice) => (
                             <TouchableOpacity key={invoice.id} onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: invoice.id })}>
                                 <Card style={styles.transactionCard}>

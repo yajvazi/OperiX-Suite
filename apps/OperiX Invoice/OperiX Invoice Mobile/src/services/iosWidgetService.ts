@@ -73,7 +73,7 @@ export function refreshDailySalesWidget(userId: string, options: { force?: boole
                 ? (await local.listInvoices({ fullItems: false }) as WidgetInvoiceRow[])
                 : ((await supabase
                     .from('invoices')
-                    .select('company_id,issue_date,total_amount,status,document_type')
+                    .select('company_id,issue_date,total_amount,status,commercial_document_type,type')
                     .or(scopedResource(userId, scope.companyIds))
                     .gte('issue_date', todayKey)
                     .limit(2000)).data || []) as WidgetInvoiceRow[];

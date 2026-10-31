@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f5f8ff;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#061a38">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e4e9f0;border-radius:16px">
+        <tr><td style="padding:28px 28px 8px;font-size:15px;font-weight:700">OperiX Invoice</td></tr>
+        <tr><td style="padding:8px 28px 0">
+          <h1 style="margin:0 0 8px;font-size:22px;line-height:1.2">Your sign-in code</h1>
+          <p style="margin:0 0 4px;font-size:14px;line-height:1.6;color:#475467">Enter this code in the app to sign in to your account.</p>
+          <p style="margin:0 0 18px;font-size:13px;line-height:1.6;color:#667085">Futni këtë kod në aplikacion për t'u kyçur në llogarinë tuaj.</p>
+        </td></tr>
+        <tr><td align="center" style="padding:6px 28px 18px">
+          <div style="display:inline-block;padding:14px 22px;font-size:32px;font-weight:800;letter-spacing:10px;background:#edf4ff;border-radius:12px;color:#004ffe">{{ .Token }}</div>
+        </td></tr>
+        <tr><td align="center" style="padding:0 28px 22px">
+          <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#667085">Signing in on the website? Use the button instead.<br>Po hyni nga faqja? Përdorni butonin.</p>
+          <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;background:#004ffe;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;border-radius:10px">Sign in · Hyr</a>
+        </td></tr>
+        <tr><td style="padding:0 28px 28px;font-size:12px;line-height:1.6;color:#98a2b3">
+          The code expires in one hour. If you did not try to sign in, you can ignore this email.<br>
+          Kodi skadon pas një ore. Nëse nuk keni provuar të hyni, injoroni këtë email.
+        </td></tr>
+      </table>
+    </td></tr></table>
+  </body>
+</html>

@@ -13,7 +13,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { SvgXml } from 'react-native-svg';
 
 import { supabase } from '@invoice-monorepo/api';
-import { deactivateCompanyBankAccount, listCompanyBankAccounts, listCompanyBankAccountShares, revokeCompanyBankAccountShare, saveCompanyBankAccount, shareCompanyBankAccount } from '@invoice-monorepo/api/repositories';
+import { getAgentSignature, setAgentSignature, deactivateCompanyBankAccount, listCompanyBankAccounts, listCompanyBankAccountShares, revokeCompanyBankAccountShare, saveCompanyBankAccount, shareCompanyBankAccount } from '@invoice-monorepo/api/repositories';
 import { useAuth } from '@invoice-monorepo/hooks';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { Input, SignaturePadModal } from '@invoice-monorepo/ui';
@@ -24,6 +24,7 @@ import { getWorkspaceScope } from '../../services/workspace';
 import { getDataStore, getLocalStore } from '../../services/dataStore';
 import { MobileHeader, MobileScreen, SectionTitle, ShortcutRow } from '../../components/mobile/MobileUI';
 import { StampGeneratorModal } from '../../components/mobile/StampGeneratorModal';
+import { ModalBackdrop } from '../../components/mobile/ModalBackdrop';
 
 const languages = [
     { code: 'en', label: 'English', flag: '🇬🇧' },
@@ -57,7 +58,7 @@ const emptyBankAccountForm: BankAccountForm = {
     is_primary: false,
 };
 
-export function SettingsScreen({ navigation }: any) {
+export function SettingsScreen({ navigation, route }: any) {
     const { user, signOut, deleteAccount } = useAuth();
     const { themeMode, setThemeMode, isDark, primaryColor, setPrimaryColor, language, setLanguage } = useTheme();
     const [profile, setProfile] = useState<Profile>({
@@ -76,8 +77,15 @@ export function SettingsScreen({ navigation }: any) {
         is_grayscale: false,
         updated_at: new Date().toISOString(),
     });
-    const [activeSection, setActiveSection] = useState<string | null>('personal');
+    const [activeSection, setActiveSection] = useState<string | null>(route?.params?.section || 'personal');
+    // Opened from the search on the More screen: expand the section that was picked.
+    useEffect(() => {
+        if (route?.params?.section) setActiveSection(route.params.section);
+    }, [route?.params?.section]);
     const [showSignaturePad, setShowSignaturePad] = useState(false);
+    // The signed-in agent's own signature, printed on the invoices they create.
+    const [mySignature, setMySignature] = useState<string | null>(null);
+    const [showMySignaturePad, setShowMySignaturePad] = useState(false);
     const [showStampGenerator, setShowStampGenerator] = useState(false);
     const [workspaceRole, setWorkspaceRole] = useState<'super_administrator' | 'company_administrator' | 'manager' | 'employee'>('employee');
     const [workspacePermissions, setWorkspacePermissions] = useState<string[]>([]);
@@ -153,6 +161,9 @@ export function SettingsScreen({ navigation }: any) {
                 currency: 'EUR',
                 primary_color: normalizeBrandColor(combined.primary_color),
             });
+            if (profileData.active_company_id) {
+                try { setMySignature(await getAgentSignature(supabase, profileData.active_company_id, user.id)); } catch { setMySignature(null); }
+            }
         }
     };
 
@@ -413,6 +424,27 @@ export function SettingsScreen({ navigation }: any) {
         }
     };
 
+
+    const saveMySignature = async (signature: string | null) => {
+        if (!user || !profile.active_company_id) return;
+        try {
+            await setAgentSignature(supabase, profile.active_company_id, user.id, signature);
+            setMySignature(signature || null);
+        } catch (error) {
+            console.error('Error saving agent signature:', error);
+        }
+    };
+
+    const pickMySignature = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 1],
+            quality: 0.5,
+            base64: true,
+        });
+        if (!result.canceled && result.assets[0].base64) await saveMySignature(`data:image/png;base64,${result.assets[0].base64}`);
+    };
 
     const pickImage = async (type: 'logo' | 'signature' | 'stamp') => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -770,6 +802,22 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 )}
 
+                {/* The agent's own signature (cloud workspaces only) */}
+                {!localMode && profile.active_company_id ? renderHeader(t('mySignature', language), t('mySignatureHint', language), PenTool, 'mySignature', primaryColor) : null}
+                {activeSection === 'mySignature' && !localMode && profile.active_company_id && (
+                    <View style={sectionPanelStyle}>
+                        <AssetPicker
+                            label={t('mySignature', language)}
+                            value={mySignature}
+                            onPick={pickMySignature}
+                            onClear={() => saveMySignature(null)}
+                            onDraw={() => setShowMySignaturePad(true)}
+                            icon={PenTool}
+                            isDark={isDark}
+                        />
+                    </View>
+                )}
+
                 {/* Identity & Visuals */}
                 {can('settings.invoice') ? renderHeader(t('logosSignatures', language), language === 'sq' ? 'Logo, nënshkrime dhe vula në dokumente' : 'Logos, signatures, and document stamps', Camera, 'visuals', primaryColor) : null}
                 {activeSection === 'visuals' && can('settings.invoice') && (
@@ -889,7 +937,7 @@ export function SettingsScreen({ navigation }: any) {
                                     style={styles.bankAccountModalOverlay}
                                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                                     keyboardVerticalOffset={0}
-                                >
+                                ><ModalBackdrop onPress={resetBankAccountForm} />
                                     <View style={[styles.bankAccountModal, { borderColor, backgroundColor: cardBg }]}>
                                         <View style={styles.bankAccountModalHeader}>
                                             <Text style={[styles.bankAccountFormTitle, { color: textColor }]}>{editingBankAccountId ? t('editBankAccount', language) : t('addBankAccount', language)}</Text>
@@ -953,7 +1001,7 @@ export function SettingsScreen({ navigation }: any) {
                                     style={styles.bankAccountModalOverlay}
                                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                                     keyboardVerticalOffset={0}
-                                >
+                                ><ModalBackdrop onPress={resetBankShareForm} />
                                     <View style={[styles.bankAccountModal, { borderColor, backgroundColor: cardBg }]}>
                                         <View style={styles.bankAccountModalHeader}>
                                             <View style={styles.bankAccountsCopy}>
@@ -1080,6 +1128,12 @@ export function SettingsScreen({ navigation }: any) {
                 visible={showSignaturePad}
                 onClose={() => setShowSignaturePad(false)}
                 onSave={(sig) => updateProfile({ signature_url: sig })}
+                primaryColor={primaryColor}
+            />
+            <SignaturePadModal
+                visible={showMySignaturePad}
+                onClose={() => setShowMySignaturePad(false)}
+                onSave={(sig) => saveMySignature(sig)}
                 primaryColor={primaryColor}
             />
             <StampGeneratorModal

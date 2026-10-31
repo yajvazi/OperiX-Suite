@@ -191,6 +191,8 @@ export function OperixCard({ children, style, variant = 'default', onPress, acce
 }
 
 export interface OperixInputProps extends TextInputProps {
+    /** Draws the placeholder as ordinary text. On some iPhones the native placeholder of a field is drawn with wide gaps between the letters. */
+    drawPlaceholder?: boolean;
     label?: string;
     required?: boolean;
     helperText?: string;
@@ -200,7 +202,7 @@ export interface OperixInputProps extends TextInputProps {
     right?: ReactNode;
 }
 
-export function OperixInput({ label, required = false, helperText, error, containerStyle, style, left, right, onChangeText, keyboardType, ...props }: OperixInputProps) {
+export function OperixInput({ drawPlaceholder = false, label, required = false, helperText, error, containerStyle, style, left, right, onChangeText, keyboardType, ...props }: OperixInputProps) {
     const { palette } = useMobileTheme();
     const inputRef = useRef<TextInput | null>(null);
     // No focus-driven state here on purpose: re-rendering the input while iOS is
@@ -224,8 +226,11 @@ export function OperixInput({ label, required = false, helperText, error, contai
             {label ? <Text style={[styles.fieldLabel, { color: palette.textSecondary }]}>{label}{required ? <Text style={{ color: palette.error }}> *</Text> : null}</Text> : null}
             <View style={[styles.inputShell, { backgroundColor: palette.surface, borderColor: error ? palette.error : palette.border }]}>
                 {left ? <View style={styles.inputAffix}>{left}</View> : null}
+                {(() => {
+                    const field = (
                 <TextInput
                     {...inputProps}
+                    placeholder={drawPlaceholder ? undefined : inputProps.placeholder}
                     ref={inputRef}
                     accessibilityLabel={props.accessibilityLabel || label}
                     // Keep the keyboard open while moving through a form. Individual
@@ -238,6 +243,20 @@ export function OperixInput({ label, required = false, helperText, error, contai
                     placeholderTextColor={palette.muted}
                     style={[styles.input, { color: palette.text }, left ? styles.inputWithoutLeftPadding : undefined, right ? styles.inputWithoutRightPadding : undefined, style]}
                 />
+                    );
+                    if (!drawPlaceholder) return field;
+                    const showPlaceholder = !props.value && Boolean(props.placeholder);
+                    return (
+                        <View style={styles.drawnPlaceholderWrap}>
+                            {field}
+                            {showPlaceholder ? (
+                                <View pointerEvents="none" style={[styles.drawnPlaceholder, { paddingLeft: left ? 4 : 16 }]}>
+                                    <Text numberOfLines={1} style={{ color: palette.muted, fontSize: operixMobileTokens.typography.size.bodyLarge, fontFamily: operixMobileTokens.typography.fontFamily.regular, letterSpacing: 0 }}>{props.placeholder}</Text>
+                                </View>
+                            ) : null}
+                        </View>
+                    );
+                })()}
                 {right ? <View style={styles.inputAffix}>{right}</View> : null}
             </View>
             {error ? <Text accessibilityRole="text" style={[styles.fieldError, { color: palette.error }]}>{error}</Text> : helperText ? <Text style={[styles.fieldHelper, { color: palette.muted }]}>{helperText}</Text> : null}
@@ -307,7 +326,7 @@ export function OperixSearchInput({ value, onChangeText, placeholder, rightAcces
     const resolvedPlaceholder = placeholder || t('search', language);
     const clearButton = value ? <OperixIconButton label={t('clear', language)} variant="ghost" size={28} onPress={() => onChangeText('')}><X color={palette.muted} size={17} /></OperixIconButton> : null;
     const rightContent = rightAccessory ? <View style={{ flexDirection: 'row', alignItems: 'center' }}>{rightAccessory}{clearButton}</View> : clearButton;
-    return <OperixInput {...props} value={value} onChangeText={onChangeText} placeholder={resolvedPlaceholder} accessibilityLabel={props.accessibilityLabel || resolvedPlaceholder} left={<Search color={palette.muted} size={operixMobileTokens.icon.md} strokeWidth={2.1} />} right={rightContent} containerStyle={styles.searchContainer} style={styles.searchInput} returnKeyType="search" />;
+    return <OperixInput {...props} drawPlaceholder value={value} onChangeText={onChangeText} placeholder={resolvedPlaceholder} accessibilityLabel={props.accessibilityLabel || resolvedPlaceholder} left={<Search color={palette.muted} size={operixMobileTokens.icon.md} strokeWidth={2.1} />} right={rightContent} containerStyle={styles.searchContainer} style={styles.searchInput} returnKeyType="search" />;
 }
 
 export function OperixDateInput({ label, value, placeholder = 'Select a date', onPress, error, required, disabled = false, containerStyle }: { label?: string; value?: string; placeholder?: string; onPress: () => void; error?: string; required?: boolean; disabled?: boolean; containerStyle?: StyleProp<ViewStyle> }) {
@@ -471,6 +490,8 @@ const styles = StyleSheet.create({
     inputShell: { minHeight: 52, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: operixMobileTokens.radii.input },
     inputFocused: { shadowColor: operixMobileTokens.colors.primary, shadowOpacity: 0.12, shadowRadius: 8, elevation: 1 },
     input: { flex: 1, minHeight: 50, paddingHorizontal: 16, paddingVertical: 12, fontSize: operixMobileTokens.typography.size.bodyLarge, lineHeight: operixMobileTokens.typography.lineHeight.bodyLarge, fontFamily: operixMobileTokens.typography.fontFamily.regular },
+    drawnPlaceholderWrap: { flex: 1, minWidth: 0 },
+    drawnPlaceholder: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center' },
     inputWithoutLeftPadding: { paddingLeft: 4 },
     inputWithoutRightPadding: { paddingRight: 4 },
     inputAffix: { paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },

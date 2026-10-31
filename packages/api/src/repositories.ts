@@ -910,6 +910,17 @@ export async function listCompanyAgents(client: SupabaseClient, companyId: strin
   return unwrap<CompanyAgent[]>(client.rpc('list_company_agents', { p_company_id: companyId }));
 }
 
+/** The agent's own signature, or null when they have none (callers then fall back to the company signature). */
+export async function getAgentSignature(client: SupabaseClient, companyId: string, userId: string): Promise<string | null> {
+  const value = await unwrap<string | null>(client.rpc('get_agent_signature', { p_company_id: companyId, p_user_id: userId }));
+  return value || null;
+}
+
+/** Saves (or, with an empty value, clears) an agent's signature. Agents change their own; company administrators can change anyone's. */
+export async function setAgentSignature(client: SupabaseClient, companyId: string, userId: string, signature: string | null): Promise<void> {
+  await unwrap<unknown>(client.rpc('set_agent_signature', { p_company_id: companyId, p_user_id: userId, p_signature: signature || '' }));
+}
+
 export async function listCompanyBankAccountShares(client: SupabaseClient, bankAccountId: string): Promise<CompanyBankAccountShare[]> {
   return unwrap<CompanyBankAccountShare[]>(client.from('company_bank_account_shares')
     .select('id,company_bank_account_id,shared_company_id,is_active,created_at')

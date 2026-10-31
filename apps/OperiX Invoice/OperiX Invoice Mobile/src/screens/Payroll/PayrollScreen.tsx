@@ -70,7 +70,7 @@ export function PayrollScreen() {
         <Text style={[styles.eyebrow, { color: '#004FFE' }]}>OPERIX INVOICE</Text>
         <Text style={[styles.title, { color: palette.text }]}>{t('payroll', language)}</Text>
         <Text style={[styles.subtitle, { color: palette.muted }]}>{t('securePayrollSubtitle', language)}</Text>
-        <ShortcutRow icon={Settings2} title="Payroll setup" description="Manage authorized payroll access, employee pay details, periods and rules." onPress={() => navigation.navigate('PayrollSetup')} trailing={null} />
+        <ShortcutRow icon={Settings2} title={t('psTitle', language)} description={t('psRowDescription', language)} onPress={() => navigation.navigate('PayrollSetup')} trailing={null} />
         {error ? <View style={[styles.warning, { borderColor: '#fecdca' }]}><CircleAlert color="#d92d20" size={18}/><Text style={{ color: '#d92d20', flex: 1 }}>{error}</Text></View> : null}
         <View style={styles.grid}>
             <Metric icon={Banknote} label={t('latestNetPayroll', language)} value={format(latest?.total_net)} palette={palette}/>

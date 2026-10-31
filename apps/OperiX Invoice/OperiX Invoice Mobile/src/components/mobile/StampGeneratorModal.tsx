@@ -5,6 +5,7 @@ import { Check, X } from 'lucide-react-native';
 import { t } from '@invoice-monorepo/i18n';
 import { useTheme } from '@invoice-monorepo/hooks';
 import { brand, getPalette } from '../../theme/brand';
+import { ModalBackdrop } from './ModalBackdrop';
 
 interface StampGeneratorModalProps {
     visible: boolean;
@@ -104,7 +105,7 @@ export function StampGeneratorModal({ visible, onClose, onSave, companyName: ini
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-            <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.82)' : 'rgba(0,0,0,0.5)' }]}> 
+            <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.82)' : 'rgba(0,0,0,0.5)' }]}><ModalBackdrop onPress={onClose} /> 
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     keyboardVerticalOffset={0}

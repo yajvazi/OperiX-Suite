@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { CommonActions } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -113,6 +114,12 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             const savedClient = await store.save('clients', { ...formData, discount_percent: wholePercentageValue(formData.discount_percent), ...(isEditing ? { id: clientId } : {}) });
             if (route.params?.returnTo === 'POS' && savedClient?.id) {
                 navigation.navigate('POS', { createdClientId: savedClient.id });
+            } else if (route.params?.returnTo === 'InvoiceForm' && savedClient?.id) {
+                // Hand the new customer to the invoice form underneath, then close this screen.
+                const routes = navigation.getState().routes;
+                const previous = routes[routes.length - 2];
+                if (previous?.name === 'InvoiceForm') navigation.dispatch({ ...CommonActions.setParams({ createdClientId: savedClient.id }), source: previous.key });
+                navigation.goBack();
             } else {
                 navigation.goBack();
             }
